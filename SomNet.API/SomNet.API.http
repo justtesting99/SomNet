@@ -1,6 +1,55 @@
 @SomNet.API_HostAddress = http://localhost:5031
 
-GET {{SomNet.API_HostAddress}}/weatherforecast/
-Accept: application/json
+### Auth
+POST {{SomNet.API_HostAddress}}/api/auth/login
+Content-Type: application/json
 
-###
+{
+  "username": "demo",
+  "password": "demo"
+}
+
+### System status
+GET {{SomNet.API_HostAddress}}/api/system/status
+
+### History timeline (Dom + Sub)
+GET {{SomNet.API_HostAddress}}/api/history/timeline?domTarget=demo&subTarget=Slv66&fromDate=2026-09-01&toDate=2026-09-05
+
+### Dom sessions (all subs)
+GET {{SomNet.API_HostAddress}}/api/history/sessions?domTarget=demo
+
+### Dom sessions (filtered sub)
+GET {{SomNet.API_HostAddress}}/api/history/sessions?domTarget=demo&subTarget=Slv67
+
+### Available subs
+GET {{SomNet.API_HostAddress}}/api/subs?domTarget=demo
+
+### Options
+GET {{SomNet.API_HostAddress}}/api/options?username=demo
+
+### Save options
+PUT {{SomNet.API_HostAddress}}/api/options?username=demo
+Content-Type: application/json
+
+{
+  "enableSoundAlerts": true,
+  "confirmBeforeCommands": false,
+  "autoExpandVideoOnMobile": true,
+  "mobileVideoExpandDefault": "both",
+  "showSessionTimestamps": true,
+  "operatorDisplayName": "demo",
+  "defaultNotesPrefix": "Session",
+  "reconnectIntervalSeconds": 10
+}
+
+### Send notification
+POST {{SomNet.API_HostAddress}}/api/notifications
+Content-Type: application/json
+
+{
+  "domTarget": "demo",
+  "subTarget": "Slv66",
+  "subject": "Upcoming Session",
+  "sessionDateTime": "2026-09-10T18:00:00-04:00",
+  "customBody": "Please be ready."
+}

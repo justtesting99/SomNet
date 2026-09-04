@@ -1,14 +1,23 @@
+using SomNet.API.Services;
+using SomNet.Shared.Serialization;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
+builder.Services.AddSingleton<IMockDataStore, MockDataStore>();
+
 builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.Converters.Add(
-            new System.Text.Json.Serialization.JsonStringEnumConverter(
-                System.Text.Json.JsonNamingPolicy.CamelCase));
-    });
+    .AddJsonOptions(options => SomNetJsonOptions.Configure(options.JsonSerializerOptions));
+
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+        policy.WithOrigins("http://localhost:56761")
+            .AllowAnyHeader()
+            .AllowAnyMethod());
+});
+
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
@@ -21,6 +30,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors();
 
 app.UseAuthorization();
 

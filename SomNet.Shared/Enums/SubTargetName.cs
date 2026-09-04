@@ -16,11 +16,11 @@ public sealed class SubTargetNameJsonConverter : JsonConverter<SubTargetName>
     public override SubTargetName Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         var value = reader.GetString();
-        return value switch
+        return value?.ToLowerInvariant() switch
         {
-            "Slv66" => SubTargetName.Slv66,
-            "Slv67" => SubTargetName.Slv67,
-            "Slv68" => SubTargetName.Slv68,
+            "slv66" => SubTargetName.Slv66,
+            "slv67" => SubTargetName.Slv67,
+            "slv68" => SubTargetName.Slv68,
             _ => throw new JsonException($"Unknown sub target: {value}"),
         };
     }
