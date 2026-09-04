@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="../SomNet.Shared/SomNet.Shared.csproj" />
+  <Project Path="../SomNet.UI/somnet.ui.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+  <Project Path="SomNet.API.csproj" />
+</Solution>

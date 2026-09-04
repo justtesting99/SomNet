@@ -1,0 +1,6 @@
+@SomNet.API_HostAddress = http://localhost:5031
+
+GET {{SomNet.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

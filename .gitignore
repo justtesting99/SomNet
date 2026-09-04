@@ -1,0 +1,39 @@
+# Dependencies
+**/node_modules/
+
+# Build outputs
+**/bin/
+**/obj/
+**/dist/
+**/dist-ssr/
+
+# .NET / IDE
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+**/appsettings.*.local.json
+**/secrets.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+*.sw?
+
+# Vite / tooling
+*.local
