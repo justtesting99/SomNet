@@ -18,15 +18,30 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod());
 });
 
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new()
+    {
+        Title = "SomNet API",
+        Version = "v1",
+        Description = "SomNet session control, history, notifications, and configuration API.",
+    });
+    options.DescribeAllParametersInCamelCase();
+});
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "SomNet API v1");
+        options.RoutePrefix = "swagger";
+        options.DocumentTitle = "SomNet API";
+    });
 }
 
 app.UseHttpsRedirection();
