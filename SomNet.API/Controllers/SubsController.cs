@@ -1,7 +1,9 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SomNet.API.Services;
-using SomNet.Shared.Enums;
+using SomNet.Shared.DTO.Subs;
 using SomNet.Shared.Models;
 
 namespace SomNet.API.Controllers;
@@ -19,11 +21,13 @@ public class SubsController : ControllerBase
     }
 
     [HttpGet]
-    public ActionResult<SubsResponseDto> GetSubs([FromQuery] string domTarget)
+    public ActionResult<SubsResponseDto> GetSubs()
     {
-        if (string.IsNullOrWhiteSpace(domTarget))
+        var domTarget = GetDomTarget();
+
+        if (domTarget is null)
         {
-            return BadRequest("domTarget is required.");
+            return Unauthorized();
         }
 
         return Ok(new SubsResponseDto
@@ -33,6 +37,79 @@ public class SubsController : ControllerBase
             Subs = _dataStore.GetSubsUnderDom(domTarget),
         });
     }
+
+    [HttpPost]
+    public ActionResult<SubsResponseDto> AddSub([FromBody] AddDomSubRequestDto request)
+    {
+        var domTarget = GetDomTarget();
+
+        if (domTarget is null)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var subs = _dataStore.AddDomSub(domTarget, request.SubName);
+            return Ok(new SubsResponseDto
+            {
+                ControllerRole = SessionUserConstants.ControllerRole,
+                SubRole = SessionUserConstants.SubRole,
+                Subs = subs,
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ex.Message);
+        }
+    }
+
+    [HttpDelete]
+    public ActionResult<SubsResponseDto> RemoveSub([FromQuery] string subName)
+    {
+        var domTarget = GetDomTarget();
+
+        if (domTarget is null)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var subs = _dataStore.RemoveDomSub(domTarget, subName);
+            return Ok(new SubsResponseDto
+            {
+                ControllerRole = SessionUserConstants.ControllerRole,
+                SubRole = SessionUserConstants.SubRole,
+                Subs = subs,
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    private string? GetDomTarget()
+    {
+        var displayName = User.FindFirstValue(JwtRegisteredClaimNames.Name) ??
+            User.FindFirstValue(ClaimTypes.Name);
+
+        if (!string.IsNullOrWhiteSpace(displayName))
+        {
+            return displayName.Trim();
+        }
+
+        var username = User.FindFirstValue(JwtRegisteredClaimNames.Sub) ??
+            User.FindFirstValue(ClaimTypes.NameIdentifier) ??
+            User.Identity?.Name;
+
+        return string.IsNullOrWhiteSpace(username) ? null : username.Trim();
+    }
 }
 
 public sealed class SubsResponseDto
@@ -41,5 +118,5 @@ public sealed class SubsResponseDto
 
     public required string SubRole { get; init; }
 
-    public required IReadOnlyList<SubTargetName> Subs { get; init; }
+    public required IReadOnlyList<string> Subs { get; init; }
 }

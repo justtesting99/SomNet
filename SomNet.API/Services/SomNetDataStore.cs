@@ -3,8 +3,7 @@ using SomNet.API.Data;
 using SomNet.API.Data.Entities;
 using SomNet.Shared.DTO.History;
 using SomNet.Shared.DTO.Notifications;
-using SomNet.Shared.DTO.Options;
-using SomNet.Shared.Enums;
+using SomNet.Shared.DTO.Settings;
 using SomNet.Shared.Models;
 
 namespace SomNet.API.Services;
@@ -18,15 +17,16 @@ public sealed class SomNetDataStore : ISomNetDataStore
         _db = db;
     }
 
-    public IReadOnlyList<SessionHistoryEntryDto> GetSessionsForDom(string domTarget, SubTargetName? subTarget = null)
+    public IReadOnlyList<SessionHistoryEntryDto> GetSessionsForDom(string domTarget, string? subTarget = null)
     {
         IQueryable<SessionHistoryEntry> query = _db.Sessions
             .AsNoTracking()
             .Where(session => session.DomTarget == domTarget);
 
-        if (subTarget is not null)
+        if (!string.IsNullOrWhiteSpace(subTarget))
         {
-            query = query.Where(session => session.SubTarget == subTarget);
+            var normalizedSub = SubTargetValidation.Normalize(subTarget);
+            query = query.Where(session => session.SubTarget == normalizedSub);
         }
 
         return query
@@ -46,11 +46,12 @@ public sealed class SomNetDataStore : ISomNetDataStore
         var sessions = GetSessionsForDom(query.DomTarget, query.SubTarget)
             .Select(session => (HistoryTimelineItemDto)new SessionHistoryTimelineItemDto { Entry = session });
 
+        var normalizedSub = SubTargetValidation.Normalize(query.SubTarget);
         var notifications = _db.Notifications
             .AsNoTracking()
             .Where(notification =>
                 notification.DomTarget == query.DomTarget &&
-                notification.SubTarget == query.SubTarget)
+                notification.SubTarget == normalizedSub)
             .AsEnumerable()
             .Select(notification => (HistoryTimelineItemDto)new NotificationHistoryTimelineItemDto
             {
@@ -64,27 +65,131 @@ public sealed class SomNetDataStore : ISomNetDataStore
             .ToList();
     }
 
-    public IReadOnlyList<SubTargetName> GetSubsUnderDom(string domTarget)
+    public IReadOnlyList<string> GetSubsUnderDom(string domTarget)
     {
-        var subs = _db.Sessions
-            .AsNoTracking()
-            .Where(session => session.DomTarget == domTarget)
-            .Select(session => session.SubTarget)
-            .Union(_db.Notifications
-                .AsNoTracking()
-                .Where(notification => notification.DomTarget == domTarget)
-                .Select(notification => notification.SubTarget))
-            .OrderBy(sub => sub)
-            .ToList();
-
-        if (subs.Count == 0)
+        if (string.IsNullOrWhiteSpace(domTarget))
         {
-            return SessionUserConstants.AvailableSubs
-                .Select(ParseSubTarget)
-                .ToList();
+            return [];
         }
 
-        return subs;
+        var key = domTarget.Trim();
+        var excluded = _db.DomSubExclusions
+            .AsNoTracking()
+            .Where(exclusion => exclusion.DomTarget == key)
+            .Select(exclusion => exclusion.SubName)
+            .ToHashSet();
+
+        return _db.DomSubAssignments
+            .AsNoTracking()
+            .Where(assignment => assignment.DomTarget == key)
+            .Select(assignment => assignment.SubName)
+            .Union(_db.Sessions
+                .AsNoTracking()
+                .Where(session => session.DomTarget == key)
+                .Select(session => session.SubTarget))
+            .Union(_db.Notifications
+                .AsNoTracking()
+                .Where(notification => notification.DomTarget == key)
+                .Select(notification => notification.SubTarget))
+            .Where(sub => !excluded.Contains(sub))
+            .OrderBy(sub => sub)
+            .ToList();
+    }
+
+    public IReadOnlyList<string> AddDomSub(string domTarget, string subName)
+    {
+        if (string.IsNullOrWhiteSpace(domTarget))
+        {
+            throw new ArgumentException("DomTarget is required.", nameof(domTarget));
+        }
+
+        var validationError = SubTargetValidation.Validate(subName);
+        if (validationError is not null)
+        {
+            throw new ArgumentException(validationError, nameof(subName));
+        }
+
+        var key = domTarget.Trim();
+        var normalizedSub = SubTargetValidation.Normalize(subName);
+
+        var exists = _db.DomSubAssignments.Any(assignment =>
+            assignment.DomTarget == key &&
+            assignment.SubName == normalizedSub);
+
+        if (exists)
+        {
+            throw new InvalidOperationException($"Sub '{normalizedSub}' is already assigned to this Dom.");
+        }
+
+        var exclusion = _db.DomSubExclusions.SingleOrDefault(entry =>
+            entry.DomTarget == key &&
+            entry.SubName == normalizedSub);
+
+        if (exclusion is not null)
+        {
+            _db.DomSubExclusions.Remove(exclusion);
+        }
+
+        _db.DomSubAssignments.Add(new DomSubAssignment
+        {
+            DomTarget = key,
+            SubName = normalizedSub,
+        });
+        _db.SaveChanges();
+
+        return GetSubsUnderDom(key);
+    }
+
+    public IReadOnlyList<string> RemoveDomSub(string domTarget, string subName)
+    {
+        if (string.IsNullOrWhiteSpace(domTarget))
+        {
+            throw new ArgumentException("DomTarget is required.", nameof(domTarget));
+        }
+
+        var validationError = SubTargetValidation.Validate(subName);
+        if (validationError is not null)
+        {
+            throw new ArgumentException(validationError, nameof(subName));
+        }
+
+        var key = domTarget.Trim();
+        var normalizedSub = SubTargetValidation.Normalize(subName);
+
+        var assignment = _db.DomSubAssignments.SingleOrDefault(entry =>
+            entry.DomTarget == key &&
+            entry.SubName == normalizedSub);
+
+        if (assignment is not null)
+        {
+            _db.DomSubAssignments.Remove(assignment);
+        }
+
+        var settings = _db.DomSubSettings.SingleOrDefault(entry =>
+            entry.DomTarget == key &&
+            entry.SubName == normalizedSub);
+
+        if (settings is not null)
+        {
+            _db.DomSubSettings.Remove(settings);
+        }
+
+        var alreadyExcluded = _db.DomSubExclusions.Any(entry =>
+            entry.DomTarget == key &&
+            entry.SubName == normalizedSub);
+
+        if (!alreadyExcluded)
+        {
+            _db.DomSubExclusions.Add(new DomSubExclusion
+            {
+                DomTarget = key,
+                SubName = normalizedSub,
+            });
+        }
+
+        _db.SaveChanges();
+
+        return GetSubsUnderDom(key);
     }
 
     public NotificationHistoryEntryDto AddNotification(SendSessionNotificationRequestDto request)
@@ -95,7 +200,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
             Id = $"notify-{nextSequence:D3}",
             SentAt = DateTimeOffset.Now,
             DomTarget = request.DomTarget.Trim(),
-            SubTarget = request.SubTarget,
+            SubTarget = SubTargetValidation.Normalize(request.SubTarget),
             Subject = string.IsNullOrWhiteSpace(request.Subject)
                 ? NotificationConstants.DefaultSubject
                 : request.Subject.Trim(),
@@ -120,7 +225,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
             Id = $"sess-{GetNextSessionSequence():D3}",
             StartedAt = DateTimeOffset.Now,
             DomTarget = domTarget.Trim(),
-            SubTarget = request.SubTarget,
+            SubTarget = SubTargetValidation.Normalize(request.SubTarget),
             Mode = request.Mode,
             Summary = "In progress",
         };
@@ -195,40 +300,57 @@ public sealed class SomNetDataStore : ISomNetDataStore
         return ToDto(session);
     }
 
-    public AppOptionsDto GetOptions(string username)
+    public PairingSettingsDto GetPairingSettings(string domTarget, string subTarget)
     {
-        if (string.IsNullOrWhiteSpace(username))
+        if (string.IsNullOrWhiteSpace(domTarget))
         {
-            return AppOptionsDefaults.Value;
+            return PairingSettingsDefaults.Value;
         }
 
-        var options = _db.UserOptions
+        var normalizedSub = SubTargetValidation.Normalize(subTarget);
+        var entity = _db.DomSubSettings
             .AsNoTracking()
-            .SingleOrDefault(entry => entry.Username == username.Trim());
+            .SingleOrDefault(entry =>
+                entry.DomTarget == domTarget.Trim() &&
+                entry.SubName == normalizedSub);
 
-        return options is null ? AppOptionsDefaults.Value : ToDto(options);
+        return entity is null
+            ? PairingSettingsDefaults.Value
+            : PairingSettingsSerializer.Deserialize(entity.SettingsJson);
     }
 
-    public AppOptionsDto SaveOptions(string username, AppOptionsDto options)
+    public PairingSettingsDto SavePairingSettings(
+        string domTarget,
+        string subTarget,
+        PairingSettingsDto settings)
     {
-        if (string.IsNullOrWhiteSpace(username))
+        if (string.IsNullOrWhiteSpace(domTarget))
         {
-            throw new ArgumentException("Username is required.", nameof(username));
+            throw new ArgumentException("DomTarget is required.", nameof(domTarget));
         }
 
-        var key = username.Trim();
-        var entity = _db.UserOptions.SingleOrDefault(entry => entry.Username == key);
+        var normalizedSub = SubTargetValidation.Normalize(subTarget);
+        var normalized = PairingSettingsSerializer.Normalize(settings);
+        var key = domTarget.Trim();
+        var entity = _db.DomSubSettings.SingleOrDefault(entry =>
+            entry.DomTarget == key &&
+            entry.SubName == normalizedSub);
 
         if (entity is null)
         {
-            entity = new UserOptions { Username = key };
-            _db.UserOptions.Add(entity);
+            entity = new DomSubSettings
+            {
+                DomTarget = key,
+                SubName = normalizedSub,
+                SettingsJson = string.Empty,
+            };
+            _db.DomSubSettings.Add(entity);
         }
 
-        ApplyOptions(entity, options);
+        entity.SettingsJson = PairingSettingsSerializer.Serialize(normalized);
         _db.SaveChanges();
 
-        return ToDto(entity);
+        return normalized;
     }
 
     private int GetNextNotificationSequence()
@@ -297,30 +419,6 @@ public sealed class SomNetDataStore : ISomNetDataStore
         SessionDateTime = notification.SessionDateTime,
     };
 
-    private static AppOptionsDto ToDto(UserOptions options) => new()
-    {
-        EnableSoundAlerts = options.EnableSoundAlerts,
-        ConfirmBeforeCommands = options.ConfirmBeforeCommands,
-        AutoExpandVideoOnMobile = options.AutoExpandVideoOnMobile,
-        MobileVideoExpandDefault = options.MobileVideoExpandDefault,
-        ShowSessionTimestamps = options.ShowSessionTimestamps,
-        OperatorDisplayName = options.OperatorDisplayName,
-        DefaultNotesPrefix = options.DefaultNotesPrefix,
-        ReconnectIntervalSeconds = options.ReconnectIntervalSeconds,
-    };
-
-    private static void ApplyOptions(UserOptions entity, AppOptionsDto options)
-    {
-        entity.EnableSoundAlerts = options.EnableSoundAlerts;
-        entity.ConfirmBeforeCommands = options.ConfirmBeforeCommands;
-        entity.AutoExpandVideoOnMobile = options.AutoExpandVideoOnMobile;
-        entity.MobileVideoExpandDefault = options.MobileVideoExpandDefault;
-        entity.ShowSessionTimestamps = options.ShowSessionTimestamps;
-        entity.OperatorDisplayName = options.OperatorDisplayName;
-        entity.DefaultNotesPrefix = options.DefaultNotesPrefix;
-        entity.ReconnectIntervalSeconds = options.ReconnectIntervalSeconds;
-    }
-
     private static bool IsWithinDateRange(HistoryTimelineItemDto item, DateOnly? fromDate, DateOnly? toDate)
     {
         var dateKey = GetTimelineDateKey(item);
@@ -350,13 +448,5 @@ public sealed class SomNetDataStore : ISomNetDataStore
         SessionHistoryTimelineItemDto session => session.Entry.StartedAt,
         NotificationHistoryTimelineItemDto notification => notification.Entry.SentAt,
         _ => throw new InvalidOperationException("Unknown timeline item type."),
-    };
-
-    private static SubTargetName ParseSubTarget(string value) => value switch
-    {
-        "Slv66" => SubTargetName.Slv66,
-        "Slv67" => SubTargetName.Slv67,
-        "Slv68" => SubTargetName.Slv68,
-        _ => throw new ArgumentOutOfRangeException(nameof(value), value, "Unknown sub target."),
     };
 }

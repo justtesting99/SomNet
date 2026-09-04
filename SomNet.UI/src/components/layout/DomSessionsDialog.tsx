@@ -37,7 +37,7 @@ export function DomSessionsDialog() {
     setIsLoading(true);
     setLoadError('');
 
-    Promise.all([fetchSessionHistory(domName), fetchSubs(domName)])
+    Promise.all([fetchSessionHistory(domName), fetchSubs()])
       .then(([sessionsResult, subsResult]) => {
         if (!cancelled) {
           setAllSessions(sessionsResult);

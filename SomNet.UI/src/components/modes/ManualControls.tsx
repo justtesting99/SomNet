@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react';
-import { defaultManualState, type ManualControlState } from '@/types/modes';
-import { computeStrokeMs } from '@/utils/stroke';
-import { useLiveSession } from '@/context/SessionProvider';
+import { type ManualControlState } from '@/types/modes';
+import { useOptions } from '@/context/OptionsProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { NumberField } from '@/components/ui/NumberField';
 import { ManualPowerSlider } from '@/components/modes/ManualPowerSlider';
+import { useLiveSession } from '@/context/SessionProvider';
+import { computeStrokeMs } from '@/utils/stroke';
 
 export function ManualControls() {
-  const [state, setState] = useState<ManualControlState>(defaultManualState);
+  const { settings, updateManual, isLoading } = useOptions();
+  const state = settings.manual;
   const [burstInProgress, setBurstInProgress] = useState(false);
   const { expandOnAction } = useVideoDisplay();
   const { recordManualStroke, recordManualBurst, endManualSession } = useLiveSession();
@@ -20,7 +22,7 @@ export function ManualControls() {
   );
 
   function update<K extends keyof ManualControlState>(key: K, value: ManualControlState[K]) {
-    setState((current) => ({ ...current, [key]: value }));
+    updateManual({ ...state, [key]: value });
   }
 
   function handleStroke() {
@@ -42,6 +44,10 @@ export function ManualControls() {
 
   return (
     <div className="space-y-4">
+      {isLoading ? (
+        <p className="text-sm text-slate-500">Loading saved manual settings…</p>
+      ) : null}
+
       <Panel title="Master Settings">
         <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
           <NumberField

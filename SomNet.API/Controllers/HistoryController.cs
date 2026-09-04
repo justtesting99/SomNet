@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SomNet.API.Services;
 using SomNet.Shared.DTO.History;
-using SomNet.Shared.Enums;
 
 namespace SomNet.API.Controllers;
 
@@ -39,7 +38,7 @@ public class HistoryController : ControllerBase
     [HttpGet("sessions")]
     public ActionResult<IReadOnlyList<SessionHistoryEntryDto>> GetSessions(
         [FromQuery] string domTarget,
-        [FromQuery] SubTargetName? subTarget = null)
+        [FromQuery] string? subTarget = null)
     {
         if (string.IsNullOrWhiteSpace(domTarget))
         {

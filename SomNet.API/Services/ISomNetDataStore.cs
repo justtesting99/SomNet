@@ -1,17 +1,20 @@
 using SomNet.Shared.DTO.History;
 using SomNet.Shared.DTO.Notifications;
-using SomNet.Shared.DTO.Options;
-using SomNet.Shared.Enums;
+using SomNet.Shared.DTO.Settings;
 
 namespace SomNet.API.Services;
 
 public interface ISomNetDataStore
 {
-    IReadOnlyList<SessionHistoryEntryDto> GetSessionsForDom(string domTarget, SubTargetName? subTarget = null);
+    IReadOnlyList<SessionHistoryEntryDto> GetSessionsForDom(string domTarget, string? subTarget = null);
 
     IReadOnlyList<HistoryTimelineItemDto> GetTimeline(HistoryQueryDto query);
 
-    IReadOnlyList<SubTargetName> GetSubsUnderDom(string domTarget);
+    IReadOnlyList<string> GetSubsUnderDom(string domTarget);
+
+    IReadOnlyList<string> AddDomSub(string domTarget, string subName);
+
+    IReadOnlyList<string> RemoveDomSub(string domTarget, string subName);
 
     NotificationHistoryEntryDto AddNotification(SendSessionNotificationRequestDto request);
 
@@ -21,7 +24,10 @@ public interface ISomNetDataStore
 
     SessionHistoryEntryDto EndSession(string domTarget, string sessionId, EndSessionRequestDto request);
 
-    AppOptionsDto GetOptions(string username);
+    PairingSettingsDto GetPairingSettings(string domTarget, string subTarget);
 
-    AppOptionsDto SaveOptions(string username, AppOptionsDto options);
+    PairingSettingsDto SavePairingSettings(
+        string domTarget,
+        string subTarget,
+        PairingSettingsDto settings);
 }

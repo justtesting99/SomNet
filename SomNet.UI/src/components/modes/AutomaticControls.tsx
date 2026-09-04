@@ -1,12 +1,11 @@
-import { useState } from 'react';
 import {
-  defaultAutomaticState,
   AUTOMATIC_RUN_MODE_OPTIONS,
   type AutomaticControlState,
   type AutomaticRunMode,
   type EndSessionMode,
 } from '@/types/modes';
 import { useLiveSession } from '@/context/SessionProvider';
+import { useOptions } from '@/context/OptionsProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
@@ -16,7 +15,8 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { RadioGroup, SelectField } from '@/components/ui/RadioGroup';
 
 export function AutomaticControls() {
-  const [state, setState] = useState<AutomaticControlState>(defaultAutomaticState);
+  const { settings, updateAutomatic, isLoading } = useOptions();
+  const state = settings.automatic;
   const { expandOnAction } = useVideoDisplay();
   const { beginAutomaticSession, endAutomaticSession } = useLiveSession();
 
@@ -24,7 +24,7 @@ export function AutomaticControls() {
     key: K,
     value: AutomaticControlState[K],
   ) {
-    setState((current) => ({ ...current, [key]: value }));
+    updateAutomatic({ ...state, [key]: value });
   }
 
   function handleStart() {
@@ -42,8 +42,11 @@ export function AutomaticControls() {
 
   return (
     <div className="space-y-4">
+      {isLoading ? (
+        <p className="text-sm text-slate-500">Loading saved automatic settings…</p>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Power Settings */}
         <Panel title="Power Settings" className="min-w-0 overflow-hidden">
           <div className="grid min-w-0 grid-cols-2 gap-2 sm:gap-4">
             <VerticalRangeControl
@@ -67,7 +70,6 @@ export function AutomaticControls() {
           </div>
         </Panel>
 
-        {/* Timing Settings */}
         <Panel title="Timing Settings">
           <div className="space-y-5">
             <div>
@@ -121,7 +123,6 @@ export function AutomaticControls() {
           </div>
         </Panel>
 
-        {/* Burst Settings */}
         <Panel title="Burst Settings">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-4">
@@ -184,7 +185,6 @@ export function AutomaticControls() {
           </div>
         </Panel>
 
-        {/* Start / Stop */}
         <Panel title="Controls">
           <div className="flex h-full flex-col justify-center gap-3">
             <SelectField

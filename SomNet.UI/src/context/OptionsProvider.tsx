@@ -4,17 +4,24 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { fetchOptions, saveOptions as saveOptionsApi } from '@/api/options';
+import { fetchPairingSettings, savePairingSettings } from '@/api/settings';
 import { useAuth } from '@/context/AuthProvider';
-import { DEFAULT_APP_OPTIONS, type AppOptions } from '@/types/options';
+import { useSubTarget } from '@/context/SubTargetProvider';
+import type { AppOptions } from '@/types/options';
+import type { AutomaticControlState, ManualControlState } from '@/types/modes';
+import { DEFAULT_PAIRING_SETTINGS, type PairingSettings } from '@/types/pairingSettings';
 
 interface OptionsContextValue {
+  settings: PairingSettings;
   options: AppOptions;
-  setOptions: (options: AppOptions) => Promise<void>;
   isLoading: boolean;
+  setOptions: (options: AppOptions) => Promise<void>;
+  updateManual: (manual: ManualControlState) => void;
+  updateAutomatic: (automatic: AutomaticControlState) => void;
   isDialogOpen: boolean;
   openDialog: () => void;
   closeDialog: () => void;
@@ -22,31 +29,65 @@ interface OptionsContextValue {
 
 const OptionsContext = createContext<OptionsContextValue | null>(null);
 
+const SAVE_DEBOUNCE_MS = 400;
+
 export function OptionsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const username = user?.username ?? '';
-  const [options, setOptionsState] = useState<AppOptions>(DEFAULT_APP_OPTIONS);
+  const { selectedSub } = useSubTarget();
+  const domTarget = user?.displayName ?? user?.username ?? '';
+  const [settings, setSettings] = useState<PairingSettings>(DEFAULT_PAIRING_SETTINGS);
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const settingsRef = useRef(settings);
+  const saveTimerRef = useRef<number | null>(null);
+
+  settingsRef.current = settings;
+
+  const persistSettings = useCallback(
+    async (nextSettings: PairingSettings) => {
+      if (!domTarget) {
+        return nextSettings;
+      }
+
+      return savePairingSettings(selectedSub, nextSettings);
+    },
+    [domTarget, selectedSub],
+  );
+
+  const queuePersist = useCallback(
+    (nextSettings: PairingSettings) => {
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+
+      saveTimerRef.current = window.setTimeout(() => {
+        saveTimerRef.current = null;
+        void persistSettings(nextSettings).catch(() => {
+          // Keep local state; the next change or dialog save can retry.
+        });
+      }, SAVE_DEBOUNCE_MS);
+    },
+    [persistSettings],
+  );
 
   useEffect(() => {
-    if (!username) {
-      setOptionsState(DEFAULT_APP_OPTIONS);
+    if (!domTarget) {
+      setSettings(DEFAULT_PAIRING_SETTINGS);
       return;
     }
 
     let cancelled = false;
     setIsLoading(true);
 
-    fetchOptions(username)
-      .then((loadedOptions) => {
+    fetchPairingSettings(selectedSub)
+      .then((loadedSettings) => {
         if (!cancelled) {
-          setOptionsState(loadedOptions);
+          setSettings(loadedSettings);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setOptionsState(DEFAULT_APP_OPTIONS);
+          setSettings(DEFAULT_PAIRING_SETTINGS);
         }
       })
       .finally(() => {
@@ -58,19 +99,71 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [username]);
+  }, [domTarget, selectedSub]);
 
-  const setOptions = useCallback(
-    async (nextOptions: AppOptions) => {
-      if (!username) {
-        setOptionsState(nextOptions);
+  useEffect(
+    () => () => {
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    },
+    [],
+  );
+
+  const applySettings = useCallback(
+    (nextSettings: PairingSettings, persistImmediately = false) => {
+      setSettings(nextSettings);
+
+      if (!domTarget) {
         return;
       }
 
-      const savedOptions = await saveOptionsApi(username, nextOptions);
-      setOptionsState(savedOptions);
+      if (persistImmediately) {
+        if (saveTimerRef.current !== null) {
+          window.clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = null;
+        }
+
+        void persistSettings(nextSettings).then((savedSettings) => {
+          setSettings(savedSettings);
+        });
+        return;
+      }
+
+      queuePersist(nextSettings);
     },
-    [username],
+    [domTarget, persistSettings, queuePersist],
+  );
+
+  const setOptions = useCallback(
+    async (nextOptions: AppOptions) => {
+      const nextSettings = {
+        ...settingsRef.current,
+        appOptions: nextOptions,
+      };
+      applySettings(nextSettings, true);
+    },
+    [applySettings],
+  );
+
+  const updateManual = useCallback(
+    (manual: ManualControlState) => {
+      applySettings({
+        ...settingsRef.current,
+        manual,
+      });
+    },
+    [applySettings],
+  );
+
+  const updateAutomatic = useCallback(
+    (automatic: AutomaticControlState) => {
+      applySettings({
+        ...settingsRef.current,
+        automatic,
+      });
+    },
+    [applySettings],
   );
 
   const openDialog = useCallback(() => {
@@ -83,14 +176,26 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
-      options,
-      setOptions,
+      settings,
+      options: settings.appOptions,
       isLoading,
+      setOptions,
+      updateManual,
+      updateAutomatic,
       isDialogOpen,
       openDialog,
       closeDialog,
     }),
-    [options, setOptions, isLoading, isDialogOpen, openDialog, closeDialog],
+    [
+      settings,
+      isLoading,
+      setOptions,
+      updateManual,
+      updateAutomatic,
+      isDialogOpen,
+      openDialog,
+      closeDialog,
+    ],
   );
 
   return <OptionsContext.Provider value={value}>{children}</OptionsContext.Provider>;

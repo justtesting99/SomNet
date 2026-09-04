@@ -10,7 +10,7 @@ public sealed class NotificationHistoryEntry
 
     public required string DomTarget { get; set; }
 
-    public SubTargetName SubTarget { get; set; }
+    public required string SubTarget { get; set; }
 
     public required string Subject { get; set; }
 

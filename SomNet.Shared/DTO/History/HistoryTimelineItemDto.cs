@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using SomNet.Shared.Enums;
 
 namespace SomNet.Shared.DTO.History;
 
@@ -22,7 +21,7 @@ public sealed class HistoryQueryDto
 {
     public required string DomTarget { get; init; }
 
-    public SubTargetName SubTarget { get; init; }
+    public required string SubTarget { get; init; }
 
     public DateOnly? FromDate { get; init; }
 

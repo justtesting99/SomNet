@@ -14,7 +14,11 @@ public sealed class SomNetDbContext : DbContext
 
     public DbSet<NotificationHistoryEntry> Notifications => Set<NotificationHistoryEntry>();
 
-    public DbSet<UserOptions> UserOptions => Set<UserOptions>();
+    public DbSet<DomSubSettings> DomSubSettings => Set<DomSubSettings>();
+
+    public DbSet<DomSubAssignment> DomSubAssignments => Set<DomSubAssignment>();
+
+    public DbSet<DomSubExclusion> DomSubExclusions => Set<DomSubExclusion>();
 
     public DbSet<User> Users => Set<User>();
 
@@ -26,6 +30,7 @@ public sealed class SomNetDbContext : DbContext
             entity.HasKey(session => session.Id);
             entity.Property(session => session.Id).HasMaxLength(32);
             entity.Property(session => session.DomTarget).HasMaxLength(128);
+            entity.Property(session => session.SubTarget).HasMaxLength(32);
             entity.Property(session => session.Summary).HasMaxLength(2000);
             entity.HasIndex(session => new { session.DomTarget, session.SubTarget, session.StartedAt });
         });
@@ -36,17 +41,34 @@ public sealed class SomNetDbContext : DbContext
             entity.HasKey(notification => notification.Id);
             entity.Property(notification => notification.Id).HasMaxLength(32);
             entity.Property(notification => notification.DomTarget).HasMaxLength(128);
+            entity.Property(notification => notification.SubTarget).HasMaxLength(32);
             entity.Property(notification => notification.Subject).HasMaxLength(256);
             entity.HasIndex(notification => new { notification.DomTarget, notification.SubTarget, notification.SentAt });
         });
 
-        modelBuilder.Entity<UserOptions>(entity =>
+        modelBuilder.Entity<DomSubSettings>(entity =>
         {
-            entity.ToTable("UserOptions");
-            entity.HasKey(options => options.Username);
-            entity.Property(options => options.Username).HasMaxLength(128);
-            entity.Property(options => options.OperatorDisplayName).HasMaxLength(256);
-            entity.Property(options => options.DefaultNotesPrefix).HasMaxLength(128);
+            entity.ToTable("DomSubSettings");
+            entity.HasKey(settings => new { settings.DomTarget, settings.SubName });
+            entity.Property(settings => settings.DomTarget).HasMaxLength(128);
+            entity.Property(settings => settings.SubName).HasMaxLength(32);
+            entity.Property(settings => settings.SettingsJson).HasMaxLength(8000);
+        });
+
+        modelBuilder.Entity<DomSubAssignment>(entity =>
+        {
+            entity.ToTable("DomSubAssignments");
+            entity.HasKey(assignment => new { assignment.DomTarget, assignment.SubName });
+            entity.Property(assignment => assignment.DomTarget).HasMaxLength(128);
+            entity.Property(assignment => assignment.SubName).HasMaxLength(32);
+        });
+
+        modelBuilder.Entity<DomSubExclusion>(entity =>
+        {
+            entity.ToTable("DomSubExclusions");
+            entity.HasKey(exclusion => new { exclusion.DomTarget, exclusion.SubName });
+            entity.Property(exclusion => exclusion.DomTarget).HasMaxLength(128);
+            entity.Property(exclusion => exclusion.SubName).HasMaxLength(32);
         });
 
         modelBuilder.Entity<User>(entity =>

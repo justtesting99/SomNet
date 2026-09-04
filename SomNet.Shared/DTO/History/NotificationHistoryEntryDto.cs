@@ -10,7 +10,7 @@ public sealed class NotificationHistoryEntryDto
 
     public required string DomTarget { get; init; }
 
-    public SubTargetName SubTarget { get; init; }
+    public required string SubTarget { get; init; }
 
     public string Subject { get; init; } = "Upcoming Session";
 

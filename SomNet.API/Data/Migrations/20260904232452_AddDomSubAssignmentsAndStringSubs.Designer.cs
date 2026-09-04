@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SomNet.API.Data;
 
@@ -11,9 +12,11 @@ using SomNet.API.Data;
 namespace SomNet.API.Data.Migrations
 {
     [DbContext(typeof(SomNetDbContext))]
-    partial class SomNetDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260904232452_AddDomSubAssignmentsAndStringSubs")]
+    partial class AddDomSubAssignmentsAndStringSubs
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -35,21 +38,6 @@ namespace SomNet.API.Data.Migrations
                     b.HasKey("DomTarget", "SubName");
 
                     b.ToTable("DomSubAssignments", (string)null);
-                });
-
-            modelBuilder.Entity("SomNet.API.Data.Entities.DomSubExclusion", b =>
-                {
-                    b.Property<string>("DomTarget")
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
-
-                    b.Property<string>("SubName")
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.HasKey("DomTarget", "SubName");
-
-                    b.ToTable("DomSubExclusions", (string)null);
                 });
 
             modelBuilder.Entity("SomNet.API.Data.Entities.DomSubSettings", b =>

@@ -8,7 +8,6 @@ public static class SomNetJsonOptions
 {
     public static void Configure(JsonSerializerOptions options)
     {
-        options.Converters.Add(new SubTargetNameJsonConverter());
         options.Converters.Add(new JsonStringEnumConverter<ConnectionState>(JsonNamingPolicy.CamelCase));
         options.Converters.Add(new JsonStringEnumConverter<OperationMode>(JsonNamingPolicy.CamelCase));
         options.Converters.Add(new JsonStringEnumConverter<EndSessionMode>(JsonNamingPolicy.CamelCase));

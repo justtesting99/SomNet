@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SomNet.API.Data;
 
@@ -11,9 +12,11 @@ using SomNet.API.Data;
 namespace SomNet.API.Data.Migrations
 {
     [DbContext(typeof(SomNetDbContext))]
-    partial class SomNetDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260904231342_AddDomSubSettings")]
+    partial class AddDomSubSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -22,52 +25,21 @@ namespace SomNet.API.Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("SomNet.API.Data.Entities.DomSubAssignment", b =>
-                {
-                    b.Property<string>("DomTarget")
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
-
-                    b.Property<string>("SubName")
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.HasKey("DomTarget", "SubName");
-
-                    b.ToTable("DomSubAssignments", (string)null);
-                });
-
-            modelBuilder.Entity("SomNet.API.Data.Entities.DomSubExclusion", b =>
-                {
-                    b.Property<string>("DomTarget")
-                        .HasMaxLength(128)
-                        .HasColumnType("nvarchar(128)");
-
-                    b.Property<string>("SubName")
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
-
-                    b.HasKey("DomTarget", "SubName");
-
-                    b.ToTable("DomSubExclusions", (string)null);
-                });
-
             modelBuilder.Entity("SomNet.API.Data.Entities.DomSubSettings", b =>
                 {
                     b.Property<string>("DomTarget")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
-                    b.Property<string>("SubName")
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                    b.Property<int>("SubTarget")
+                        .HasColumnType("int");
 
                     b.Property<string>("SettingsJson")
                         .IsRequired()
                         .HasMaxLength(8000)
                         .HasColumnType("nvarchar(max)");
 
-                    b.HasKey("DomTarget", "SubName");
+                    b.HasKey("DomTarget", "SubTarget");
 
                     b.ToTable("DomSubSettings", (string)null);
                 });
@@ -89,10 +61,8 @@ namespace SomNet.API.Data.Migrations
                     b.Property<DateTimeOffset>("SessionDateTime")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<string>("SubTarget")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                    b.Property<int>("SubTarget")
+                        .HasColumnType("int");
 
                     b.Property<string>("Subject")
                         .IsRequired()
@@ -123,10 +93,8 @@ namespace SomNet.API.Data.Migrations
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<string>("SubTarget")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                    b.Property<int>("SubTarget")
+                        .HasColumnType("int");
 
                     b.Property<string>("Summary")
                         .IsRequired()
