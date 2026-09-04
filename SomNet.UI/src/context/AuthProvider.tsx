@@ -1,4 +1,5 @@
 import { createContext, useContext, type ReactNode, useState, useCallback } from 'react';
+import { login as loginApi } from '@/api/auth';
 import type { User, LoginCredentials } from '@/types/auth';
 
 export interface AuthContextValue {
@@ -22,20 +23,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => loadStoredUser());
 
   const login = useCallback(async (credentials: LoginCredentials): Promise<boolean> => {
-    await new Promise((resolve) => setTimeout(resolve, 400));
-
     if (!credentials.username.trim() || !credentials.password.trim()) {
       return false;
     }
 
-    const authenticatedUser: User = {
-      username: credentials.username.trim(),
-      displayName: credentials.username.trim(),
-    };
-
-    setUser(authenticatedUser);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(authenticatedUser));
-    return true;
+    try {
+      const authenticatedUser = await loginApi(credentials);
+      setUser(authenticatedUser);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(authenticatedUser));
+      return true;
+    } catch {
+      return false;
+    }
   }, []);
 
   const logout = useCallback(() => {

@@ -9,8 +9,13 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+  },
   server: {
     port: 56761,
+    // Used only when running `npm run dev` standalone (optional hot-reload workflow).
     proxy: {
       '/api': {
         target: 'http://localhost:5031',

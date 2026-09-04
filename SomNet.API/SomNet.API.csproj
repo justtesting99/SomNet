@@ -4,6 +4,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <SkipFrontendBuild>false</SkipFrontendBuild>
+    <UiDistPath>$(MSBuildThisFileDirectory)..\SomNet.UI\dist</UiDistPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,5 +15,10 @@
   <ItemGroup>
     <ProjectReference Include="..\SomNet.Shared\SomNet.Shared.csproj" />
   </ItemGroup>
+
+  <Target Name="BuildFrontend" BeforeTargets="Build" Condition="'$(SkipFrontendBuild)' != 'true'">
+    <Message Importance="high" Text="Building SomNet.UI for static hosting..." />
+    <Exec Command="npm run build" WorkingDirectory="$(MSBuildThisFileDirectory)..\SomNet.UI" />
+  </Target>
 
 </Project>

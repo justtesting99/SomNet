@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
+import { fetchHistoryTimeline } from '@/api/history';
 import {
   filterHistoryTimelineByDateRange,
   formatSessionDateTime,
-  getHistoryTimelineForPair,
   isHistoryDateRangeInvalid,
-} from '@/data/mockSessionHistory';
+} from '@/utils/history';
 import { CONTROLLER_ROLE, SUB_ROLE } from '@/config/sessionUsers';
 import { useAuth } from '@/context/AuthProvider';
 import { useHistory } from '@/context/HistoryProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import type { HistoryTimelineEntry } from '@/types/sessionHistory';
 import { Button } from '@/components/ui/Button';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
 
@@ -19,11 +20,9 @@ export function HistoryDialog() {
   const domName = user?.displayName ?? 'Unknown';
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-
-  const timeline = useMemo(
-    () => getHistoryTimelineForPair(domName, selectedSub),
-    [domName, selectedSub],
-  );
+  const [timeline, setTimeline] = useState<HistoryTimelineEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   const dateRangeInvalid = isHistoryDateRangeInvalid(fromDate, toDate);
 
@@ -40,6 +39,38 @@ export function HistoryDialog() {
       setToDate('');
     }
   }, [isDialogOpen]);
+
+  useEffect(() => {
+    if (!isDialogOpen) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+    setLoadError('');
+
+    fetchHistoryTimeline(domName, selectedSub)
+      .then((entries) => {
+        if (!cancelled) {
+          setTimeline(entries);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTimeline([]);
+          setLoadError('Unable to load history from the API.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isDialogOpen, domName, selectedSub]);
 
   useEffect(() => {
     if (!isDialogOpen) {
@@ -101,7 +132,11 @@ export function HistoryDialog() {
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          {timeline.length === 0 ? (
+          {isLoading ? (
+            <p className="text-sm text-slate-500">Loading history…</p>
+          ) : loadError ? (
+            <p className="text-sm text-red-400">{loadError}</p>
+          ) : timeline.length === 0 ? (
             <p className="text-sm text-slate-500">
               No past sessions or notifications recorded for this {CONTROLLER_ROLE} and {SUB_ROLE}{' '}
               pairing.

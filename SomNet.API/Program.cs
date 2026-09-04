@@ -1,3 +1,4 @@
+using Microsoft.Extensions.FileProviders;
 using SomNet.API.Services;
 using SomNet.Shared.Serialization;
 
@@ -9,14 +10,6 @@ builder.Services.AddSingleton<IMockDataStore, MockDataStore>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(options => SomNetJsonOptions.Configure(options.JsonSerializerOptions));
-
-builder.Services.AddCors(options =>
-{
-    options.AddDefaultPolicy(policy =>
-        policy.WithOrigins("http://localhost:56761")
-            .AllowAnyHeader()
-            .AllowAnyMethod());
-});
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -32,6 +25,9 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+var uiDistPath = Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "SomNet.UI", "dist"));
+var uiDistExists = Directory.Exists(uiDistPath);
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -46,10 +42,37 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseCors();
+if (uiDistExists)
+{
+    var uiFileProvider = new PhysicalFileProvider(uiDistPath);
+
+    app.UseDefaultFiles(new DefaultFilesOptions
+    {
+        FileProvider = uiFileProvider,
+    });
+
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = uiFileProvider,
+    });
+}
+else if (app.Environment.IsDevelopment())
+{
+    app.Logger.LogWarning(
+        "UI build output not found at {UiDistPath}. Run `npm run build` in SomNet.UI or build SomNet.API to generate it.",
+        uiDistPath);
+}
 
 app.UseAuthorization();
 
 app.MapControllers();
+
+if (uiDistExists)
+{
+    app.MapFallbackToFile("index.html", new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(uiDistPath),
+    });
+}
 
 app.Run();

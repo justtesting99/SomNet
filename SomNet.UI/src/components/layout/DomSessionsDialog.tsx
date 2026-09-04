@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import {
-  formatSessionDateTime,
-  getSessionHistoryForDom,
-  getSubsUnderDom,
-} from '@/data/mockSessionHistory';
+import { useEffect, useState } from 'react';
+import { fetchSessionHistory } from '@/api/history';
+import { fetchSubs } from '@/api/subs';
+import { formatSessionDateTime } from '@/utils/history';
 import { CONTROLLER_ROLE, SUB_ROLE, type SubTargetName } from '@/config/sessionUsers';
 import { useAuth } from '@/context/AuthProvider';
 import { useDomSessions } from '@/context/DomSessionsProvider';
+import type { SessionHistoryEntry } from '@/types/sessionHistory';
 import { Button } from '@/components/ui/Button';
 
 export function DomSessionsDialog() {
@@ -14,22 +13,54 @@ export function DomSessionsDialog() {
   const { user } = useAuth();
   const domName = user?.displayName ?? 'Unknown';
   const [subFilter, setSubFilter] = useState<SubTargetName | null>(null);
+  const [allSessions, setAllSessions] = useState<SessionHistoryEntry[]>([]);
+  const [subsUnderDom, setSubsUnderDom] = useState<SubTargetName[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
-  const allSessions = useMemo(() => getSessionHistoryForDom(domName), [domName]);
-  const subsUnderDom = useMemo(() => getSubsUnderDom(domName), [domName]);
-
-  const sessions = useMemo(() => {
-    if (!subFilter) {
-      return allSessions;
-    }
-    return allSessions.filter((session) => session.subTarget === subFilter);
-  }, [allSessions, subFilter]);
+  const sessions = subFilter
+    ? allSessions.filter((session) => session.subTarget === subFilter)
+    : allSessions;
 
   useEffect(() => {
     if (isDialogOpen) {
       setSubFilter(null);
     }
   }, [isDialogOpen]);
+
+  useEffect(() => {
+    if (!isDialogOpen) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+    setLoadError('');
+
+    Promise.all([fetchSessionHistory(domName), fetchSubs(domName)])
+      .then(([sessionsResult, subsResult]) => {
+        if (!cancelled) {
+          setAllSessions(sessionsResult);
+          setSubsUnderDom(subsResult);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAllSessions([]);
+          setSubsUnderDom([]);
+          setLoadError('Unable to load sessions from the API.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isDialogOpen, domName]);
 
   useEffect(() => {
     if (!isDialogOpen) {
@@ -115,7 +146,11 @@ export function DomSessionsDialog() {
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          {sessions.length === 0 ? (
+          {isLoading ? (
+            <p className="text-sm text-slate-500">Loading sessions…</p>
+          ) : loadError ? (
+            <p className="text-sm text-red-400">{loadError}</p>
+          ) : sessions.length === 0 ? (
             <p className="text-sm text-slate-500">
               {subFilter
                 ? `No sessions recorded for ${SUB_ROLE} ${subFilter}.`

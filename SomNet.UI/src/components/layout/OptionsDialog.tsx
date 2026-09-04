@@ -11,10 +11,14 @@ import type { MobileVideoExpandDefault } from '@/types/options';
 export function OptionsDialog() {
   const { isDialogOpen, closeDialog, options, setOptions } = useOptions();
   const [pendingOptions, setPendingOptions] = useState<AppOptions>(options);
+  const [saveError, setSaveError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isDialogOpen) {
       setPendingOptions(options);
+      setSaveError('');
+      setIsSaving(false);
     }
   }, [isDialogOpen, options]);
 
@@ -41,9 +45,18 @@ export function OptionsDialog() {
     setPendingOptions((current) => ({ ...current, [key]: value }));
   }
 
-  function handleSave() {
-    setOptions(pendingOptions);
-    closeDialog();
+  async function handleSave() {
+    setSaveError('');
+    setIsSaving(true);
+
+    try {
+      await setOptions(pendingOptions);
+      closeDialog();
+    } catch {
+      setSaveError('Unable to save options. Check that the API is running.');
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function handleReset() {
@@ -141,15 +154,20 @@ export function OptionsDialog() {
         </div>
 
         <footer className="shrink-0 border-t border-slate-800 px-5 py-4">
+          {saveError ? (
+            <p className="mb-3 text-sm text-red-400">{saveError}</p>
+          ) : null}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-            <Button variant="ghost" onClick={handleReset}>
+            <Button variant="ghost" onClick={handleReset} disabled={isSaving}>
               Reset defaults
             </Button>
             <div className="flex flex-col-reverse gap-2 sm:flex-row">
-              <Button variant="ghost" onClick={closeDialog}>
+              <Button variant="ghost" onClick={closeDialog} disabled={isSaving}>
                 Cancel
               </Button>
-              <Button onClick={handleSave}>Save</Button>
+              <Button onClick={handleSave} disabled={isSaving}>
+                {isSaving ? 'Saving…' : 'Save'}
+              </Button>
             </div>
           </div>
         </footer>

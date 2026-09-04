@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { sendSessionNotification } from '@/api/notifications';
 import { SUB_ROLE } from '@/config/sessionUsers';
 import { useAuth } from '@/context/AuthProvider';
 import { useNotify } from '@/context/NotifyProvider';
@@ -71,10 +72,14 @@ export function NotifyDialog() {
     setIsSending(true);
     setStatusMessage('');
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    setIsSending(false);
-    setStatusMessage(`Notification prepared for ${SUB_ROLE} ${selectedSub}. Email sending will be handled by the API.`);
+    try {
+      const message = await sendSessionNotification(domName, selectedSub, form);
+      setStatusMessage(message);
+    } catch {
+      setStatusMessage('Unable to send notification. Check that the API is running.');
+    } finally {
+      setIsSending(false);
+    }
   }
 
   return (

@@ -1,17 +1,56 @@
 import { useEffect, useState } from 'react';
+import { fetchSubs } from '@/api/subs';
 import { AVAILABLE_SUBS, SUB_ROLE, type SubTargetName } from '@/config/sessionUsers';
+import { useAuth } from '@/context/AuthProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { Button } from '@/components/ui/Button';
 
 export function SubSelectionDialog() {
   const { selectedSub, setSelectedSub, isDialogOpen, closeDialog } = useSubTarget();
+  const { user } = useAuth();
+  const domName = user?.displayName ?? 'Unknown';
   const [pendingSub, setPendingSub] = useState<SubTargetName>(selectedSub);
+  const [availableSubs, setAvailableSubs] = useState<SubTargetName[]>([...AVAILABLE_SUBS]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     if (isDialogOpen) {
       setPendingSub(selectedSub);
     }
   }, [isDialogOpen, selectedSub]);
+
+  useEffect(() => {
+    if (!isDialogOpen) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+    setLoadError('');
+
+    fetchSubs(domName)
+      .then((subs) => {
+        if (!cancelled) {
+          setAvailableSubs(subs.length > 0 ? subs : [...AVAILABLE_SUBS]);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAvailableSubs([...AVAILABLE_SUBS]);
+          setLoadError('Unable to load Sub list from the API. Showing defaults.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isDialogOpen, domName]);
 
   useEffect(() => {
     if (!isDialogOpen) {
@@ -59,8 +98,15 @@ export function SubSelectionDialog() {
           </p>
         </header>
 
+        {isLoading ? (
+          <p className="mb-4 text-sm text-slate-500">Loading {SUB_ROLE} list…</p>
+        ) : null}
+        {loadError ? (
+          <p className="mb-4 text-sm text-amber-400">{loadError}</p>
+        ) : null}
+
         <ul className="space-y-2" role="listbox" aria-label={`${SUB_ROLE} targets`}>
-          {AVAILABLE_SUBS.map((sub) => {
+          {availableSubs.map((sub) => {
             const isSelected = pendingSub === sub;
 
             return (

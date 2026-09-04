@@ -20,7 +20,7 @@ export function LoginForm() {
     setIsSubmitting(false);
 
     if (!success) {
-      setError('Enter a username and password to continue.');
+      setError('Sign in failed. Check your credentials and ensure the API is running.');
     }
   }
 
@@ -64,7 +64,8 @@ export function LoginForm() {
         </form>
 
         <p className="mt-5 text-center text-xs text-slate-500">
-          Authentication is local for now — any non-empty credentials will sign you in.
+          Sign in via the SomNet API. Use username <span className="text-slate-400">demo</span> to
+          see mock history data.
         </p>
       </Card>
     </div>

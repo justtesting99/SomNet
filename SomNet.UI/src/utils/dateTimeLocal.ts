@@ -60,3 +60,17 @@ export function formatDateRangeDisplay(fromDate: string, toDate: string): string
   }
   return 'All dates';
 }
+
+export function toApiDateTimeOffset(localDateTime: string): string {
+  if (!localDateTime) {
+    return localDateTime;
+  }
+
+  const withSeconds = localDateTime.length === 16 ? `${localDateTime}:00` : localDateTime;
+  const parsed = new Date(withSeconds);
+  if (Number.isNaN(parsed.getTime())) {
+    return withSeconds;
+  }
+
+  return parsed.toISOString();
+}
