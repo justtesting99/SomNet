@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using SomNet.Shared.DTO.System;
+using SomNet.Shared.Enums;
 
 namespace SomNet.API.Controllers;
 
@@ -7,15 +9,15 @@ namespace SomNet.API.Controllers;
 public class SystemStatusController : ControllerBase
 {
     [HttpGet("status")]
-    public IActionResult GetStatus()
+    public ActionResult<SystemStatusResponseDto> GetStatus()
     {
         // Device and SignalR status will be populated once hardware integration is implemented.
-        return Ok(new
+        return Ok(new SystemStatusResponseDto
         {
-            api = "online",
-            device = "disconnected",
-            signalR = "disconnected",
-            message = "API online. Device and SignalR connection pending implementation.",
+            Api = ConnectionState.Online,
+            Device = ConnectionState.Offline,
+            SignalR = ConnectionState.Offline,
+            Message = "API online. Device and SignalR connection pending implementation.",
         });
     }
 }
