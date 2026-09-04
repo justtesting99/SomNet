@@ -1,8 +1,6 @@
 namespace SomNet.Shared.DTO.Auth;
 
-public sealed class LoginResponseDto
+public sealed class ChangePasswordResponseDto
 {
-    public required UserDto User { get; init; }
-
     public required AuthTokenDto Token { get; init; }
 }

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SomNet.API.Services;
 using SomNet.Shared.Enums;
@@ -5,13 +6,14 @@ using SomNet.Shared.Models;
 
 namespace SomNet.API.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/subs")]
 public class SubsController : ControllerBase
 {
-    private readonly IMockDataStore _dataStore;
+    private readonly ISomNetDataStore _dataStore;
 
-    public SubsController(IMockDataStore dataStore)
+    public SubsController(ISomNetDataStore dataStore)
     {
         _dataStore = dataStore;
     }

@@ -5,7 +5,7 @@ using SomNet.Shared.Enums;
 
 namespace SomNet.API.Services;
 
-public interface IMockDataStore
+public interface ISomNetDataStore
 {
     IReadOnlyList<SessionHistoryEntryDto> GetSessionsForDom(string domTarget, SubTargetName? subTarget = null);
 
@@ -14,6 +14,12 @@ public interface IMockDataStore
     IReadOnlyList<SubTargetName> GetSubsUnderDom(string domTarget);
 
     NotificationHistoryEntryDto AddNotification(SendSessionNotificationRequestDto request);
+
+    SessionHistoryEntryDto StartSession(string domTarget, StartSessionRequestDto request);
+
+    SessionHistoryEntryDto UpdateSession(string domTarget, string sessionId, UpdateSessionRequestDto request);
+
+    SessionHistoryEntryDto EndSession(string domTarget, string sessionId, EndSessionRequestDto request);
 
     AppOptionsDto GetOptions(string username);
 

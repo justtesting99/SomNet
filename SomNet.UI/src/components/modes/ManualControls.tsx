@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { defaultManualState, type ManualControlState } from '@/types/modes';
 import { computeStrokeMs } from '@/utils/stroke';
+import { useLiveSession } from '@/context/SessionProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
@@ -9,8 +10,9 @@ import { ManualPowerSlider } from '@/components/modes/ManualPowerSlider';
 
 export function ManualControls() {
   const [state, setState] = useState<ManualControlState>(defaultManualState);
-  const [abortEnabled, setAbortEnabled] = useState(false);
+  const [burstInProgress, setBurstInProgress] = useState(false);
   const { expandOnAction } = useVideoDisplay();
+  const { recordManualStroke, recordManualBurst, endManualSession } = useLiveSession();
 
   const strokeMs = useMemo(
     () => computeStrokeMs(state.powerPercent, state.minimumStrokeMs, state.maximumStrokeMs),
@@ -22,17 +24,20 @@ export function ManualControls() {
   }
 
   function handleStroke() {
-    setAbortEnabled(true);
+    setBurstInProgress(false);
     expandOnAction();
+    void recordManualStroke(state.burstStrokes, state.burstDelaySeconds);
   }
 
   function handleBurst() {
-    setAbortEnabled(true);
+    setBurstInProgress(true);
     expandOnAction();
+    void recordManualBurst(state.burstStrokes, state.burstDelaySeconds);
   }
 
   function handleAbort() {
-    setAbortEnabled(false);
+    setBurstInProgress(false);
+    void endManualSession('abort');
   }
 
   return (
@@ -99,7 +104,7 @@ export function ManualControls() {
               fullWidth
               variant="secondary"
               className="py-4 text-base"
-              disabled={!abortEnabled}
+              disabled={!burstInProgress}
               onClick={handleAbort}
             >
               Abort

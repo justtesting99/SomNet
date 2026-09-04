@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
+import { changePassword } from '@/api/auth';
+import { ApiError } from '@/api/client';
+import { useAuth } from '@/context/AuthProvider';
 import { useOptions } from '@/context/OptionsProvider';
 import { DEFAULT_APP_OPTIONS, MOBILE_VIDEO_EXPAND_OPTIONS, type AppOptions } from '@/types/options';
+import { MIN_PASSWORD_LENGTH } from '@/types/auth';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Input } from '@/components/ui/Input';
@@ -9,16 +13,29 @@ import { SelectField } from '@/components/ui/RadioGroup';
 import type { MobileVideoExpandDefault } from '@/types/options';
 
 export function OptionsDialog() {
+  const { user, updateSession } = useAuth();
   const { isDialogOpen, closeDialog, options, setOptions } = useOptions();
   const [pendingOptions, setPendingOptions] = useState<AppOptions>(options);
   const [saveError, setSaveError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordMessage, setPasswordMessage] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   useEffect(() => {
     if (isDialogOpen) {
       setPendingOptions(options);
       setSaveError('');
       setIsSaving(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setPasswordError('');
+      setPasswordMessage('');
+      setIsChangingPassword(false);
     }
   }, [isDialogOpen, options]);
 
@@ -61,6 +78,59 @@ export function OptionsDialog() {
 
   function handleReset() {
     setPendingOptions(DEFAULT_APP_OPTIONS);
+  }
+
+  async function handleChangePassword() {
+    setPasswordError('');
+    setPasswordMessage('');
+
+    if (!currentPassword.trim()) {
+      setPasswordError('Current password is required.');
+      return;
+    }
+
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      setPasswordError(`New password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError('New passwords do not match.');
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      setPasswordError('New password must be different from the current password.');
+      return;
+    }
+
+    if (!user) {
+      setPasswordError('You must be signed in to change your password.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    try {
+      const token = await changePassword({
+        currentPassword,
+        newPassword,
+      });
+
+      updateSession({ user, token });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setPasswordMessage('Password updated successfully.');
+    } catch (error) {
+      const message =
+        error instanceof ApiError && error.message
+          ? error.message
+          : 'Unable to change password. Check that the API is running.';
+      setPasswordError(message);
+    } finally {
+      setIsChangingPassword(false);
+    }
   }
 
   return (
@@ -150,6 +220,44 @@ export function OptionsDialog() {
               value={pendingOptions.defaultNotesPrefix}
               onChange={(event) => updateOption('defaultNotesPrefix', event.target.value)}
             />
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-200">Account</h3>
+            <p className="text-xs text-slate-500">
+              Signed in as <span className="text-slate-300">{user?.username}</span>
+            </p>
+            <Input
+              label="Current password"
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+            />
+            <Input
+              label="New password"
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+            />
+            <Input
+              label="Confirm new password"
+              type="password"
+              autoComplete="new-password"
+              value={confirmNewPassword}
+              onChange={(event) => setConfirmNewPassword(event.target.value)}
+            />
+            {passwordError ? <p className="text-sm text-red-400">{passwordError}</p> : null}
+            {passwordMessage ? <p className="text-sm text-emerald-400">{passwordMessage}</p> : null}
+            <Button
+              variant="secondary"
+              onClick={handleChangePassword}
+              disabled={isChangingPassword || isSaving}
+            >
+              {isChangingPassword ? 'Updating password…' : 'Change password'}
+            </Button>
           </section>
         </div>
 

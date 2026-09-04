@@ -10,6 +10,7 @@ import {
 import type { SystemStatusResponse, SystemStatusSnapshot } from '@/types/systemStatus';
 import { initialSystemStatus } from '@/types/systemStatus';
 import { buildSystemStatus } from '@/utils/systemStatus';
+import { apiFetch } from '@/api/client';
 
 const STATUS_ENDPOINT = '/api/system/status';
 const POLL_INTERVAL_MS = 10_000;
@@ -23,15 +24,7 @@ const SystemStatusContext = createContext<SystemStatusContextValue | null>(null)
 
 async function fetchSystemStatus(): Promise<SystemStatusSnapshot> {
   try {
-    const response = await fetch(STATUS_ENDPOINT, {
-      headers: { Accept: 'application/json' },
-    });
-
-    if (!response.ok) {
-      return buildSystemStatus(null, false);
-    }
-
-    const payload = (await response.json()) as SystemStatusResponse;
+    const payload = await apiFetch<SystemStatusResponse>(STATUS_ENDPOINT);
     return buildSystemStatus(payload, true);
   } catch {
     return buildSystemStatus(null, false);

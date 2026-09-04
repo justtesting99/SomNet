@@ -37,3 +37,8 @@ Thumbs.db
 
 # Vite / tooling
 *.local
+
+# LocalDB data files (stored under repo /data on D:)
+/data/
+*.mdf
+*.ldf

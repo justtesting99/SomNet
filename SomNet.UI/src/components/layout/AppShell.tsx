@@ -12,6 +12,7 @@ import { NotifyDialog } from '@/components/layout/NotifyDialog';
 import { useHistory } from '@/context/HistoryProvider';
 import { useOptions } from '@/context/OptionsProvider';
 import { useNotify } from '@/context/NotifyProvider';
+import { useLiveSession } from '@/context/SessionProvider';
 
 interface AppShellProps {
   children: ReactNode;
@@ -24,6 +25,18 @@ export function AppShell({ children, wide = false }: AppShellProps) {
   const { openDialog: openHistory } = useHistory();
   const { openDialog: openOptions } = useOptions();
   const { openDialog: openNotify } = useNotify();
+  const { endActiveSessionIfNeeded } = useLiveSession();
+
+  async function handleSwitchMode() {
+    await endActiveSessionIfNeeded('mode-switch');
+    setMode(null);
+  }
+
+  async function handleSignOut() {
+    await endActiveSessionIfNeeded('sign-out');
+    setMode(null);
+    logout();
+  }
 
   return (
     <div className="min-h-dvh bg-slate-950 text-slate-100">
@@ -59,7 +72,7 @@ export function AppShell({ children, wide = false }: AppShellProps) {
                   variant="ghost"
                   size="sm"
                   className="mr-4 sm:mr-6"
-                  onClick={() => setMode(null)}
+                  onClick={handleSwitchMode}
                 >
                   Switch mode
                 </Button>
@@ -71,14 +84,7 @@ export function AppShell({ children, wide = false }: AppShellProps) {
                 <Button variant="ghost" size="sm" onClick={openOptions}>
                   Options
                 </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => {
-                    setMode(null);
-                    logout();
-                  }}
-                >
+                <Button variant="secondary" size="sm" onClick={handleSignOut}>
                   Sign out
                 </Button>
               </div>

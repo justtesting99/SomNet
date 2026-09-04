@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { fetchSubs } from '@/api/subs';
 import { AVAILABLE_SUBS, SUB_ROLE, type SubTargetName } from '@/config/sessionUsers';
 import { useAuth } from '@/context/AuthProvider';
+import { useLiveSession } from '@/context/SessionProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { Button } from '@/components/ui/Button';
 
 export function SubSelectionDialog() {
   const { selectedSub, setSelectedSub, isDialogOpen, closeDialog } = useSubTarget();
   const { user } = useAuth();
+  const { endActiveSessionIfNeeded } = useLiveSession();
   const domName = user?.displayName ?? 'Unknown';
   const [pendingSub, setPendingSub] = useState<SubTargetName>(selectedSub);
   const [availableSubs, setAvailableSubs] = useState<SubTargetName[]>([...AVAILABLE_SUBS]);
@@ -71,7 +73,11 @@ export function SubSelectionDialog() {
     return null;
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
+    if (pendingSub !== selectedSub) {
+      await endActiveSessionIfNeeded('sub-change');
+    }
+
     setSelectedSub(pendingSub);
     closeDialog();
   }

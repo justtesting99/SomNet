@@ -6,6 +6,7 @@ import {
   type AutomaticRunMode,
   type EndSessionMode,
 } from '@/types/modes';
+import { useLiveSession } from '@/context/SessionProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +18,7 @@ import { RadioGroup, SelectField } from '@/components/ui/RadioGroup';
 export function AutomaticControls() {
   const [state, setState] = useState<AutomaticControlState>(defaultAutomaticState);
   const { expandOnAction } = useVideoDisplay();
+  const { beginAutomaticSession, endAutomaticSession } = useLiveSession();
 
   function update<K extends keyof AutomaticControlState>(
     key: K,
@@ -28,10 +30,12 @@ export function AutomaticControls() {
   function handleStart() {
     update('running', true);
     expandOnAction();
+    void beginAutomaticSession();
   }
 
   function handleStop() {
     update('running', false);
+    void endAutomaticSession('stopped manually');
   }
 
   const endSessionDisabled = state.endSessionMode === 'noAutoEnd';

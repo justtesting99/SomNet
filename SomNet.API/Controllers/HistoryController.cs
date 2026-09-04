@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SomNet.API.Services;
 using SomNet.Shared.DTO.History;
@@ -5,13 +6,14 @@ using SomNet.Shared.Enums;
 
 namespace SomNet.API.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/history")]
 public class HistoryController : ControllerBase
 {
-    private readonly IMockDataStore _dataStore;
+    private readonly ISomNetDataStore _dataStore;
 
-    public HistoryController(IMockDataStore dataStore)
+    public HistoryController(ISomNetDataStore dataStore)
     {
         _dataStore = dataStore;
     }

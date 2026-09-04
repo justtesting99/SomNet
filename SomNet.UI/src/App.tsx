@@ -10,13 +10,22 @@ import { DomSessionsProvider } from '@/context/DomSessionsProvider';
 import { OptionsProvider } from '@/context/OptionsProvider';
 import { NotifyProvider } from '@/context/NotifyProvider';
 import { VideoDisplayProvider } from '@/context/VideoDisplayProvider';
+import { SessionProvider } from '@/context/SessionProvider';
 import { ModeSelector } from '@/components/modes/ModeSelector';
 import { ManualControls } from '@/components/modes/ManualControls';
 import { AutomaticControls } from '@/components/modes/AutomaticControls';
 
 export function App() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isRestoring } = useAuth();
   const { mode } = useMode();
+
+  if (isRestoring) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-slate-950 text-sm text-slate-400">
+        Restoring session…
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <LoginForm />;
@@ -24,27 +33,29 @@ export function App() {
 
   return (
     <SubTargetProvider>
-      <DomSessionsProvider>
-        <OptionsProvider>
-          <NotifyProvider>
-            <HistoryProvider>
-              <SystemStatusProvider enabled>
-                <AppShell wide={mode !== null}>
-                  {!mode ? (
-                    <ModeSelector />
-                  ) : (
-                    <VideoDisplayProvider>
-                      <DashboardLayout
-                        controls={mode === 'manual' ? <ManualControls /> : <AutomaticControls />}
-                      />
-                    </VideoDisplayProvider>
-                  )}
-                </AppShell>
-              </SystemStatusProvider>
-            </HistoryProvider>
-          </NotifyProvider>
-        </OptionsProvider>
-      </DomSessionsProvider>
+      <SessionProvider>
+        <DomSessionsProvider>
+          <OptionsProvider>
+            <NotifyProvider>
+              <HistoryProvider>
+                <SystemStatusProvider enabled>
+                  <AppShell wide={mode !== null}>
+                    {!mode ? (
+                      <ModeSelector />
+                    ) : (
+                      <VideoDisplayProvider>
+                        <DashboardLayout
+                          controls={mode === 'manual' ? <ManualControls /> : <AutomaticControls />}
+                        />
+                      </VideoDisplayProvider>
+                    )}
+                  </AppShell>
+                </SystemStatusProvider>
+              </HistoryProvider>
+            </NotifyProvider>
+          </OptionsProvider>
+        </DomSessionsProvider>
+      </SessionProvider>
     </SubTargetProvider>
   );
 }

@@ -1,16 +1,18 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SomNet.API.Services;
 using SomNet.Shared.DTO.Options;
 
 namespace SomNet.API.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/options")]
 public class OptionsController : ControllerBase
 {
-    private readonly IMockDataStore _dataStore;
+    private readonly ISomNetDataStore _dataStore;
 
-    public OptionsController(IMockDataStore dataStore)
+    public OptionsController(ISomNetDataStore dataStore)
     {
         _dataStore = dataStore;
     }

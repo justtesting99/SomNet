@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SomNet.Shared.DTO.System;
 using SomNet.Shared.Enums;
 
 namespace SomNet.API.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/system")]
 public class SystemStatusController : ControllerBase
