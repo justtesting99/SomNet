@@ -1,5 +1,6 @@
 #include "nvs_store.h"
 
+#include <Arduino.h>
 #include <Preferences.h>
 #include <string.h>
 
@@ -7,9 +8,10 @@ namespace {
 
 constexpr char kNamespace[] = "somnet";
 
+// NVS key names must be <= 15 characters (ESP-IDF NVS_KEY_NAME_MAX_SIZE - 1).
 constexpr char kKeyDeviceId[] = "device_id";
-constexpr char kKeyFriendlyName[] = "device_friendly_name";
-constexpr char kKeyInstallerContact[] = "installer_contact";
+constexpr char kKeyFriendlyName[] = "friendly_name";
+constexpr char kKeyInstallerContact[] = "installer";
 constexpr char kKeyWifiSsid[] = "wifi_ssid";
 constexpr char kKeyWifiPass[] = "wifi_pass";
 constexpr char kKeyServerUrl[] = "server_url";
@@ -23,6 +25,13 @@ constexpr char kKeyProvisioned[] = "provisioned";
 
 Preferences preferences;
 NvsStore* gNvsStoreInstance = nullptr;
+
+static bool isValidNvsKey(const char* key) {
+    if (key == nullptr || key[0] == '\0') {
+        return false;
+    }
+    return strlen(key) <= 15;
+}
 
 } // namespace
 
@@ -82,7 +91,7 @@ bool NvsStore::getString(const char* key, char* out, size_t outLen) const {
         return false;
     }
     out[0] = '\0';
-    if (!open_) {
+    if (!open_ || !isValidNvsKey(key)) {
         return false;
     }
     if (!preferences.isKey(key)) {
@@ -90,20 +99,20 @@ bool NvsStore::getString(const char* key, char* out, size_t outLen) const {
     }
 
     String value = preferences.getString(key, "");
-    if (value.length() == 0) {
-        return false;
-    }
-
     strncpy(out, value.c_str(), outLen - 1);
     out[outLen - 1] = '\0';
     return true;
 }
 
 bool NvsStore::setString(const char* key, const char* value) {
-    if (!open_) {
+    if (!open_ || !isValidNvsKey(key)) {
+        Serial.print(F("[NVS] invalid key (max 15 chars): "));
+        Serial.println(key != nullptr ? key : "(null)");
         return false;
     }
-    return preferences.putString(key, value != nullptr ? value : "") > 0;
+    // putString returns 0 for empty strings; that is still a successful write.
+    preferences.putString(key, value != nullptr ? value : "");
+    return true;
 }
 
 bool NvsStore::getDeviceId(char* out, size_t outLen) const {

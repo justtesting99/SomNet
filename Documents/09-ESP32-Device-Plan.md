@@ -311,7 +311,7 @@ During **initial provisioning**, SignalR is intentionally **not** started until 
 | Field | Stored in NVS | Notes |
 |-------|---------------|-------|
 | **Device ID** | `device_id` | **Read-only** on form — derived from MAC (§4.1) |
-| **Friendly name** | `device_friendly_name` | Optional; user-entered label for this unit |
+| **Friendly name** | `friendly_name` | Optional; user-entered label for this unit |
 | Wi-Fi SSID | `wifi_ssid` | Required |
 | Wi-Fi password | `wifi_pass` | Required for WPA |
 | SomNet server URL | `server_url` | e.g. `http://192.168.1.10:5031` or `https://api.example.com` — **no** `/hubs/hardware` suffix |
@@ -456,7 +456,7 @@ That JWT binding is exactly what makes later transactions **secure and scoped** 
 | **Uniqueness** | Suitable for **many devices** on one server — MAC is globally unique per unit |
 | **Stability** | Same MAC → same ID across reboots; factory reset keeps MAC, regenerates same ID |
 
-Optional **friendly name** (`device_friendly_name` in NVS) helps humans distinguish units; see email workflow below.
+Optional **friendly name** (`friendly_name` in NVS) helps humans distinguish units; see email workflow below.
 
 #### Registration strategies — comparison
 
@@ -567,8 +567,8 @@ Until Phase 8: Swagger + device ID from ESP32 status page or email.
 | Field | Editable? | NVS key | Notes |
 |-------|-----------|---------|-------|
 | **Device ID** | **Read-only** | `device_id` (from MAC) | Prominent; “use this ID when pairing in SomNet” |
-| **Friendly name** | Optional text | `device_friendly_name` | e.g. “Workshop valve” — include in email to Dom |
-| **Installer contact** | Optional text | `installer_contact` | Name/email for email handoff (§4.1) |
+| **Friendly name** | Optional text | `friendly_name` | e.g. “Workshop valve” — include in email to Dom |
+| **Installer contact** | Optional text | `installer` | Name/email for email handoff (§4.1) |
 | Wi-Fi SSID / password | Yes | `wifi_ssid`, `wifi_pass` | Required for provisioning |
 | SomNet server URL | Yes | `server_url` | Cloud or LAN IP of API |
 | Pairing state | Read-only | — | Unpaired / paired / connected; Dom/Sub if paired |
@@ -1150,11 +1150,13 @@ Respond to SignalR **ping** messages promptly to avoid server idle disconnect.
 
 Use ESP32 **Preferences** (NVS namespace e.g. `somnet`).
 
+**Key names must be ≤ 15 characters** (ESP-IDF limit). Use short keys in firmware — e.g. `friendly_name`, not `device_friendly_name`.
+
 | Key | Type | Description |
 |-----|------|-------------|
 | `device_id` | string | **`esp32-{MAC}`** — from `device_identity`; read-only in config UI |
-| `device_friendly_name` | string | Optional label from config form (§4.1) |
-| `installer_contact` | string | Optional name/email for email handoff to Dom |
+| `friendly_name` | string | Optional label from config form (§4.1) |
+| `installer` | string | Optional name/email for email handoff to Dom |
 | `wifi_ssid` | string | From config web UI or compile-time default |
 | `wifi_pass` | string | From config web UI (stored in NVS; consider encryption for production) |
 | `server_url` | string | SomNet API base URL (e.g. `http://192.168.1.10:5031`) — set via config UI |
@@ -1418,7 +1420,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 **Deliverables (reference):**
 
 - [x] `device_identity` module: read MAC → format **`esp32-{12HEX}`** → persist `device_id`
-- [x] `nvs_store` module: token, pairing metadata, **`device_friendly_name`**
+- [x] `nvs_store` module: token, pairing metadata, **`friendly_name`**
 - [x] Serial + banner prints device ID and MAC
 - [x] Credential reset hook: **10 s button hold** clears Wi‑Fi + server settings (`clearProvisioning`); see [Hardware User Guide](./Hardware-User-Guide.md)
 

@@ -118,8 +118,33 @@ bool saveConfigFromRequest(AsyncWebServerRequest* request, String& errorOut) {
         return false;
     }
 
-    gNvs->setFriendlyName(request->arg("friendly_name").c_str());
-    gNvs->setInstallerContact(request->arg("installer_contact").c_str());
+    String friendlyName = request->arg("friendly_name");
+    String installerContact = request->arg("installer_contact");
+    friendlyName.trim();
+    installerContact.trim();
+
+    if (friendlyName.length() == 0) {
+        char existing[NvsStore::kMaxStringLen];
+        if (gNvs->getFriendlyName(existing, sizeof(existing))) {
+            friendlyName = existing;
+        }
+    }
+
+    if (installerContact.length() == 0) {
+        char existing[NvsStore::kMaxStringLen];
+        if (gNvs->getInstallerContact(existing, sizeof(existing))) {
+            installerContact = existing;
+        }
+    }
+
+    if (!gNvs->setFriendlyName(friendlyName.c_str())) {
+        errorOut = "Failed to save friendly name";
+        return false;
+    }
+    if (!gNvs->setInstallerContact(installerContact.c_str())) {
+        errorOut = "Failed to save installer contact";
+        return false;
+    }
 
     if (!gNvs->setProvisioned(true)) {
         errorOut = "Failed to mark provisioned";
@@ -129,7 +154,11 @@ bool saveConfigFromRequest(AsyncWebServerRequest* request, String& errorOut) {
     Serial.print(F("[HTTP] saved wifi ssid="));
     Serial.print(wifiSsid);
     Serial.print(F(" pass_len="));
-    Serial.println(wifiPass.length());
+    Serial.print(wifiPass.length());
+    Serial.print(F(" friendly="));
+    Serial.print(friendlyName.length() > 0 ? friendlyName.c_str() : "(none)");
+    Serial.print(F(" installer="));
+    Serial.println(installerContact.length() > 0 ? installerContact.c_str() : "(none)");
 
     return true;
 }

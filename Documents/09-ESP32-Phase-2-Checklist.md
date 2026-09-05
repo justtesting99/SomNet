@@ -112,8 +112,8 @@ Implement ESP32 **Preferences** wrapper for namespace `somnet` (or P2-D2).
 | Key | Type | Phase 2 |
 |-----|------|---------|
 | `device_id` | string | **Read/write** — primary deliverable |
-| `device_friendly_name` | string | Read/write API (empty default) |
-| `installer_contact` | string | Read/write API (empty default) |
+| `friendly_name` | string | Read/write API (empty default) |
+| `installer` | string | Read/write API (empty default) |
 | `wifi_ssid` | string | Stub get/set — used Phase 3 |
 | `wifi_pass` | string | Stub get/set — used Phase 3 |
 | `server_url` | string | Stub get/set — used Phase 3 |
