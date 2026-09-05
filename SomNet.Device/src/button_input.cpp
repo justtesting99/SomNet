@@ -10,11 +10,11 @@ void ButtonInput::begin() {
     pinMode(PIN_BUTTON, INPUT_PULLUP);
 }
 
-void ButtonInput::handleFactoryResetHold(bool pressed) {
+void ButtonInput::handleCredentialResetHold(bool pressed) {
     if (!pressed) {
         pressStartedMs_ = 0;
-        factoryResetWarned_ = false;
-        factoryResetTriggered_ = false;
+        credentialResetWarned_ = false;
+        credentialResetTriggered_ = false;
         return;
     }
 
@@ -25,16 +25,16 @@ void ButtonInput::handleFactoryResetHold(bool pressed) {
 
     const unsigned long heldMs = millis() - pressStartedMs_;
 
-    if (!factoryResetWarned_ && heldMs >= FACTORY_RESET_WARN_MS) {
-        Serial.println(F("[BTN] hold 10s for factory reset..."));
-        factoryResetWarned_ = true;
+    if (!credentialResetWarned_ && heldMs >= CREDENTIAL_RESET_WARN_MS) {
+        Serial.println(F("[BTN] keep holding 10s to reset Wi-Fi / server credentials..."));
+        credentialResetWarned_ = true;
     }
 
-    if (!factoryResetTriggered_ && heldMs >= FACTORY_RESET_HOLD_MS) {
-        factoryResetTriggered_ = true;
-        Serial.println(F("[NVS] factory reset — clearing all keys"));
+    if (!credentialResetTriggered_ && heldMs >= CREDENTIAL_RESET_HOLD_MS) {
+        credentialResetTriggered_ = true;
+        Serial.println(F("[NVS] credential reset — clearing Wi-Fi and server settings"));
         if (NvsStore* store = nvsStoreInstance()) {
-            store->clearAll();
+            store->clearProvisioning();
         }
         Serial.println(F("[BOOT] restarting..."));
         delay(100);
@@ -53,6 +53,6 @@ void ButtonInput::poll() {
         }
     }
 
-    handleFactoryResetHold(pressed);
+    handleCredentialResetHold(pressed);
     lastPressed_ = pressed;
 }

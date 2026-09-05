@@ -14,6 +14,10 @@ public:
 
     void clearAll();
     void clearPairing();
+    void clearProvisioning();
+
+    // True when provisioned flag set and wifi_ssid + server_url stored
+    bool isFullyProvisioned() const;
 
     // device_id
     bool getDeviceId(char* out, size_t outLen) const;
@@ -58,6 +62,6 @@ private:
     bool open_ = false;
 };
 
-// Set by main during setup for factory reset
+// Set by main during setup for button credential reset
 void nvsStoreSetInstance(NvsStore* store);
 NvsStore* nvsStoreInstance();

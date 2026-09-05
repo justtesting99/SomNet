@@ -12,9 +12,11 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 **Critical path after scaffold:** **Device registration** — associating a physical unit with a **Sub** on the SomNet server so SignalR commands reach the right device. The on-device config web UI (MAC-based ID, optional friendly name) plus a SomNet UI pairing flow address this. See **§4.1**.
 
+**End-user / installer documentation:** [Hardware User Guide](./Hardware-User-Guide.md) — provisioning, Wi‑Fi recovery (10 s button hold), Device ID.
+
 **Scope:** Planning and architecture only. No changes to existing SomNet API or UI code until explicitly approved.
 
-**Related docs:** [SignalR & Hardware](./06-SignalR-And-Hardware.md), [Authentication & Security](./05-Authentication-And-Security.md), [API Reference](./02-API-Reference.md)
+**Related docs:** [Hardware User Guide](./Hardware-User-Guide.md), [SignalR & Hardware](./06-SignalR-And-Hardware.md), [Authentication & Security](./05-Authentication-And-Security.md), [API Reference](./02-API-Reference.md)
 
 ---
 
@@ -270,15 +272,15 @@ These do not conflict:
 ### Operating modes
 
 ```
-┌─────────────────┐     first boot / no Wi-Fi / button hold
-│  PROVISIONING   │ ──► Soft-AP (e.g. SomNet-Setup-ABC123) + captive portal
+┌─────────────────┐     first boot / no Wi-Fi / 10s button (credential reset)
+│  PROVISIONING   │ ──► Soft-AP (e.g. SomNet-Setup-ABC123) + setup form
 └────────┬────────┘     SignalR: paused until Wi-Fi + server URL saved
          │ reboot
          ▼
 ┌─────────────────┐     normal operation
 │    RUNNING      │ ──► Wi-Fi STA + SignalR hub client + optional LAN status page
 └────────┬────────┘
-         │ user opens http://<device-ip>/config (or long-press button)
+         │ user opens http://<device-ip>/config (or 10s button → provisioning)
          ▼
 ┌─────────────────┐     config session (can overlap RUNNING)
 │  CONFIG ACTIVE  │ ──► HTTP config forms; SignalR stays connected if already paired
@@ -330,6 +332,24 @@ During **initial provisioning**, SignalR is intentionally **not** started until 
 | **Minimal attack surface** | Static HTML + form POST; no file upload; no arbitrary SSID injection into shell |
 | **Responsive layout** | Usable on phone browser (single column) |
 | **Clear device ID** | Prominent copy/display for SomNet pairing step |
+
+### Config UI — visual styling (deferred polish)
+
+Phase 3 ships **functional** pages first (inline CSS, minimal layout, PROGMEM-friendly HTML). **Do not block Phase 4+ on styling.**
+
+Before production / end of Phase 7, align the on-device config UI with the **SomNet React web application** so installers recognize a consistent product:
+
+| Item | Target |
+|------|--------|
+| **When** | After Phase 3 exit criteria met; **scheduled in Phase 7** (production prep) or optional Phase 3 polish if time allows |
+| **Scope** | `/`, `/config`, and POST “Saved / please wait for reboot” pages |
+| **Approach** | Shared compact CSS in PROGMEM (colors, typography, buttons, form fields) — no external CDN, no heavy JS; keep total HTML+CSS within ESP32 RAM budget (~20 KB combined) |
+| **Source of truth** | SomNet React app theme (header background, primary button, text colors, spacing) — extract hex/font values from frontend CSS or design tokens |
+| **Out of scope** | Pixel-perfect clone, dark-mode toggle, or loading the full web app on the device |
+
+**Checklist reminder:** When closing Phase 7, verify this item is done or explicitly deferred with sign-off.
+
+**End-user doc:** [Hardware User Guide](./Hardware-User-Guide.md) describes flows only; styling is invisible to procedure.
 
 ### Relationship to SomNet web app
 
@@ -1330,7 +1350,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 | **0** | Protocol verification | [Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | **Complete** |
 | 1 | Project scaffold | [Phase 1 Checklist](./09-ESP32-Phase-1-Checklist.md) | **Complete** |
 | 2 | NVS + MAC device identity | [Phase 2 Checklist](./09-ESP32-Phase-2-Checklist.md) | **Complete** |
-| **3** | **Config web UI + registration UX** | *TBD* | — |
+| **3** | **Config web UI + registration UX** | [Phase 3 Checklist](./09-ESP32-Phase-3-Checklist.md) | **Complete** |
 | 4 | SignalR client + pairing | *TBD* | — |
 | 5 | Single-pulse command + ack | *TBD* | — |
 | 6 | Single-pulse relay | *TBD* | — |
@@ -1339,6 +1359,8 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 | 9 | Burst and automatic modes | *TBD* | — |
 
 **Rationale:** Phase **3** (config UI with MAC-based ID and friendly name) runs **before** SignalR so installers can provision network and obtain the pairing ID without Swagger/serial. Phase **8** completes Dom-side Sub association in the React app.
+
+**Cross-phase polish:** On-device config pages (`/`, `/config`) are **functionally complete in Phase 3** but **visually minimal** until **Phase 7**, when they should match the SomNet web app theme — see §4 *Config UI — visual styling* and open decision **#17**. Do not skip this when closing production prep.
 
 **Maintenance:** When a phase finishes, (1) mark its checklist sign-off, (2) update the **Status** column above, (3) add the next phase checklist document if needed.
 
@@ -1398,7 +1420,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 - [x] `device_identity` module: read MAC → format **`esp32-{12HEX}`** → persist `device_id`
 - [x] `nvs_store` module: token, pairing metadata, **`device_friendly_name`**
 - [x] Serial + banner prints device ID and MAC
-- [x] Factory reset hook (optional: long-press button clears NVS except MAC-derived id)
+- [x] Credential reset hook: **10 s button hold** clears Wi‑Fi + server settings (`clearProvisioning`); see [Hardware User Guide](./Hardware-User-Guide.md)
 
 **Exit criteria:** Reboot preserves same `device_id`; MAC-based ID stable and documented for pairing.
 
@@ -1406,15 +1428,25 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 ### Phase 3 — Config web UI and registration UX (2–3 days) — **early priority**
 
+**Checklist:** [09-ESP32-Phase-3-Checklist.md](./09-ESP32-Phase-3-Checklist.md)  
+**Status:** Complete (2026-09-05)
+
 **Why early:** Enables Wi-Fi/server setup and **shows MAC-based device ID + optional friendly name** before SignalR/relay work. Unblocks manual registration testing with Swagger.
 
-**Deliverables:**
+**Summary:** `ESPAsyncWebServer` on LAN; Soft-AP provisioning when not provisioned; `/` status + `/config` form → NVS → reboot; Wi-Fi from NVS with dev `secrets.ini` fallback. **No** SignalR, Dom/Sub, or JWT on device UI.
 
-- [ ] `config_web_server` module with `ESPAsyncWebServer`
-- [ ] **`/` status page:** read-only device ID, MAC, friendly name, pairing state, instructions “Pair this ID in SomNet”
-- [ ] **`/config` form:** friendly name (optional), Wi-Fi, server URL; device ID **read-only**
-- [ ] POST → NVS → reboot; **provisioning Soft-AP** when not provisioned
-- [ ] Non-blocking HTTP alongside future SignalR (architecture ready)
+**Exit criteria:** Installer configures unit from phone; device ID visible without serial; no random ID typing.
+
+*Detailed routes, form fields, and verification tests are in the checklist — not duplicated here.*
+
+**Deliverables (reference):**
+
+- [x] `config_web_server` module with `ESPAsyncWebServer`
+- [x] **`/` status page:** read-only device ID, MAC, friendly name, pairing state, instructions “Pair this ID in SomNet”
+- [x] **`/config` form:** friendly name (optional), Wi-Fi, server URL; device ID **read-only**
+- [x] POST → NVS → reboot; **provisioning Soft-AP** when not provisioned
+- [x] Non-blocking HTTP alongside future SignalR (architecture ready)
+- [ ] **Visual polish (deferred):** match SomNet web app styling — see §4 *Config UI — visual styling*; target Phase 7
 
 **Exit criteria:** Installer configures unit from phone; device ID visible without serial; no random ID typing.
 
@@ -1474,6 +1506,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 - [ ] Token expiry handling → unpaired fallback
 - [ ] `wss://` build profile for cloud
 - [ ] Watchdog for hub loop
+- [ ] **Config UI visual alignment** with SomNet React app (§4 *Config UI — visual styling*) — colors, typography, buttons on `/`, `/config`, saved/reboot page; PROGMEM CSS only
 - [ ] README: wiring diagram, flash steps, **config UI URL**, **registration / pairing procedure** (§4.1)
 - [ ] Soak test: 24h reconnect stability (SignalR + config HTTP concurrent)
 
@@ -1519,6 +1552,8 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 ## 11. Pairing Procedure (Development)
 
 ### Initial device setup (ESP32 config UI — Phase 3)
+
+**Installer guide:** [Hardware User Guide](./Hardware-User-Guide.md)
 
 1. Flash ESP32; on first boot it enters **provisioning** (Soft-AP)
 2. Connect phone to device AP (or same LAN after setup)
@@ -1634,6 +1669,7 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 | 14 | Failed command in UI | Show error only vs write "failed attempt" to session history |
 | 15 | Automatic pulse randomization | Random power→ms vs random ms directly in range (or both per config) |
 | 16 | Burst inside automatic | Nested class vs `AutomaticSessionMode` calling `BurstSequenceMode` |
+| 17 | Config UI visual styling | Phase 3 minimal inline CSS now; **Phase 7** align with SomNet React theme (§4) |
 
 ---
 

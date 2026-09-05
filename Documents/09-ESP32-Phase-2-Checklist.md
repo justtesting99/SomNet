@@ -195,6 +195,8 @@ Note: wifi_init_default netstack cb warning observed once; connect succeeded
 
 ## D. Factory reset (optional — P2-D6)
 
+**Update (Phase 3):** Button hold is now **credential reset** (Wi‑Fi + server only), not full NVS wipe. See [Hardware User Guide](./Hardware-User-Guide.md). Full factory reset remains on `/config` when on LAN.
+
 Long-press **PIN_BUTTON** (D33, active low) clears NVS and reboots.
 
 - [x] Hold detection non-blocking in `button_input.poll()` or dedicated `factory_reset` helper
@@ -316,5 +318,5 @@ Future phase checklists:
 | 0 | [09-ESP32-Phase-0-Checklist.md](./09-ESP32-Phase-0-Checklist.md) | Complete |
 | 1 | [09-ESP32-Phase-1-Checklist.md](./09-ESP32-Phase-1-Checklist.md) | Complete |
 | 2 | This document | Complete |
-| 3 | *TBD: `09-ESP32-Phase-3-Checklist.md`* | — |
+| 3 | [09-ESP32-Phase-3-Checklist.md](./09-ESP32-Phase-3-Checklist.md) | Complete |
 | 4+ | *Created when prior phase completes* | — |

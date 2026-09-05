@@ -4,18 +4,46 @@
 
 #include <Arduino.h>
 
-void WifiManager::begin(const char* ssid, const char* password) {
-    ssid_ = ssid != nullptr ? ssid : "";
-    password_ = password != nullptr ? password : "";
+void WifiManager::beginStation(const char* ssid, const char* password) {
+    softApMode_ = false;
+    loggedConfigUi_ = false;
+    strncpy(ssid_, ssid != nullptr ? ssid : "", sizeof(ssid_) - 1);
+    strncpy(password_, password != nullptr ? password : "", sizeof(password_) - 1);
+    ssid_[sizeof(ssid_) - 1] = '\0';
+    password_[sizeof(password_) - 1] = '\0';
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(false);
     state_ = WifiConnectionState::Disconnected;
     retryDelayMs_ = WIFI_RETRY_BASE_MS;
     nextRetryMs_ = millis();
     loggedConnected_ = false;
+    connectFailures_ = 0;
+}
+
+void WifiManager::beginSoftAp(const char* apSsid) {
+    softApMode_ = true;
+    loggedConfigUi_ = false;
+    ssid_[0] = '\0';
+    password_[0] = '\0';
+
+    WiFi.mode(WIFI_AP);
+    WiFi.softAPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1), IPAddress(255, 255, 255, 0));
+    const bool started = WiFi.softAP(apSsid);
+    state_ = started ? WifiConnectionState::Connected : WifiConnectionState::Disconnected;
+    loggedConnected_ = false;
+
+    Serial.print(F("[WIFI] Soft-AP "));
+    Serial.print(apSsid);
+    Serial.print(F(" IP="));
+    Serial.println(WiFi.softAPIP());
+    Serial.println(F("[HTTP] Config UI: http://192.168.4.1/"));
 }
 
 void WifiManager::poll() {
+    if (softApMode_) {
+        return;
+    }
+
     switch (state_) {
     case WifiConnectionState::Disconnected:
         handleDisconnected();
@@ -31,21 +59,36 @@ void WifiManager::poll() {
 
 const char* WifiManager::localIp() const {
     static char buffer[16] = "0.0.0.0";
+    if (softApMode_) {
+        const IPAddress ip = WiFi.softAPIP();
+        strncpy(buffer, ip.toString().c_str(), sizeof(buffer) - 1);
+        buffer[sizeof(buffer) - 1] = '\0';
+        return buffer;
+    }
     if (!isConnected()) {
         return buffer;
     }
-    strncpy(buffer, WiFi.localIP().toString().c_str(), sizeof(buffer) - 1);
+
+    const IPAddress ip = WiFi.localIP();
+    strncpy(buffer, ip.toString().c_str(), sizeof(buffer) - 1);
     buffer[sizeof(buffer) - 1] = '\0';
     return buffer;
 }
 
+const char* WifiManager::configuredSsid() const {
+    return ssid_;
+}
+
 int WifiManager::rssi() const {
-    return isConnected() ? WiFi.RSSI() : 0;
+    if (softApMode_ || !isConnected()) {
+        return 0;
+    }
+    return WiFi.RSSI();
 }
 
 void WifiManager::startConnect() {
     if (ssid_[0] == '\0') {
-        Serial.println(F("[WIFI] no SSID configured — copy secrets.ini.example to secrets.ini"));
+        Serial.println(F("[WIFI] no SSID configured — use /config or secrets.ini"));
         nextRetryMs_ = millis() + retryDelayMs_;
         return;
     }
@@ -57,6 +100,7 @@ void WifiManager::startConnect() {
     connectStartedMs_ = millis();
     state_ = WifiConnectionState::Connecting;
     loggedConnected_ = false;
+    loggedConfigUi_ = false;
 }
 
 void WifiManager::handleDisconnected() {
@@ -71,6 +115,7 @@ void WifiManager::handleConnecting() {
     if (status == WL_CONNECTED) {
         state_ = WifiConnectionState::Connected;
         retryDelayMs_ = WIFI_RETRY_BASE_MS;
+        connectFailures_ = 0;
         logConnectedOnce();
         return;
     }
@@ -80,6 +125,7 @@ void WifiManager::handleConnecting() {
         Serial.println(static_cast<int>(status));
         WiFi.disconnect(true);
         state_ = WifiConnectionState::Disconnected;
+        ++connectFailures_;
         retryDelayMs_ = min(retryDelayMs_ * 2, WIFI_RETRY_MAX_MS);
         nextRetryMs_ = millis() + retryDelayMs_;
         Serial.print(F("[WIFI] retry in "));
@@ -96,6 +142,7 @@ void WifiManager::handleConnected() {
     Serial.println(F("[WIFI] link lost, reconnecting"));
     state_ = WifiConnectionState::Disconnected;
     loggedConnected_ = false;
+    loggedConfigUi_ = false;
     nextRetryMs_ = millis() + WIFI_RETRY_BASE_MS;
 }
 
@@ -108,4 +155,11 @@ void WifiManager::logConnectedOnce() {
     Serial.print(WiFi.localIP());
     Serial.print(F(" RSSI="));
     Serial.println(WiFi.RSSI());
+
+    if (!loggedConfigUi_) {
+        loggedConfigUi_ = true;
+        Serial.print(F("[HTTP] Config UI: http://"));
+        Serial.print(WiFi.localIP());
+        Serial.println('/');
+    }
 }

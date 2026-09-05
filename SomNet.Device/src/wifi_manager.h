@@ -12,13 +12,17 @@ enum class WifiConnectionState {
 
 class WifiManager {
 public:
-    void begin(const char* ssid, const char* password);
+    void beginStation(const char* ssid, const char* password);
+    void beginSoftAp(const char* apSsid);
     void poll();
 
+    bool isSoftAp() const { return softApMode_; }
     WifiConnectionState state() const { return state_; }
     bool isConnected() const { return state_ == WifiConnectionState::Connected; }
     const char* localIp() const;
+    const char* configuredSsid() const;
     int rssi() const;
+    unsigned connectFailureCount() const { return connectFailures_; }
 
 private:
     void startConnect();
@@ -27,11 +31,14 @@ private:
     void handleConnected();
     void logConnectedOnce();
 
-    const char* ssid_ = "";
-    const char* password_ = "";
+    char ssid_[33] = {};
+    char password_[65] = {};
+    bool softApMode_ = false;
     WifiConnectionState state_ = WifiConnectionState::Disconnected;
     unsigned long connectStartedMs_ = 0;
     unsigned long nextRetryMs_ = 0;
     unsigned long retryDelayMs_ = WIFI_RETRY_BASE_MS;
     bool loggedConnected_ = false;
+    bool loggedConfigUi_ = false;
+    unsigned connectFailures_ = 0;
 };

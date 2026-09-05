@@ -69,12 +69,23 @@ void NvsStore::clearPairing() {
     setPairedFlag(false);
 }
 
+void NvsStore::clearProvisioning() {
+    setWifiSsid("");
+    setWifiPass("");
+    setServerUrl("");
+    setUseTls(false);
+    setProvisioned(false);
+}
+
 bool NvsStore::getString(const char* key, char* out, size_t outLen) const {
     if (outLen == 0) {
         return false;
     }
     out[0] = '\0';
     if (!open_) {
+        return false;
+    }
+    if (!preferences.isKey(key)) {
         return false;
     }
 
@@ -169,6 +180,16 @@ bool NvsStore::setProvisioned(bool value) {
         return false;
     }
     return preferences.putBool(kKeyProvisioned, value) > 0;
+}
+
+bool NvsStore::isFullyProvisioned() const {
+    if (!isProvisioned()) {
+        return false;
+    }
+
+    char wifi[NvsStore::kMaxStringLen];
+    char server[NvsStore::kMaxStringLen];
+    return getWifiSsid(wifi, sizeof(wifi)) && getServerUrl(server, sizeof(server));
 }
 
 bool NvsStore::getAccessToken(char* out, size_t outLen) const {
