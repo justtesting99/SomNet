@@ -22,6 +22,7 @@ SomNet/
 ├── SomNet.API/       ASP.NET Core host (REST, SignalR, EF Core, static UI)
 ├── SomNet.Shared/    Shared DTOs, enums, models
 ├── SomNet.UI/        React + TypeScript + Vite + Tailwind
+├── SomNet.Device/    PlatformIO ESP32 firmware (Cursor/VS Code + PlatformIO; not in .slnx)
 ├── Documents/        Technical documentation and user guide
 └── data/             SQL LocalDB attach files (local dev)
 ```
@@ -44,6 +45,7 @@ Full documentation lives in the [`Documents/`](Documents/) folder:
 | [Development Guide](Documents/08-Development-Guide.md) | Local setup, ports, troubleshooting |
 | [User Guide](Documents/User-Guide.md) | Operator how-to |
 | [ESP32 Device Plan](Documents/09-ESP32-Device-Plan.md) | ESP32 firmware implementation plan |
+| [ESP32 Phase 0 Checklist](Documents/09-ESP32-Phase-0-Checklist.md) | Protocol capture checklist (firmware Phase 0) |
 
 See [Documents/README.md](Documents/README.md) for the full index.
 

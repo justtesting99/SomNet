@@ -6,6 +6,12 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 **Source-of-truth principle:** What the UI/API **records** about strokes, bursts, and automatic sessions must reflect **what the device actually did**, as reported in the completion message (`AckCommand`) after each command — not what the UI assumed when the button was pressed.
 
+**Timing architecture:** Firmware is **non-blocking** — explicit **state machines** drive relay pulses, bursts, and automatic schedules using `millis()` polling so SignalR and Wi-Fi stay responsive while timing stays accurate.
+
+**Initial development scope:** First firmware milestones implement **`stroke` (single pulse) only** — pairing, SignalR, relay timing, and ack. The codebase **must still be structured** for `burst` and `automatic` modes (`IExecutionMode`, `execution_context`, separate mode classes) so later features plug in without rework. See §6 and §10.
+
+**Critical path after scaffold:** **Device registration** — associating a physical unit with a **Sub** on the SomNet server so SignalR commands reach the right device. The on-device config web UI (MAC-based ID, optional friendly name) plus a SomNet UI pairing flow address this. See **§4.1**.
+
 **Scope:** Planning and architecture only. No changes to existing SomNet API or UI code until explicitly approved.
 
 **Related docs:** [SignalR & Hardware](./06-SignalR-And-Hardware.md), [Authentication & Security](./05-Authentication-And-Security.md), [API Reference](./02-API-Reference.md)
@@ -23,95 +29,150 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 | 3 | **Outbound SignalR to SomNet API** | Secure, token-authenticated hub connection; act only on messages destined for this device |
 | 4 | **Acknowledge command lifecycle** | Server and UI know when a message was received and when action completed |
 | 5 | **Initial action = serial logging** | Relay/button logic stubbed; commands logged to Serial Monitor during development |
-| 6 | **On-device configuration web UI** | Lightweight pages served by the ESP32 HTTP server for Wi-Fi and SomNet server settings (see §4) |
-| 7 | **Device-side timing execution** | Relay and sequence timing run entirely on the ESP32 from message payload data (see §6) |
+| 6 | **On-device configuration web UI** | Wi-Fi, server URL, **device identity display**, optional friendly name — enables registration (see §4, §4.1) |
+| 7 | **Device-side timing execution** | Relay and sequence timing on ESP32; automatic uses **random** pulse length and random inter-pulse gaps (see §6) |
 | 8 | **Device-reported history** | Completion ack from device updates API/UI session state — device is authoritative (see §9) |
+| 9 | **Non-blocking timing architecture** | No blocking waits in the main path; state machines for stroke, burst, and automatic timing (see §6, §12) |
 
-### Non-Goals (Phase 1)
+### Non-Goals (initial firmware milestones)
 
 - OTA firmware updates
 - Offline command queue
 - SomNet UI pairing dialog (pair via Swagger/API during dev; device UI shows ID only)
 - Changes to SomNet backend or frontend (unless a protocol gap is approved)
 - Full-featured device admin portal (keep config UI minimal)
+- **Fully implemented burst and automatic modes** — architecture and stubs only until single-pulse path is proven (see §6 *Initial vs target implementation*)
 
-### Hardware (Phase 1)
+### Hardware (confirmed)
 
-| Component | Role | Notes |
-|-----------|------|-------|
-| **ESP32 dev board** | Main controller | ESP32-WROOM or similar; Wi-Fi required |
-| **Relay module** | Output | Single relay on one GPIO; **energized (closed) for exact `strokeMs` from message**, then de-energized |
-| **Push button** | Input (future) | One GPIO with internal pull-up; debounce in firmware; no server action in Phase 1 |
-| **USB serial** | Development | 115200 baud Serial Monitor for state and command logging |
+| Component | Detail |
+|-----------|--------|
+| **Main board** | **ESP32 DevKit V1 clone** (ESP32-WROOM-32 class, 30-pin dev board) |
+| **PlatformIO board** | `esp32dev` in `platformio.ini` |
+| **USB serial** | On-board CP2102/CH340 (clone-dependent); **115200** baud for monitor |
+| **Relay module** | **D4** (GPIO 4) → optocoupled input; module has **built-in LED(s)** on relay state — no separate status LEDs in project |
+| **Push button** | **D33** (GPIO 33) — input with internal pull-up, debounced |
 
-Suggested starting pins (configurable constants, not fixed in this plan):
+### Status LEDs
 
-| Signal | Suggested GPIO | Direction |
-|--------|----------------|-----------|
-| Relay control | GPIO 26 | Output |
-| User button | GPIO 27 | Input (pull-up) |
+| Location | Present? | Firmware |
+|----------|----------|----------|
+| **External / project LEDs** | **No** | No GPIO allocated for status indicators |
+| **ESP32 DevKit on-board LED** | Usually GPIO 2 (built into board) | **Do not use for relay logic** — optional debug only if needed |
+| **Relay module built-in LED(s)** | **Yes** | Driven by module circuitry when opto input activates — **no extra firmware**; use for visual confirmation during bench test |
+
+Firmware status and command trace rely on **Serial Monitor** (115200) until/unless external LEDs are added later.
+
+### Relay module (optocoupler)
+
+Typical 1-channel ESP32 relay module layout:
+
+```
+ESP32 D4 (GPIO 4) ──► optocoupler input (IN) ──► relay driver ──► relay contacts (load)
+                              │
+                         module LED(s) follow input/relay state
+```
+
+| Aspect | Detail |
+|--------|--------|
+| **Isolation** | Optocoupler separates ESP32 logic from relay coil/high-voltage side — ESP32 GPIO only drives the low-current LED side of the opto |
+| **Safety** | Load wiring stays on relay screw terminals; do not route mains through the dev board. Firmware controls **timing only** on `PIN_RELAY` |
+| **Active level** | Many modules are **active-low** (IN pulled low to turn on). Set `RELAY_ACTIVE_HIGH` in `boardDefs.h` to match your module |
+| **Visual feedback** | Module LED illuminates when relay is energized — sufficient for stroke/burst testing without external LEDs |
+
+**Pin mapping:** DevKit silkscreen labels (`D4`, `D33`) map to ESP32 GPIO numbers. All hardware pins are defined as **constants in `include/boardDefs.h`** so wiring can be corrected in one place without searching the codebase.
+
+| Silkscreen | GPIO | Constant (proposed) | Role |
+|------------|------|---------------------|------|
+| **D4** | 4 | `PIN_RELAY` | Relay control (digital output) |
+| **D33** | 33 | `PIN_BUTTON` | Push switch (digital input, pull-up) |
+
+Example `include/boardDefs.h`:
+
+```cpp
+#pragma once
+
+// ESP32 DevKit V1 clone — update here if wiring changes
+constexpr int PIN_RELAY  = 4;   // D4
+constexpr int PIN_BUTTON = 33;  // D33
+
+// Relay active level (many opto modules are active-LOW — verify against module LED behavior)
+constexpr bool RELAY_ACTIVE_HIGH = true;
+```
+
+Firmware must **never hard-code GPIO numbers** in `main.cpp` or drivers — include `boardDefs.h` from `relay_controller`, `button_input`, etc.
+
+**Avoid** flash pins **6–11** and boot-strapping pins **0, 2, 12, 15** for new wiring. D4 and D33 are acceptable on typical DevKit V1 clones with Wi-Fi enabled.
+
+DevKit V1 clones vary slightly (CP2102 vs CH340 USB chip); PlatformIO `esp32dev` profile works for most WROOM-32 V1 clones. If upload fails, try holding **BOOT**, press **EN**, or lower `upload_speed` in `platformio.ini`.
 
 ---
 
 ## 2. Repository and Project Layout
 
-### Recommendation: Separate repository (sibling to SomNet)
+### Confirmed layout: `SomNet.Device/` in this repo (PlatformIO)
 
-The ESP32 firmware is a **C++/Arduino/PlatformIO** project. It does not belong inside the .NET solution and should not be forced into `SomNet.slnx`.
+The ESP32 firmware is a **PlatformIO** project (C++ / Arduino framework on ESP32). It lives under the SomNet repo root, **outside** `SomNet.slnx` — not built or opened as part of the Visual Studio / .NET solution.
 
-**Recommended layout:**
+**Target layout:**
 
 ```
-D:\MoreRepos\
-├── SomNet\                    ← Existing .NET + React repo (unchanged)
-│   └── Documents\
-│       └── 09-ESP32-Device-Plan.md   ← This document
-│
-└── SomNet.Device\             ← New repo (proposed name)
-    ├── README.md              ← Flash instructions, wiring, env config
-    ├── platformio.ini         ← PlatformIO project (recommended)
-    ├── include/
-    │   └── config.h           ← Server URL, GPIO pins, feature flags
-    ├── src/
-    │   ├── main.cpp
-    │   ├── wifi_manager.*
-    │   ├── nvs_store.*
-    │   ├── device_identity.*
-    │   ├── signalr_client.*
-    │   ├── command_handler.*
-    │   ├── sequence_executor.*    ← Burst / timed multi-step sequences (non-blocking)
-    │   ├── automatic_engine.*     ← Automatic mode: random timing locally from config snapshot
-    │   ├── relay_controller.*
-    │   ├── button_input.*
-    │   └── config_web_server.*
-    ├── data/
-    │   └── config/              ← Embedded HTML/CSS (PROGMEM or LittleFS)
-    └── docs/
-        └── PROTOCOL.md          ← Copy/summary of hub message contracts
+D:\MoreRepos\SomNet\
+├── SomNet.API/
+├── SomNet.Shared/
+├── SomNet.UI/
+├── SomNet.Device/             ← PlatformIO firmware (confirmed)
+│   ├── platformio.ini
+│   ├── README.md
+│   ├── include/
+│   │   ├── boardDefs.h        ← GPIO / relay polarity (D4, D33) — single place to change wiring
+│   │   └── config.h           ← Server URL, feature flags (not pin numbers)
+│   ├── src/
+│   │   ├── main.cpp
+│   │   ├── wifi_manager.*
+│   │   ├── nvs_store.*
+│   │   ├── device_identity.*
+│   │   ├── signalr_client.*
+│   │   ├── command_handler.*
+│   │   ├── execution_context.*  ← Active IExecutionMode*, poll/abort routing
+│   │   ├── power_timing.*       ← powerPercent ↔ strokeMs, random helpers
+│   │   ├── modes/
+│   │   │   ├── i_execution_mode.h
+│   │   │   ├── single_pulse_mode.*
+│   │   │   ├── burst_sequence_mode.*
+│   │   │   └── automatic_session_mode.*
+│   │   ├── relay_controller.*
+│   │   ├── button_input.*
+│   │   └── config_web_server.*
+│   ├── data/
+│   │   └── config/            ← Embedded HTML/CSS (PROGMEM or LittleFS)
+│   └── docs/
+│       └── PROTOCOL.md
+├── Documents/
+└── data/
 ```
 
-### Why not inside SomNet?
+Open and build firmware with **Cursor (or VS Code) + PlatformIO extension**, or the `pio` CLI — not Visual Studio.
+
+### Repository options (reference)
 
 | Approach | Verdict |
 |----------|---------|
-| **Sibling repo `SomNet.Device`** | **Recommended** — separate toolchain (PlatformIO vs .NET), separate CI, clear ownership |
-| **Git submodule** `SomNet/devices/esp32` | Acceptable if you want one clone URL; adds submodule complexity |
-| **Folder inside SomNet** `SomNet.Device/` at repo root | Acceptable for small teams; keep out of `.slnx`; document in root README |
-| **Inside `SomNet.API`** | **Avoid** — wrong technology stack |
+| **`SomNet.Device/` inside SomNet repo** | **Confirmed** — one clone, shared docs, separate toolchain |
+| **Sibling repo** | Optional if releases/CI should split later |
+| **Inside `SomNet.slnx` / Visual Studio solution** | **No** — wrong IDE and build system |
+| **Inside `SomNet.API/`** | **Avoid** — wrong technology stack |
 
-### Linking the two repos
+### Toolchain — PlatformIO (confirmed)
 
-- SomNet `Documents/` references `SomNet.Device` README and protocol
-- SomNet.Device README links back to `SomNet/Documents/06-SignalR-And-Hardware.md`
-- Optional: git submodule or a short “Related repositories” section in root `README.md` when the device repo exists
+| Item | Choice |
+|------|--------|
+| **Build system** | PlatformIO (`platformio.ini`) |
+| **IDE** | **Cursor** + PlatformIO extension (**confirmed installed**) or CLI only |
+| **Board target** | **`esp32dev`** — ESP32 DevKit V1 clone (confirmed) |
+| **Environments** | e.g. `dev_local` (serial, ws), `prod_cloud` (wss) |
 
-### Toolchain choice
-
-**PlatformIO (recommended)** over Arduino IDE alone:
-
-- Reproducible builds and library pinning
-- Multiple environments (`dev_local`, `prod_cloud`) via `platformio.ini`
-- Easier CI later (GitHub Actions)
+PlatformIO provides reproducible builds, pinned libraries, and straightforward CI (`pio run`).
 
 **Core libraries (evaluate during implementation):**
 
@@ -236,9 +297,9 @@ During **initial provisioning**, SignalR is intentionally **not** started until 
 
 | Page / endpoint | Method | Purpose |
 |-----------------|--------|---------|
-| `/` | GET | Status dashboard: device ID, Wi-Fi, server URL, pairing state, hub connection, last error |
-| `/config` | GET | Communication settings form |
-| `/config` | POST | Save Wi-Fi SSID/password, server base URL, optional TLS flag → NVS → reboot |
+| `/` | GET | Status: **device ID (MAC-based)**, friendly name, MAC raw, pairing state, Wi-Fi, server URL, hub connection |
+| `/config` | GET | Setup form: friendly name, Wi-Fi, server URL; device ID **read-only** |
+| `/config` | POST | Save friendly name, Wi-Fi, server URL, TLS → NVS → reboot |
 | `/config/reset-wifi` | POST | Clear Wi-Fi + server URL; enter provisioning mode |
 | `/config/factory-reset` | POST | Clear all NVS including pairing token; reboot to provisioning |
 | `/api/status` | GET | JSON status (optional, for simple polling from same pages) |
@@ -247,6 +308,8 @@ During **initial provisioning**, SignalR is intentionally **not** started until 
 
 | Field | Stored in NVS | Notes |
 |-------|---------------|-------|
+| **Device ID** | `device_id` | **Read-only** on form — derived from MAC (§4.1) |
+| **Friendly name** | `device_friendly_name` | Optional; user-entered label for this unit |
 | Wi-Fi SSID | `wifi_ssid` | Required |
 | Wi-Fi password | `wifi_pass` | Required for WPA |
 | SomNet server URL | `server_url` | e.g. `http://192.168.1.10:5031` or `https://api.example.com` — **no** `/hubs/hardware` suffix |
@@ -280,7 +343,224 @@ During **initial provisioning**, SignalR is intentionally **not** started until 
 | Send stroke/burst commands | ✓ | — |
 | View hub connection status | ✓ (system status) | ✓ (local diagnostic) |
 
-No changes to SomNet are **required** for the device config UI. Optional future enhancement: SomNet pairing dialog could link to “configure device network” help text pointing users to the ESP32 setup URL.
+No changes to SomNet are **required** for the device config UI alone. **SomNet UI pairing** (Dom selects Sub, enters device ID from ESP32 screen) is required for production registration — currently Swagger-only; see §4.1 and Phase 8.
+
+### Device registration and Sub association (§4.1)
+
+This is the **main integration challenge** after initial scaffolding: the operator must link **this physical ESP32** to **one Sub** under their Dom so `ExecuteCommand` messages reach the device.
+
+#### Split of responsibility
+
+| Step | Where | Who |
+|------|--------|-----|
+| Wi-Fi + server URL | ESP32 config web UI | Device installer (anyone on LAN) |
+| **Device identifier** | ESP32 — **auto from MAC**, shown read-only | No manual random ID entry |
+| **Friendly name** (optional) | ESP32 config form → NVS | Installer labels unit (e.g. “Garage valve”) |
+| **Sub assignment** | SomNet web app (future) or Swagger (dev) | Authenticated **Dom** |
+| **Pairing token** | SomNet API → SignalR `PairDevice` | Automatic after Dom pairs |
+
+The ESP32 **does not** choose or store which Sub it belongs to until the server sends `PairDevice`. The config UI’s job is to make **identity obvious** and **network path working**; the SomNet UI’s job is **Dom + Sub + pair API**.
+
+#### Association security — valid mental model (with one important correction)
+
+**What you have right:**
+
+| Idea | Correct? |
+|------|----------|
+| Process **starts** with ESP32 web setup (Wi-Fi, server URL, identity visible) | **Yes** |
+| Once pairing completes, the server has **device ID + Dom + Sub** bound together | **Yes** |
+| Server issues a **device JWT** that becomes the basis of **secure** hub traffic | **Yes** |
+| Every later `ExecuteCommand` is scoped to that device and validated with the token | **Yes** |
+
+**Important correction — where Dom and Sub are entered:**
+
+| Approach | Valid? | Why |
+|----------|--------|-----|
+| Installer enters **Dom + Sub names on the ESP32 page alone**; device sends them to API; server immediately issues JWT | **No (not recommended)** | Anyone on the LAN could pair a device to **any** Dom/Sub without proving they are that Dom |
+| **Authenticated Dom** in SomNet UI selects Sub and pairs **device ID** (from ESP32 page/email/pending list) | **Yes — this is the model** | Server only binds Dom+Sub+device after **operator JWT** proves who the Dom is |
+| Device sends a **pairing request** (device ID + friendly name); Dom **approves** in SomNet UI | **Yes — optional future enhancement** | Same security: JWT only after Dom action |
+
+So: the ESP32 page **does not** complete association by itself. It prepares the device to **reach** the server (network + identity). **Association** (Dom + Sub + device ID → JWT) is an **authenticated server action** triggered by the Dom in SomNet (or Swagger in dev).
+
+#### What the server knows at each stage
+
+```
+Stage 1 — After ESP32 config + unpaired SignalR connect
+  Server knows: deviceId (esp32-MAC), connection is unpaired, maybe friendly name (future)
+  Server does NOT yet: assign Dom/Sub, issue device JWT
+
+Stage 2 — After Dom calls POST /api/devices/pair?subTarget=Slv66 { deviceId }
+  Server knows: Dom (from operator JWT), Sub (query + validation), deviceId, live connection
+  Server creates: device JWT (audience SomNet.Device, claims dom, sub, device_id)
+  Server sends: PairDevice via SignalR → ESP32 stores token in NVS
+
+Stage 3 — All subsequent messaging
+  Device connects: ?access_token={device JWT}
+  ExecuteCommand includes: accessToken + deviceId + dom + sub
+  Device verifies: token and targeting before acting on relay
+  Operator commands: only via authenticated API → paired group
+```
+
+That JWT binding is exactly what makes later transactions **secure and scoped** — your take on post-pairing security is **valid**.
+
+#### End-to-end registration flow
+
+```
+┌─────────────┐   1. Open config UI     ┌─────────────┐
+│  Installer  │ ───────────────────────►│    ESP32    │
+│  (phone)    │   Wi-Fi, server URL,    │  HTTP :80   │
+└─────────────┘   optional friendly name └──────┬──────┘
+                                                │ 2. Reboot → Wi-Fi STA
+                                                │ 3. deviceId = esp32-{MAC}
+                                                │ 4. SignalR unpaired connect
+                                                ▼
+┌─────────────┐   5. Select Sub,        ┌─────────────┐
+│  Dom        │      enter device ID    │  SomNet API │
+│  (browser)  │ ───────────────────────►│  + UI       │
+└─────────────┘   POST /api/devices/pair└──────┬──────┘
+                                                │ 6. PairDevice → token
+                                                ▼
+                                         ┌─────────────┐
+                                         │    ESP32    │
+                                         │  paired JWT │
+                                         └─────────────┘
+```
+
+#### Device ID — MAC-based (confirmed approach)
+
+| Aspect | Detail |
+|--------|--------|
+| **Format** | `esp32-{12 hex MAC digits}` e.g. `esp32-A4C1389F2B01` (uppercase, no colons) |
+| **Generation** | Read Wi-Fi STA MAC (or EFUSE) once in `device_identity`; persist in NVS as `device_id` |
+| **User entry** | **None on device** — displayed read-only on `/` and `/config` with copy-friendly layout |
+| **Uniqueness** | Suitable for **many devices** on one server — MAC is globally unique per unit |
+| **Stability** | Same MAC → same ID across reboots; factory reset keeps MAC, regenerates same ID |
+
+Optional **friendly name** (`device_friendly_name` in NVS) helps humans distinguish units; see email workflow below.
+
+#### Registration strategies — comparison
+
+Several approaches work with the existing `POST /api/devices/pair` + unpaired SignalR connection model. For **many devices**, combine more than one.
+
+| Strategy | How it works | Pros | Cons |
+|----------|--------------|------|------|
+| **A. MAC ID + paste in UI** | Dom copies `esp32-{MAC}` from device page into pair dialog | Simple; no API change; works offline-first on device | Typo risk; tedious at scale |
+| **B. Email / message handoff** | Installer emails Dom: device ID + friendly name + location; Dom pairs from email | Fits real-world install (installer ≠ Dom); async | Manual process; not automated |
+| **C. Pending devices list (recommended API add)** | Device connects unpaired; server lists **online unpaired** devices; Dom picks one + Sub | **Best UX at scale**; no typing; server already tracks unpaired connections in memory | Device must be online; needs new `GET /api/devices/unpaired` (Phase 8) |
+| **D. QR code on device page** | Status page shows QR encoding `deviceId`; Dom scans in UI | Fast, no typos | UI camera/scanner work; still MAC underneath |
+| **E. Dom-generated pairing code** | Dom creates code in UI; installer enters code on ESP32 | Dom-driven | Extra step on device; worse for “installer on site first” |
+| **F. UUID not tied to MAC** | Random ID in NVS | Hides MAC | User must copy random string; **worse** than MAC for your case |
+
+**MAC as canonical ID remains correct** — unique, factory-derived, zero installer guesswork. The question is only **how the Dom learns the ID**, not whether to use MAC.
+
+#### Recommended hybrid (production)
+
+Use **layers** that fit different situations:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Layer 1 — Device (always)                                       │
+│  MAC → esp32-{MAC} + optional friendly name on config UI         │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+         ┌────────────────────┼────────────────────┐
+         ▼                    ▼                    ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│ Layer 2a        │  │ Layer 2b        │  │ Layer 2c        │
+│ Pending list    │  │ Email handoff   │  │ Paste / QR      │
+│ (online now)    │  │ (async)         │  │ (fallback)      │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+         │                    │                    │
+         └────────────────────┼────────────────────┘
+                              ▼
+              POST /api/devices/pair?subTarget={Sub}
+                              │
+                              ▼
+                    PairDevice → device JWT
+```
+
+| Layer | When to use |
+|-------|-------------|
+| **2a — Pending list** | Device is powered, on Wi-Fi, connected unpaired — Dom opens “Pair device”, sees **“esp32-… — Workshop valve — online”**, clicks Pair |
+| **2b — Email handoff** | Installer not co-located with Dom; device may be offline when Dom pairs — email contains ID + friendly name (+ optional installer contact) |
+| **2c — Paste / QR** | Fallback; small fleet; pending API not shipped yet |
+
+#### Email-assisted workflow (operational — no protocol change)
+
+Supports your scenario: **installer on site**, **Dom uses UI later**.
+
+1. Installer completes ESP32 config (Wi-Fi, server URL, optional **friendly name**).
+2. Installer opens device status page — copies **Device ID** (`esp32-{MAC}`) or uses “Share / email setup info” (future: mailto link with pre-filled body).
+3. Installer emails Dom (or support desk):
+
+   ```
+   Subject: Pair SomNet device — Workshop valve
+
+   Device ID: esp32-A4C1389F2B01
+   Friendly name: Workshop valve
+   Installer: Jane Smith (jane@example.com)
+   Location: Building B
+   Server: https://api.example.com
+   ```
+
+4. Dom logs into SomNet, selects **Sub**, opens pair dialog:
+   - Pastes **Device ID** from email, **or**
+   - Selects device from **pending list** if it is online (matches ID in email)
+5. Dom confirms pair → same `POST /api/devices/pair` as today.
+
+**Username in email:** map to **installer contact** (informational). **Dom** is always the authenticated SomNet user performing pair; the installer is not a SomNet login unless they are also the Dom.
+
+Optional config UI field (Phase 3+):
+
+| Field | Purpose |
+|-------|---------|
+| **Installer name / email** | Shown on status page; included in “copy setup summary” for email — stored NVS only until API stores it |
+
+#### Pending devices list — suggested API (Phase 8)
+
+Server **already registers** unpaired connections (`DeviceConnectionRegistry.RegisterUnpaired`). Extend SomNet when approved:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/devices/unpaired` | List `{ deviceId, connectedAt, lastSeen? }` for Dom (auth required) |
+| Optional | Include `friendlyName` if device sends it via future hub hello message |
+
+UI: **“Devices waiting to pair”** table → select row → Pair to **current Sub**.
+
+This eliminates MAC typing for online devices while keeping email workflow for async installs.
+
+#### SomNet UI (Phase 8) — pairing dialog
+
+1. Dom logged in; **Sub selected** in header.
+2. **Pair device** dialog with tabs or sections:
+   - **Online now** — pending/unpaired list (preferred when API exists)
+   - **Enter device ID** — paste from email or device screen
+   - Optional later: **Scan QR**
+3. Show **friendly name** from email or future device metadata when available.
+4. **Pair** → `POST /api/devices/pair?subTarget={currentSub}` with `{ deviceId }`.
+5. Show result + `GET /api/devices/status` connection state.
+
+Until Phase 8: Swagger + device ID from ESP32 status page or email.
+
+#### Config UI — registration-focused fields
+
+| Field | Editable? | NVS key | Notes |
+|-------|-----------|---------|-------|
+| **Device ID** | **Read-only** | `device_id` (from MAC) | Prominent; “use this ID when pairing in SomNet” |
+| **Friendly name** | Optional text | `device_friendly_name` | e.g. “Workshop valve” — include in email to Dom |
+| **Installer contact** | Optional text | `installer_contact` | Name/email for email handoff (§4.1) |
+| Wi-Fi SSID / password | Yes | `wifi_ssid`, `wifi_pass` | Required for provisioning |
+| SomNet server URL | Yes | `server_url` | Cloud or LAN IP of API |
+| Pairing state | Read-only | — | Unpaired / paired / connected; Dom/Sub if paired |
+| MAC address (raw) | Read-only | — | Secondary display for support/debug |
+
+**Must NOT on ESP32 UI:** Sub picker, Dom login, or manual JWT entry.
+
+Optional **“Copy setup summary”** button on status page — builds email-ready text (device ID, friendly name, installer contact, server URL).
+
+#### Phase priority
+
+**Config web UI moves early** (Phase 3) — immediately after NVS/MAC identity — so registration can be tested **before** full SignalR polish or relay work. See §10 phase table.
 
 ### Implementation notes
 
@@ -291,7 +571,7 @@ No changes to SomNet are **required** for the device config UI. Optional future 
 
 ### Config UI implementation phase
 
-Added as **Phase 5a** (after SignalR works, before or parallel with relay hardware) — see §10 Implementation Phases.
+Added as **Phase 3** (early — before SignalR) — see §10 Implementation Phases.
 
 ---
 
@@ -411,7 +691,110 @@ SomNet is the **control plane** (operator intent, settings, history, pairing). T
 
 The server **must not** send repeated tick messages to hold the relay on. One command message can represent a single stroke, an entire burst, or the **configuration** to run automatic mode until stop/abort.
 
-### Manual single stroke (`commandKey: stroke`)
+### Load context — air compressor valve
+
+The relay drives an **optocoupled relay module** that switches an **air compressor valve** (or equivalent pneumatic load). In this application:
+
+| Concept | Physical meaning |
+|---------|------------------|
+| **Relay ON (closed)** | Valve energized — air flow / power to load |
+| **Pulse duration (`strokeMs`)** | **Directly correlates to effective power** — longer open time = more output |
+| **Gap between pulses** | Idle / off time between power applications |
+| **Manual mode** | Operator-chosen power → UI converts to fixed `strokeMs` per command |
+| **Automatic mode** | Device **randomly** chooses both **next pulse length** and **wait until next pulse** within configured ranges |
+
+Timing accuracy on the ESP32 is therefore safety- and behavior-critical: the firmware must deliver the requested (or randomly selected) pulse width, not an approximate block-then-guess.
+
+### Power ↔ pulse duration mapping
+
+Shared utility (e.g. `power_timing.h` / `PowerTiming` class) — used by automatic mode and for validation/logging in manual modes:
+
+```cpp
+// Linear map — mirrors SomNet UI computeStrokeMs()
+int strokeMsFromPower(int powerPercent, int minimumStrokeMs, int maximumStrokeMs);
+
+// Automatic: uniform random power in range, then map to ms
+int randomStrokeMsFromPowerRange(int minPower, int maxPower, int minimumStrokeMs, int maximumStrokeMs);
+
+// Automatic: uniform random ms directly in range (alternative path)
+int randomStrokeMs(int minimumStrokeMs, int maximumStrokeMs);
+
+// Automatic: random inter-pulse interval (seconds → ms)
+unsigned long randomIntervalMs(int strokeMinSeconds, int strokeMaxSeconds);
+```
+
+Manual **stroke/burst** commands arrive with **`strokeMs` already computed** by the UI. Automatic mode generates **random pulse lengths and random gaps on the device** using the start payload ranges.
+
+### Execution mode class architecture (separate by operation)
+
+Relay GPIO logic stays **thin and mode-agnostic**. Each **incoming command type** is handled by a **dedicated execution mode class** with its own FSM, sharing a common interface and the same `relay_controller`.
+
+```
+command_handler
+      │
+      ├── dispatches by commandKey
+      │
+      ▼
+┌─────────────────────────────────────────────────────────────┐
+│  IExecutionMode (interface)                                  │
+│    start(payload) / poll() / abort() / isActive() / ...      │
+└─────────────────────────────────────────────────────────────┘
+      ▲              ▲                    ▲
+      │              │                    │
+ SinglePulseMode  BurstSequenceMode  AutomaticSessionMode
+ (stroke)          (burst)            (automatic-start/stop)
+      │              │                    │
+      └──────────────┴────────────────────┘
+                     │
+              relay_controller          ← only layer that touches PIN_RELAY
+              power_timing              ← ms ↔ power helpers + RNG
+```
+
+**Proposed source layout:**
+
+```
+src/
+  relay_controller.*       ← GPIO + atomic timed pulse FSM (hardware only)
+  power_timing.*           ← strokeMsFromPower, random helpers
+  execution_context.*      ← owns active IExecutionMode*, routes poll/abort
+  modes/
+    i_execution_mode.h
+    single_pulse_mode.*    ← commandKey: stroke
+    burst_sequence_mode.*  ← commandKey: burst
+    automatic_session_mode.* ← automatic-start; runs until stop/abort/end rules
+  command_handler.*        ← parse ExecuteCommand → execution_context.startMode(...)
+```
+
+| Class | Responsibility | Does **not** |
+|-------|----------------|--------------|
+| **`relay_controller`** | Drive `PIN_RELAY`, timed pulse FSM, immediate off on abort | Parse JSON, random timing, session rules |
+| **`SinglePulseMode`** | One pulse from fixed `strokeMs` in payload | Schedule bursts or random automatic strokes |
+| **`BurstSequenceMode`** | Fixed count, fixed `strokeMs`, fixed inter-stroke delay from payload | Randomize timing |
+| **`AutomaticSessionMode`** | Random **inter-pulse interval** and random **pulse length** (via power/ms ranges); optional random bursts; end-session rules | Touch GPIO directly |
+| **`execution_context`** | Ensures one active mode; forwards `poll()`/`abort()`; completion → ack + `resultJson` | SignalR protocol |
+
+This separation keeps automatic randomization logic out of manual paths and prevents `command_handler` from becoming a monolithic switch with intertwined timing code.
+
+### Initial vs target implementation
+
+| Aspect | **Initial development** (now) | **Target architecture** (documented for later) |
+|--------|--------------------------------|--------------------------------------------------|
+| **Command keys** | Implement **`stroke` only** end-to-end | `burst`, `automatic-start/stop`, `abort` |
+| **Mode classes** | Implement **`SinglePulseMode`** + **`relay_controller`** | Full `BurstSequenceMode`, `AutomaticSessionMode` |
+| **Scaffolding** | **`IExecutionMode`**, **`execution_context`**, **`command_handler`** dispatch table in place from Phase 1 scaffold | Same interfaces — no refactor when adding modes |
+| **Stub behavior** | Unknown `commandKey` → log + ack `success: false` (“not implemented”) | Replace stubs with real mode classes |
+| **`power_timing`** | Optional for stroke (UI sends `strokeMs`); stub file OK | Required for automatic random pulse/interval |
+| **Validation focus** | Single pulse timing accuracy + SignalR coexistence | Burst sequences, dual RNG automatic, session summaries |
+
+**Rule for initial coding:** Do not fold burst/automatic logic into `SinglePulseMode` or `relay_controller` “temporarily.” Keep §6 class boundaries even when burst/automatic `.cpp` files only contain `// TODO: Phase 8` stubs.
+
+**Priority order after single mode works:**
+
+1. `abort` (cancel active pulse — small extension to `execution_context`)
+2. `burst` (`BurstSequenceMode`)
+3. `automatic-start` / `automatic-stop` (`AutomaticSessionMode` + `power_timing`)
+
+### Manual single stroke (`commandKey: stroke`) — **initial milestone**
 
 In manual mode the UI maps power percent to a stroke duration using the Dom+Sub **minimum/maximum stroke ms** settings (`computeStrokeMs` in the React app). That computed value is sent to the device as **`strokeMs`**.
 
@@ -436,7 +819,7 @@ The device does **not** recalculate power from percent unless `strokeMs` is omit
 }
 ```
 
-### Manual burst (`commandKey: burst`)
+### Manual burst (`commandKey: burst`) — *target; stub initially*
 
 Burst is **not** multiple server round-trips. The UI sends one message describing the full burst; the device runs the sequence internally.
 
@@ -457,7 +840,7 @@ Burst is **not** multiple server round-trips. The UI sends one message describin
 | `burstStrokes` | Manual burst stroke count | Number of pulses in sequence |
 | `burstDelayMs` | `burstDelaySeconds × 1000` | Idle time **between** pulses (relay open) |
 
-**Device behavior (`sequence_executor`):**
+**Device behavior (`BurstSequenceMode`):**
 
 ```
 FOR each stroke 1..burstStrokes:
@@ -471,9 +854,14 @@ THEN AckCommand success
 - **Ack timing:** Send `AckCommand` when the **entire burst finishes** (or fails), not after the first pulse — aligns with single ack on current API (see §9)
 - Phase 1 dev: log each step to serial; Phase 5: drive relay
 
-### Automatic mode (`automatic-start` / `automatic-stop`)
+### Automatic mode (`automatic-start` / `automatic-stop`) — *target; stub initially*
 
-Automatic mode timing is **randomized on the device** according to parameters in the start payload. The UI/API sends a **snapshot** of `AutomaticControlStateDto` (minus runtime-only `running` flag); the ESP32 runs until stop, abort, end-session rules, or disconnect.
+Automatic mode requires **two independent random processes** on the device, both critical to perceived “power” at the valve:
+
+1. **Random time between pulses** — gap before the next valve actuation (`strokeMinSeconds` … `strokeMaxSeconds` from payload).
+2. **Random length of each pulse** — duration the valve stays energized, mapped from random power or random `strokeMs` within configured min/max (correlates to output strength).
+
+The UI/API sends a **one-time config snapshot** (`AutomaticControlStateDto`); the ESP32 **generates all automatic stroke timings locally** until stop, abort, or end-session rule.
 
 **Proposed `payloadJson` (automatic start):** mirrors shared DTO fields, camelCase:
 
@@ -501,17 +889,27 @@ Automatic mode timing is **randomized on the device** according to parameters in
 }
 ```
 
-**Device behavior (`automatic_engine`):**
+**Device behavior (`AutomaticSessionMode`):**
 
-| Parameter area | Executed on ESP32 |
-|----------------|-------------------|
-| Inter-stroke interval | Random between `strokeMinSeconds` and `strokeMaxSeconds` |
-| Stroke duration | Random `strokeMs` between `minimumStrokeMs` and `maximumStrokeMs`, or mapped from random power in range |
-| Bursts | When `burstsOn`, inject burst sequences at `burstPercent` probability with random strokes/delays in min/max ranges |
-| End session | Stop when `endSessionMode` satisfied (minutes elapsed, stroke count, or never until stop) |
-| Start delay | Wait `delayBeforeStartSeconds` before first stroke |
+| Random variable | Source fields | Device action each cycle |
+|-----------------|---------------|---------------------------|
+| **Wait until next pulse** | `strokeMinSeconds`, `strokeMaxSeconds` | `randomIntervalMs()` → non-blocking wait state |
+| **Pulse length (power)** | `minimumPower`, `maximumPower`, `minimumStrokeMs`, `maximumStrokeMs` | Pick random power → `strokeMsFromPower()` **or** pick random ms in range |
+| **Optional burst** | `burstsOn`, `burstPercent`, burst min/max fields | Delegate to nested burst sub-sequence (same `BurstSequenceMode` pattern with generated params) |
+| **End session** | `endSessionMode`, `endSessionValue` | Stop engine; emit summary in stop ack `resultJson` |
+| **Start delay** | `delayBeforeStartSeconds` | Initial wait before first random cycle |
 
-**`automatic-stop` / `abort`:** Stop engine, cancel pending timers, relay open, ack immediately.
+**Automatic cycle (conceptual):**
+
+```
+wait random interval ──► random strokeMs (power-correlated) ──► relay pulse ──► repeat
+                              │
+                              └── (optional) burst sub-sequence with its own random params
+```
+
+Each completed pulse should be **logged** (serial + aggregated for stop ack): actual `strokeMs`, optional `powerPercent`, cumulative stroke count, elapsed time.
+
+**`automatic-stop` / `abort`:** `execution_context.abort()` → cancel `AutomaticSessionMode`, relay open, ack with **device-measured** session summary (not UI estimates).
 
 The server does **not** send per-stroke commands during automatic mode — only start/stop (and abort).
 
@@ -525,13 +923,90 @@ The server does **not** send per-stroke commands during automatic mode — only 
 
 Active-high vs active-low depends on relay module; configure in firmware constants.
 
-### Non-blocking execution (critical)
+### Non-blocking execution and state machines (required)
 
-Long sequences (burst, automatic) **must not** block the main loop:
+This application depends on **accurate relay timing** (exact `strokeMs`, burst gaps, automatic random intervals) while **Simultaneously** maintaining Wi-Fi, SignalR, and the config HTTP server. **Blocking calls are not acceptable** on the hot path.
 
-- Use `relay_controller` + `sequence_executor` + `automatic_engine` state machines polled from `loop()`
-- Continue processing SignalR ping/pong and WebSocket reads during waits
-- Only one **primary** sequence at a time; new `stroke` during burst queues or rejects (open decision: **reject with ack failure** recommended)
+#### Design rules
+
+| Rule | Requirement |
+|------|-------------|
+| **No `delay()` in `loop()`** | Forbidden during command execution, hub I/O, or relay timing (brief `delay()` in `setup()` or factory reset only) |
+| **Time base** | `millis()` for ms-level relay and sequence timing; `micros()` only if sub-ms precision is needed later |
+| **Poll, don’t wait** | Every module exposes `poll()` (or equivalent) called once per `loop()` iteration |
+| **State machines** | Stroke, burst, and automatic logic implemented as explicit **finite-state machines (FSM)**, not nested blocking loops |
+| **Hub priority** | `signalr_client.poll()` runs every loop so ping/pong and inbound commands are not starved |
+| **Single executor** | One primary timing pipeline at a time; overlapping commands rejected or cancelled per open decision (§15) |
+| **Completion callbacks** | FSM entry/exit triggers ack + `resultJson` — never ack from inside a blocking wait |
+
+#### Why state machines
+
+| Operation | Without FSM (blocking) | With FSM (non-blocking) |
+|-----------|------------------------|-------------------------|
+| 200 ms stroke | `delay(200)` freezes SignalR | Relay ON → poll until elapsed → relay OFF |
+| 5-stroke burst with 5 s gaps | ~25 s blocked loop | States: pulse → gap → pulse → … |
+| Automatic mode (minutes) | Impossible in one loop | Idle → wait → pulse → wait → … for session lifetime |
+
+#### Module state machines (proposed)
+
+**`relay_controller`** — atomic timed pulse:
+
+```
+Idle ──startPulse(ms)──► RelayOn ──elapsed──► RelayOff ──► Idle (callback: pulse complete)
+         ▲                    │
+         └── abort ───────────┘
+```
+
+**`BurstSequenceMode`** — manual burst:
+
+```
+Idle ──start──► PulseOn ──► PulseOff ──► [more strokes?] ──InterDelay──► … ──► Complete ──► Idle
+                  ▲                              │
+                  └──────── abort ───────────────┘
+```
+
+**`AutomaticSessionMode`** — automatic session (dual random: interval + pulse length):
+
+```
+Idle ──start(config)──► StartDelay ──► WaitRandomInterval ──► PickRandomStrokeMs ──► PulseOn ──► PulseOff ──► (maybe burst sub-mode) ──► …
+                           │                                         │
+                           └──────── stop/abort/end ──────────────────┴──► Stopped ──► Idle (session summary ack)
+```
+
+**`execution_context`** — top-level orchestration:
+
+```
+DeviceIdle | RunningStroke | RunningBurst | AutomaticRunning | AwaitingAck
+```
+
+State enums and transition helpers live in dedicated mode headers (`modes/single_pulse_mode.h`, etc.) — not scattered magic numbers.
+
+Use **`esp_random()`** (or Arduino `random()`) for automatic mode; seed once in `setup()` if reproducibility needed for tests.
+
+#### Implementation sketch
+
+```cpp
+// Called every loop() — never blocks
+void relay_controller_poll() {
+  switch (state_) {
+    case RelayState::Idle:
+      break;
+    case RelayState::On:
+      if (millis() - onSinceMs_ >= durationMs_) {
+        relayWrite(false);
+        state_ = RelayState::Idle;
+        if (onComplete_) onComplete_();
+      }
+      break;
+  }
+}
+```
+
+#### Testing timing quality
+
+- Compare requested vs actual pulse length (serial log: `requested=200 actual=201` using `millis()` delta)
+- Run burst while sending SignalR ping — connection must stay up
+- Long automatic session soak without watchdog resets
 
 ### Serial monitor (development)
 
@@ -657,7 +1132,9 @@ Use ESP32 **Preferences** (NVS namespace e.g. `somnet`).
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `device_id` | string | Stable UUID or MAC-derived ID; generated once on first boot |
+| `device_id` | string | **`esp32-{MAC}`** — from `device_identity`; read-only in config UI |
+| `device_friendly_name` | string | Optional label from config form (§4.1) |
+| `installer_contact` | string | Optional name/email for email handoff to Dom |
 | `wifi_ssid` | string | From config web UI or compile-time default |
 | `wifi_pass` | string | From config web UI (stored in NVS; consider encryption for production) |
 | `server_url` | string | SomNet API base URL (e.g. `http://192.168.1.10:5031`) — set via config UI |
@@ -846,16 +1323,37 @@ For development visibility, log state transitions locally regardless of ack mode
 
 ## 10. Implementation Phases
 
+Phase-specific **checklists** track day-to-day progress. The plan below stays the authoritative design reference; update checklist status and link back here when each phase completes.
+
+| Phase | Focus | Checklist | Status |
+|-------|--------|-----------|--------|
+| **0** | Protocol verification | [Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | **Not started** |
+| 1 | Project scaffold | *TBD when Phase 0 complete* | — |
+| 2 | NVS + MAC device identity | *TBD* | — |
+| **3** | **Config web UI + registration UX** | *TBD* | — |
+| 4 | SignalR client + pairing | *TBD* | — |
+| 5 | Single-pulse command + ack | *TBD* | — |
+| 6 | Single-pulse relay | *TBD* | — |
+| 7 | Resilience / production prep | *TBD* | — |
+| **8** | **SomNet UI pairing dialog** + command integration | *TBD* | — |
+| 9 | Burst and automatic modes | *TBD* | — |
+
+**Rationale:** Phase **3** (config UI with MAC-based ID and friendly name) runs **before** SignalR so installers can provision network and obtain the pairing ID without Swagger/serial. Phase **8** completes Dom-side Sub association in the React app.
+
+**Maintenance:** When a phase finishes, (1) mark its checklist sign-off, (2) update the **Status** column above, (3) add the next phase checklist document if needed.
+
+---
+
 ### Phase 0 — Protocol verification (1–2 days)
 
-**Deliverables:**
+**Checklist:** [09-ESP32-Phase-0-Checklist.md](./09-ESP32-Phase-0-Checklist.md)  
+**Status:** Not started
 
-- [ ] Capture WebSocket frames from browser or test client against local `/hubs/hardware`
-- [ ] Document exact handshake bytes and `ExecuteCommand` / `PairDevice` envelope
-- [ ] Confirm camelCase JSON field names match `DeviceDtos.cs`
-- [ ] Pair test device via Swagger `POST /api/devices/pair` while ESP32 serial logs raw frames (even pre-parser)
+**Summary:** Capture WebSocket/SignalR frames from `/hubs/hardware`; confirm envelopes and field names against `DeviceDtos.cs`; document in `SomNet.Device/docs/PROTOCOL.md`.
 
-**Exit criteria:** Written `PROTOCOL.md` in device repo with captured examples.
+**Exit criteria:** Phase 0 checklist sign-off complete; `PROTOCOL.md` exists with redacted examples.
+
+*Detailed steps, decisions, and capture templates are in the checklist — not duplicated here.*
 
 ---
 
@@ -863,29 +1361,48 @@ For development visibility, log state transitions locally regardless of ack mode
 
 **Deliverables:**
 
-- [ ] Create `SomNet.Device` repo (or agreed folder)
+- [ ] Create `SomNet.Device/` folder in repo
 - [ ] PlatformIO project for `esp32dev`
-- [ ] `config.h`: Wi-Fi SSID/password (or `secrets.ini`), server URL, GPIO pins
+- [ ] `boardDefs.h`: `PIN_RELAY` (D4 / GPIO 4), `PIN_BUTTON` (D33 / GPIO 33), relay polarity
+- [ ] `config.h`: server URL, feature flags (`secrets.ini` for Wi-Fi in dev)
+- [ ] **Architecture skeleton (stubs OK):** `i_execution_mode.h`, `execution_context.*`, `command_handler.*`, empty `modes/burst_sequence_mode.*` and `modes/automatic_session_mode.*`
 - [ ] Serial banner: firmware version, device ID, pairing state
 - [ ] Wi-Fi connect with retry
 
-**Exit criteria:** Board connects to Wi-Fi; prints device ID on serial.
+**Exit criteria:** Board connects to Wi-Fi; prints device ID on serial; project compiles with mode class layout in place.
 
 ---
 
-### Phase 2 — NVS and device identity (1 day)
+### Phase 2 — NVS and MAC device identity (1 day)
 
 **Deliverables:**
 
-- [ ] `device_identity` module: generate/read persistent `device_id`
-- [ ] `nvs_store` module: read/write token, pairing metadata
-- [ ] Factory reset hook (optional: long-press button clears NVS)
+- [ ] `device_identity` module: read MAC → format **`esp32-{12HEX}`** → persist `device_id`
+- [ ] `nvs_store` module: token, pairing metadata, **`device_friendly_name`**
+- [ ] Serial + banner prints device ID and MAC
+- [ ] Factory reset hook (optional: long-press button clears NVS except MAC-derived id)
 
-**Exit criteria:** Reboot preserves same `device_id`; NVS round-trip tests via serial commands.
+**Exit criteria:** Reboot preserves same `device_id`; MAC-based ID stable and documented for pairing.
 
 ---
 
-### Phase 3 — Minimal SignalR client (3–5 days)
+### Phase 3 — Config web UI and registration UX (2–3 days) — **early priority**
+
+**Why early:** Enables Wi-Fi/server setup and **shows MAC-based device ID + optional friendly name** before SignalR/relay work. Unblocks manual registration testing with Swagger.
+
+**Deliverables:**
+
+- [ ] `config_web_server` module with `ESPAsyncWebServer`
+- [ ] **`/` status page:** read-only device ID, MAC, friendly name, pairing state, instructions “Pair this ID in SomNet”
+- [ ] **`/config` form:** friendly name (optional), Wi-Fi, server URL; device ID **read-only**
+- [ ] POST → NVS → reboot; **provisioning Soft-AP** when not provisioned
+- [ ] Non-blocking HTTP alongside future SignalR (architecture ready)
+
+**Exit criteria:** Installer configures unit from phone; device ID visible without serial; no random ID typing.
+
+---
+
+### Phase 4 — Minimal SignalR client + pairing (3–5 days)
 
 **Deliverables:**
 
@@ -895,100 +1412,111 @@ For development visibility, log state transitions locally regardless of ack mode
 - [ ] Ping/pong handling
 - [ ] Reconnect with exponential backoff
 
-**Exit criteria:** End-to-end pairing via Swagger while ESP32 stores token and reconnects as paired; `GET /api/devices/status` shows `isConnected: true`.
+**Exit criteria:** End-to-end pairing via Swagger using **device ID from Phase 3 UI**; `GET /api/devices/status` shows `isConnected: true`.
 
 ---
 
-### Phase 4 — Command handling and ack (2–3 days)
+### Phase 5 — Single-pulse command handling and ack (2–3 days)
+
+**Scope:** **`stroke` only** — validate architecture with one mode before burst/automatic.
 
 **Deliverables:**
 
-- [ ] Parse `ExecuteCommand`
+- [ ] Parse `ExecuteCommand` for `commandKey: stroke`
 - [ ] Validation layer (deviceId, token, dom/sub)
-- [ ] `command_handler`: dispatch by `commandKey`
-- [ ] Invoke `AckCommand` with matching `correlationId`, **`resultJson`**, and `message`
+- [ ] `command_handler` → `execution_context` → **`SinglePulseMode`**
+- [ ] Other keys (`burst`, `automatic-start`, …) → stub ack `success: false`, message `"not implemented"`
+- [ ] Invoke `AckCommand` with `correlationId`, **`resultJson`** (actual `strokeMs`), and `message`
 - [ ] Serial logging for every step
 
-**Exit criteria:** `POST /api/devices/commands` from Swagger returns `delivered: true`, `acknowledged: true`, `success: true`; serial shows full trace.
+**Exit criteria:** Swagger `POST /api/devices/commands` with `commandKey: stroke` returns success; serial shows FSM trace (relay may still be stub).
 
 ---
 
-### Phase 5a — On-device configuration web UI (2–3 days)
+### Phase 6 — Single-pulse relay and button (1–2 days)
+
+**Scope:** **`SinglePulseMode` + `relay_controller` only** — proves non-blocking timing with SignalR.
 
 **Deliverables:**
 
-- [ ] `config_web_server` module with `ESPAsyncWebServer`
-- [ ] Embedded pages: `/` status dashboard, `/config` form (Wi-Fi + server URL)
-- [ ] POST handlers → NVS → reboot
-- [ ] **Provisioning mode:** Soft-AP + captive portal when not provisioned
-- [ ] **Running mode:** status page while SignalR remains connected
-- [ ] Button hold → factory reset or re-enter provisioning (optional)
-- [ ] Prominent **device ID** on status page for SomNet pairing
+- [ ] **Non-blocking FSM:** `relay_controller` + `SinglePulseMode` (exact `strokeMs`)
+- [ ] `execution_context.poll()` delegates to active mode
+- [ ] `abort` during active stroke (relay open, cancel pulse) — minimal abort support
+- [ ] Serial logging on **every state transition**
+- [ ] `button_input`: debounced read; serial log on press
 
-**Exit criteria:** Configure Wi-Fi and server URL from phone browser without re-flash; device reconnects to hub after reboot; SignalR and HTTP server run concurrently in RUNNING mode.
+**Exit criteria:** Stroke at 200 ms closes relay ~200 ms then opens; SignalR stays connected during pulse; abort opens relay; serial shows FSM transitions.
 
 ---
 
-### Phase 5 — Relay, sequences, and button (2–4 days)
-
-**Deliverables:**
-
-- [ ] `relay_controller`: non-blocking ON/OFF; timed pulse for exact `strokeMs`
-- [ ] `sequence_executor`: manual burst (N × pulse + inter-stroke delays) per §6
-- [ ] `automatic_engine`: random inter-stroke intervals, stroke ms, optional bursts from start payload (§6)
-- [ ] `abort` / `automatic-stop` → cancel engines; relay open immediately
-- [ ] Serial logging for every stroke, delay, and state transition
-- [ ] `button_input`: debounced read; serial log on press (no API uplink yet)
-
-**Exit criteria:** Stroke at 200 ms closes relay exactly 200 ms then opens; 5-stroke burst runs full sequence from one command; automatic start runs locally until stop; abort mid-sequence opens relay.
-
----
-
-### Phase 6 — Resilience and production prep (2–3 days)
+### Phase 7 — Resilience and production prep (2–3 days)
 
 **Deliverables:**
 
 - [ ] Token expiry handling → unpaired fallback
 - [ ] `wss://` build profile for cloud
 - [ ] Watchdog for hub loop
-- [ ] README: wiring diagram, flash steps, **config UI URL**, pairing procedure
+- [ ] README: wiring diagram, flash steps, **config UI URL**, **registration / pairing procedure** (§4.1)
 - [ ] Soak test: 24h reconnect stability (SignalR + config HTTP concurrent)
 
 **Exit criteria:** Survives API restart and Wi-Fi blip; reconnects without manual re-pair if token valid.
 
 ---
 
-### Phase 7 — SomNet integration (when approved)
+### Phase 8 — SomNet UI pairing and command integration (when approved)
 
-**Not in scope until requested:**
+**Priority:** **Pair device to Sub in UI** — production registration path (§4.1).
 
-- [ ] UI pairing dialog (device ID display + pair button)
+**Deliverables:**
+
+- [ ] **`GET /api/devices/unpaired`** — list online unpaired devices (§4.1 pending list)
+- [ ] **UI pairing dialog** — **Online now** list + **paste device ID** (from email/device page); Pair → `POST /api/devices/pair`
+- [ ] Optional: QR scan; show friendly name / installer contact when available
+- [ ] Device status in UI (`GET /api/devices/status?subTarget=`) — connected / paired indicators
 - [ ] UI replaces simulated `waitForHardwareAck` with `/api/devices/commands` **including `payloadJson` per §6**
 - [ ] **`HardwareCommandAckDto.resultJson`** + pass-through on REST and SignalR
-- [ ] **Session/history driven by device ack** — remove optimistic `recordManualStroke` on click; commit on ack (§9)
+- [ ] **Session/history driven by device ack** (§9)
 - [ ] SignalR client in UI for `CommandAcknowledged` with `resultJson`
-- [ ] Optional two-phase ack API extension
-- [ ] Button → uplink event (new hub method TBD)
+- [ ] Optional: two-phase ack API extension; button uplink (TBD)
+
+**Exit criteria:** Dom pairs device to Sub from UI using MAC-based ID from ESP32; stroke command works without Swagger.
+
+---
+
+### Phase 9 — Burst and automatic modes (future)
+
+**Not part of initial development** — implement after single-pulse path is stable.
+
+**Deliverables:**
+
+- [ ] **`BurstSequenceMode`** — full burst FSM
+- [ ] **`AutomaticSessionMode`** — dual random timing + `power_timing`
+- [ ] **`abort` / `automatic-stop`** — full `execution_context` cancellation across modes
+- [ ] Session summary `resultJson` on automatic stop
+
+**Exit criteria:** Burst and automatic commands work end-to-end per §6; no refactor of `SinglePulseMode` or `relay_controller` required.
 
 ---
 
 ## 11. Pairing Procedure (Development)
 
-### Initial device setup (config web UI)
+### Initial device setup (ESP32 config UI — Phase 3)
 
-1. Flash ESP32; on first boot it enters **provisioning** (Soft-AP or serial instructions)
-2. Connect phone/PC to device AP or same LAN after setup
-3. Open config UI (`http://192.168.4.1` in AP mode, or URL shown on serial)
-4. Enter **Wi-Fi SSID/password** and **SomNet server URL** (PC LAN IP for local dev, e.g. `http://192.168.1.10:5031`)
-5. Save and reboot — device connects to Wi-Fi and opens outbound SignalR (unpaired)
+1. Flash ESP32; on first boot it enters **provisioning** (Soft-AP)
+2. Connect phone to device AP (or same LAN after setup)
+3. Open config UI (`http://192.168.4.1` in AP mode, or LAN IP from serial)
+4. Note **Device ID** (`esp32-{MAC}`) — read-only on page; copy for pairing
+5. Optionally enter **friendly name** (e.g. “Workshop valve”)
+6. Enter **Wi-Fi** and **SomNet server URL** (PC LAN IP for dev, e.g. `http://192.168.1.10:5031`)
+7. Save and reboot — device connects to Wi-Fi; Phase 4+ opens SignalR unpaired with that device ID
 
-### SomNet pairing (API / future UI)
+### SomNet pairing — associate with Sub (Phase 4 dev / Phase 8 UI)
 
-1. Note **device ID** from config UI status page or serial log
-2. Start SomNet API locally (`http://localhost:5031`) or use cloud URL configured on device
-3. Login as Dom (demo/demo); ensure target Sub exists
-4. Open Swagger → `POST /api/devices/pair?subTarget=Slv66` with body `{ "deviceId": "<from device>" }`
-5. ESP32 receives `PairDevice`, writes NVS, reconnects
+1. Dom logged in; **Sub selected** in header (e.g. `Slv66`)
+2. Copy **Device ID** from ESP32 status page (`/` on device)
+3. **Dev:** Swagger → `POST /api/devices/pair?subTarget=Slv66` with `{ "deviceId": "esp32-..." }`
+4. **Production (Phase 8):** SomNet UI → Pair device → paste ID → Pair
+5. ESP32 receives `PairDevice`, stores token, reconnects paired
 6. Verify `GET /api/devices/status?subTarget=Slv66` → `isPaired: true`, `isConnected: true`
 7. Test `POST /api/devices/commands` with `{ "subTarget": "Slv66", "commandKey": "stroke", "payloadJson": "{\"powerPercent\":60,\"strokeMs\":250}" }`
 
@@ -998,34 +1526,36 @@ For development visibility, log state transitions locally regardless of ack mode
 
 ## 12. Firmware Architecture (Modules)
 
+### Cooperative loop (non-blocking)
+
+All work is driven from a **single `loop()`** that returns quickly. Long operations are decomposed into **state machines** polled on each iteration (§6). Do not rely on FreeRTOS tasks for timing unless a future revision explicitly adds a dedicated worker — default is one cooperative loop.
+
 ```
 main.cpp
   ├── setup: serial, NVS, mode (provisioning vs running)
   ├── setup: Wi-Fi (AP or STA), config_web_server, hub (if provisioned)
-  └── loop:
+  └── loop:                    // must return quickly — no delay() here
         wifi_manager.poll()
         config_web_server.poll()   // Async; callbacks non-blocking
-        signalr_client.poll()      // outbound WebSocket
-        relay_controller.poll()    // strokeMs timer → open relay
-        sequence_executor.poll()   // burst steps + delays
-        automatic_engine.poll()    // random timing when automatic running
+        signalr_client.poll()      // outbound WebSocket — every iteration
+        execution_context.poll()   // delegates to active IExecutionMode
+        relay_controller.poll()    // atomic GPIO pulse FSM (used by all modes)
         button_input.poll()
 
-Callbacks:
+Callbacks (async completion — not from blocking code):
   onPairDevice(msg)     → nvs_store.savePairing → hub.reconnect(paired)
-  onExecuteCommand(msg) → validate → command_handler
-                              ├─ stroke  → relay_controller.pulse(strokeMs) → ack + resultJson when done
-                              ├─ burst   → sequence_executor.start(...) → ack + resultJson when done
-                              ├─ automatic-start → automatic_engine.start(payload) → ack
-                              ├─ abort / automatic-stop → cancel all → ack + resultJson (actual counts/elapsed)
+  onExecuteCommand(msg) → command_handler → execution_context.startMode(...)
+  onModeComplete(mode)  → hub.ackCommand + resultJson (stroke / burst / automatic summary)
   onConfigSaved()       → nvs_store.saveWifiAndServer → ESP.restart()
 ```
 
-**Important:** `onExecuteCommand` must not call `hub.ackCommand()` until the **device-side work** for that command is finished (see §9), except for immediate cancel/stop cases.
+**Important:** `hub.ackCommand()` is invoked from **FSM completion callbacks** only (§9), not from `onExecuteCommand` while timing is still in progress.
 
 ### Threading
 
-Prefer **single-threaded loop** on Arduino (`loop()`) with non-blocking relay timing (`millis()`). `ESPAsyncWebServer` handles HTTP on AsyncTCP; do not block the loop with long `delay()` calls — SignalR ping/pong and reconnect logic depend on frequent `signalr_client.poll()`.
+Prefer **single-threaded cooperative `loop()`** with FSM-based timing (`millis()`). `ESPAsyncWebServer` uses AsyncTCP; **`delay()` must not appear in `loop()` or FSM poll paths** — SignalR ping/pong, command delivery, and relay timing accuracy all depend on continuous polling.
+
+Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loop()` task** unless profiling shows hub starvation; avoid `vTaskDelay` in command paths for the same reasons as `delay()`.
 
 ---
 
@@ -1053,7 +1583,7 @@ Prefer **single-threaded loop** on Arduino (`loop()`) with non-blocking relay ti
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| No stable SignalR library for ESP32 | Schedule slip | Budget time for custom minimal client; Phase 0 capture |
+| Blocking `delay()` in command path | SignalR drop, bad timing | FSM + `millis()`; code review / grep for `delay(` in `src/` |
 | SignalR message format mismatch | No commands parsed | Protocol doc from live capture before coding parser |
 | JWT too large for query string | Connect fails | Verify token length; server config already uses query `access_token` |
 | Single ack vs two-phase requirement | UX gap | Phase 1 single ack; document Phase 2 API proposal |
@@ -1070,9 +1600,9 @@ Prefer **single-threaded loop** on Arduino (`loop()`) with non-blocking relay ti
 
 | # | Question | Options |
 |---|----------|---------|
-| 1 | Repo name/location | `SomNet.Device` sibling vs submodule vs folder in SomNet |
+| 1 | Repo name/location | **`SomNet.Device/` in repo** — confirmed |
 | 2 | Relay active level | Active-low vs active-high module |
-| 3 | Device ID format | UUID vs `esp32-{mac}` |
+| 3 | Device ID format | **`esp32-{MAC}`** — confirmed (§4.1) |
 | 4 | Phase 1 ack timing | Ack after full execution vs immediate (MVP = after execution) |
 | 5 | Two-phase ack | Defer to Phase 2 API change vs accept single ack for now |
 | 6 | Burst command | Log only vs sequential relay pulses in Phase 1 |
@@ -1084,16 +1614,20 @@ Prefer **single-threaded loop** on Arduino (`loop()`) with non-blocking relay ti
 | 12 | Missing `strokeMs` in payload | Reject vs compute from powerPercent on device (prefer reject) |
 | 13 | Automatic stroke reporting | Per-stroke acks vs aggregated summary only on stop |
 | 14 | Failed command in UI | Show error only vs write "failed attempt" to session history |
+| 15 | Automatic pulse randomization | Random power→ms vs random ms directly in range (or both per config) |
+| 16 | Burst inside automatic | Nested class vs `AutomaticSessionMode` calling `BurstSequenceMode` |
 
 ---
 
 ## 16. Document Maintenance
 
+**Phase progress:** Update [phase checklist documents](./09-ESP32-Phase-0-Checklist.md) and the status table in §10 as work completes.
+
 When the device repo is created:
 
-1. Add link in [Documents/README.md](./README.md) to this plan
+1. Add link in [Documents/README.md](./README.md) to this plan and active phase checklists
 2. Add “Related repositories” entry in root [README.md](../README.md)
-3. Copy protocol examples into `SomNet.Device/docs/PROTOCOL.md` after Phase 0
+3. Copy protocol examples into `SomNet.Device/docs/PROTOCOL.md` after Phase 0 (per [Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md))
 4. Update [06-SignalR-And-Hardware.md](./06-SignalR-And-Hardware.md) with “firmware repo” link when available
 
 ---
@@ -1110,12 +1644,19 @@ When the device repo is created:
 - [x] Repository placement recommended
 - [x] Device-side relay timing model documented (stroke, burst, automatic)
 - [x] Device-reported source of truth for UI/session history documented
+- [x] Device registration model documented (ESP32 config UI + MAC ID + SomNet Sub pairing §4.1)
+- [x] Execution mode class split (single / burst / automatic) documented
+- [x] Automatic dual random timing (interval + pulse length) documented
 - [x] On-device config web UI requirements and SignalR coexistence documented
 - [x] Implementation phases with exit criteria listed
 
 **Ready to implement when:**
 
+- [x] PlatformIO extension installed and active in Cursor
+- [x] Hardware target confirmed: ESP32 DevKit V1 clone → `board = esp32dev`
+- [x] Wiring confirmed: relay **D4**, button **D33** → constants in `boardDefs.h`
+- [x] No external status LEDs; relay module has optocoupler + built-in LED(s)
 - [ ] Open decisions in §15 resolved
-- [ ] Phase 0 protocol capture done
+- [ ] [Phase 0 checklist](./09-ESP32-Phase-0-Checklist.md) complete — see §10 status table
 - [ ] `SomNet.Device` repository created
 - [ ] Explicit approval to begin firmware (and any API changes for two-phase ack)

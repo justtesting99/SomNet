@@ -1,3 +1,13 @@
+# PlatformIO (SomNet.Device)
+**/.pio/
+.pio/
+lib_deps/
+**/SomNet.Device/.vscode/.browse.c_cpp.db*
+**/SomNet.Device/.vscode/c_cpp_properties.json
+**/SomNet.Device/.vscode/launch.json
+**/SomNet.Device/.vscode/ipch
+**/SomNet.Device/secrets.ini
+
 # Dependencies
 **/node_modules/
 
