@@ -12,7 +12,9 @@
 #include <WiFi.h>
 
 #include <ctype.h>
+#include <mbedtls/base64.h>
 #include <string.h>
+#include <time.h>
 
 namespace {
 
@@ -32,7 +34,211 @@ size_t gRxLen = 0;
 bool gUsePairedConnect = false;
 bool gHandshakeComplete = false;
 bool gImmediateReconnect = false;
+bool gSuppressDisconnectNotify = false;
 uint32_t gAckInvocationCounter = 0;
+unsigned long gHandshakeStartedMs = 0;
+unsigned long gLastExpiryDiagMs = 0;
+unsigned long gIgnorePairDeviceUntilMs = 0;
+
+uint64_t parseExpiresAtMs(const char* iso);
+
+uint64_t utcToUnixMs(int year, int month, int day, int hour, int minute, int second) {
+    if (month <= 2) {
+        year -= 1;
+        month += 12;
+    }
+
+    const uint64_t era = static_cast<uint64_t>((year >= 0 ? year : year - 399) / 400);
+    const unsigned yoe = static_cast<unsigned>(year - static_cast<int>(era * 400));
+    const unsigned doy = (153U * static_cast<unsigned>(month - 3) + 2U) / 5U + static_cast<unsigned>(day - 1);
+    const unsigned doe = yoe * 365U + yoe / 4U - yoe / 100U + doy;
+    const int64_t days = static_cast<int64_t>(era * 146097ULL + doe) - 719468;
+    const int64_t seconds = ((days * 24 + hour) * 60 + minute) * 60 + second;
+    if (seconds < 0) {
+        return 0;
+    }
+    return static_cast<uint64_t>(seconds) * 1000ULL;
+}
+
+bool decodeBase64UrlSegment(const char* input, char* out, size_t outLen, size_t* decodedLen) {
+    if (input == nullptr || out == nullptr || decodedLen == nullptr || outLen == 0) {
+        return false;
+    }
+
+    char normalized[NvsStore::kMaxTokenLen];
+    size_t normalizedLen = 0;
+    for (size_t i = 0; input[i] != '\0' && normalizedLen + 1 < sizeof(normalized); ++i) {
+        const char c = input[i];
+        if (c == '-') {
+            normalized[normalizedLen++] = '+';
+        } else if (c == '_') {
+            normalized[normalizedLen++] = '/';
+        } else {
+            normalized[normalizedLen++] = c;
+        }
+    }
+
+    while (normalizedLen % 4 != 0 && normalizedLen + 1 < sizeof(normalized)) {
+        normalized[normalizedLen++] = '=';
+    }
+    normalized[normalizedLen] = '\0';
+
+    size_t outputLength = 0;
+    const int rc = mbedtls_base64_decode(
+        reinterpret_cast<unsigned char*>(out),
+        outLen - 1,
+        &outputLength,
+        reinterpret_cast<const unsigned char*>(normalized),
+        normalizedLen);
+    if (rc != 0) {
+        return false;
+    }
+
+    out[outputLength] = '\0';
+    *decodedLen = outputLength;
+    return true;
+}
+
+uint64_t parseJwtExpMs(const char* jwt) {
+    if (jwt == nullptr || jwt[0] == '\0') {
+        return 0;
+    }
+
+    const char* firstDot = strchr(jwt, '.');
+    if (firstDot == nullptr) {
+        return 0;
+    }
+    const char* secondDot = strchr(firstDot + 1, '.');
+    if (secondDot == nullptr) {
+        return 0;
+    }
+
+    const size_t payloadLen = static_cast<size_t>(secondDot - (firstDot + 1));
+    if (payloadLen == 0 || payloadLen >= NvsStore::kMaxTokenLen) {
+        return 0;
+    }
+
+    char payloadSegment[NvsStore::kMaxTokenLen];
+    memcpy(payloadSegment, firstDot + 1, payloadLen);
+    payloadSegment[payloadLen] = '\0';
+
+    char payloadJson[NvsStore::kMaxTokenLen];
+    size_t decodedLen = 0;
+    if (!decodeBase64UrlSegment(payloadSegment, payloadJson, sizeof(payloadJson), &decodedLen)) {
+        return 0;
+    }
+
+    StaticJsonDocument<384> doc;
+    if (deserializeJson(doc, payloadJson)) {
+        return 0;
+    }
+
+    const uint64_t expSec = doc["exp"] | 0ULL;
+    if (expSec == 0) {
+        return 0;
+    }
+    return expSec * 1000ULL;
+}
+
+uint64_t resolveTokenExpiryMs(const char* expiresAtIso, const char* accessToken) {
+    const uint64_t jwtExpMs = parseJwtExpMs(accessToken);
+    if (jwtExpMs > 0) {
+        return jwtExpMs;
+    }
+
+    return parseExpiresAtMs(expiresAtIso);
+}
+
+void logExpiryDiagnostics(NvsStore& nvs, WifiManager& wifi) {
+    if (!nvs.isPaired() || !wifi.isTimeSynced()) {
+        return;
+    }
+
+    const unsigned long nowMs = millis();
+    if (nowMs - gLastExpiryDiagMs < 60000UL) {
+        return;
+    }
+    gLastExpiryDiagMs = nowMs;
+
+    const uint64_t expiresMs = nvs.getTokenExpires();
+    const time_t nowSec = time(nullptr);
+    if (expiresMs == 0 || nowSec <= 0) {
+        Serial.println(F("[HUB] expiry diag: token_expires not set — re-pair after API restart"));
+        return;
+    }
+
+    const int64_t remainingSec = static_cast<int64_t>(expiresMs / 1000ULL) - static_cast<int64_t>(nowSec);
+    Serial.print(F("[HUB] expiry diag: remaining_s="));
+    Serial.print(static_cast<long>(remainingSec));
+    Serial.print(F(" (clears ~"));
+    Serial.print(static_cast<long>(remainingSec - static_cast<int64_t>(TOKEN_EXPIRY_BUFFER_MS / 1000ULL)));
+    Serial.println(F(" s with 5 min buffer)"));
+}
+
+void buildEffectiveServerUrl(NvsStore& nvs, char* out, size_t outLen) {
+    out[0] = '\0';
+    if (nvs.getServerUrl(out, outLen)) {
+        return;
+    }
+    if (SOMNET_SERVER_HOST[0] != '\0') {
+        snprintf(out, outLen, "http://%s:%d", SOMNET_SERVER_HOST, SOMNET_SERVER_PORT);
+    }
+}
+
+bool hasHubServerConfig(NvsStore& nvs) {
+    if (nvs.isFullyProvisioned()) {
+        return true;
+    }
+
+    char serverUrl[NvsStore::kMaxStringLen];
+    buildEffectiveServerUrl(nvs, serverUrl, sizeof(serverUrl));
+    return serverUrl[0] != '\0';
+}
+
+bool isTokenExpiryReached(uint64_t expiresMs) {
+    if (expiresMs == 0) {
+        return false;
+    }
+
+    const time_t nowSec = time(nullptr);
+    if (nowSec <= 0) {
+        return false;
+    }
+
+    const uint64_t nowMs = static_cast<uint64_t>(nowSec) * 1000ULL;
+    return nowMs + TOKEN_EXPIRY_BUFFER_MS >= expiresMs;
+}
+
+bool pairingTokenExpired(NvsStore& nvs, WifiManager& wifi) {
+    if (!nvs.isPaired() || !wifi.isTimeSynced()) {
+        return false;
+    }
+
+    return isTokenExpiryReached(nvs.getTokenExpires());
+}
+
+void clearExpiredPairing(NvsStore& nvs) {
+    Serial.println(F("[HUB] token expired — clearing pairing"));
+    nvs.clearPairing();
+    gUsePairedConnect = false;
+    gIgnorePairDeviceUntilMs = millis() + 10000;
+}
+
+bool tryClearExpiredPairing(NvsStore& nvs, WifiManager& wifi, SignalRClient* client) {
+    if (!pairingTokenExpired(nvs, wifi)) {
+        return false;
+    }
+
+    clearExpiredPairing(nvs);
+    if (gWs.isConnected()) {
+        gSuppressDisconnectNotify = true;
+        gWs.disconnect();
+    }
+    if (client != nullptr) {
+        client->onTransportLost(true);
+    }
+    return true;
+}
 
 void resetRxBuffer() {
     gRxLen = 0;
@@ -128,24 +334,14 @@ uint64_t parseExpiresAtMs(const char* iso) {
         return 0;
     }
 
-    struct tm tmUtc = {};
-    tmUtc.tm_year = year - 1900;
-    tmUtc.tm_mon = month - 1;
-    tmUtc.tm_mday = day;
-    tmUtc.tm_hour = hour;
-    tmUtc.tm_min = minute;
-    tmUtc.tm_sec = second;
-
-    time_t seconds = mktime(&tmUtc);
-    if (seconds < 0) {
-        return 0;
-    }
-    return static_cast<uint64_t>(seconds) * 1000ULL;
+    return utcToUnixMs(year, month, day, hour, minute, second);
 }
 
 bool negotiateConnectionToken(NvsStore& nvs, char* tokenOut, size_t tokenLen) {
     char serverUrl[NvsStore::kMaxStringLen];
-    if (!nvs.getServerUrl(serverUrl, sizeof(serverUrl))) {
+    buildEffectiveServerUrl(nvs, serverUrl, sizeof(serverUrl));
+    if (serverUrl[0] == '\0') {
+        Serial.println(F("[HUB] no server URL — use /config or secrets.ini"));
         return false;
     }
 
@@ -228,7 +424,7 @@ void handleHubFrame(const char* frame) {
         return;
     }
 
-    if (frame[0] == '\0') {
+    if (frame[0] == '\0' || strcmp(frame, "{}") == 0) {
         if (gActiveClient != nullptr) {
             gActiveClient->markHandshakeComplete();
         } else {
@@ -253,9 +449,8 @@ void handleHubFrame(const char* frame) {
     }
 
     if (type == 7) {
-        Serial.println(F("[HUB] server close (type 7)"));
         if (gNvs != nullptr && gNvs->isPaired()) {
-            Serial.println(F("[HUB] clearing pairing and reconnecting unpaired"));
+            Serial.println(F("[HUB] token rejected — unpaired"));
             gNvs->clearPairing();
             gUsePairedConnect = false;
             gImmediateReconnect = true;
@@ -306,7 +501,22 @@ void handleHubFrame(const char* frame) {
             return;
         }
 
-        const uint64_t expiresMs = parseExpiresAtMs(expiresAt);
+        if (millis() < gIgnorePairDeviceUntilMs) {
+            Serial.println(F("[HUB] PairDevice ignored — cooldown after expiry clear"));
+            return;
+        }
+
+        const uint64_t expiresMs = resolveTokenExpiryMs(expiresAt, accessToken);
+        if (expiresMs == 0) {
+            Serial.println(F("[HUB] PairDevice expiry unresolved — expiry check disabled until re-pair"));
+        } else {
+            Serial.print(F("[HUB] token_expires_s="));
+            Serial.println(static_cast<unsigned long>(expiresMs / 1000ULL));
+            if (isTokenExpiryReached(expiresMs)) {
+                Serial.println(F("[HUB] PairDevice token within expiry buffer — ignored; re-pair from UI"));
+                return;
+            }
+        }
         if (!gNvs->savePairing(accessToken, domTarget, subTarget, expiresMs)) {
             Serial.println(F("[HUB] failed to save pairing to NVS"));
             return;
@@ -320,6 +530,7 @@ void handleHubFrame(const char* frame) {
         gUsePairedConnect = true;
         gHandshakeComplete = false;
         gImmediateReconnect = true;
+        gSuppressDisconnectNotify = true;
         gWs.disconnect();
         return;
     }
@@ -422,15 +633,21 @@ void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
         Serial.println(F("[HUB] websocket disconnected"));
         resetRxBuffer();
         gHandshakeComplete = false;
+        gHandshakeStartedMs = 0;
         if (gActiveClient != nullptr) {
             gActiveClient->clearHandshakeState();
         }
-        notifyTransportLost();
+        if (gSuppressDisconnectNotify) {
+            gSuppressDisconnectNotify = false;
+        } else {
+            notifyTransportLost();
+        }
         break;
     case WStype_CONNECTED:
         Serial.println(F("[HUB] websocket connected"));
         resetRxBuffer();
         gHandshakeComplete = false;
+        gHandshakeStartedMs = millis();
         sendHandshake();
         break;
     case WStype_TEXT:
@@ -514,7 +731,7 @@ void SignalRClient::poll() {
         return;
     }
 
-    if (wifi_->isSoftAp() || !wifi_->isConnected() || !nvs_->isFullyProvisioned()) {
+    if (wifi_->isSoftAp() || !wifi_->isConnected() || !hasHubServerConfig(*nvs_)) {
         if (state_ != HubConnectionState::Offline) {
             gWs.disconnect();
             state_ = HubConnectionState::Offline;
@@ -528,16 +745,43 @@ void SignalRClient::poll() {
     gWs.loop();
     handshakeComplete_ = gHandshakeComplete;
 
+    if (nvs_->isPaired() && !wifi_->isTimeSynced()) {
+        static bool loggedWaitingForSntp = false;
+        if (!loggedWaitingForSntp) {
+            loggedWaitingForSntp = true;
+            Serial.println(F("[HUB] waiting for SNTP before paired hub connect"));
+        }
+        state_ = HubConnectionState::Backoff;
+        return;
+    }
+
+    if (nvs_->isPaired()) {
+        logExpiryDiagnostics(*nvs_, *wifi_);
+        if (tryClearExpiredPairing(*nvs_, *wifi_, this)) {
+            return;
+        }
+    }
+
     if (gWs.isConnected() && handshakeComplete_) {
+        gHandshakeStartedMs = 0;
         state_ = (gUsePairedConnect && nvs_->isPaired()) ? HubConnectionState::Paired : HubConnectionState::Unpaired;
         pendingConnect_ = false;
         return;
     }
 
     if (gWs.isConnected()) {
+        if (gHandshakeStartedMs != 0 && millis() - gHandshakeStartedMs >= HUB_HANDSHAKE_TIMEOUT_MS) {
+            Serial.println(F("[HUB] handshake timeout — reconnecting"));
+            gSuppressDisconnectNotify = true;
+            gWs.disconnect();
+            onTransportLost(false);
+            return;
+        }
         state_ = HubConnectionState::Handshaking;
         return;
     }
+
+    gHandshakeStartedMs = 0;
 
     if (pendingConnect_) {
         state_ = HubConnectionState::Connecting;

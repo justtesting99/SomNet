@@ -212,7 +212,7 @@ Not blocking Phase 6 or Phase 7 start. Revisit after oscilloscope measurement on
 - [x] `SomNet.Device/README.md` — Phase 6 behavior, relay wiring, abort test
 - [x] Link Phase 6 checklist from README
 - [x] Parent plan §10 Phase 6 status → **Complete**
-- [ ] [Hardware-User-Guide.md](./Hardware-User-Guide.md) relay section — Phase 7
+- [x] [Hardware-User-Guide.md](./Hardware-User-Guide.md) relay section — done 2026-09-05
 
 ---
 
@@ -268,4 +268,5 @@ Future phase checklists:
 |-------|-------------------|--------|
 | 0–5 | Prior checklists | Complete |
 | 6 | This document | **Signed off** 2026-09-05 |
-| 7+ | *Created when prior phase completes* | — |
+| 7 | [09-ESP32-Phase-7-Checklist.md](./09-ESP32-Phase-7-Checklist.md) | Not started |
+| 8+ | *Created when prior phase completes* | — |

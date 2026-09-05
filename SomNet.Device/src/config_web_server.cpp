@@ -61,20 +61,22 @@ bool saveConfigFromRequest(AsyncWebServerRequest* request, String& errorOut) {
     wifiPass.trim();
     serverUrl.trim();
 
+    const bool allowCredentialFallback = gNvs->isFullyProvisioned();
+
     if (wifiSsid.length() == 0) {
         char existing[NvsStore::kMaxStringLen];
-        if (gNvs->getWifiSsid(existing, sizeof(existing))) {
+        if (allowCredentialFallback && gNvs->getWifiSsid(existing, sizeof(existing))) {
             wifiSsid = existing;
-        } else if (WIFI_SSID[0] != '\0') {
+        } else if (allowCredentialFallback && WIFI_SSID[0] != '\0') {
             wifiSsid = WIFI_SSID;
         }
     }
 
     if (wifiPass.length() == 0) {
         char existing[NvsStore::kMaxStringLen];
-        if (gNvs->getWifiPass(existing, sizeof(existing))) {
+        if (allowCredentialFallback && gNvs->getWifiPass(existing, sizeof(existing))) {
             wifiPass = existing;
-        } else if (WIFI_PASSWORD[0] != '\0') {
+        } else if (allowCredentialFallback && WIFI_PASSWORD[0] != '\0') {
             wifiPass = WIFI_PASSWORD;
         }
     }
@@ -186,7 +188,7 @@ void handleFavicon(AsyncWebServerRequest* request) {
 }
 
 void handleStatus(AsyncWebServerRequest* request) {
-    char html[2048];
+    char html[5120];
     char serverUrl[NvsStore::kMaxStringLen];
     buildEffectiveServerUrl(serverUrl, sizeof(serverUrl));
     ConfigPages::renderStatus(
@@ -203,7 +205,7 @@ void handleStatus(AsyncWebServerRequest* request) {
 }
 
 void handleConfigGet(AsyncWebServerRequest* request) {
-    char html[4096];
+    char html[5120];
     char serverUrl[NvsStore::kMaxStringLen];
     buildEffectiveServerUrl(serverUrl, sizeof(serverUrl));
     ConfigPages::renderConfigForm(
@@ -234,7 +236,7 @@ void handleConfigPost(AsyncWebServerRequest* request) {
     Serial.println(F("[HTTP] config saved"));
     scheduleRestartAfterResponse(request);
 
-    char html[768];
+    char html[2560];
     ConfigPages::renderSavedPage(html, sizeof(html), "Settings saved.");
     sendHtml(request, html);
 }
@@ -268,7 +270,7 @@ void handleResetWifi(AsyncWebServerRequest* request) {
         gNvs->clearProvisioning();
     }
     scheduleRestartAfterResponse(request);
-    char html[768];
+    char html[2560];
     ConfigPages::renderSavedPage(html, sizeof(html), "Wi-Fi settings cleared.");
     sendHtml(request, html);
 }
@@ -278,7 +280,7 @@ void handleFactoryReset(AsyncWebServerRequest* request) {
         gNvs->clearAll();
     }
     scheduleRestartAfterResponse(request);
-    char html[768];
+    char html[2560];
     ConfigPages::renderSavedPage(html, sizeof(html), "Factory reset complete.");
     sendHtml(request, html);
 }
@@ -287,11 +289,11 @@ void registerRoutes(AsyncWebServer& server) {
     server.on("/ping", HTTP_GET, handlePing);
     server.on("/favicon.ico", HTTP_GET, handleFavicon);
     server.on("/", HTTP_GET, handleStatus);
-    server.on("/config", HTTP_GET, handleConfigGet);
-    server.on("/config", HTTP_POST, handleConfigPost);
-    server.on("/api/status", HTTP_GET, handleApiStatus);
     server.on("/config/reset-wifi", HTTP_POST, handleResetWifi);
     server.on("/config/factory-reset", HTTP_POST, handleFactoryReset);
+    server.on(AsyncURIMatcher::exact("/config"), HTTP_GET, handleConfigGet);
+    server.on(AsyncURIMatcher::exact("/config"), HTTP_POST, handleConfigPost);
+    server.on("/api/status", HTTP_GET, handleApiStatus);
     server.onNotFound([](AsyncWebServerRequest* request) {
         request->redirect("/");
     });

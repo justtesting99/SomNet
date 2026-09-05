@@ -6,6 +6,7 @@ import { useSystemStatus } from '@/context/SystemStatusProvider';
 import type { DeviceStatusResponse } from '@/types/device';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { getDeviceTokenExpiryInfo } from '@/utils/deviceTokenExpiry';
 
 function formatStatusLine(status: DeviceStatusResponse | null): string {
   if (!status) {
@@ -21,6 +22,51 @@ function formatStatusLine(status: DeviceStatusResponse | null): string {
   }
 
   return `No device paired for ${status.subTarget}`;
+}
+
+function DeviceTokenExpiryNotice({ status }: { status: DeviceStatusResponse }) {
+  if (!status.isPaired || !status.tokenExpiresAt) {
+    return null;
+  }
+
+  const expiry = getDeviceTokenExpiryInfo(status.tokenExpiresAt);
+  if (!expiry) {
+    return null;
+  }
+
+  const toneClass =
+    expiry.urgency === 'expired'
+      ? 'border-amber-900/60 bg-amber-950/40 text-amber-200'
+      : expiry.urgency === 'warn'
+        ? 'border-amber-900/50 bg-amber-950/30 text-amber-100'
+        : 'border-slate-800 bg-slate-950/40 text-slate-400';
+
+  let headline = 'Pairing token expiry';
+  let detail = `Re-pair before ${expiry.formattedEffectiveExpiry} to avoid interruption.`;
+
+  if (expiry.urgency === 'expired') {
+    headline = 'Pairing token expired';
+    detail = 'Tap Pair device below to renew (same Device ID).';
+  } else if (expiry.urgency === 'warn') {
+    headline =
+      expiry.daysRemaining <= 1
+        ? 'Pairing token expires soon'
+        : `Pairing token expires in ${expiry.daysRemaining} days`;
+    detail = `Re-pair before ${expiry.formattedEffectiveExpiry} to stay connected.`;
+  }
+
+  return (
+    <div className={`rounded-lg border px-3 py-2 text-xs ${toneClass}`}>
+      <p className="font-medium text-slate-200">{headline}</p>
+      <p className="mt-1">
+        Server expiry: <span className="text-slate-300">{expiry.formattedServerExpiry}</span>
+      </p>
+      <p className="mt-1">{detail}</p>
+      <p className="mt-1 text-slate-500">
+        The device may disconnect up to 5 minutes before the server expiry time.
+      </p>
+    </div>
+  );
 }
 
 export function DevicePairingPanel({ active }: { active: boolean }) {
@@ -138,6 +184,7 @@ export function DevicePairingPanel({ active }: { active: boolean }) {
       <p className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">
         {formatStatusLine(status)}
       </p>
+      {status ? <DeviceTokenExpiryNotice status={status} /> : null}
       <Input
         label="Device ID"
         value={deviceId}

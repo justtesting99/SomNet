@@ -219,7 +219,7 @@ The status indicator in the header shows connection state:
 | **Connecting** | Attempting connection |
 | **Unknown** | Status not yet determined |
 
-When hardware devices are paired, status will reflect device connectivity (requires device pairing — see technical documentation).
+When hardware devices are paired, status will reflect device connectivity. **Options → Hardware device** shows the pairing token expiry date and a warning when renewal is due. Pairing credentials expire after about **one year**; the Dom must **pair the device again** (same Device ID — no Wi‑Fi re-setup). See the [Hardware User Guide](./Hardware-User-Guide.md#pairing-token-renewal-about-once-a-year).
 
 ---
 

@@ -46,7 +46,7 @@ Full documentation lives in the [`Documents/`](Documents/) folder. See [Document
 | [ESP32 Device Plan](Documents/09-ESP32-Device-Plan.md) | Firmware plan — **source of truth** (Phases 0–5 complete, Phase 6 signed off) |
 | [SomNet.Device/README](SomNet.Device/README.md) | Build, flash, and test ESP32 firmware |
 
-**ESP32 phase checklists:** [0](Documents/09-ESP32-Phase-0-Checklist.md) · [1](Documents/09-ESP32-Phase-1-Checklist.md) · [2](Documents/09-ESP32-Phase-2-Checklist.md) · [3](Documents/09-ESP32-Phase-3-Checklist.md) · [4](Documents/09-ESP32-Phase-4-Checklist.md) · [5](Documents/09-ESP32-Phase-5-Checklist.md) · [6](Documents/09-ESP32-Phase-6-Checklist.md) — **0–5 Complete**, **6 Signed off** (2026-09-05)
+**ESP32 phase checklists:** [0](Documents/09-ESP32-Phase-0-Checklist.md) · [1](Documents/09-ESP32-Phase-1-Checklist.md) · [2](Documents/09-ESP32-Phase-2-Checklist.md) · [3](Documents/09-ESP32-Phase-3-Checklist.md) · [4](Documents/09-ESP32-Phase-4-Checklist.md) · [5](Documents/09-ESP32-Phase-5-Checklist.md) · [6](Documents/09-ESP32-Phase-6-Checklist.md) · [7](Documents/09-ESP32-Phase-7-Checklist.md) — **0–5 Complete**, **6 Signed off**, **7 Next**
 
 ## ESP32 firmware (quick pointer)
 
@@ -75,7 +75,7 @@ Copy `secrets.ini.example` → `secrets.ini` with your Wi‑Fi and PC **LAN IP**
 | React UI (auth, modes, settings, history) | Complete |
 | Dom/Sub management | Complete |
 | SignalR hub + device pairing (API) | Complete |
-| ESP32 firmware (pairing, `stroke`, relay) | **Phase 6 signed off**; Phases 0–5 complete (2026-09-05) |
+| ESP32 firmware (pairing, `stroke`, relay) | **Phase 6 signed off**; **Phase 7 next** ([checklist](Documents/09-ESP32-Phase-7-Checklist.md)) |
 | UI device pairing (Options panel) | Minimal — complete for dev |
 | UI → hardware command dispatch | Stub (simulated ack) — Phase 8 |
 | Email notifications | Future |

@@ -134,7 +134,7 @@ void printSerialBanner() {
     Serial.println(wifiManager.localIp());
     Serial.print(F(" Server: "));
     Serial.println(serverUrl[0] != '\0' ? serverUrl : "(not configured)");
-    Serial.println(F(" Log prefixes: [WIFI] [HTTP] [HUB] [CMD] [STROKE] [RELAY] [NVS] [ID]"));
+    Serial.println(F(" Log prefixes: [WIFI] [TIME] [HTTP] [HUB] [CMD] [STROKE] [RELAY] [NVS] [ID]"));
     Serial.println(F("========================================"));
 }
 

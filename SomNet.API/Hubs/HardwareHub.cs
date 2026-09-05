@@ -55,6 +55,12 @@ public sealed class HardwareHub : Hub
             _connectionRegistry.RegisterUnpaired(deviceId, Context.ConnectionId);
             await Groups.AddToGroupAsync(Context.ConnectionId, HardwareHubGroups.Unpaired(deviceId));
             _logger.LogInformation("Unpaired device {DeviceId} connected with connection {ConnectionId}.", deviceId, Context.ConnectionId);
+
+            if (await _deviceTokenService.TryDeliverPendingPairingAsync(deviceId, Context.ConnectionAborted))
+            {
+                _logger.LogInformation("Delivered pending pairing token to unpaired device {DeviceId}.", deviceId);
+            }
+
             await base.OnConnectedAsync();
             return;
         }

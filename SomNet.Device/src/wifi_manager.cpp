@@ -3,6 +3,7 @@
 #include "config.h"
 
 #include <Arduino.h>
+#include <time.h>
 
 void WifiManager::beginStation(const char* ssid, const char* password) {
     softApMode_ = false;
@@ -18,6 +19,7 @@ void WifiManager::beginStation(const char* ssid, const char* password) {
     nextRetryMs_ = millis();
     loggedConnected_ = false;
     connectFailures_ = 0;
+    resetTimeSync();
 }
 
 void WifiManager::beginSoftAp(const char* apSsid) {
@@ -160,6 +162,8 @@ void WifiManager::handleConnecting() {
 }
 
 void WifiManager::handleConnected() {
+    pollTimeSync();
+
     if (WiFi.status() == WL_CONNECTED) {
         return;
     }
@@ -168,6 +172,7 @@ void WifiManager::handleConnected() {
     state_ = WifiConnectionState::Disconnected;
     loggedConnected_ = false;
     loggedConfigUi_ = false;
+    resetTimeSync();
     nextRetryMs_ = millis() + WIFI_RETRY_BASE_MS;
 }
 
@@ -188,5 +193,56 @@ void WifiManager::logConnectedOnce() {
         Serial.print(F("[HTTP] Config UI: http://"));
         Serial.print(WiFi.localIP());
         Serial.println('/');
+    }
+
+    startSntpIfNeeded();
+}
+
+void WifiManager::resetTimeSync() {
+    sntpStarted_ = false;
+    timeSynced_ = false;
+    sntpStartedMs_ = 0;
+}
+
+void WifiManager::startSntpIfNeeded() {
+    if (sntpStarted_ || softApMode_) {
+        return;
+    }
+
+    sntpStarted_ = true;
+    sntpStartedMs_ = millis();
+    setenv("TZ", "UTC0", 1);
+    tzset();
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    Serial.println(F("[TIME] SNTP sync started"));
+}
+
+void WifiManager::pollTimeSync() {
+    if (timeSynced_ || !sntpStarted_) {
+        return;
+    }
+
+    const time_t now = time(nullptr);
+    if (now >= 1700000000) {
+        timeSynced_ = true;
+        struct tm timeinfo = {};
+        gmtime_r(&now, &timeinfo);
+        Serial.print(F("[TIME] synced UTC "));
+        Serial.print(timeinfo.tm_year + 1900);
+        Serial.print('-');
+        if (timeinfo.tm_mon + 1 < 10) {
+            Serial.print('0');
+        }
+        Serial.print(timeinfo.tm_mon + 1);
+        Serial.print('-');
+        if (timeinfo.tm_mday < 10) {
+            Serial.print('0');
+        }
+        Serial.println(timeinfo.tm_mday);
+        return;
+    }
+
+    if (millis() - sntpStartedMs_ >= SNTP_SYNC_TIMEOUT_MS) {
+        Serial.println(F("[TIME] SNTP sync timeout — expiry check deferred to hub type-7"));
     }
 }

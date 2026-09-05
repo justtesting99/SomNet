@@ -5,23 +5,38 @@
 #include "nvs_store.h"
 #include "wifi_manager.h"
 
-#include <stdio.h>
-#include <string.h>
+#include <Arduino.h>
 
 namespace {
 
+// Phase 7 (P7-D10): SomNet web app palette — slate-950 / slate-900 / indigo-600
 constexpr char kStyle[] PROGMEM = R"raw(
 <style>
-body{font-family:system-ui,sans-serif;margin:1rem;line-height:1.4;max-width:32rem}
-h1{font-size:1.25rem}
-label{display:block;margin-top:.75rem;font-weight:600}
-input[type=text],input[type=password],input[type=url]{width:100%;box-sizing:border-box;padding:.5rem;margin-top:.25rem}
-.readonly{background:#f3f3f3}
-.device-id{font-family:monospace;font-size:1.1rem;word-break:break-all;user-select:all}
-.note{color:#444;font-size:.9rem}
-.actions{margin-top:1.25rem}
-button{padding:.5rem 1rem}
-a{color:#0366d6}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:#020617;color:#cbd5e1;line-height:1.45;min-height:100vh;-webkit-font-smoothing:antialiased}
+.page{max-width:32rem;margin:0 auto;padding:1rem 1rem 2rem}
+h1{font-size:1.25rem;color:#f1f5f9;margin:0 0 .75rem;font-weight:600}
+.panel{background:#0f172a;border:1px solid #334155;border-radius:.75rem;padding:1rem;margin:.75rem 0}
+.note{color:#94a3b8;font-size:.875rem;margin:.5rem 0}
+label{display:block;margin:.75rem 0 .35rem;font-weight:600;color:#e2e8f0;font-size:.875rem}
+input[type=text],input[type=password],input[type=url]{width:100%;padding:.55rem .65rem;border:1px solid #475569;border-radius:.5rem;background:#1e293b;color:#f8fafc;font-size:1rem}
+input:read-only{background:#334155;color:#cbd5e1}
+.device-id{font-family:ui-monospace,monospace;font-size:1.05rem;word-break:break-all;user-select:all;color:#a5b4fc;padding:.65rem;background:#1e293b;border-radius:.5rem;border:1px solid #4338ca;margin:.35rem 0}
+.row{margin:.4rem 0}
+.row strong{color:#e2e8f0}
+a{color:#818cf8;text-decoration:none}
+a:hover{text-decoration:underline}
+.actions{margin-top:1rem;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+button,.btn{display:inline-block;padding:.55rem 1rem;border-radius:.5rem;border:1px solid transparent;font-size:.9375rem;font-weight:600;cursor:pointer;font-family:inherit}
+.btn-primary{background:#4f46e5;color:#fff}
+.btn-primary:hover{background:#6366f1}
+.btn-primary:disabled{background:#334155;color:#64748b;cursor:not-allowed;opacity:.85}
+.btn-primary:disabled:hover{background:#334155}
+.btn-secondary{background:#334155;color:#e2e8f0;border-color:#475569}
+.btn-danger{background:#7f1d1d;color:#fecaca;border-color:#991b1b}
+.alert-success{padding:.75rem 1rem;background:rgba(79,70,229,.15);border:1px solid #4f46e5;border-radius:.5rem;color:#e0e7ff;margin:.75rem 0}
+.danger-zone{margin-top:1.5rem;padding-top:1rem;border-top:1px solid #334155}
+.danger-zone .note{margin-bottom:.5rem}
 </style>
 )raw";
 
@@ -41,11 +56,43 @@ void append(char* out, size_t outLen, size_t* offset, const char* text) {
     }
 }
 
+void appendProgmemStr(char* out, size_t outLen, size_t* offset, const char* progmemText) {
+    if (progmemText == nullptr || *offset >= outLen) {
+        return;
+    }
+    for (size_t i = 0;; ++i) {
+        const char c = static_cast<char>(pgm_read_byte(progmemText + i));
+        if (c == '\0') {
+            break;
+        }
+        if (*offset + 1 >= outLen) {
+            out[outLen - 1] = '\0';
+            return;
+        }
+        out[(*offset)++] = c;
+    }
+    out[*offset] = '\0';
+}
+
 void appendProgmem(char* out, size_t outLen, size_t* offset, const char* progmemText) {
-    char buffer[512];
+    char buffer[768];
     strncpy_P(buffer, progmemText, sizeof(buffer) - 1);
     buffer[sizeof(buffer) - 1] = '\0';
     append(out, outLen, offset, buffer);
+}
+
+void appendHtmlHead(char* out, size_t outLen, size_t* offset, const char* title) {
+    append(out, outLen, offset, "<!DOCTYPE html><html><head><meta charset=\"utf-8\">");
+    append(out, outLen, offset, "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+    append(out, outLen, offset, "<title>");
+    append(out, outLen, offset, title);
+    append(out, outLen, offset, "</title>");
+    appendProgmemStr(out, outLen, offset, kStyle);
+    append(out, outLen, offset, "</head><body><div class=\"page\">");
+}
+
+void appendHtmlFoot(char* out, size_t outLen, size_t* offset) {
+    append(out, outLen, offset, "</div></body></html>");
 }
 
 void htmlEscape(const char* input, char* out, size_t outLen) {
@@ -123,40 +170,44 @@ void renderStatus(
     htmlEscape(installer, escInstaller, sizeof(escInstaller));
     htmlEscape(effectiveServerUrl != nullptr ? effectiveServerUrl : "", escServer, sizeof(escServer));
 
-    append(out, outLen, &offset, "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>SomNet Device</title></head><body style=\"font-family:sans-serif;margin:1rem;color:#000;background:#fff;max-width:32rem;line-height:1.4\">");
-    append(out, outLen, &offset, "<h1 style=\"font-size:1.25rem\">SomNet Device</h1>");
+    appendHtmlHead(out, outLen, &offset, "SomNet Device");
+    append(out, outLen, &offset, "<h1>SomNet Device</h1>");
 
     if (provisioningMode) {
-        append(out, outLen, &offset, "<p style=\"color:#444;font-size:.9rem\"><strong>Setup mode.</strong> Connect this device to your Wi-Fi and SomNet server.</p>");
+        append(out, outLen, &offset, "<div class=\"panel note\"><strong>Setup mode.</strong> Connect this device to your Wi-Fi and SomNet server.</div>");
     }
 
-    append(out, outLen, &offset, "<p><strong>Device ID</strong> (pair in SomNet)</p><p style=\"font-family:monospace;font-size:1.1rem;word-break:break-all\">");
+    append(out, outLen, &offset, "<div class=\"panel\"><p><strong>Device ID</strong> (pair in SomNet)</p><div class=\"device-id\">");
     append(out, outLen, &offset, escId);
-    append(out, outLen, &offset, "</p><p style=\"color:#444;font-size:.9rem\">Dom account -&gt; select Sub -&gt; Pair device -&gt; paste this ID.</p>");
+    append(out, outLen, &offset, "</div><p class=\"note\">Dom account &rarr; select Sub &rarr; Options &rarr; Hardware device &rarr; paste this ID.</p></div>");
 
-    if (escFriendly[0] != '\0') {
-        append(out, outLen, &offset, "<p><strong>Friendly name:</strong> ");
-        append(out, outLen, &offset, escFriendly);
-        append(out, outLen, &offset, "</p>");
+    if (escFriendly[0] != '\0' || escInstaller[0] != '\0') {
+        append(out, outLen, &offset, "<div class=\"panel\">");
+        if (escFriendly[0] != '\0') {
+            append(out, outLen, &offset, "<p class=\"row\"><strong>Friendly name:</strong> ");
+            append(out, outLen, &offset, escFriendly);
+            append(out, outLen, &offset, "</p>");
+        }
+        if (escInstaller[0] != '\0') {
+            append(out, outLen, &offset, "<p class=\"row\"><strong>Installer contact:</strong> ");
+            append(out, outLen, &offset, escInstaller);
+            append(out, outLen, &offset, "</p>");
+        }
+        append(out, outLen, &offset, "</div>");
     }
 
-    if (escInstaller[0] != '\0') {
-        append(out, outLen, &offset, "<p><strong>Installer contact:</strong> ");
-        append(out, outLen, &offset, escInstaller);
-        append(out, outLen, &offset, "</p>");
-    }
-
-    append(out, outLen, &offset, "<p><strong>MAC:</strong> ");
+    append(out, outLen, &offset, "<div class=\"panel\">");
+    append(out, outLen, &offset, "<p class=\"row\"><strong>MAC:</strong> ");
     append(out, outLen, &offset, escMac);
-    append(out, outLen, &offset, "</p><p><strong>Pairing:</strong> ");
+    append(out, outLen, &offset, "</p><p class=\"row\"><strong>Pairing:</strong> ");
     append(out, outLen, &offset, nvs.isPaired() ? "paired" : "not paired");
-    append(out, outLen, &offset, "</p><p><strong>Wi-Fi:</strong> ");
+    append(out, outLen, &offset, "</p><p class=\"row\"><strong>Wi-Fi:</strong> ");
     append(out, outLen, &offset, wifi.isConnected() ? (wifi.isSoftAp() ? "setup AP" : "connected") : "disconnected");
-    append(out, outLen, &offset, "</p><p><strong>IP:</strong> ");
+    append(out, outLen, &offset, "</p><p class=\"row\"><strong>IP:</strong> ");
     append(out, outLen, &offset, wifi.localIp());
-    append(out, outLen, &offset, "</p><p><strong>Server:</strong> ");
+    append(out, outLen, &offset, "</p><p class=\"row\"><strong>Server:</strong> ");
     append(out, outLen, &offset, escServer[0] != '\0' ? escServer : "(not configured)");
-    append(out, outLen, &offset, "</p><p><strong>Hub:</strong> ");
+    append(out, outLen, &offset, "</p><p class=\"row\"><strong>Hub:</strong> ");
     if (provisioningMode) {
         append(out, outLen, &offset, "off (provisioning)");
     } else if (hubConnected) {
@@ -166,10 +217,10 @@ void renderStatus(
     } else {
         append(out, outLen, &offset, hubStateLabel != nullptr ? hubStateLabel : "offline");
     }
-    append(out, outLen, &offset, "</p>");
+    append(out, outLen, &offset, "</p></div>");
 
-    append(out, outLen, &offset, "<p><a href=\"/config\">Configure</a></p>");
-    append(out, outLen, &offset, "</body></html>");
+    append(out, outLen, &offset, "<p class=\"actions\"><a class=\"btn btn-primary\" href=\"/config\">Configure</a></p>");
+    appendHtmlFoot(out, outLen, &offset);
 }
 
 void renderConfigForm(
@@ -213,33 +264,36 @@ void renderConfigForm(
     htmlEscape(wifiPass, escPass, sizeof(escPass));
     htmlEscape(server, escServer, sizeof(escServer));
 
-    append(out, outLen, &offset, "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Configure SomNet Device</title></head><body style=\"font-family:sans-serif;margin:1rem;color:#000;background:#fff;max-width:32rem;line-height:1.4\">");
-    append(out, outLen, &offset, "<h1 style=\"font-size:1.25rem\">Configure</h1>");
-    if (provisioningMode) {
-        append(out, outLen, &offset, "<p style=\"color:#444;font-size:.9rem\">Enter Wi-Fi and SomNet API base URL (no /hubs/hardware suffix).</p>");
+    appendHtmlHead(out, outLen, &offset, "Configure SomNet Device");
+    append(out, outLen, &offset, "<h1>Configure</h1>");
+    if (provisioningMode || !nvs.isFullyProvisioned()) {
+        append(out, outLen, &offset, "<p class=\"note\">Enter Wi-Fi and SomNet API base URL (no /hubs/hardware suffix). <strong>All fields below are required</strong>, including Wi-Fi password.</p>");
     }
 
-    append(out, outLen, &offset, "<form method=POST action=\"/config\">");
-    append(out, outLen, &offset, "<p><label>Device ID<br><input style=\"width:100%;box-sizing:border-box;background:#f3f3f3\" type=text readonly value=\"");
+    append(out, outLen, &offset, "<div class=\"panel\"><form id=cfg-form method=POST action=\"/config\">");
+    append(out, outLen, &offset, "<label>Device ID<input type=text readonly value=\"");
     append(out, outLen, &offset, escId);
-    append(out, outLen, &offset, "\"></label></p><p><label>Friendly name (optional)<br><input style=\"width:100%;box-sizing:border-box\" type=text name=friendly_name maxlength=64 value=\"");
+    append(out, outLen, &offset, "\"></label><label>Friendly name (optional)<input type=text name=friendly_name maxlength=64 value=\"");
     append(out, outLen, &offset, escFriendly);
-    append(out, outLen, &offset, "\"></label></p><p><label>Installer contact (optional)<br><input style=\"width:100%;box-sizing:border-box\" type=text name=installer_contact maxlength=128 value=\"");
+    append(out, outLen, &offset, "\"></label><label>Installer contact (optional)<input type=text name=installer_contact maxlength=128 value=\"");
     append(out, outLen, &offset, escInstaller);
-    append(out, outLen, &offset, "\"></label></p><p><label>Wi-Fi SSID<br><input style=\"width:100%;box-sizing:border-box\" required type=text name=wifi_ssid maxlength=32 value=\"");
+    append(out, outLen, &offset, "\"></label><label>Wi-Fi SSID<input required type=text name=wifi_ssid maxlength=32 value=\"");
     append(out, outLen, &offset, escSsid);
-    append(out, outLen, &offset, "\"></label></p><p><label>Wi-Fi password<br><input style=\"width:100%;box-sizing:border-box\" required type=password name=wifi_pass maxlength=64 value=\"");
+    append(out, outLen, &offset, "\"></label><label>Wi-Fi password<input required type=password name=wifi_pass maxlength=64 value=\"");
     append(out, outLen, &offset, escPass);
-    append(out, outLen, &offset, "\"></label></p><p><label>SomNet server URL<br><input style=\"width:100%;box-sizing:border-box\" required type=url name=server_url placeholder=\"http://192.168.x.x:5031\" maxlength=128 value=\"");
+    append(out, outLen, &offset, "\"></label><label>SomNet server URL<input required type=url name=server_url placeholder=\"http://192.168.x.x:5031\" maxlength=128 value=\"");
     append(out, outLen, &offset, escServer);
-    append(out, outLen, &offset, "\"></label></p><p style=\"color:#444;font-size:.9rem\">Example: http://192.168.1.100:5031</p><p><button type=submit>Save and reboot</button> <a href=\"/\">Cancel</a></p></form>");
+    append(out, outLen, &offset, "\"></label><p class=\"note\">Example: http://192.168.1.100:5031</p>");
+    append(out, outLen, &offset, "<p class=\"actions\"><button id=cfg-save class=\"btn btn-primary\" type=submit disabled>Save and reboot</button> <a class=\"btn btn-secondary\" href=\"/\">Cancel</a></p></form></div>");
+    append(out, outLen, &offset, "<script>(function(){var f=document.getElementById('cfg-form');if(!f)return;var b=document.getElementById('cfg-save');var req=['wifi_ssid','wifi_pass','server_url'];function ok(){for(var i=0;i<req.length;i++){var el=f.elements[req[i]];if(!el||!String(el.value||'').trim())return false;}return true;}function upd(){if(b)b.disabled=!ok();}f.addEventListener('input',upd);f.addEventListener('change',upd);upd();})();</script>");
 
     if (!provisioningMode) {
-        append(out, outLen, &offset, "<form method=POST action=\"/config/reset-wifi\" style=\"margin-top:2rem\"><button type=submit>Reset Wi-Fi / server (re-provision)</button></form>");
-        append(out, outLen, &offset, "<form method=POST action=\"/config/factory-reset\" style=\"margin-top:.5rem\" onsubmit=\"return confirm('Clear all settings including pairing?')\"><button type=submit>Factory reset</button></form>");
+        append(out, outLen, &offset, "<div class=\"panel danger-zone\"><p class=\"note\">Advanced: clears Wi-Fi and server settings, or all NVS including pairing.</p>");
+        append(out, outLen, &offset, "<form method=POST action=\"/config/reset-wifi\"><p class=\"actions\"><button class=\"btn btn-secondary\" type=submit>Reset Wi-Fi / server</button></p></form>");
+        append(out, outLen, &offset, "<form method=POST action=\"/config/factory-reset\" onsubmit=\"return confirm('Clear all settings including pairing?')\"><p class=\"actions\"><button class=\"btn btn-danger\" type=submit>Factory reset</button></p></form></div>");
     }
 
-    append(out, outLen, &offset, "</body></html>");
+    appendHtmlFoot(out, outLen, &offset);
 }
 
 void renderSavedPage(char* out, size_t outLen, const char* message) {
@@ -252,11 +306,19 @@ void renderSavedPage(char* out, size_t outLen, const char* message) {
 
     size_t offset = 0;
     out[0] = '\0';
-    append(out, outLen, &offset, "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"refresh\" content=\"5;url=/\"><title>Saved</title></head><body style=\"font-family:sans-serif;margin:1rem;color:#000;background:#fff;max-width:32rem;line-height:1.4\">");
-    append(out, outLen, &offset, "<h1 style=\"font-size:1.25rem\">Saved</h1>");
-    append(out, outLen, &offset, "<p style=\"padding:.75rem 1rem;background:#e8f4e8;border:1px solid #6aa86a;border-radius:.5rem\"><strong>Please wait for reboot.</strong><br>Your save was received. The device is restarting now — this usually takes 10–30 seconds.</p><p>");
+    append(out, outLen, &offset, "<!DOCTYPE html><html><head><meta charset=\"utf-8\">");
+    append(out, outLen, &offset, "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+    append(out, outLen, &offset, "<meta http-equiv=\"refresh\" content=\"5;url=/\">");
+    append(out, outLen, &offset, "<title>Saved</title>");
+    appendProgmemStr(out, outLen, &offset, kStyle);
+    append(out, outLen, &offset, "</head><body><div class=\"page\">");
+    append(out, outLen, &offset, "<h1>Saved</h1>");
+    append(out, outLen, &offset, "<div class=\"alert-success\"><strong>Please wait for reboot.</strong><br>Your save was received. The device is restarting now &mdash; this usually takes 10&ndash;30 seconds.</div>");
+    append(out, outLen, &offset, "<p>");
     append(out, outLen, &offset, escMessage);
-    append(out, outLen, &offset, "</p><p>Redirecting to the <a href=\"/\">status page</a> shortly…</p><p style=\"color:#444;font-size:.9rem\">If the status page does not load, wait for Wi-Fi to reconnect and open <a href=\"/\">/</a>.</p></body></html>");
+    append(out, outLen, &offset, "</p><p class=\"note\">Redirecting to the <a href=\"/\">status page</a> shortly&hellip;</p>");
+    append(out, outLen, &offset, "<p class=\"note\">If the status page does not load, wait for Wi-Fi to reconnect and open <a href=\"/\">/</a>.</p>");
+    appendHtmlFoot(out, outLen, &offset);
 }
 
 } // namespace ConfigPages

@@ -3,11 +3,12 @@
 PlatformIO firmware for the SomNet hardware device (ESP32 DevKit V1 clone). Lives in the SomNet repo but is **not** part of the .NET solution — build with PlatformIO in Cursor/VS Code or the `pio` CLI.
 
 **Protocol:** [docs/PROTOCOL.md](docs/PROTOCOL.md)  
+**Partitions / OTA headroom:** [docs/PARTITIONS.md](docs/PARTITIONS.md)  
 **Hardware user guide:** [Documents/Hardware-User-Guide.md](../Documents/Hardware-User-Guide.md)  
 **Plan:** [Documents/09-ESP32-Device-Plan.md](../Documents/09-ESP32-Device-Plan.md)  
-**Phase checklists (0–6 complete):** [0](../Documents/09-ESP32-Phase-0-Checklist.md) · [1](../Documents/09-ESP32-Phase-1-Checklist.md) · [2](../Documents/09-ESP32-Phase-2-Checklist.md) · [3](../Documents/09-ESP32-Phase-3-Checklist.md) · [4](../Documents/09-ESP32-Phase-4-Checklist.md) · [5](../Documents/09-ESP32-Phase-5-Checklist.md) · [6](../Documents/09-ESP32-Phase-6-Checklist.md)
+**Phase checklists (0–6 complete):** [0](../Documents/09-ESP32-Phase-0-Checklist.md) · [1](../Documents/09-ESP32-Phase-1-Checklist.md) · [2](../Documents/09-ESP32-Phase-2-Checklist.md) · [3](../Documents/09-ESP32-Phase-3-Checklist.md) · [4](../Documents/09-ESP32-Phase-4-Checklist.md) · [5](../Documents/09-ESP32-Phase-5-Checklist.md) · [6](../Documents/09-ESP32-Phase-6-Checklist.md) · [7](../Documents/09-ESP32-Phase-7-Checklist.md) (**next**)
 
-**Current firmware:** `0.6.0-phase6` — SignalR pairing, `stroke` relay on D4, `abort` during active pulse. See [Phase 6 behavior](#phase-6-behavior-current) below.
+**Current firmware:** `0.7.0-phase7` — Phase 7 in progress: **SomNet-themed config UI** on `/` and `/config`. SignalR, stroke, relay unchanged from Phase 6.
 
 ## Hardware (default wiring)
 
@@ -51,7 +52,36 @@ pio device monitor
 
 Or use the PlatformIO sidebar: **Build**, **Upload**, **Monitor** (115200 baud).
 
-## Phase 6 behavior (current)
+## Flash and partitions
+
+**Partition table:** `min_spiffs.csv` (set in `platformio.ini`) — dual OTA slots ~**1.9 MB** each. Config HTML uses PROGMEM, not SPIFFS, so the large SPIFFS region from the default profile is unused.
+
+| Metric | Typical (`0.7.0-phase7`, dev build) |
+|--------|--------------------------------------|
+| RAM | ~15% static |
+| Flash (one OTA slot) | ~53% (~1.05 MB / 1.97 MB) |
+
+Full notes: [docs/PARTITIONS.md](docs/PARTITIONS.md).
+
+**After changing partition table:** run a full `pio run -t upload` once. NVS usually persists; re-pair if needed.
+
+**Do not switch to `huge_app` / `no_ota`** if over-the-air updates are planned — those remove the second OTA bank.
+
+---
+
+Firmware **`0.7.0-phase7`** applies the SomNet web app palette to the on-device pages:
+
+- Dark slate background (`#020617`), panel cards (`#0f172a`), indigo primary buttons
+- Styled `/`, `/config`, and “Saved — rebooting” pages
+- Shared PROGMEM CSS in `config_pages.cpp` (~1.5 KB)
+
+**Build size (dev env, `min_spiffs`, 2026-09-05):** RAM 15.4% · Flash **53.3%** of OTA slot (1.05 / 1.97 MB) — see [PARTITIONS.md](docs/PARTITIONS.md).
+
+Flash and open **`http://<device-ip>/`** on your phone to preview.
+
+---
+
+## Phase 6 behavior (relay + stroke)
 
 Firmware **0.6.0-phase6** drives the **relay on D4** for `stroke` commands and supports **`abort`** during an active pulse.
 

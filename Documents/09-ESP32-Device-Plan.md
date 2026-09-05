@@ -19,7 +19,7 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 **Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 6 signed off (2026-09-05).** SomNet API/UI changes remain gated unless noted (Phase 4 pairing bonus, Phase 5 ack fix).
 
 **Related docs:** [Hardware User Guide](./Hardware-User-Guide.md), [SignalR & Hardware](./06-SignalR-And-Hardware.md), [Authentication & Security](./05-Authentication-And-Security.md), [API Reference](./02-API-Reference.md), [SomNet.Device/README](../SomNet.Device/README.md), [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md)  
-**Phase checklists (0–6 complete):** [0](./09-ESP32-Phase-0-Checklist.md) · [1](./09-ESP32-Phase-1-Checklist.md) · [2](./09-ESP32-Phase-2-Checklist.md) · [3](./09-ESP32-Phase-3-Checklist.md) · [4](./09-ESP32-Phase-4-Checklist.md) · [5](./09-ESP32-Phase-5-Checklist.md) · [6](./09-ESP32-Phase-6-Checklist.md)
+**Phase checklists (0–6 done):** [0](./09-ESP32-Phase-0-Checklist.md) · [1](./09-ESP32-Phase-1-Checklist.md) · [2](./09-ESP32-Phase-2-Checklist.md) · [3](./09-ESP32-Phase-3-Checklist.md) · [4](./09-ESP32-Phase-4-Checklist.md) · [5](./09-ESP32-Phase-5-Checklist.md) · [6](./09-ESP32-Phase-6-Checklist.md) · [7](./09-ESP32-Phase-7-Checklist.md) (**next**)
 
 ---
 
@@ -41,7 +41,7 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 ### Non-Goals (initial firmware milestones)
 
-- OTA firmware updates
+- OTA firmware updates (**partition table ready** — `min_spiffs.csv` since Phase 7; OTA client not implemented)
 - Offline command queue
 - ~~SomNet UI pairing dialog~~ — **partial (2026-09-05):** minimal pairing in **Options** dialog during Phase 4 dev; full dialog + pending list still Phase 8 (see §4 *SomNet React UI — early pairing*)
 - Changes to SomNet backend or frontend (unless a protocol gap is approved — **exceptions:** Phase 4 minimal pairing UI, Phase 5 ack dispatcher fix, Phase 8 `resultJson` + commands)
@@ -54,6 +54,7 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 |-----------|--------|
 | **Main board** | **ESP32 DevKit V1 clone** (ESP32-WROOM-32 class, 30-pin dev board) |
 | **PlatformIO board** | `esp32dev` in `platformio.ini` |
+| **Flash partitions** | **`min_spiffs.csv`** — dual OTA ~1.9 MB/slot (Phase 7); see [PARTITIONS.md](../SomNet.Device/docs/PARTITIONS.md) |
 | **USB serial** | On-board CP2102/CH340 (clone-dependent); **115200** baud for monitor |
 | **Relay module** | **D4** (GPIO 4) → optocoupled input; module has **built-in LED(s)** on relay state — no separate status LEDs in project |
 | **Push button** | **D33** (GPIO 33) — input with internal pull-up, debounced |
@@ -578,16 +579,19 @@ This eliminates MAC typing for online devices while keeping email workflow for a
 
 #### SomNet UI (Phase 8) — pairing dialog
 
-**Partial implementation (2026-09-05):** Minimal **paste device ID + Pair/Revoke** lives in **Options → Hardware device** for Phase 4 dev. Phase 8 still owns the **production** pairing experience below.
+**Partial implementation (2026-09-05):** Minimal **paste device ID + Pair/Revoke** lives in **Options → Hardware device** for Phase 4 dev; **per-Sub token expiry** display added Phase 7. Phase 8 still owns the **production** pairing experience below.
 
-1. Dom logged in; **Sub selected** in header.
+1. Dom logged in; **Sub selected** in header *(single-Sub flow today)*.
 2. **Pair device** dialog with tabs or sections:
+   - **All Subs (admin)** — table of every Sub for this Dom: device ID, connected/paired state, **token expiry** with **yellow** (≤30 days) / **red** (expired) row highlighting; Pair/Revoke per Sub without switching header Sub *(Phase 8 refinement — requested 2026-09-05)*
    - **Online now** — pending/unpaired list (preferred when API exists)
    - **Enter device ID** — paste from email or device screen *(implemented minimally in Options today)*
    - Optional later: **Scan QR**
 3. Show **friendly name** from email or future device metadata when available.
-4. **Pair** → `POST /api/devices/pair?subTarget={currentSub}` with `{ deviceId }`.
+4. **Pair** → `POST /api/devices/pair?subTarget={sub}` with `{ deviceId }`.
 5. Show result + `GET /api/devices/status` connection state.
+
+**Expiry UX (Phase 8):** Reuse `deviceTokenExpiry.ts` logic from Options panel; extend to multi-Sub grid with consistent warn/expired colors (yellow/red).
 
 **Until Phase 8 polish:** use **Options → Hardware device** (preferred) or Swagger with Authorize + device ID from ESP32 status page or email.
 
@@ -1410,7 +1414,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 | 4 | SignalR client + pairing | [Phase 4 Checklist](./09-ESP32-Phase-4-Checklist.md) | **Complete** (2026-09-05) |
 | 5 | Single-pulse command + ack | [Phase 5 Checklist](./09-ESP32-Phase-5-Checklist.md) | **Complete** (2026-09-05) |
 | 6 | Single-pulse relay | [Phase 6 Checklist](./09-ESP32-Phase-6-Checklist.md) | **Signed off** (2026-09-05) |
-| 7 | Resilience / production prep | *TBD: [Phase 7 Checklist](./09-ESP32-Phase-7-Checklist.md)* | **Next** |
+| 7 | Resilience / production prep | [Phase 7 Checklist](./09-ESP32-Phase-7-Checklist.md) | **Next** — [checklist](./09-ESP32-Phase-7-Checklist.md) created |
 | **8** | **SomNet UI pairing dialog** + command integration | *TBD* | **Partial** — minimal pairing in Options (2026-09-05); full dialog + commands pending |
 | 9 | Burst and automatic modes | *TBD* | — |
 
@@ -1580,19 +1584,20 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 ### Phase 7 — Resilience and production prep (2–3 days)
 
-**Checklist:** *TBD — [09-ESP32-Phase-7-Checklist.md](./09-ESP32-Phase-7-Checklist.md)*  
-**Status:** Not started
+**Checklist:** [09-ESP32-Phase-7-Checklist.md](./09-ESP32-Phase-7-Checklist.md)  
+**Status:** **In progress** (2026-09-05) — config UI theme, `min_spiffs` partitions
 
 **Carry-forward from Phase 6:** ~~Update [Hardware User Guide](./Hardware-User-Guide.md) (relay on D4)~~ — done 2026-09-05; oscilloscope timing validation; optional fixed offset in `relay_controller` if scope shows systematic error (TBD).
 
 **Deliverables:**
 
+- [x] **`min_spiffs.csv`** partition table in `platformio.ini` — OTA headroom ([PARTITIONS.md](../SomNet.Device/docs/PARTITIONS.md))
+- [x] **Config UI visual alignment** (§4) — dark slate + indigo PROGMEM CSS
 - [ ] Token expiry handling → unpaired fallback
-- [ ] `wss://` build profile for cloud
+- [ ] `wss://` build profile for cloud (build-only until Azure)
 - [ ] Watchdog for hub loop
-- [ ] **Config UI visual alignment** with SomNet React app (§4 *Config UI — visual styling*) — colors, typography, buttons on `/`, `/config`, saved/reboot page; PROGMEM CSS only
-- [ ] README: wiring diagram, flash steps, **config UI URL**, **registration / pairing procedure** (§4.1)
-- [ ] Soak test: 24h reconnect stability (SignalR + config HTTP concurrent)
+- [ ] README: wiring diagram, flash/partition docs, registration pointer
+- [ ] Soak test: **8 h** reconnect stability (SignalR + config HTTP concurrent)
 
 **Exit criteria:** Survives API restart and Wi-Fi blip; reconnects without manual re-pair if token valid.
 
@@ -1611,8 +1616,10 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 **Deliverables (remaining):**
 
 - [ ] **Relocate / redesign pairing UX** — dedicated dialog or multi-page settings (split **network/device** from **Subs** and general options); remove pairing from generic Options long-term
+- [ ] **Dom hardware admin — all Subs view** — single dialog listing **every Sub** the Dom operates: paired device ID, connection state, **`tokenExpiresAt`**, Pair/Revoke per row; **yellow** highlight when expiry is within 30 days (soon), **red** when expired or past effective deadline (−5 min device buffer); enables proactive annual re-pair without opening each Sub in Options (may need batch `GET /api/devices/status` or new list endpoint)
 - [ ] **`GET /api/devices/unpaired`** — list online unpaired devices (§4.1 pending list)
 - [ ] **UI pairing dialog** — **Online now** list + **paste device ID** (enhance beyond current Options panel)
+- [ ] **Show pairing token expiry** in Hardware device UI — display `tokenExpiresAt` from `GET /api/devices/status`; warn when within 30 days; note device may disconnect up to **5 minutes** before server expiry (Phase 7 buffer) — **partial:** implemented in Options `DevicePairingPanel` (2026-09-05); relocate with dedicated dialog
 - [ ] Optional: QR scan; show friendly name / installer contact when available
 - [ ] UI replaces simulated `waitForHardwareAck` with `/api/devices/commands` **including `payloadJson` per §6**
 - [ ] **Verify `abort` dual-ack and busy reject** (deferred from Phase 6 — Swagger REST is synchronous)

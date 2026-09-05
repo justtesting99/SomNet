@@ -37,6 +37,10 @@ public interface IDeviceTokenService
         string subTarget,
         CancellationToken cancellationToken = default);
 
+    Task<bool> TryDeliverPendingPairingAsync(
+        string deviceId,
+        CancellationToken cancellationToken = default);
+
     Task MarkConnectedAsync(
         string domTarget,
         string subTarget,
@@ -48,6 +52,8 @@ public interface IDeviceTokenService
 
 public sealed class DeviceTokenService : IDeviceTokenService
 {
+    private const int TokenDeliveryBufferMinutes = 5;
+
     private readonly SomNetDbContext _db;
     private readonly IDeviceConnectionRegistry _connectionRegistry;
     private readonly IHubContext<HardwareHub> _hubContext;
@@ -89,7 +95,7 @@ public sealed class DeviceTokenService : IDeviceTokenService
         var normalizedDom = domTarget.Trim();
         var normalizedSub = subTarget.Trim();
         var normalizedDeviceId = deviceId.Trim();
-        var expiresAt = DateTimeOffset.UtcNow.AddDays(_jwtSettings.DeviceExpireDays);
+        var expiresAt = ComputeDeviceTokenExpiry();
         var jti = Guid.NewGuid().ToString("N");
         var accessToken = CreateDeviceToken(normalizedDeviceId, normalizedDom, normalizedSub, jti, expiresAt);
 
@@ -222,6 +228,45 @@ public sealed class DeviceTokenService : IDeviceTokenService
         await _db.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<bool> TryDeliverPendingPairingAsync(
+        string deviceId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            return false;
+        }
+
+        var normalizedDeviceId = deviceId.Trim();
+        var deliveryCutoff = DateTimeOffset.UtcNow.AddMinutes(TokenDeliveryBufferMinutes);
+        var registration = await _db.SubDeviceRegistrations
+            .AsNoTracking()
+            .Where(
+                entry =>
+                    entry.DeviceId == normalizedDeviceId &&
+                    !entry.IsRevoked &&
+                    entry.TokenExpiresAt > deliveryCutoff)
+            .OrderByDescending(entry => entry.PairedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (registration is null)
+        {
+            return false;
+        }
+
+        var pairMessage = new PairDeviceMessageDto
+        {
+            DeviceId = registration.DeviceId,
+            DomTarget = registration.DomTarget,
+            SubTarget = registration.SubName,
+            AccessToken = registration.AccessToken,
+            ExpiresAt = registration.TokenExpiresAt,
+        };
+
+        await _hubContext.SendPairDeviceAsync(normalizedDeviceId, pairMessage, cancellationToken);
+        return true;
+    }
+
     public async Task MarkConnectedAsync(
         string domTarget,
         string subTarget,
@@ -264,6 +309,21 @@ public sealed class DeviceTokenService : IDeviceTokenService
         {
             return null;
         }
+    }
+
+    private DateTimeOffset ComputeDeviceTokenExpiry()
+    {
+        if (_jwtSettings.DeviceExpireMinutes is int expireMinutes && expireMinutes > 0)
+        {
+            return DateTimeOffset.UtcNow.AddMinutes(expireMinutes);
+        }
+
+        var days = _jwtSettings.DeviceExpireDays > 0 ? _jwtSettings.DeviceExpireDays : 365;
+        var expiresAt = DateTimeOffset.UtcNow.AddDays(days);
+
+        // JWT exp must be strictly after nbf (second precision). Guard misconfiguration.
+        var minimumExpiry = DateTimeOffset.UtcNow.AddMinutes(1);
+        return expiresAt > minimumExpiry ? expiresAt : minimumExpiry;
     }
 
     private string CreateDeviceToken(

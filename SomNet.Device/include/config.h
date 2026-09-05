@@ -30,6 +30,10 @@ constexpr unsigned kWifiConnectFailuresBeforeRecovery = 5;
 constexpr unsigned long HUB_RETRY_BASE_MS = 1000;
 constexpr unsigned long HUB_RETRY_MAX_MS = 60000;
 constexpr unsigned long HUB_NEGOTIATE_TIMEOUT_MS = 8000;
+constexpr unsigned long HUB_HANDSHAKE_TIMEOUT_MS = 15000;
+
+constexpr unsigned long SNTP_SYNC_TIMEOUT_MS = 30000;
+constexpr uint64_t TOKEN_EXPIRY_BUFFER_MS = 5ULL * 60ULL * 1000ULL;
 
 constexpr unsigned long kMaxStrokeMs = 30000;
 

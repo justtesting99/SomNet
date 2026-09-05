@@ -9,7 +9,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | SomNet web app | [User Guide](./User-Guide.md) |
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 
-**Firmware status (2026-09-05):** Phases **0–6** — Wi‑Fi provisioning, SomNet pairing over SignalR, and **relay control** for manual stroke commands from the server. SomNet **web app stroke buttons** are not wired to hardware yet (Phase 8); pairing and stroke testing use the device status page + SomNet **Options → Hardware device** or Swagger.
+**Firmware status (2026-09-05):** Phases **0–7** (in progress) — Wi‑Fi provisioning, SomNet pairing over SignalR, **relay control**, and **pairing token expiry** with unpaired fallback. SomNet **web app stroke buttons** are not wired to hardware yet (Phase 8); pairing and stroke testing use the device status page + SomNet **Options → Hardware device** or Swagger.
 
 ---
 
@@ -88,6 +88,45 @@ The device receives pairing over its live connection, stores credentials, and re
 
 ---
 
+## Pairing token renewal (about once a year)
+
+Each paired device holds a **time-limited credential** issued by the SomNet server. In normal production use that credential is valid for **365 days** (one year). The device checks expiry automatically; it does **not** renew itself in the background.
+
+### What happens when the token expires
+
+| Where | What you see |
+|-------|----------------|
+| **SomNet UI** | Device shows **not connected** (or paired but waiting) — commands will not reach the hardware |
+| **Device status page** | **Pairing: not paired** and **Hub: connected (unpaired)** — Wi‑Fi and server link are fine; only the auth token was cleared |
+
+This is **expected**. The unit stays on your network and keeps talking to the server in “unpaired” mode until a Dom pairs it again.
+
+### What the Dom should do
+
+No factory reset or Wi‑Fi re-setup is required.
+
+1. Log in as **Dom** and select the **Sub** that uses this device.
+2. Open **Options** → **Hardware device**.
+3. Confirm the **Device ID** (same `esp32-…` as on the device status page).
+4. Tap **Pair device** again.
+
+The server issues a **new one-year token** and sends it to the device over its live connection. Within a few seconds the status page should show **paired** and SomNet should show **connected** again.
+
+**Tip for installers:** Note the **pair date** in your install records or maintenance calendar so the Dom can re-pair proactively before expiry — e.g. annually at the same time as other site checks. SomNet **Options → Hardware device** shows the expected expiry date when a device is paired.
+
+### How this differs from other recovery actions
+
+| Situation | Device Wi‑Fi / server settings | Pairing token | Fix |
+|-----------|-------------------------------|---------------|-----|
+| **Token expired (annual)** | Unchanged | Cleared on device | **Pair again** in SomNet UI |
+| **Revoke pairing** (Dom choice) | Unchanged | Revoked on server | **Pair again** in SomNet UI |
+| **10 s button — credential reset** | Cleared | **Kept** if already paired | Re-enter Wi‑Fi + server URL only |
+| **Factory reset** on `/config` | Cleared | Cleared | Full setup + pair from scratch |
+
+Developers testing expiry locally may use a **much shorter** token lifetime (minutes) in server config — that is for lab use only, not production behavior.
+
+---
+
 ## Wrong Wi‑Fi password or need to change network
 
 If Wi‑Fi credentials were mistyped or the network changed, the device **cannot** be reached at its old IP. Use **credential reset**:
@@ -159,6 +198,7 @@ If the device is on your network and you can open its web page:
 | Setup page will not load | Confirm you are on `SomNet-Setup-XXXX` or the same LAN as the device; try `http://192.168.4.1/` on setup AP |
 | Device ID needed for pairing | Status page at `http://<device-ip>/` after Wi‑Fi works, or USB serial log for installers |
 | Paired but “not connected” in SomNet | Check server URL on device; confirm API is running; same LAN; Windows Firewall on dev PC may block LAN inbound port 5031 |
+| Device was paired; now “not paired” after ~1 year | **Expected** — pairing token expired. Dom: Options → Hardware device → **Pair device** again (same Device ID). See [Pairing token renewal](./Hardware-User-Guide.md#pairing-token-renewal-about-once-a-year) |
 | Stroke does nothing | Confirm pairing + connected status; relay wiring on **D4**; support may test via Swagger while UI wiring is pending |
 | Lost pairing / start over completely | On `/config`, use **Factory reset** (when reachable), or contact support |
 
@@ -182,3 +222,4 @@ If the device is on your network and you can open its web page:
 |------|--------|
 | 2026-09-05 | Initial guide: provisioning, config UI, 10 s credential reset |
 | 2026-09-05 | SignalR pairing, relay on D4, Options pairing path; clarified UI stroke buttons pending Phase 8 |
+| 2026-09-05 | Annual pairing token expiry and re-pair procedure (Phase 7) |

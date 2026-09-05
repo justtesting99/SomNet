@@ -330,8 +330,10 @@ wifi_manager → signalr_client → relay_controller → execution_context → c
 1. Replace `waitForHardwareAck` in `hardwareCommandAck.ts` with `POST /api/devices/commands` + real payload
 2. Add `@microsoft/signalr` client in `HardwareCommandProvider` for `CommandAcknowledged`
 3. Relocate pairing UX from Options to dedicated dialog; add `GET /api/devices/unpaired` pending list
-4. Add `resultJson` to `HardwareCommandAckDto` and defer session writes until device ack
-5. E2E verify `abort` dual-ack and busy reject (REST is synchronous — parallel commands need UI or async pattern)
+4. Show pairing token expiry on Hardware device panel (`tokenExpiresAt` + proactive re-pair warning) — **partial (Options, 2026-09-05)**
+5. **Dom all-Subs hardware admin dialog** — one view for every Sub: expiry per row, yellow (≤30 days) / red (expired), Pair/Revoke without per-Sub Options drill-down
+6. Add `resultJson` to `HardwareCommandAckDto` and defer session writes until device ack
+7. E2E verify `abort` dual-ack and busy reject (REST is synchronous — parallel commands need UI or async pattern)
 
 See [Device Plan §10 Phase 8](./09-ESP32-Device-Plan.md).
 

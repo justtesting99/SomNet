@@ -23,6 +23,7 @@ public:
     const char* configuredSsid() const;
     int rssi() const;
     unsigned connectFailureCount() const { return connectFailures_; }
+    bool isTimeSynced() const { return timeSynced_; }
 
 private:
     void startConnect();
@@ -30,6 +31,9 @@ private:
     void handleConnecting();
     void handleConnected();
     void logConnectedOnce();
+    void startSntpIfNeeded();
+    void pollTimeSync();
+    void resetTimeSync();
 
     char ssid_[33] = {};
     char password_[65] = {};
@@ -41,4 +45,7 @@ private:
     bool loggedConnected_ = false;
     bool loggedConfigUi_ = false;
     unsigned connectFailures_ = 0;
+    bool sntpStarted_ = false;
+    bool timeSynced_ = false;
+    unsigned long sntpStartedMs_ = 0;
 };
