@@ -1,6 +1,16 @@
 # SignalR & Hardware Integration
 
-SomNet provides real-time communication between the API and ESP32 hardware devices through a SignalR hub. The backend pairing and command pipeline is complete; the React UI has not yet been wired to use it.
+SomNet provides real-time communication between the API and ESP32 hardware devices through a SignalR hub.
+
+| Layer | Status (2026-09-05) |
+|-------|------------------------|
+| **API + hub** | Complete — pairing, dispatch, ack registry |
+| **ESP32 firmware** | **Phases 0–6 signed off** — `stroke` + `abort` on hardware; firmware **`0.6.0-phase6`** |
+| **React UI** | **Partial** — minimal pairing in Options; stroke/burst buttons still use simulated ack |
+
+**Related docs:** [ESP32 Device Plan](./09-ESP32-Device-Plan.md) (source of truth) · [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md) (wire capture) · [Hardware User Guide](./Hardware-User-Guide.md) · [SomNet.Device/README](../SomNet.Device/README.md)
+
+---
 
 ## Hub Endpoint
 
@@ -16,7 +26,7 @@ Registered in `Program.cs`:
 app.MapHub<HardwareHub>("/hubs/hardware");
 ```
 
-SignalR JSON protocol uses the same `SomNetJsonOptions` camelCase serialization as the REST API.
+SignalR JSON protocol uses the same `SomNetJsonOptions` camelCase serialization as the REST API. Every JSON frame is terminated with **`0x1E`** (record separator) — see [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md).
 
 ---
 
@@ -27,9 +37,11 @@ When a client connects, `OnConnectedAsync` classifies the connection:
 | Connection | How identified | Group joined | Capabilities |
 |------------|----------------|--------------|--------------|
 | **Paired device** | JWT with `role=device` | `paired:{dom}:{sub}` | Receive commands, send acks |
-| **Operator** | JWT with operator audience | `operator:{dom}` | Receive command ack notifications (future UI) |
+| **Operator** | JWT with operator audience | `operator:{dom}` | Receive `CommandAcknowledged` (future live UI) |
 | **Unpaired device** | Query `?deviceId=...` (no auth) | `unpaired:{deviceId}` | Receive pairing token only |
 | **Invalid** | None of the above | — | Connection aborted |
+
+**Device ID format:** `esp32-{12HEX}` from MAC (e.g. `esp32-84CCA85C36B4`). Set in firmware via `device_identity`; shown read-only on the on-device config UI.
 
 On disconnect, `DeviceConnectionRegistry` removes the connection and updates status.
 
@@ -51,7 +63,9 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 
 | Method | Payload | Sender | Purpose |
 |--------|---------|--------|---------|
-| `AckCommand` | Ack with correlationId, success | Paired device | Confirm command execution |
+| `AckCommand` | `HardwareCommandAckDto` | Paired device | Confirm command execution |
+
+**DTO note:** `HardwareCommandAckDto` today has `correlationId`, `success`, and `message` only. Firmware builds **`resultJson`** locally (serial log); wire pass-through to REST/UI is **Phase 8** — see [Device Plan §9](./09-ESP32-Device-Plan.md).
 
 ---
 
@@ -61,9 +75,10 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 ┌──────────┐                    ┌──────────┐                    ┌──────────┐
 │  ESP32   │                    │   API    │                    │ Dom (UI) │
 └────┬─────┘                    └────┬─────┘                    └────┬─────┘
-     │  Connect ?deviceId=abc        │                               │
+     │  Negotiate + WS             │                               │
+     │  ?deviceId=esp32-...        │                               │
      │──────────────────────────────►│                               │
-     │  Join unpaired:abc            │                               │
+     │  Join unpaired:{deviceId}   │                               │
      │                               │  POST /api/devices/pair       │
      │                               │◄──────────────────────────────│
      │                               │  Create device JWT            │
@@ -83,7 +98,7 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 **Request:** `POST /api/devices/pair?subTarget=Slv66`
 
 ```json
-{ "deviceId": "esp32-abc123" }
+{ "deviceId": "esp32-84CCA85C36B4" }
 ```
 
 **Server actions:**
@@ -95,6 +110,8 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 
 **Revoke:** `DELETE /api/devices/pair?subTarget=Slv66` — sets `IsRevoked`, clears active connection.
 
+**Dev UI path:** SomNet **Options → Hardware device** (`DevicePairingPanel`) — paste device ID from ESP32 status page. **Production UX** (dedicated dialog, pending list) → Phase 8.
+
 ---
 
 ## Command Dispatch Flow
@@ -104,18 +121,22 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 │ Dom (UI) │                    │   API    │                    │  ESP32   │
 └────┬─────┘                    └────┬─────┘                    └────┬─────┘
      │  POST /api/devices/commands   │                               │
-     │  { subTarget, commandKey }    │                               │
+     │  { subTarget, commandKey,       │                               │
+     │    payloadJson }                │                               │
      │──────────────────────────────►│                               │
      │                               │  Verify registration + conn   │
      │                               │  ExecuteCommand               │
      │                               │──────────────────────────────►│
-     │                               │                               │ Execute
+     │                               │                               │ Validate + FSM
      │                               │  AckCommand(correlationId)    │
      │                               │◄──────────────────────────────│
      │                               │  CommandAcknowledged → operator group
-     │  { delivered, acknowledged }  │                               │
+     │  { delivered, acknowledged,   │                               │
+     │    success, message }         │                               │
      │◄──────────────────────────────│                               │
 ```
+
+**Verified path (2026-09-05):** Swagger `POST /api/devices/commands` with `commandKey: stroke` on paired hardware (`esp32-84CCA85C36B4` / Sub `Slv66`). React UI buttons do **not** call this endpoint yet.
 
 ### Command Request
 
@@ -135,26 +156,61 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 
 - `correlationId` — Unique ID for ack matching
 - `commandKey` — Action identifier
-- `payloadJson` — Command parameters
-- `accessToken` — Device validates against stored token
+- `payloadJson` — Command parameters (stringified JSON)
+- `accessToken` — Device validates against stored NVS token
+- `deviceId`, `domTarget`, `subTarget` — Scope checks on device
+
+### REST Response Semantics
+
+`SendHardwareCommandResponseDto` fields:
+
+| Field | Meaning |
+|-------|---------|
+| `delivered` | Hub sent `ExecuteCommand` to the paired device group |
+| `acknowledged` | Device sent `AckCommand` within the timeout |
+| `success` | Device ack reported `success: true` |
+| `message` | Device message or dispatcher fallback |
+
+**Phase 5 fix (2026-09-05):** `DeviceConnectionRegistry.WaitForAcknowledgementAsync` returns the full `HardwareCommandAckDto?`, not a boolean. The dispatcher now separates **ack received** from **ack success**:
+
+| Outcome | `delivered` | `acknowledged` | `success` |
+|---------|-------------|----------------|-----------|
+| Device ack + success | `true` | `true` | `true` |
+| Device ack + failure (validation, busy, etc.) | `true` | `true` | `false` |
+| Timeout (no ack in 10 s) | `true` | `false` | `false` |
+| Device offline / not paired | `false` | `false` | `false` |
+
+Example — device rejected missing `strokeMs`:
+
+```json
+{
+  "correlationId": "...",
+  "delivered": true,
+  "acknowledged": true,
+  "success": false,
+  "message": "strokeMs required"
+}
+```
 
 ### Ack Timeout
 
-`HardwareCommandDispatcher` waits up to **10 seconds** for `AckCommand`. Returns partial success if delivered but not acknowledged.
+`HardwareCommandDispatcher` waits up to **10 seconds** for `AckCommand`. Long relay pulses (e.g. 5 s) still complete within this window; very long bursts/automatic sessions may need two-phase ack (future — [Device Plan §9](./09-ESP32-Device-Plan.md)).
 
 ---
 
 ## Command Keys
 
-Aligned with UI constants (`types/hardwareCommand.ts`):
+Aligned with UI constants (`types/hardwareCommand.ts`). **Firmware status** as of `0.6.0-phase6`:
 
-| Key | Trigger | Typical Payload |
-|-----|---------|-----------------|
-| `stroke` | Manual stroke button | `{ powerPercent, strokeMs }` |
-| `burst` | Manual burst button | `{ powerPercent, burstStrokes, burstDelaySeconds }` |
-| `abort` | Manual abort | `{}` |
-| `automatic-start` | Automatic start | Automatic config snapshot |
-| `automatic-stop` | Automatic stop | `{ reason }` |
+| Key | Trigger | Typical Payload | Firmware |
+|-----|---------|-----------------|----------|
+| `stroke` | Manual stroke button | `{ powerPercent, strokeMs }` | **Implemented** — relay pulse on D4 |
+| `abort` | Manual abort | `{}` | **Implemented** — cancels active stroke; dual ack on interrupt |
+| `burst` | Manual burst button | `{ powerPercent, strokeMs, burstStrokes, burstDelayMs }` | Stub ack `"not implemented"` (Phase 9) |
+| `automatic-start` | Automatic start | Automatic config snapshot | Stub ack (Phase 9) |
+| `automatic-stop` | Automatic stop | `{ reason }` | Stub ack (Phase 9) |
+
+**Stroke rules (firmware):** `strokeMs` required, > 0, max 30 000 ms. Overlapping commands while a pulse is active → reject with `success: false` (busy).
 
 ---
 
@@ -165,8 +221,8 @@ Aligned with UI constants (`types/hardwareCommand.ts`):
 | Data | Purpose |
 |------|---------|
 | Device connection ID by dom/sub | Verify device is online before dispatch |
-| Pending ack tasks by correlationId | Async wait for device acknowledgment |
-| Operator connections by dom | Forward acks to UI (future) |
+| Pending ack tasks by correlationId | Async wait for device acknowledgment (stores full `HardwareCommandAckDto`) |
+| Operator connections by dom | Forward acks to UI via `CommandAcknowledged` |
 
 This is process-local memory — multi-instance deployment would require a Redis backplane or similar.
 
@@ -181,46 +237,75 @@ Returns:
 - Whether a device is registered
 - `deviceId`
 - `isConnected` (live SignalR connection)
-- `pairedAt`, `lastConnectedAt`
+- `isPaired`, `pairedAt`, `lastConnectedAt`
 - Token expiry info
 
-Also surfaced via **GET /api/system/status?subTarget=Slv66** for header display (UI does not yet pass subTarget).
+Also surfaced via **GET /api/system/status?subTarget=Slv66** for header display. The React `SystemStatusProvider` passes the **selected Sub** as `subTarget` (Phase 4+).
 
 ---
 
-## ESP32 Implementation Guide
+## ESP32 Firmware
 
-**Authoritative wire capture:** [`SomNet.Device/docs/PROTOCOL.md`](../SomNet.Device/docs/PROTOCOL.md) (Phase 0, 2026-09-05).
+**Repository:** [`SomNet.Device/`](../SomNet.Device/) (PlatformIO, `board = esp32dev`)  
+**Wire protocol:** [`SomNet.Device/docs/PROTOCOL.md`](../SomNet.Device/docs/PROTOCOL.md)  
+**Implementation plan:** [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md)
 
 Device JWT Sub claim is the device id; Sub **name** is claim `sub_target` (not `sub`).
 
-### Initial Boot
+### What is implemented (Phases 0–6)
 
-1. Read MAC → `deviceId` (`esp32-{MAC}`)
-2. `POST /hubs/hardware/negotiate?negotiateVersion=1` → `connectionToken`
-3. Connect WebSocket `?id={connectionToken}&deviceId={id}`
-4. SignalR handshake (§ PROTOCOL.md)
-5. Listen for `PairDevice` event
-6. Persist token to NVS/flash
+| Phase | Capability |
+|-------|------------|
+| 0 | Protocol capture → `PROTOCOL.md` |
+| 1 | PlatformIO scaffold, module tree, Wi-Fi |
+| 2 | NVS + MAC `device_id` |
+| 3 | Config web UI (Soft-AP provisioning, `/`, `/config`) |
+| 4 | SignalR client — negotiate, WebSocket, `PairDevice`, reconnect |
+| 5 | `ExecuteCommand` → `stroke` validation + `AckCommand`; handshake race fix |
+| 6 | `relay_controller` GPIO pulse (`micros()` FSM), `abort`, measured `actualStrokeMs` in serial `resultJson` |
 
-### After Pairing
+**Libraries:** `links2004/WebSockets`, `bblanchon/ArduinoJson`, `ESPAsyncWebServer` (config UI).
 
-1. Disconnect unpaired connection
-2. Reconnect with `?access_token={stored-token}`
-3. Listen for `ExecuteCommand`
-4. Validate `accessToken` in message matches stored token
-5. Execute hardware action (GPIO, PWM, etc.)
-6. Call `AckCommand` with `correlationId` and `success` flag
+### Boot and pairing sequence
+
+1. Read MAC → `deviceId` (`esp32-{12HEX}`); load NVS (Wi-Fi, server URL, token)
+2. If not provisioned → Soft-AP + config UI; SignalR off until saved + reboot
+3. `POST /hubs/hardware/negotiate?negotiateVersion=1` → `connectionToken`
+4. WebSocket: unpaired `?id={token}&deviceId={id}` or paired `?id={token}&access_token={jwt}`
+5. SignalR handshake → listen for `PairDevice` / `ExecuteCommand`
+6. On `PairDevice` → persist token → disconnect → reconnect paired
+
+### Handshake readiness (Phase 5)
+
+`ExecuteCommand` can arrive before the `{}` handshake frame is processed. Firmware sets handshake complete on explicit `{}` **or** on any type-1 invocation, so the first command after connect is not spuriously rejected.
+
+### After pairing — command execution
+
+1. Validate `deviceId`, `accessToken`, `domTarget`, `subTarget` against NVS
+2. Route `commandKey` through `command_handler` → `execution_context` → active mode
+3. **`stroke`:** `SinglePulseMode` → `relay_controller.requestPulse(strokeMs)` — non-blocking FSM
+4. **`abort`:** cancel active pulse; relay open; dual ack when interrupting a stroke
+5. **`AckCommand`** from FSM completion callback (not from blocking code)
+6. Serial logs `[CMD]`, `[RELAY]`, and `resultJson` for development
+
+### Main loop order
+
+Cooperative `loop()` in `main.cpp` (must not block):
+
+```
+wifi_manager → signalr_client → relay_controller → execution_context → command_handler → button_input → config_web_server
+```
 
 ### Reconnection
 
-- On disconnect, retry with stored device JWT
-- If token expired/revoked, fall back to unpaired `?deviceId=` and wait for re-pair
+- On disconnect, exponential backoff (1 s → 60 s cap); re-negotiate each attempt
+- Paired + valid token → reconnect with `?access_token=`
+- Token expired / revoked / type-7 close → clear pairing, reconnect unpaired with `?deviceId=`
 
-### Recommended Libraries
+### Dev networking
 
-- Arduino/ESP32: WebSockets client + JSON parsing
-- SignalR protocol: implement handshake + JSON message envelope, or use a lightweight SignalR client port
+- ESP32 `server_url` must use the PC **LAN IP** (e.g. `http://192.168.1.47:5031`), not `localhost`
+- Windows Firewall may block inbound TCP **5031** from LAN while Swagger on the same PC works — allow Private network rule for local dev
 
 ---
 
@@ -230,18 +315,25 @@ Device JWT Sub claim is the device id; Sub **name** is claim `sub_target` (not `
 |---------|--------|
 | API endpoints | ✅ Complete |
 | SignalR hub | ✅ Complete |
-| Command dispatcher | ✅ Complete |
-| UI calls `/api/devices/commands` | ❌ Uses simulated 450ms ack |
-| UI SignalR client for acks | ❌ Not implemented |
-| Device pairing dialog | ❌ Not implemented |
-| System status with subTarget | ❌ Polls without sub param |
+| Command dispatcher (ack vs success) | ✅ Complete (Phase 5 fix) |
+| Swagger JWT Authorize | ✅ Complete |
+| **Pair / revoke device** | ✅ **Minimal** — Options → Hardware device (`DevicePairingPanel`) |
+| **Device status API** | ✅ Used by pairing panel + system status |
+| **System status with subTarget** | ✅ `SystemStatusProvider` passes selected Sub |
+| UI calls `/api/devices/commands` for stroke/burst | ❌ Uses simulated 450 ms ack (`hardwareCommandAck.ts`) |
+| UI SignalR client for live acks | ❌ Not implemented |
+| Dedicated pairing dialog + pending list | ❌ Phase 8 |
+| Session/history from device `resultJson` | ❌ Phase 8 |
 
-### Planned UI Changes
+### Phase 8 — planned UI changes
 
-1. Replace `waitForHardwareAck` in `hardwareCommandAck.ts` with API call
-2. Add `@microsoft/signalr` client in `HardwareCommandProvider` for live acks
-3. Add pairing UI (device ID entry, status indicator)
-4. Pass selected sub to `SystemStatusProvider` poll URL
+1. Replace `waitForHardwareAck` in `hardwareCommandAck.ts` with `POST /api/devices/commands` + real payload
+2. Add `@microsoft/signalr` client in `HardwareCommandProvider` for `CommandAcknowledged`
+3. Relocate pairing UX from Options to dedicated dialog; add `GET /api/devices/unpaired` pending list
+4. Add `resultJson` to `HardwareCommandAckDto` and defer session writes until device ack
+5. E2E verify `abort` dual-ack and busy reject (REST is synchronous — parallel commands need UI or async pattern)
+
+See [Device Plan §10 Phase 8](./09-ESP32-Device-Plan.md).
 
 ---
 
@@ -249,10 +341,24 @@ Device JWT Sub claim is the device id; Sub **name** is claim `sub_target` (not `
 
 | Symptom | Likely Cause |
 |---------|--------------|
-| Connection aborted | Missing deviceId and invalid/missing token |
+| Connection aborted | Missing `deviceId` and invalid/missing token |
+| Negotiate / WS connection refused (ESP32 only) | Wrong server URL (`localhost` on device); Windows Firewall blocking LAN inbound 5031 |
 | Command not delivered | Device offline or not paired |
-| Command delivered, not acked | Device firmware not calling AckCommand |
-| PairDevice not received | Device not in unpaired group or wrong deviceId |
-| 401 on reconnect | Expired or revoked device token |
+| `delivered: true`, `acknowledged: false` | Device did not ack within 10 s; firmware hang; hub not connected |
+| `acknowledged: true`, `success: false` | Device rejected command (validation, busy, not implemented key) — read `message` |
+| `hub not ready` on first command (fixed Phase 5) | Handshake race — ensure firmware ≥ `0.5.0-phase5` |
+| PairDevice not received | Device not in `unpaired:{deviceId}` group or wrong deviceId |
+| 401 / type 7 on reconnect | Expired or revoked device token — re-pair |
+| Stroke works in Swagger but not UI | Expected until Phase 8 — UI still simulates ack |
 
-**Development tip:** Use Swagger + a SignalR test client, or browser devtools WebSocket tab on `/hubs/hardware`.
+**Development tip:** Use Swagger (Authorize with Dom JWT) + ESP32 serial monitor. Optional: browser devtools WebSocket tab on `/hubs/hardware` for frame inspection.
+
+**Test command (Swagger):**
+
+```json
+{
+  "subTarget": "Slv66",
+  "commandKey": "stroke",
+  "payloadJson": "{\"powerPercent\":50,\"strokeMs\":200}"
+}
+```

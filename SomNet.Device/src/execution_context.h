@@ -2,9 +2,11 @@
 
 #include "modes/single_pulse_mode.h"
 
+class RelayController;
+
 class ExecutionContext {
 public:
-    void begin();
+    void begin(RelayController* relay);
     void poll();
     void abortActive();
     bool isActive() const;

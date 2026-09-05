@@ -50,7 +50,7 @@ void CommandHandler::begin(
     signalR_ = signalRClient;
     gCommandHandlerInstance = this;
     initialized_ = true;
-    Serial.println(F("[CMD] command_handler ready (Phase 5)"));
+    Serial.println(F("[CMD] command_handler ready (Phase 6)"));
 }
 
 void CommandHandler::poll() {
@@ -169,15 +169,27 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
         return;
     }
 
+    if (executionContext_ == nullptr) {
+        sendAck(command.correlationId, false, "execution unavailable", nullptr);
+        return;
+    }
+
+    if (strcmp(command.commandKey, "abort") == 0) {
+        if (!executionContext_->isActive()) {
+            Serial.println(F("[CMD] reject: nothing to abort"));
+            sendAck(command.correlationId, false, "nothing to abort", nullptr);
+            return;
+        }
+
+        executionContext_->abortActive();
+        sendAck(command.correlationId, true, "stroke aborted", nullptr);
+        return;
+    }
+
     if (strcmp(command.commandKey, "stroke") != 0) {
         Serial.print(F("[CMD] unsupported commandKey: "));
         Serial.println(command.commandKey);
         sendAck(command.correlationId, false, "not implemented", nullptr);
-        return;
-    }
-
-    if (executionContext_ == nullptr) {
-        sendAck(command.correlationId, false, "execution unavailable", nullptr);
         return;
     }
 

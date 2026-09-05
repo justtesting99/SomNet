@@ -1,11 +1,16 @@
 #include "modes/single_pulse_mode.h"
 
 #include "config.h"
+#include "relay_controller.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <stdio.h>
 #include <string.h>
+
+void SinglePulseMode::setRelay(RelayController* relay) {
+    relay_ = relay;
+}
 
 void SinglePulseMode::start(const char* /*payloadJson*/) {
     // Use beginStroke() — IExecutionMode entry point reserved for future wiring.
@@ -16,7 +21,7 @@ bool SinglePulseMode::beginStroke(
     const char* payloadJson,
     void* callbackContext,
     StrokeCompleteCallback onComplete) {
-    if (correlationId == nullptr || correlationId[0] == '\0' || onComplete == nullptr) {
+    if (relay_ == nullptr || correlationId == nullptr || correlationId[0] == '\0' || onComplete == nullptr) {
         return false;
     }
 
@@ -48,14 +53,17 @@ bool SinglePulseMode::beginStroke(
         powerPercent = 100;
     }
 
+    if (!relay_->requestPulse(static_cast<unsigned long>(strokeMs), this, &SinglePulseMode::onRelayPulseComplete)) {
+        Serial.println(F("[STROKE] reject: relay busy"));
+        return false;
+    }
+
     strncpy(correlationId_, correlationId, sizeof(correlationId_) - 1);
     correlationId_[sizeof(correlationId_) - 1] = '\0';
     callbackContext_ = callbackContext;
     onComplete_ = onComplete;
     strokeMs_ = strokeMs;
     powerPercent_ = powerPercent;
-    durationMs_ = static_cast<unsigned long>(strokeMs);
-    startMs_ = millis();
     active_ = true;
     resultJson_[0] = '\0';
 
@@ -68,35 +76,56 @@ bool SinglePulseMode::beginStroke(
 }
 
 void SinglePulseMode::poll() {
-    if (!active_) {
+}
+
+void SinglePulseMode::onRelayPulseComplete(void* context, unsigned long actualMs) {
+    if (context == nullptr) {
         return;
     }
 
-    const unsigned long elapsed = millis() - startMs_;
-    if (elapsed < durationMs_) {
+    auto* mode = static_cast<SinglePulseMode*>(context);
+    if (!mode->active_) {
         return;
     }
 
+    mode->buildSuccessResultJson(actualMs);
+
+    char message[96];
+    snprintf(message, sizeof(message), "stroke %lums complete", static_cast<unsigned long>(actualMs));
+    mode->complete(true, message, mode->resultJson_);
+}
+
+void SinglePulseMode::buildSuccessResultJson(unsigned long actualMs) {
     snprintf(
         resultJson_,
         sizeof(resultJson_),
-        "{\"commandKey\":\"stroke\",\"powerPercent\":%d,\"requestedStrokeMs\":%d,\"actualStrokeMs\":%d,\"success\":true}",
+        "{\"commandKey\":\"stroke\",\"powerPercent\":%d,\"requestedStrokeMs\":%d,"
+        "\"actualStrokeMs\":%lu,\"success\":true}",
         powerPercent_,
         strokeMs_,
-        strokeMs_);
+        actualMs);
+}
 
-    char message[96];
-    snprintf(message, sizeof(message), "stroke %dms complete (simulated)", strokeMs_);
-    complete(true, message, resultJson_);
+void SinglePulseMode::buildAbortedResultJson(unsigned long actualMs) {
+    snprintf(
+        resultJson_,
+        sizeof(resultJson_),
+        "{\"commandKey\":\"stroke\",\"powerPercent\":%d,\"requestedStrokeMs\":%d,"
+        "\"actualStrokeMs\":%lu,\"success\":false,\"interrupted\":true,\"reason\":\"abort\"}",
+        powerPercent_,
+        strokeMs_,
+        actualMs);
 }
 
 void SinglePulseMode::abort() {
-    if (!active_) {
+    if (!active_ || relay_ == nullptr) {
         return;
     }
 
     Serial.println(F("[STROKE] aborted"));
-    complete(false, "stroke aborted", nullptr);
+    const unsigned long actualMs = relay_->abort();
+    buildAbortedResultJson(actualMs);
+    complete(false, "stroke aborted", resultJson_);
 }
 
 void SinglePulseMode::complete(bool success, const char* message, const char* resultJson) {

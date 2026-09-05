@@ -4,6 +4,8 @@
 
 #include <stddef.h>
 
+class RelayController;
+
 typedef void (*StrokeCompleteCallback)(
     void* context,
     const char* correlationId,
@@ -13,6 +15,8 @@ typedef void (*StrokeCompleteCallback)(
 
 class SinglePulseMode : public IExecutionMode {
 public:
+    void setRelay(RelayController* relay);
+
     bool beginStroke(
         const char* correlationId,
         const char* payloadJson,
@@ -25,15 +29,18 @@ public:
     bool isActive() const override;
 
 private:
+    static void onRelayPulseComplete(void* context, unsigned long actualMs);
+
+    void buildSuccessResultJson(unsigned long actualMs);
+    void buildAbortedResultJson(unsigned long actualMs);
     void complete(bool success, const char* message, const char* resultJson);
 
+    RelayController* relay_ = nullptr;
     bool active_ = false;
-    unsigned long startMs_ = 0;
-    unsigned long durationMs_ = 0;
     int strokeMs_ = 0;
     int powerPercent_ = 0;
     char correlationId_[64] = {};
-    char resultJson_[256] = {};
+    char resultJson_[320] = {};
     void* callbackContext_ = nullptr;
     StrokeCompleteCallback onComplete_ = nullptr;
 };

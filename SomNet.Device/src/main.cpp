@@ -134,7 +134,7 @@ void printSerialBanner() {
     Serial.println(wifiManager.localIp());
     Serial.print(F(" Server: "));
     Serial.println(serverUrl[0] != '\0' ? serverUrl : "(not configured)");
-    Serial.println(F(" Log prefixes: [WIFI] [HTTP] [HUB] [CMD] [STROKE] [NVS] [ID]"));
+    Serial.println(F(" Log prefixes: [WIFI] [HTTP] [HUB] [CMD] [STROKE] [RELAY] [NVS] [ID]"));
     Serial.println(F("========================================"));
 }
 
@@ -162,7 +162,7 @@ void setup() {
     }
 
     relayController.begin();
-    executionContext.begin();
+    executionContext.begin(&relayController);
     buttonInput.begin();
     signalRClient.begin(&nvsStore, &deviceIdentity, &wifiManager);
     commandHandler.begin(&executionContext, &nvsStore, &deviceIdentity, &signalRClient);
@@ -175,16 +175,16 @@ void loop() {
     wifiManager.poll();
     tryWifiRecovery();
     signalRClient.poll();
+    relayController.poll();
     executionContext.poll();
     commandHandler.poll();
     buttonInput.poll();
     configWebServer.poll();
-    relayController.poll();
 
     if (!bannerPrinted && millis() >= 1500) {
         printSerialBanner();
         bannerPrinted = true;
     }
 
-    delay(1);
+    yield();
 }

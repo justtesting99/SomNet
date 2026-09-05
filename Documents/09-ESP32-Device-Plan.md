@@ -6,17 +6,20 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 **Source-of-truth principle:** What the UI/API **records** about strokes, bursts, and automatic sessions must reflect **what the device actually did**, as reported in the completion message (`AckCommand`) after each command — not what the UI assumed when the button was pressed.
 
-**Timing architecture:** Firmware is **non-blocking** — explicit **state machines** drive relay pulses, bursts, and automatic schedules using `millis()` polling so SignalR and Wi-Fi stay responsive while timing stays accurate.
+**Timing architecture:** Firmware is **non-blocking** — explicit **state machines** drive relay pulses, bursts, and automatic schedules using `millis()` / **`micros()`** (relay pulse, Phase 6+) polling so SignalR and Wi-Fi stay responsive while timing stays accurate.
 
-**Initial development scope:** First firmware milestones implement **`stroke` (single pulse) only** — pairing, SignalR, relay timing, and ack. The codebase **must still be structured** for `burst` and `automatic` modes (`IExecutionMode`, `execution_context`, separate mode classes) so later features plug in without rework. See §6 and §10.
+**Initial development scope:** Phases **5–6** delivered **`stroke` (single pulse) + `abort`** — pairing, SignalR, relay timing, and ack on hardware. The codebase **remains structured** for `burst` and `automatic` modes (`IExecutionMode`, `execution_context`, separate mode classes) so Phase 9 features plug in without rework. See §6 and §10.
 
 **Critical path after scaffold:** **Device registration** — associating a physical unit with a **Sub** on the SomNet server so SignalR commands reach the right device. The on-device config web UI (MAC-based ID, optional friendly name) plus a SomNet UI pairing flow address this. See **§4.1**.
 
 **End-user / installer documentation:** [Hardware User Guide](./Hardware-User-Guide.md) — provisioning, Wi‑Fi recovery (10 s button hold), Device ID.
 
-**Scope:** Planning and architecture only. No changes to existing SomNet API or UI code until explicitly approved.
+**Implementation progress (2026-09-05):** Phases **0–6 signed off**. Current firmware **`0.6.0-phase6`** — paired SignalR, `stroke` command + ack, **real relay GPIO** on D4 (`micros()` pulse FSM). Next: **Phase 7** (resilience / production prep). Phase **8**: UI commands + abort/busy E2E. See §10.
 
-**Related docs:** [Hardware User Guide](./Hardware-User-Guide.md), [SignalR & Hardware](./06-SignalR-And-Hardware.md), [Authentication & Security](./05-Authentication-And-Security.md), [API Reference](./02-API-Reference.md)
+**Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 6 signed off (2026-09-05).** SomNet API/UI changes remain gated unless noted (Phase 4 pairing bonus, Phase 5 ack fix).
+
+**Related docs:** [Hardware User Guide](./Hardware-User-Guide.md), [SignalR & Hardware](./06-SignalR-And-Hardware.md), [Authentication & Security](./05-Authentication-And-Security.md), [API Reference](./02-API-Reference.md), [SomNet.Device/README](../SomNet.Device/README.md), [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md)  
+**Phase checklists (0–6 complete):** [0](./09-ESP32-Phase-0-Checklist.md) · [1](./09-ESP32-Phase-1-Checklist.md) · [2](./09-ESP32-Phase-2-Checklist.md) · [3](./09-ESP32-Phase-3-Checklist.md) · [4](./09-ESP32-Phase-4-Checklist.md) · [5](./09-ESP32-Phase-5-Checklist.md) · [6](./09-ESP32-Phase-6-Checklist.md)
 
 ---
 
@@ -30,7 +33,7 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 | 2 | **Persistent pairing token in NVS** | Survive reboot; reconnect without re-pairing until revoke or expiry |
 | 3 | **Outbound SignalR to SomNet API** | Secure, token-authenticated hub connection; act only on messages destined for this device |
 | 4 | **Acknowledge command lifecycle** | Server and UI know when a message was received and when action completed |
-| 5 | **Initial action = serial logging** | Relay/button logic stubbed; commands logged to Serial Monitor during development |
+| 5 | **Command execution + relay** | Phases 5–6: `stroke` over SignalR with ack; **GPIO relay pulse** on D4 (see §10 Phase 6) |
 | 6 | **On-device configuration web UI** | Wi-Fi, server URL, **device identity display**, optional friendly name — enables registration (see §4, §4.1) |
 | 7 | **Device-side timing execution** | Relay and sequence timing on ESP32; automatic uses **random** pulse length and random inter-pulse gaps (see §6) |
 | 8 | **Device-reported history** | Completion ack from device updates API/UI session state — device is authoritative (see §9) |
@@ -41,9 +44,9 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 - OTA firmware updates
 - Offline command queue
 - ~~SomNet UI pairing dialog~~ — **partial (2026-09-05):** minimal pairing in **Options** dialog during Phase 4 dev; full dialog + pending list still Phase 8 (see §4 *SomNet React UI — early pairing*)
-- Changes to SomNet backend or frontend (unless a protocol gap is approved)
+- Changes to SomNet backend or frontend (unless a protocol gap is approved — **exceptions:** Phase 4 minimal pairing UI, Phase 5 ack dispatcher fix, Phase 8 `resultJson` + commands)
 - Full-featured device admin portal (keep config UI minimal)
-- **Fully implemented burst and automatic modes** — architecture and stubs only until single-pulse path is proven (see §6 *Initial vs target implementation*)
+- **Fully implemented burst and automatic modes** — architecture and stubs only; **single-pulse path proven** (Phases 5–6); burst/automatic remain Phase 9 (see §6 *Initial vs target implementation*)
 
 ### Hardware (confirmed)
 
@@ -79,7 +82,7 @@ ESP32 D4 (GPIO 4) ──► optocoupler input (IN) ──► relay driver ──
 |--------|--------|
 | **Isolation** | Optocoupler separates ESP32 logic from relay coil/high-voltage side — ESP32 GPIO only drives the low-current LED side of the opto |
 | **Safety** | Load wiring stays on relay screw terminals; do not route mains through the dev board. Firmware controls **timing only** on `PIN_RELAY` |
-| **Active level** | Many modules are **active-low** (IN pulled low to turn on). Set `RELAY_ACTIVE_HIGH` in `boardDefs.h` to match your module |
+| **Active level** | Many modules are **active-low** (IN pulled low to turn on). Set `RELAY_ACTIVE_HIGH` in `boardDefs.h` to match your module. **Verified on bench unit (2026-09-05):** `RELAY_ACTIVE_HIGH = true` |
 | **Visual feedback** | Module LED illuminates when relay is energized — sufficient for stroke/burst testing without external LEDs |
 
 **Pin mapping:** DevKit silkscreen labels (`D4`, `D33`) map to ESP32 GPIO numbers. All hardware pins are defined as **constants in `include/boardDefs.h`** so wiring can be corrected in one place without searching the codebase.
@@ -360,7 +363,7 @@ Before production / end of Phase 7, align the on-device config UI with the **Som
 | Pair device to Sub | ✓ (minimal — **Options → Hardware device**; refine Phase 8) / Swagger | Shows **device ID only** |
 | Set Wi-Fi on ESP32 | — | ✓ |
 | Set SomNet server URL | — | ✓ |
-| Send stroke/burst commands | ✓ | — |
+| Send stroke/burst commands | Swagger ✓ (Phases 5–6); React UI → Phase 8 | — |
 | View hub connection status | ✓ (system status) | ✓ (local diagnostic) |
 
 No changes to SomNet are **required** for the device config UI alone. **SomNet UI pairing** (Dom selects Sub, enters device ID from ESP32 screen) is required for production registration — a **minimal pairing panel shipped early in Phase 4** (Options dialog); full UX remains Phase 8 — see §4.1 and §10 Phase 8.
@@ -391,7 +394,7 @@ Living in Options is **practical for Phase 4 dev**; treat it as **provisional** 
 
 ### Device registration and Sub association (§4.1)
 
-This is the **main integration challenge** after initial scaffolding: the operator must link **this physical ESP32** to **one Sub** under their Dom so `ExecuteCommand` messages reach the device.
+This is the **registration model** for production: the operator links **this physical ESP32** to **one Sub** under their Dom so `ExecuteCommand` messages reach the device. **Verified Phases 4–6** via Options panel + Swagger on test unit `esp32-84CCA85C36B4` / Sub `Slv66`.
 
 #### Split of responsibility
 
@@ -623,7 +626,7 @@ Added as **Phase 3** (early — before SignalR) — see §10 Implementation Phas
 
 ## 5. Alignment with Existing SomNet API
 
-The backend is **already implemented**. The ESP32 must conform to these contracts (no API changes required for MVP).
+The backend hub protocol is **implemented**. The ESP32 conforms to these contracts. **Minor API fix (Phase 5):** dispatcher distinguishes `Acknowledged` vs `Success` (see §9). **`resultJson` on shared DTO** — Phase 8.
 
 ### Hub URL
 
@@ -690,17 +693,17 @@ JWT is passed on the query string because WebSocket clients on ESP32 cannot reli
 }
 ```
 
-`resultJson` is **proposed** — not yet on `HardwareCommandAckDto` in SomNet.Shared. Required for device-as-source-of-truth UI updates (§9).
+`resultJson` is **built on device** (serial log from Phase 5; Phase 6 includes `actualStrokeMs`). **Not yet on `HardwareCommandAckDto` in SomNet.Shared** — Phase 8 adds wire pass-through for device-as-source-of-truth UI (§9).
 
 ### Command keys and device execution summary
 
-| Key | Device responsibility |
-|-----|----------------------|
-| `stroke` | Single relay pulse for **`strokeMs`** from payload, then open |
-| `burst` | Run full burst sequence locally (N strokes × `strokeMs`, delays between) |
-| `abort` | Cancel any running sequence; relay open immediately |
-| `automatic-start` | Start local automatic engine from config snapshot in payload |
-| `automatic-stop` | Stop automatic engine; relay open |
+| Key | Device responsibility | Status (2026-09-05) |
+|-----|----------------------|------------------------|
+| `stroke` | Single relay pulse for **`strokeMs`** from payload, then open | **Done** (Phases 5–6) |
+| `abort` | Cancel active stroke; relay open; dual ack on interrupt | **Firmware done** (Phase 6); E2E → Phase 8 |
+| `burst` | Run full burst sequence locally (N strokes × `strokeMs`, delays between) | Stub ack — Phase 9 |
+| `automatic-start` | Start local automatic engine from config snapshot in payload | Stub ack — Phase 9 |
+| `automatic-stop` | Stop automatic engine; relay open | Stub ack — Phase 9 |
 
 Detailed behavior: **§6 Device-Side Relay and Timing Execution**.
 
@@ -823,38 +826,42 @@ This separation keeps automatic randomization logic out of manual paths and prev
 
 ### Initial vs target implementation
 
-| Aspect | **Initial development** (now) | **Target architecture** (documented for later) |
-|--------|--------------------------------|--------------------------------------------------|
-| **Command keys** | Implement **`stroke` only** end-to-end | `burst`, `automatic-start/stop`, `abort` |
-| **Mode classes** | Implement **`SinglePulseMode`** + **`relay_controller`** | Full `BurstSequenceMode`, `AutomaticSessionMode` |
-| **Scaffolding** | **`IExecutionMode`**, **`execution_context`**, **`command_handler`** dispatch table in place from Phase 1 scaffold | Same interfaces — no refactor when adding modes |
-| **Stub behavior** | Unknown `commandKey` → log + ack `success: false` (“not implemented”) | Replace stubs with real mode classes |
-| **`power_timing`** | Optional for stroke (UI sends `strokeMs`); stub file OK | Required for automatic random pulse/interval |
-| **Validation focus** | Single pulse timing accuracy + SignalR coexistence | Burst sequences, dual RNG automatic, session summaries |
+| Aspect | **Current (Phases 5–6 complete)** | **Target architecture** (later phases) |
+|--------|-----------------------------------|----------------------------------------|
+| **Command keys** | **`stroke`** + **`abort`** (firmware); burst/automatic stub ack | Full `burst`, `automatic-start/stop` (Phase 9) |
+| **Mode classes** | **`SinglePulseMode`** + **`relay_controller`** (GPIO) | `BurstSequenceMode`, `AutomaticSessionMode` |
+| **Scaffolding** | `IExecutionMode`, `execution_context`, `command_handler` in place | Same interfaces — no refactor when adding modes |
+| **Stub behavior** | Unknown keys → ack `"not implemented"` | Replace with real mode classes |
+| **`power_timing`** | Stub file OK (UI sends `strokeMs` for manual stroke) | Required for automatic random pulse/interval |
+| **Validation focus** | Single pulse timing + SignalR coexistence — **verified** | Burst sequences, dual RNG automatic, session summaries |
 
-**Rule for initial coding:** Do not fold burst/automatic logic into `SinglePulseMode` or `relay_controller` “temporarily.” Keep §6 class boundaries even when burst/automatic `.cpp` files only contain `// TODO: Phase 8` stubs.
+**Rule for initial coding:** Do not fold burst/automatic logic into `SinglePulseMode` or `relay_controller` “temporarily.” Keep §6 class boundaries even when burst/automatic `.cpp` files only contain `// TODO: Phase 9` stubs.
 
 **Priority order after single mode works:**
 
-1. `abort` (cancel active pulse — small extension to `execution_context`)
-2. `burst` (`BurstSequenceMode`)
-3. `automatic-start` / `automatic-stop` (`AutomaticSessionMode` + `power_timing`)
+1. ~~`abort` (cancel active pulse)~~ — **done Phase 6** (E2E with UI → Phase 8)
+2. `burst` (`BurstSequenceMode`) — Phase 9
+3. `automatic-start` / `automatic-stop` (`AutomaticSessionMode` + `power_timing`) — Phase 9
 
-### Manual single stroke (`commandKey: stroke`) — **initial milestone**
+### Manual single stroke (`commandKey: stroke`) — **implemented (Phases 5–6)**
 
 In manual mode the UI maps power percent to a stroke duration using the Dom+Sub **minimum/maximum stroke ms** settings (`computeStrokeMs` in the React app). That computed value is sent to the device as **`strokeMs`**.
 
 **Example:** At 50% power with a 25–400 ms range, the UI sends `strokeMs: 213`. If settings yield 200 ms at 50%, the payload contains **`strokeMs: 200`**.
 
-**Device behavior:**
+**Status:** End-to-end on hardware — command/ack (Phase 5), GPIO relay pulse (Phase 6), firmware **`0.6.0-phase6`**. Swagger path verified; SomNet UI buttons still Phase 8.
 
-1. Parse `strokeMs` from `payloadJson` (required, > 0, capped e.g. at 30 s for safety)
-2. **Close relay** (energize)
-3. Wait **exactly** `strokeMs` milliseconds (non-blocking state machine using `millis()`)
+**Device behavior (as implemented):**
+
+1. Parse `strokeMs` from `payloadJson` (required, > 0, max 30 000 ms)
+2. **Close relay** (energize) via `relay_controller`
+3. Wait **`strokeMs`** using non-blocking FSM (`micros()` in `relay_controller.poll()`)
 4. **Open relay** (de-energize)
-5. Send `AckCommand` with `success: true` and a **structured result** describing what actually ran (see §9.4)
+5. Send `AckCommand` with `success`, `message`, and **`resultJson` logged on serial** (API wire field → Phase 8)
 
-The device does **not** recalculate power from percent unless `strokeMs` is omitted (fallback: reject or use safe default — prefer **require `strokeMs`** in payload).
+Measured **`actualStrokeMs`** in serial `resultJson` (e.g. 5000 requested → 5005 actual on test unit). Optional fixed offset after oscilloscope validation — deferred ([Phase 6 checklist](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration-deferred)).
+
+The device does **not** recalculate power from percent when `strokeMs` is omitted — **reject** with clear message (P5-D3).
 
 **Proposed `payloadJson` (manual stroke):**
 
@@ -865,7 +872,7 @@ The device does **not** recalculate power from percent unless `strokeMs` is omit
 }
 ```
 
-### Manual burst (`commandKey: burst`) — *target; stub initially*
+### Manual burst (`commandKey: burst`) — *Phase 9; stub ack today*
 
 Burst is **not** multiple server round-trips. The UI sends one message describing the full burst; the device runs the sequence internally.
 
@@ -898,9 +905,9 @@ THEN AckCommand success
 
 - **Abort** during burst: cancel sequence, relay open, ack aborted if applicable
 - **Ack timing:** Send `AckCommand` when the **entire burst finishes** (or fails), not after the first pulse — aligns with single ack on current API (see §9)
-- Phase 1 dev: log each step to serial; Phase 5: drive relay
+- Phase 6: **`relay_controller`** drives GPIO; log `[RELAY]` transitions (see [Phase 6 Checklist](./09-ESP32-Phase-6-Checklist.md))
 
-### Automatic mode (`automatic-start` / `automatic-stop`) — *target; stub initially*
+### Automatic mode (`automatic-start` / `automatic-stop`) — *Phase 9; stub ack today*
 
 Automatic mode requires **two independent random processes** on the device, both critical to perceived “power” at the valve:
 
@@ -967,7 +974,7 @@ The server does **not** send per-stroke commands during automatic mode — only 
 | **Relay open / OFF / de-energized** | GPIO inactive — load off |
 | **Pulse** | Closed for `strokeMs`, then open |
 
-Active-high vs active-low depends on relay module; configure in firmware constants.
+Active-high vs active-low depends on relay module; configure in firmware constants. **Bench unit (2026-09-05):** `RELAY_ACTIVE_HIGH = true` in `boardDefs.h`.
 
 ### Non-blocking execution and state machines (required)
 
@@ -978,7 +985,7 @@ This application depends on **accurate relay timing** (exact `strokeMs`, burst g
 | Rule | Requirement |
 |------|-------------|
 | **No `delay()` in `loop()`** | Forbidden during command execution, hub I/O, or relay timing (brief `delay()` in `setup()` or factory reset only) |
-| **Time base** | `millis()` for ms-level relay and sequence timing; `micros()` only if sub-ms precision is needed later |
+| **Time base** | **`micros()`** for relay pulse timing (Phase 6 — `relay_controller`); `millis()` for burst gaps, automatic intervals, and general scheduling |
 | **Poll, don’t wait** | Every module exposes `poll()` (or equivalent) called once per `loop()` iteration |
 | **State machines** | Stroke, burst, and automatic logic implemented as explicit **finite-state machines (FSM)**, not nested blocking loops |
 | **Hub priority** | `signalr_client.poll()` runs every loop so ping/pong and inbound commands are not starved |
@@ -993,9 +1000,9 @@ This application depends on **accurate relay timing** (exact `strokeMs`, burst g
 | 5-stroke burst with 5 s gaps | ~25 s blocked loop | States: pulse → gap → pulse → … |
 | Automatic mode (minutes) | Impossible in one loop | Idle → wait → pulse → wait → … for session lifetime |
 
-#### Module state machines (proposed)
+#### Module state machines
 
-**`relay_controller`** — atomic timed pulse:
+**`relay_controller`** — atomic timed pulse — **implemented (Phase 6)**:
 
 ```
 Idle ──startPulse(ms)──► RelayOn ──elapsed──► RelayOff ──► Idle (callback: pulse complete)
@@ -1029,7 +1036,7 @@ State enums and transition helpers live in dedicated mode headers (`modes/single
 
 Use **`esp_random()`** (or Arduino `random()`) for automatic mode; seed once in `setup()` if reproducibility needed for tests.
 
-#### Implementation sketch
+#### Implementation sketch (Phase 6 — `relay_controller`)
 
 ```cpp
 // Called every loop() — never blocks
@@ -1038,7 +1045,7 @@ void relay_controller_poll() {
     case RelayState::Idle:
       break;
     case RelayState::On:
-      if (millis() - onSinceMs_ >= durationMs_) {
+      if (micros() - onSinceUs_ >= durationUs_) {
         relayWrite(false);
         state_ = RelayState::Idle;
         if (onComplete_) onComplete_();
@@ -1048,10 +1055,12 @@ void relay_controller_poll() {
 }
 ```
 
+Timestamp **`onSinceUs_` after `relayWrite(true)`** so GPIO transition time is excluded from the measured pulse.
+
 #### Testing timing quality
 
-- Compare requested vs actual pulse length (serial log: `requested=200 actual=201` using `millis()` delta)
-- Run burst while sending SignalR ping — connection must stay up
+- Compare requested vs actual pulse length (serial log: `requested=5000 actual=5005` from `actualStrokeMs` in `resultJson`)
+- Run burst while sending SignalR ping — connection must stay up (verified for long single pulse in Phase 6)
 - Long automatic session soak without watchdog resets
 
 ### Serial monitor (development)
@@ -1075,9 +1084,9 @@ Log every transition for bring-up:
 [AUTO] stop received
 ```
 
-### SomNet UI/API alignment (future integration)
+### SomNet UI/API alignment (Phase 8 — device path works via Swagger today)
 
-Today the React UI **does not yet** send `payloadJson` to `/api/devices/commands` (simulated ack), and **`SessionProvider` records strokes/bursts optimistically** from button clicks before any device confirmation. That behavior must change when hardware is integrated.
+**Today:** Swagger `POST /api/devices/commands` drives **`stroke`** on paired hardware (Phases 5–6 verified). The React UI **does not yet** send real commands — `waitForHardwareAck` is simulated (~450 ms). **`SessionProvider` still records strokes/bursts optimistically** from button clicks. Phase 8 wires UI to the same REST path and defers session writes until device ack + `resultJson`.
 
 **Target flow (device as source of truth):**
 
@@ -1106,7 +1115,7 @@ The UI must **not** treat a button click as proof the relay fired. Failed, parti
 | Automatic start | Full automatic settings snapshot JSON |
 | Abort / stop | `{}` or `{ reason }` |
 
-Document this contract in `SomNet.Device/docs/PROTOCOL.md` when implementing. **No SomNet code changes until approved** — this section defines the target contract for firmware and a future UI PR.
+Contract documented in [`PROTOCOL.md`](../SomNet.Device/docs/PROTOCOL.md) (Phase 0). **SomNet UI integration** — Phase 8; **ack dispatcher fix** — done Phase 5 (§9).
 
 ### Safety limits (firmware)
 
@@ -1154,7 +1163,17 @@ Outgoing `AckCommand`:
 {"type":1,"target":"AckCommand","arguments":[{"correlationId":"...","success":true,"message":"received"}]}
 ```
 
-(Exact envelope format must be verified against a browser WebSocket capture during Step 0 — see §10.)
+(Exact envelope format verified in Phase 0 — see [`PROTOCOL.md`](../SomNet.Device/docs/PROTOCOL.md).)
+
+### Handshake readiness (Phase 5 fix)
+
+`ExecuteCommand` may arrive in the **same WebSocket frame batch** as the `{}` handshake success line, or before the empty handshake frame is processed. **`signalr_client`** therefore:
+
+- Sets `handshakeComplete_` on explicit `{}` handshake response
+- Sets `handshakeComplete_` **implicitly** on any type-1 hub invocation (e.g. `ExecuteCommand`)
+- Gates command handling via `isHubConnected()` = WebSocket connected **and** handshake complete
+
+This prevents spurious “hub not ready” rejects during the first command after connect.
 
 ### Reconnection strategy
 
@@ -1266,24 +1285,33 @@ SomNet today supports **one** acknowledgment per command:
 
 There is **no** separate “received” vs “completed” hub method yet. **`HardwareCommandAckDto` today carries only `correlationId`, `success`, and `message`** — insufficient for rich session updates without parsing free text. A structured **`resultJson`** field on the ack DTO is recommended (§9.4).
 
-### Recommended phasing
+### Recommended ack model (implementation phases 5–6 use this)
 
-#### Phase 1 — MVP (no SomNet code changes)
+> **Naming note:** “Phase 1 / Phase 2” below refers to **ack protocol maturity**, not firmware implementation phases in §10.
 
-| Command | Device action | When to ack |
-|---------|---------------|-------------|
-| `stroke` | Single relay pulse for `strokeMs` | After relay opens |
-| `burst` | Full sequence locally (see §6) | After **all** strokes and delays complete |
-| `abort` / `automatic-stop` | Cancel sequences; relay open | Immediately after cancel |
-| `automatic-start` | Start local engine (see §6) | After engine accepts config (optional immediate ack); session runs async |
+#### Single-phase ack — **current (Phases 5–6)**
 
-For `stroke` and `burst`, send **one** `AckCommand` with `success`, human-readable `message`, and machine-readable **`resultJson`** (§9.4).
+| Command | Device action | When to ack | Status |
+|---------|---------------|-------------|--------|
+| `stroke` | Single relay pulse for `strokeMs` | After relay opens | **Done** — hardware verified |
+| `abort` | Cancel active pulse; relay open | Dual ack on interrupt (stroke fail + abort success) | **Firmware done**; E2E via UI → Phase 8 |
+| `burst` | Full sequence locally (see §6) | After **all** strokes and delays complete | Phase 9 |
+| `abort` / `automatic-stop` (during burst/auto) | Cancel sequences; relay open | Immediately after cancel | Phase 9 |
+| `automatic-start` | Start local engine (see §6) | After engine accepts config (optional immediate ack); session runs async | Phase 9 |
+
+For `stroke`, send **one** `AckCommand` with `success`, human-readable `message`, and machine-readable **`resultJson`** on serial (§9.4). **`resultJson` on REST/SignalR wire → Phase 8.**
 
 Operator/API see: delivered + acknowledged + success after **device-side execution** completes. **Session/history updates use `resultJson`, not the original command payload alone.**
 
-**Trade-off:** No “received but still executing” state on server during long bursts (unless Phase 2 two-phase ack is approved).
+**SomNet API fix (Phase 5, 2026-09-05):** `DeviceConnectionRegistry.WaitForAcknowledgementAsync` returns the full `HardwareCommandAckDto?` (not `bool`). `HardwareCommandDispatcher` maps:
+- Ack received + `success: false` → `acknowledged: true`, `success: false`, device message
+- True timeout → `acknowledged: false`
 
-#### Phase 2 — Two-phase ack (optional, requires approved API + UI changes)
+This separates “device responded” from “device succeeded.”
+
+**Trade-off:** No “received but still executing” state on server during long bursts (unless two-phase ack below is approved).
+
+#### Two-phase ack (optional — requires approved API + UI changes)
 
 Extend protocol (proposal for future discussion):
 
@@ -1298,7 +1326,7 @@ SomNet changes would include:
 - `HardwareCommandDispatcher` optionally waiting for completed phase
 - UI showing received / executing / done
 
-**Do not implement Phase 2 until explicitly approved.**
+**Do not implement two-phase ack until explicitly approved.**
 
 ### Completion payload — `resultJson` (proposed)
 
@@ -1353,9 +1381,9 @@ Extend `HardwareCommandAckDto` with optional **`resultJson`** (stringified JSON,
 | **UI `sessionSummary.ts`** | Build lines from parsed `resultJson` (fallback to message string during transition) |
 | **UI `HardwareCommandProvider`** | Subscribe to SignalR `CommandAcknowledged` or use REST response body |
 
-Firmware can populate `message` for logs and **`resultJson` for UI** in parallel from Phase 4 onward.
+Firmware populates `message` for logs and builds **`resultJson` locally from Phase 5 onward** (serial). SomNet API/UI pass-through of **`resultJson`** on REST and `CommandAcknowledged` → Phase 8.
 
-#### Phase 1 serial logging (immediate feedback)
+#### Development serial logging (Phases 5–6)
 
 For development visibility, log state transitions locally regardless of ack model:
 
@@ -1375,14 +1403,14 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 | Phase | Focus | Checklist | Status |
 |-------|--------|-----------|--------|
-| **0** | Protocol verification | [Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | **Complete** |
-| 1 | Project scaffold | [Phase 1 Checklist](./09-ESP32-Phase-1-Checklist.md) | **Complete** |
-| 2 | NVS + MAC device identity | [Phase 2 Checklist](./09-ESP32-Phase-2-Checklist.md) | **Complete** |
-| **3** | **Config web UI + registration UX** | [Phase 3 Checklist](./09-ESP32-Phase-3-Checklist.md) | **Complete** |
+| **0** | Protocol verification | [Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | **Complete** (2026-09-05) |
+| 1 | Project scaffold | [Phase 1 Checklist](./09-ESP32-Phase-1-Checklist.md) | **Complete** (2026-09-05) |
+| 2 | NVS + MAC device identity | [Phase 2 Checklist](./09-ESP32-Phase-2-Checklist.md) | **Complete** (2026-09-05) |
+| **3** | **Config web UI + registration UX** | [Phase 3 Checklist](./09-ESP32-Phase-3-Checklist.md) | **Complete** (2026-09-05) |
 | 4 | SignalR client + pairing | [Phase 4 Checklist](./09-ESP32-Phase-4-Checklist.md) | **Complete** (2026-09-05) |
 | 5 | Single-pulse command + ack | [Phase 5 Checklist](./09-ESP32-Phase-5-Checklist.md) | **Complete** (2026-09-05) |
-| 6 | Single-pulse relay | *TBD* | — |
-| 7 | Resilience / production prep | *TBD* | — |
+| 6 | Single-pulse relay | [Phase 6 Checklist](./09-ESP32-Phase-6-Checklist.md) | **Signed off** (2026-09-05) |
+| 7 | Resilience / production prep | *TBD: [Phase 7 Checklist](./09-ESP32-Phase-7-Checklist.md)* | **Next** |
 | **8** | **SomNet UI pairing dialog** + command integration | *TBD* | **Partial** — minimal pairing in Options (2026-09-05); full dialog + commands pending |
 | 9 | Burst and automatic modes | *TBD* | — |
 
@@ -1397,7 +1425,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 ### Phase 0 — Protocol verification (1–2 days)
 
 **Checklist:** [09-ESP32-Phase-0-Checklist.md](./09-ESP32-Phase-0-Checklist.md)  
-**Status:** Complete
+**Status:** Complete (2026-09-05)
 
 **Summary:** Capture WebSocket/SignalR frames from `/hubs/hardware`; confirm envelopes and field names against `DeviceDtos.cs`; document in `SomNet.Device/docs/PROTOCOL.md`.
 
@@ -1410,7 +1438,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 ### Phase 1 — Project scaffold (1 day)
 
 **Checklist:** [09-ESP32-Phase-1-Checklist.md](./09-ESP32-Phase-1-Checklist.md)  
-**Status:** Complete
+**Status:** Complete (2026-09-05)
 
 **Summary:** PlatformIO project, `boardDefs.h` / `config.h`, stub module tree (`IExecutionMode`, `execution_context`, `command_handler`, mode classes), Wi-Fi with retry, serial banner. **No** SignalR, NVS identity, config UI, or relay actuation.
 
@@ -1435,7 +1463,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 ### Phase 2 — NVS and MAC device identity (1 day)
 
 **Checklist:** [09-ESP32-Phase-2-Checklist.md](./09-ESP32-Phase-2-Checklist.md)  
-**Status:** Complete
+**Status:** Complete (2026-09-05)
 
 **Summary:** `device_identity` reads MAC → `esp32-{12HEX}` and persists via `nvs_store` (Preferences namespace `somnet`). Banner shows real ID + MAC. Optional long-press factory reset. **No** SignalR, config UI, or Wi-Fi-from-NVS yet.
 
@@ -1485,7 +1513,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 **Checklist:** [09-ESP32-Phase-4-Checklist.md](./09-ESP32-Phase-4-Checklist.md)  
 **Status:** Complete (2026-09-05)
 
-**Summary:** Negotiate + WebSocket to `/hubs/hardware`; unpaired connect with `deviceId`; handle `PairDevice` → NVS token → paired reconnect; ping/pong; exponential backoff. **No** `ExecuteCommand`, relay, or `wss` yet.
+**Summary:** Negotiate + WebSocket to `/hubs/hardware`; unpaired connect with `deviceId`; handle `PairDevice` → NVS token → paired reconnect; ping/pong; exponential backoff. **At Phase 4 exit:** no `ExecuteCommand` handling, relay, or `wss`. **Added in Phases 5–6:** `ExecuteCommand` / `AckCommand`, relay GPIO, `abort`.
 
 **Exit criteria:** End-to-end pairing using **device ID from Phase 3 UI**; `GET /api/devices/status` shows `isConnected: true`. Verified with Dom **demo** / Sub **Slv66** via SomNet **Options → Hardware device** (and Swagger with Bearer auth).
 
@@ -1508,11 +1536,13 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 ### Phase 5 — Single-pulse command handling and ack (2–3 days)
 
 **Checklist:** [09-ESP32-Phase-5-Checklist.md](./09-ESP32-Phase-5-Checklist.md)  
-**Status:** **Complete** — stroke E2E verified on hardware (2026-09-05); optional G.2–G.4 validation tests remain
+**Status:** **Complete** — stroke E2E verified (2026-09-05); validation + API ack fix verified; superseded by Phase 6 for GPIO
 
 **Scope:** **`stroke` only** — validate architecture with one mode before burst/automatic.
 
-**Decisions (2026-09-05):** Software timer stub (no GPIO); reject busy/invalid/missing `strokeMs`; ack failures; build `resultJson` locally (serial only until Phase 8); firmware `0.5.0-phase5`; test Sub `Slv66`.
+**Decisions (2026-09-05):** Software timer stub (no GPIO); reject busy/invalid/missing `strokeMs`; ack failures; build `resultJson` locally (serial only until Phase 8); firmware `0.5.0-phase5`; test Sub `Slv66`; handshake race fix (§7).
+
+**SomNet API (Phase 5):** `WaitForAcknowledgementAsync` returns full ack DTO; dispatcher separates `Acknowledged` vs `Success` (see §9).
 
 **Deliverables:**
 
@@ -1523,27 +1553,37 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 - [x] Invoke `AckCommand` with `correlationId`, **`message`**, `success` (`resultJson` logged serial only until Phase 8)
 - [x] Serial logging for every step
 
-**Exit criteria:** Swagger `POST /api/devices/commands` with `commandKey: stroke` returns success; serial shows FSM trace (relay stub — GPIO in Phase 6). **Met** on `esp32-84CCA85C36B4` / Sub `Slv66`.
+**Exit criteria:** Swagger `POST /api/devices/commands` with `commandKey: stroke` returns success; serial shows command FSM trace. **Met** on `esp32-84CCA85C36B4` / Sub `Slv66`. Relay GPIO → Phase 6.
 
 ---
 
 ### Phase 6 — Single-pulse relay and button (1–2 days)
 
+**Checklist:** [09-ESP32-Phase-6-Checklist.md](./09-ESP32-Phase-6-Checklist.md)  
+**Status:** **Signed off** — 2026-09-05
+
 **Scope:** **`SinglePulseMode` + `relay_controller` only** — proves non-blocking timing with SignalR.
+
+**Decisions (2026-09-05):** Active-HIGH relay; relay-only timing (`micros()`); measured `actualStrokeMs`; abort in firmware; callback completion; busy reject; `0.6.0-phase6`; Sub `Slv66`.
 
 **Deliverables:**
 
-- [ ] **Non-blocking FSM:** `relay_controller` + `SinglePulseMode` (exact `strokeMs`)
-- [ ] `execution_context.poll()` delegates to active mode
-- [ ] `abort` during active stroke (relay open, cancel pulse) — minimal abort support
-- [ ] Serial logging on **every state transition**
-- [ ] `button_input`: debounced read; serial log on press
+- [x] **Non-blocking FSM:** `relay_controller` + `SinglePulseMode` (exact `strokeMs`)
+- [x] `execution_context.poll()` delegates to active mode
+- [x] `abort` during active stroke — **implemented**; E2E test Phase 8
+- [x] Serial logging on **every state transition** (`[RELAY]`)
+- [x] `button_input`: debounced read; serial log on press (unchanged)
 
-**Exit criteria:** Stroke at 200 ms closes relay ~200 ms then opens; SignalR stays connected during pulse; abort opens relay; serial shows FSM transitions.
+**Exit criteria:** Stroke closes relay ~requested ms then opens; SignalR stays connected during pulse; serial shows `[RELAY]` FSM transitions. **Met** on `esp32-84CCA85C36B4` / Sub `Slv66` (5000 ms → 5005 ms `actualStrokeMs` after `micros()` refinement). Abort mid-pulse + busy reject E2E → Phase 8. Oscilloscope validation + optional `strokeMs` offset → deferred ([Phase 6 checklist *Post sign-off*](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration-deferred)).
 
 ---
 
 ### Phase 7 — Resilience and production prep (2–3 days)
+
+**Checklist:** *TBD — [09-ESP32-Phase-7-Checklist.md](./09-ESP32-Phase-7-Checklist.md)*  
+**Status:** Not started
+
+**Carry-forward from Phase 6:** ~~Update [Hardware User Guide](./Hardware-User-Guide.md) (relay on D4)~~ — done 2026-09-05; oscilloscope timing validation; optional fixed offset in `relay_controller` if scope shows systematic error (TBD).
 
 **Deliverables:**
 
@@ -1575,6 +1615,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 - [ ] **UI pairing dialog** — **Online now** list + **paste device ID** (enhance beyond current Options panel)
 - [ ] Optional: QR scan; show friendly name / installer contact when available
 - [ ] UI replaces simulated `waitForHardwareAck` with `/api/devices/commands` **including `payloadJson` per §6**
+- [ ] **Verify `abort` dual-ack and busy reject** (deferred from Phase 6 — Swagger REST is synchronous)
 - [ ] **`HardwareCommandAckDto.resultJson`** + pass-through on REST and SignalR
 - [ ] **Session/history driven by device ack** (§9)
 - [ ] SignalR client in UI for `CommandAcknowledged` with `resultJson`
@@ -1611,7 +1652,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 4. Note **Device ID** (`esp32-{MAC}`) — read-only on page; copy for pairing
 5. Optionally enter **friendly name** (e.g. “Workshop valve”)
 6. Enter **Wi-Fi** and **SomNet server URL** (PC LAN IP for dev, e.g. `http://192.168.1.10:5031`)
-7. Save and reboot — device connects to Wi-Fi; Phase 4+ opens SignalR unpaired with that device ID
+7. Save and reboot — device connects to Wi-Fi; SignalR connects unpaired with that device ID (Phase 4+)
 
 ### SomNet pairing — associate with Sub (Phase 4 dev / Phase 8 UI)
 
@@ -1640,13 +1681,14 @@ All work is driven from a **single `loop()`** that returns quickly. Long operati
 main.cpp
   ├── setup: serial, NVS, mode (provisioning vs running)
   ├── setup: Wi-Fi (AP or STA), config_web_server, hub (if provisioned)
-  └── loop:                    // must return quickly — no delay() here
+  └── loop:                    // must return quickly — yield() OK, no delay()
         wifi_manager.poll()
-        config_web_server.poll()   // Async; callbacks non-blocking
-        signalr_client.poll()      // outbound WebSocket — every iteration
-        execution_context.poll()   // delegates to active IExecutionMode
+        signalr_client.poll()      // outbound WebSocket — every iteration (first)
         relay_controller.poll()    // atomic GPIO pulse FSM (used by all modes)
+        execution_context.poll()   // delegates to active IExecutionMode
+        command_handler.poll()     // deferred acks, dual-ack on abort
         button_input.poll()
+        config_web_server.poll()   // Async; callbacks non-blocking
 
 Callbacks (async completion — not from blocking code):
   onPairDevice(msg)     → nvs_store.savePairing → hub.reconnect(paired)
@@ -1659,7 +1701,7 @@ Callbacks (async completion — not from blocking code):
 
 ### Threading
 
-Prefer **single-threaded cooperative `loop()`** with FSM-based timing (`millis()`). `ESPAsyncWebServer` uses AsyncTCP; **`delay()` must not appear in `loop()` or FSM poll paths** — SignalR ping/pong, command delivery, and relay timing accuracy all depend on continuous polling.
+Prefer **single-threaded cooperative `loop()`** with FSM-based timing (`micros()` for relay pulse, `millis()` for longer sequences). `ESPAsyncWebServer` uses AsyncTCP; **`delay()` must not appear in `loop()` or FSM poll paths** — use `yield()` where needed. SignalR ping/pong, command delivery, and relay timing accuracy all depend on continuous polling.
 
 Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loop()` task** unless profiling shows hub starvation; avoid `vTaskDelay` in command paths for the same reasons as `delay()`.
 
@@ -1677,11 +1719,12 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 | **Hardware** | Multimeter/LED on relay pin; timed pulse matches `strokeMs` (±1 ms jitter) |
 | **Timing** | Oscilloscope or logic analyzer on GPIO for 200 ms stroke; burst interval spacing |
 
-### Success metrics (Phase 4+)
+### Success metrics (Phases 4–6)
 
 - Pairing succeeds within 5 s of API call
-- Command ack within 500 ms for serial-only stub; within command timeout for relay pulse
+- Command ack within command timeout for relay pulse; measured `actualStrokeMs` logged on serial
 - Zero false accepts of commands for other device IDs (manual test with forged payload)
+- Long pulse (e.g. 5 s): hub stays connected; GPIO pulse within ~±5 ms of requested at ms scale (serial `micros()`); scope validation deferred
 
 ---
 
@@ -1689,10 +1732,11 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Blocking `delay()` in command path | SignalR drop, bad timing | FSM + `millis()`; code review / grep for `delay(` in `src/` |
-| SignalR message format mismatch | No commands parsed | Protocol doc from live capture before coding parser |
+| Blocking `delay()` in command path | SignalR drop, bad timing | FSM + `micros()`/`millis()`; code review / grep for `delay(` in `src/` |
+| SignalR message format mismatch | No commands parsed | `PROTOCOL.md` from Phase 0; parser verified Phases 4–5 |
+| Handshake vs first command race | Spurious “hub not ready” | Implicit handshake on type-1 invocation (§7) — fixed Phase 5 |
 | JWT too large for query string | Connect fails | Verify token length; server config already uses query `access_token` |
-| Single ack vs two-phase requirement | UX gap | Phase 1 single ack; document Phase 2 API proposal |
+| Single ack vs two-phase requirement | UX gap | Single-phase ack in use (Phases 5–6); two-phase proposal in §9 |
 | Local dev uses HTTP not HTTPS | Different from prod | Separate PlatformIO environments |
 | Relay noise on Wi-Fi GPIO | Unreliable RF | Separate relay supply; avoid strapping pins; keep GPIO configurable |
 | Cloud multi-instance API | Hub on wrong instance | Future: Azure SignalR Service (noted in Dev Guide) |
@@ -1702,22 +1746,29 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 
 ---
 
-## 15. Open Decisions (Resolve Before Coding)
+## 15. Decisions
+
+### Resolved (Phases 0–6)
+
+| # | Question | Resolution |
+|---|----------|------------|
+| 1 | Repo name/location | **`SomNet.Device/` in repo** |
+| 2 | Relay active level | **`RELAY_ACTIVE_HIGH = true`** — verified on bench unit (2026-09-05) |
+| 3 | Device ID format | **`esp32-{MAC}`** (§4.1) |
+| 4 | Ack timing (stroke) | Ack **after** relay opens (execution complete) |
+| 5 | Two-phase ack | **Deferred** — single ack in use; proposal in §9 |
+| 6 | Burst command (initial) | **Deferred to Phase 9** — stub ack `"not implemented"` |
+| 11 | Command overlap | **Reject** new command while sequence running (P5-D2, P6-D8) |
+| 12 | Missing `strokeMs` | **Reject** with clear message (P5-D3) |
+
+### Open (before Phase 7+ / production)
 
 | # | Question | Options |
 |---|----------|---------|
-| 1 | Repo name/location | **`SomNet.Device/` in repo** — confirmed |
-| 2 | Relay active level | Active-low vs active-high module |
-| 3 | Device ID format | **`esp32-{MAC}`** — confirmed (§4.1) |
-| 4 | Phase 1 ack timing | Ack after full execution vs immediate (MVP = after execution) |
-| 5 | Two-phase ack | Defer to Phase 2 API change vs accept single ack for now |
-| 6 | Burst command | Log only vs sequential relay pulses in Phase 1 |
 | 7 | Certificate pinning | Required for prod or trust store only |
 | 8 | Config UI access control | Open `/config` on LAN vs button-gated vs time-limited |
 | 9 | Wi-Fi credentials in NVS | Plaintext vs ESP32 flash encryption |
 | 10 | Provisioning UX | Soft-AP captive portal vs BLE vs serial-only for dev |
-| 11 | Command overlap | Reject new stroke/burst while sequence running vs queue |
-| 12 | Missing `strokeMs` in payload | Reject vs compute from powerPercent on device (prefer reject) |
 | 13 | Automatic stroke reporting | Per-stroke acks vs aggregated summary only on stop |
 | 14 | Failed command in UI | Show error only vs write "failed attempt" to session history |
 | 15 | Automatic pulse randomization | Random power→ms vs random ms directly in range (or both per config) |
@@ -1728,14 +1779,14 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 
 ## 16. Document Maintenance
 
-**Phase progress:** Update [phase checklist documents](./09-ESP32-Phase-0-Checklist.md) and the status table in §10 as work completes.
+**Phase progress:** Update [phase checklist documents](./09-ESP32-Phase-0-Checklist.md) and the status table in §10 as work completes. This plan is the **source of truth** — when implementation diverges, update the plan first, then checklists.
 
-When the device repo is created:
+**Repository (created — Phase 1):**
 
-1. Add link in [Documents/README.md](./README.md) to this plan and active phase checklists
-2. Add “Related repositories” entry in root [README.md](../README.md)
-3. Copy protocol examples into `SomNet.Device/docs/PROTOCOL.md` after Phase 0 (per [Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md))
-4. Update [06-SignalR-And-Hardware.md](./06-SignalR-And-Hardware.md) with “firmware repo” link when available
+1. [x] Link in [Documents/README.md](./README.md) to this plan and phase checklists (0–6)
+4. [x] Add “Related repositories” / firmware pointer in root [README.md](../README.md) (2026-09-05) if not present
+3. [x] Protocol examples in `SomNet.Device/docs/PROTOCOL.md` (Phase 0)
+4. [x] Update [06-SignalR-And-Hardware.md](./06-SignalR-And-Hardware.md) with firmware repo link and Phase 5–6 command path (2026-09-05)
 
 ---
 
@@ -1757,13 +1808,13 @@ When the device repo is created:
 - [x] On-device config web UI requirements and SignalR coexistence documented
 - [x] Implementation phases with exit criteria listed
 
-**Ready to implement when:**
+**Implementation through Phase 6 (2026-09-05):**
 
-- [x] PlatformIO extension installed and active in Cursor
-- [x] Hardware target confirmed: ESP32 DevKit V1 clone → `board = esp32dev`
-- [x] Wiring confirmed: relay **D4**, button **D33** → constants in `boardDefs.h`
-- [x] No external status LEDs; relay module has optocoupler + built-in LED(s)
-- [ ] Open decisions in §15 resolved
-- [x] [Phase 0 checklist](./09-ESP32-Phase-0-Checklist.md) complete — see §10 status table
-- [x] `SomNet.Device` repository created (PlatformIO scaffold — Phase 1 complete)
-- [ ] Explicit approval to begin firmware (and any API changes for two-phase ack)
+- [x] Phases 0–6 signed off — firmware **`0.6.0-phase6`**
+- [x] PlatformIO project `SomNet.Device/` with module tree per §12
+- [x] Pairing + `stroke` E2E via Swagger on hardware (`esp32-84CCA85C36B4` / Sub `Slv66`)
+- [x] Relay GPIO on D4 with `micros()` pulse FSM
+- [x] Open decisions #1–6, #11–12 resolved (§15)
+- [ ] Phase 7 resilience / production prep — **next**
+- [ ] Phase 8 UI commands + `resultJson` wire + abort/busy E2E
+- [ ] Explicit approval only if pursuing two-phase ack API change

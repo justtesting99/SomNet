@@ -5,10 +5,9 @@ PlatformIO firmware for the SomNet hardware device (ESP32 DevKit V1 clone). Live
 **Protocol:** [docs/PROTOCOL.md](docs/PROTOCOL.md)  
 **Hardware user guide:** [Documents/Hardware-User-Guide.md](../Documents/Hardware-User-Guide.md)  
 **Plan:** [Documents/09-ESP32-Device-Plan.md](../Documents/09-ESP32-Device-Plan.md)  
-**Phase 1 checklist:** [Documents/09-ESP32-Phase-1-Checklist.md](../Documents/09-ESP32-Phase-1-Checklist.md)  
-**Phase 3 checklist:** [Documents/09-ESP32-Phase-3-Checklist.md](../Documents/09-ESP32-Phase-3-Checklist.md)  
-**Phase 4 checklist:** [Documents/09-ESP32-Phase-4-Checklist.md](../Documents/09-ESP32-Phase-4-Checklist.md)  
-**Phase 5 checklist:** [Documents/09-ESP32-Phase-5-Checklist.md](../Documents/09-ESP32-Phase-5-Checklist.md)
+**Phase checklists (0–6 complete):** [0](../Documents/09-ESP32-Phase-0-Checklist.md) · [1](../Documents/09-ESP32-Phase-1-Checklist.md) · [2](../Documents/09-ESP32-Phase-2-Checklist.md) · [3](../Documents/09-ESP32-Phase-3-Checklist.md) · [4](../Documents/09-ESP32-Phase-4-Checklist.md) · [5](../Documents/09-ESP32-Phase-5-Checklist.md) · [6](../Documents/09-ESP32-Phase-6-Checklist.md)
+
+**Current firmware:** `0.6.0-phase6` — SignalR pairing, `stroke` relay on D4, `abort` during active pulse. See [Phase 6 behavior](#phase-6-behavior-current) below.
 
 ## Hardware (default wiring)
 
@@ -52,9 +51,100 @@ pio device monitor
 
 Or use the PlatformIO sidebar: **Build**, **Upload**, **Monitor** (115200 baud).
 
-## Phase 4 behavior (current)
+## Phase 6 behavior (current)
 
-Firmware **0.4.0-phase4** adds outbound SignalR hub client + device pairing.
+Firmware **0.6.0-phase6** drives the **relay on D4** for `stroke` commands and supports **`abort`** during an active pulse.
+
+### Flow
+
+1. Dom sends `POST /api/devices/commands` (Swagger **Authorize** required)
+2. Device validates and starts `relay_controller` pulse for `strokeMs`
+3. Relay energizes → waits `strokeMs` (non-blocking FSM) → de-energizes
+4. Device sends **`AckCommand`** with measured **`actualStrokeMs`** in serial `resultJson`
+5. **`abort`** during a long pulse opens the relay immediately and sends **two acks** (stroke interrupted, then abort success)
+
+Verify `RELAY_ACTIVE_HIGH` in `include/boardDefs.h` if the relay energizes at idle (flip to `false` for active-LOW modules).
+
+### Test stroke (Swagger)
+
+```json
+POST /api/devices/commands
+{
+  "subTarget": "Slv66",
+  "commandKey": "stroke",
+  "payloadJson": "{\"powerPercent\":50,\"strokeMs\":200}"
+}
+```
+
+### Test abort (Swagger)
+
+Start a long stroke, then within the pulse window:
+
+```json
+POST /api/devices/commands
+{
+  "subTarget": "Slv66",
+  "commandKey": "abort",
+  "payloadJson": "{}"
+}
+```
+
+### Serial trace
+
+```
+[CMD] recv correlationId=... key=stroke
+[STROKE] start strokeMs=200 powerPercent=50
+[RELAY] ON
+[RELAY] OFF after 200ms
+[STROKE] complete success=true
+[CMD] resultJson={"commandKey":"stroke",...,"actualStrokeMs":200,...}
+[CMD] ack correlationId=... success=true
+[HUB] AckCommand sent
+```
+
+---
+
+## Phase 5 behavior (prior)
+
+Firmware **0.5.0-phase5** handled **`stroke`** with a software timer stub (no GPIO). Superseded by Phase 6 relay timing.
+
+### Flow (Phase 5)
+
+1. Dom sends `POST /api/devices/commands` (Swagger **Authorize** required)
+2. API pushes `ExecuteCommand` over SignalR
+3. Device validates `deviceId`, token, dom/sub
+4. **Software timer** ran for `strokeMs` (no relay GPIO)
+5. Device sent **`AckCommand`** → API returned `acknowledged: true`
+
+### Test stroke (Swagger)
+
+```json
+POST /api/devices/commands
+{
+  "subTarget": "Slv66",
+  "commandKey": "stroke",
+  "payloadJson": "{\"powerPercent\":50,\"strokeMs\":200}"
+}
+```
+
+Use a short `strokeMs` (e.g. **200**) for quick feedback. Other command keys return ack `success: false`, message `"not implemented"`.
+
+### Serial trace (Phase 5)
+
+```
+[CMD] recv correlationId=... key=stroke
+[STROKE] start strokeMs=200 powerPercent=50
+[STROKE] complete success=true
+[CMD] resultJson={"commandKey":"stroke",...}
+[CMD] ack correlationId=... success=true
+[HUB] AckCommand sent
+```
+
+---
+
+## Phase 4 behavior (prior)
+
+Firmware **0.4.0-phase4** added outbound SignalR hub client + device pairing.
 
 ### Hub connection
 
@@ -84,53 +174,9 @@ See [Phase 4 checklist](../Documents/09-ESP32-Phase-4-Checklist.md) and device p
 - If negotiate fails with `connection refused` from ESP but Swagger works on the PC, allow inbound TCP **5031** on Windows Firewall (Private network)
 - **Production (Azure):** device connects outbound to cloud — end-user PC firewall is not involved
 
-### Log prefix
-
-| `[HUB]` | SignalR client (negotiate, WS, PairDevice, reconnect) |
-
 ---
 
-## Phase 5 behavior (current)
-
-Firmware **0.5.0-phase5** handles **`stroke`** commands on the paired hub connection.
-
-### Flow
-
-1. Dom sends `POST /api/devices/commands` (Swagger **Authorize** required)
-2. API pushes `ExecuteCommand` over SignalR
-3. Device validates `deviceId`, token, dom/sub
-4. **Software timer** runs for `strokeMs` (no relay GPIO yet — Phase 6)
-5. Device sends **`AckCommand`** → API returns `acknowledged: true`
-
-### Test stroke (Swagger)
-
-```json
-POST /api/devices/commands
-{
-  "subTarget": "Slv66",
-  "commandKey": "stroke",
-  "payloadJson": "{\"powerPercent\":50,\"strokeMs\":200}"
-}
-```
-
-Use a short `strokeMs` (e.g. **200**) for quick feedback. Other command keys return ack `success: false`, message `"not implemented"`.
-
-### Serial trace
-
-```
-[CMD] recv correlationId=... key=stroke
-[STROKE] start strokeMs=200 powerPercent=50
-[STROKE] complete success=true
-[CMD] resultJson={"commandKey":"stroke",...}
-[CMD] ack correlationId=... success=true
-[HUB] AckCommand sent
-```
-
----
-
-## Phase 4 behavior (prior)
-
-### Boot modes
+## Phase 4 — boot modes and config UI (still current)
 
 | Mode | When | Wi-Fi | Config UI |
 |------|------|-------|-----------|

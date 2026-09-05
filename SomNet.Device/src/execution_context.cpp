@@ -1,7 +1,10 @@
 #include "execution_context.h"
 
-void ExecutionContext::begin() {
+#include "relay_controller.h"
+
+void ExecutionContext::begin(RelayController* relay) {
     activeMode_ = nullptr;
+    singlePulseMode_.setRelay(relay);
 }
 
 void ExecutionContext::poll() {

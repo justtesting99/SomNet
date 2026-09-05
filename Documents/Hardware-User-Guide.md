@@ -1,24 +1,33 @@
 # SomNet Hardware — User Guide
 
-Guide for **installers**, **device owners**, and **support staff** using the SomNet ESP32 hardware unit. This document grows as firmware features ship.
+Guide for **installers**, **device owners**, and **support staff** using the SomNet ESP32 hardware unit.
 
-For firmware development, see [ESP32 Device Plan](./09-ESP32-Device-Plan.md). For the SomNet web application, see [User Guide](./User-Guide.md).
+| Audience | Document |
+|----------|----------|
+| Installers / owners | This guide |
+| Developers | [ESP32 Device Plan](./09-ESP32-Device-Plan.md) · [SomNet.Device/README](../SomNet.Device/README.md) |
+| SomNet web app | [User Guide](./User-Guide.md) |
+| Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
+
+**Firmware status (2026-09-05):** Phases **0–6** — Wi‑Fi provisioning, SomNet pairing over SignalR, and **relay control** for manual stroke commands from the server. SomNet **web app stroke buttons** are not wired to hardware yet (Phase 8); pairing and stroke testing use the device status page + SomNet **Options → Hardware device** or Swagger.
 
 ---
 
 ## What you have
 
-The SomNet device is a small Wi‑Fi controller that connects to your SomNet server on the local network. Each unit has a **unique Device ID** (based on its hardware address) used when pairing to a Sub in SomNet.
+The SomNet device is a small Wi‑Fi controller that connects **outbound** to your SomNet server. Each unit has a **unique Device ID** (based on its hardware address) used when pairing to a Sub in SomNet.
 
 **On the default dev kit:**
 
 | Part | Label | Purpose |
 |------|-------|---------|
 | Setup button | **D33** | Reset Wi‑Fi / server settings (hold 10 seconds) |
-| Relay output | **D4** | Controlled by SomNet commands (future phases) |
-| USB | — | Power and optional service access (developers) |
+| Relay output | **D4** | Drives the air valve relay — energized during a **stroke** command from SomNet |
+| USB | — | Power and optional service access (developers / support) |
 
 Production enclosures may label the button differently; the **10 second hold** behavior is the same.
+
+When a stroke command runs, the relay energizes for the requested duration (milliseconds to seconds, set by the operator’s power settings in SomNet), then de-energizes. You may see the relay module’s built-in indicator LED during that time.
 
 ---
 
@@ -67,7 +76,15 @@ The IP is shown on the status page once you know it; installers may use their ro
 
 On the device **status page**, copy the **Device ID** (format `esp32-…`).
 
-In SomNet (Dom account → select Sub → **Pair device**), paste that ID. Pairing in the web UI is the supported method; the device does not ask for your SomNet login.
+In SomNet:
+
+1. Log in as **Dom** and select the **Sub** this device will serve.
+2. Open **Options** → **Hardware device**.
+3. Paste the Device ID and tap **Pair device**.
+
+The device receives pairing over its live connection, stores credentials, and reconnects. The status page should show paired/connected state when the server and device are both online.
+
+**Note:** The device does not ask for your SomNet login — pairing is always initiated from the SomNet app by an authenticated Dom.
 
 ---
 
@@ -79,7 +96,7 @@ If Wi‑Fi credentials were mistyped or the network changed, the device **cannot
 
 1. Power the device on (or leave it running).
 2. Press and **hold the button (D33)** for **10 seconds**.
-   - At about **5 seconds**, the device indicates a reset is pending (serial log if connected to USB; future builds may add an LED pattern).
+   - At about **5 seconds**, the device logs a warning on serial (USB); future builds may add an LED pattern.
 3. Release after 10 seconds. The device clears **Wi‑Fi and server settings only**, then reboots.
 4. Follow **First-time setup** again (join `SomNet-Setup-XXXX` → **http://192.168.4.1/config**).
 
@@ -100,7 +117,7 @@ If the device is on your network and you can open its web page:
 
 | Page | URL | Use |
 |------|-----|-----|
-| Status | `http://<device-ip>/` | Device ID, pairing state, server URL |
+| Status | `http://<device-ip>/` | Device ID, pairing/connection state, server URL |
 | Configure | `http://<device-ip>/config` | Change Wi‑Fi, server, friendly name |
 | Reset Wi‑Fi / server | Button on `/config` | Same as credential reset, then reboot |
 | Factory reset | Button on `/config` | Clears **all** settings including pairing — use only when decommissioning or starting completely fresh |
@@ -118,6 +135,21 @@ If the device is on your network and you can open its web page:
 
 ---
 
+## SomNet connection and relay (current firmware)
+
+| Capability | Available? | Notes |
+|------------|------------|--------|
+| Device connects to SomNet server (SignalR) | **Yes** | After Wi‑Fi + server URL configured and device paired |
+| Pairing from SomNet UI | **Yes** | Options → Hardware device (dedicated dialog planned) |
+| Status page shows pairing state | **Yes** | Unpaired / paired / connected indicators |
+| Stroke from SomNet **web app buttons** | **Not yet** | Phase 8 — operators use API/Swagger for hardware testing today |
+| Relay responds to server **stroke** command | **Yes** | Duration set in command payload (`strokeMs`) |
+| Burst / automatic modes | **Not yet** | Phase 9 |
+
+**Server URL reminder:** Use the SomNet API **LAN address** on the device (e.g. `http://192.168.1.47:5031`). The SomNet browser on the same PC can use `localhost`; the ESP32 cannot.
+
+---
+
 ## Troubleshooting
 
 | Problem | What to try |
@@ -126,19 +158,19 @@ If the device is on your network and you can open its web page:
 | Saved wrong Wi‑Fi password | Hold button 10 s → set up again |
 | Setup page will not load | Confirm you are on `SomNet-Setup-XXXX` or the same LAN as the device; try `http://192.168.4.1/` on setup AP |
 | Device ID needed for pairing | Status page at `http://<device-ip>/` after Wi‑Fi works, or USB serial log for installers |
+| Paired but “not connected” in SomNet | Check server URL on device; confirm API is running; same LAN; Windows Firewall on dev PC may block LAN inbound port 5031 |
+| Stroke does nothing | Confirm pairing + connected status; relay wiring on **D4**; support may test via Swagger while UI wiring is pending |
 | Lost pairing / start over completely | On `/config`, use **Factory reset** (when reachable), or contact support |
 
 ---
 
-## Coming soon
+## Coming later
 
-Features not yet available on shipped firmware; this section will be updated per release.
-
-| Feature | Status |
+| Feature | Target |
 |---------|--------|
-| Live connection to SomNet (SignalR) | Planned — Phase 4 |
-| Pairing confirmation on device status page | Planned — Phase 4 |
-| Relay / session control from SomNet | Planned — later phases |
+| Stroke / burst from SomNet web app buttons | Phase 8 |
+| Dedicated pairing dialog + “online now” device list | Phase 8 |
+| Burst and automatic session modes | Phase 9 |
 | LED indicators for setup / fault | Under consideration |
 | QR code on status page for Device ID | Future polish |
 
@@ -149,3 +181,4 @@ Features not yet available on shipped firmware; this section will be updated per
 | Date | Change |
 |------|--------|
 | 2026-09-05 | Initial guide: provisioning, config UI, 10 s credential reset |
+| 2026-09-05 | SignalR pairing, relay on D4, Options pairing path; clarified UI stroke buttons pending Phase 8 |
