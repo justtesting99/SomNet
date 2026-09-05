@@ -1328,7 +1328,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 | Phase | Focus | Checklist | Status |
 |-------|--------|-----------|--------|
 | **0** | Protocol verification | [Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | **Complete** |
-| 1 | Project scaffold | *TBD when Phase 0 complete* | — |
+| 1 | Project scaffold | [Phase 1 Checklist](./09-ESP32-Phase-1-Checklist.md) | **Complete** |
 | 2 | NVS + MAC device identity | *TBD* | — |
 | **3** | **Config web UI + registration UX** | *TBD* | — |
 | 4 | SignalR client + pairing | *TBD* | — |
@@ -1347,7 +1347,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 ### Phase 0 — Protocol verification (1–2 days)
 
 **Checklist:** [09-ESP32-Phase-0-Checklist.md](./09-ESP32-Phase-0-Checklist.md)  
-**Status:** Not started
+**Status:** Complete
 
 **Summary:** Capture WebSocket/SignalR frames from `/hubs/hardware`; confirm envelopes and field names against `DeviceDtos.cs`; document in `SomNet.Device/docs/PROTOCOL.md`.
 
@@ -1359,15 +1359,24 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 ### Phase 1 — Project scaffold (1 day)
 
-**Deliverables:**
+**Checklist:** [09-ESP32-Phase-1-Checklist.md](./09-ESP32-Phase-1-Checklist.md)  
+**Status:** Complete
 
-- [ ] Create `SomNet.Device/` folder in repo
-- [ ] PlatformIO project for `esp32dev`
-- [ ] `boardDefs.h`: `PIN_RELAY` (D4 / GPIO 4), `PIN_BUTTON` (D33 / GPIO 33), relay polarity
-- [ ] `config.h`: server URL, feature flags (`secrets.ini` for Wi-Fi in dev)
-- [ ] **Architecture skeleton (stubs OK):** `i_execution_mode.h`, `execution_context.*`, `command_handler.*`, empty `modes/burst_sequence_mode.*` and `modes/automatic_session_mode.*`
-- [ ] Serial banner: firmware version, device ID, pairing state
-- [ ] Wi-Fi connect with retry
+**Summary:** PlatformIO project, `boardDefs.h` / `config.h`, stub module tree (`IExecutionMode`, `execution_context`, `command_handler`, mode classes), Wi-Fi with retry, serial banner. **No** SignalR, NVS identity, config UI, or relay actuation.
+
+**Exit criteria:** `pio run` clean; board connects to Wi-Fi; serial prints version + placeholder device ID; architecture skeleton matches plan §6.
+
+*Detailed steps, file list, and decisions are in the checklist — not duplicated here.*
+
+**Deliverables (reference):**
+
+- [x] Create `SomNet.Device/` folder in repo
+- [x] PlatformIO project for `esp32dev`
+- [x] `boardDefs.h`: `PIN_RELAY` (D4 / GPIO 4), `PIN_BUTTON` (D33 / GPIO 33), relay polarity
+- [x] `config.h`: server URL, feature flags (`secrets.ini` for Wi-Fi in dev)
+- [x] **Architecture skeleton (stubs OK):** `i_execution_mode.h`, `execution_context.*`, `command_handler.*`, empty `modes/burst_sequence_mode.*` and `modes/automatic_session_mode.*`
+- [x] Serial banner: firmware version, device ID, pairing state
+- [x] Wi-Fi connect with retry
 
 **Exit criteria:** Board connects to Wi-Fi; prints device ID on serial; project compiles with mode class layout in place.
 
@@ -1658,5 +1667,5 @@ When the device repo is created:
 - [x] No external status LEDs; relay module has optocoupler + built-in LED(s)
 - [ ] Open decisions in §15 resolved
 - [x] [Phase 0 checklist](./09-ESP32-Phase-0-Checklist.md) complete — see §10 status table
-- [ ] `SomNet.Device` repository created
+- [x] `SomNet.Device` repository created (PlatformIO scaffold — Phase 1 complete)
 - [ ] Explicit approval to begin firmware (and any API changes for two-phase ack)

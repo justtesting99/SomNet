@@ -1,0 +1,2 @@
+# Local secrets — never commit (see repo root .gitignore)
+secrets.ini

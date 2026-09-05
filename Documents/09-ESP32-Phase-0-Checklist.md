@@ -269,5 +269,5 @@ Future phase checklists (to be added as phases start):
 | Phase | Checklist document | Status |
 |-------|-------------------|--------|
 | 0 | This document | Complete |
-| 1 | *TBD: `09-ESP32-Phase-1-Checklist.md`* | — |
+| 1 | [09-ESP32-Phase-1-Checklist.md](./09-ESP32-Phase-1-Checklist.md) | Not started |
 | 2+ | *Created when prior phase completes* | — |
