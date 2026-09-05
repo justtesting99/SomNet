@@ -15,8 +15,10 @@ public static class ControlStateDefaults
     {
         Running = false,
         AutomaticMode = Enums.AutomaticRunMode.RandomPowerAndTiming,
-        MinimumPower = 25,
-        MaximumPower = 400,
+        MinimumStrokeMs = 25,
+        MaximumStrokeMs = 400,
+        MinimumPower = 0,
+        MaximumPower = 100,
         StrokeMinSeconds = 5,
         StrokeMaxSeconds = 20,
         DelayBeforeStartSeconds = 0,

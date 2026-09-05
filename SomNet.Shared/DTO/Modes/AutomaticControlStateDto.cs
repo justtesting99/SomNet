@@ -8,9 +8,13 @@ public sealed class AutomaticControlStateDto
 
     public AutomaticRunMode AutomaticMode { get; init; } = AutomaticRunMode.RandomPowerAndTiming;
 
-    public int MinimumPower { get; init; } = 25;
+    public int MinimumStrokeMs { get; init; } = 25;
 
-    public int MaximumPower { get; init; } = 400;
+    public int MaximumStrokeMs { get; init; } = 400;
+
+    public int MinimumPower { get; init; }
+
+    public int MaximumPower { get; init; } = 100;
 
     public int StrokeMinSeconds { get; init; } = 5;
 

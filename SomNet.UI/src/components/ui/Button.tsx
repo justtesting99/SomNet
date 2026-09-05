@@ -7,6 +7,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   fullWidth?: boolean;
+  pending?: boolean;
   children: ReactNode;
 }
 
@@ -31,6 +32,7 @@ export function Button({
   variant = 'primary',
   size = 'md',
   fullWidth = false,
+  pending = false,
   className = '',
   children,
   ...props
@@ -38,11 +40,15 @@ export function Button({
   return (
     <button
       className={[
-        'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-colors',
+        'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-[transform,colors,box-shadow] duration-150',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
         'disabled:pointer-events-none disabled:opacity-50',
+        'active:scale-[0.97] active:brightness-95',
         variantClasses[variant],
         sizeClasses[size],
+        pending
+          ? 'scale-[0.98] cursor-wait ring-2 ring-amber-400/90 ring-offset-2 ring-offset-slate-900 brightness-110 shadow-lg shadow-amber-900/20'
+          : '',
         fullWidth ? 'w-full' : '',
         className,
       ]
@@ -50,6 +56,12 @@ export function Button({
         .join(' ')}
       {...props}
     >
+      {pending ? (
+        <span
+          className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+          aria-hidden="true"
+        />
+      ) : null}
       {children}
     </button>
   );

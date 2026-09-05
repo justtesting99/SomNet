@@ -11,6 +11,7 @@ import { OptionsProvider } from '@/context/OptionsProvider';
 import { NotifyProvider } from '@/context/NotifyProvider';
 import { VideoDisplayProvider } from '@/context/VideoDisplayProvider';
 import { SessionProvider } from '@/context/SessionProvider';
+import { HardwareCommandProvider } from '@/context/HardwareCommandProvider';
 import { ModeSelector } from '@/components/modes/ModeSelector';
 import { ManualControls } from '@/components/modes/ManualControls';
 import { AutomaticControls } from '@/components/modes/AutomaticControls';
@@ -44,9 +45,11 @@ export function App() {
                       <ModeSelector />
                     ) : (
                       <VideoDisplayProvider>
-                        <DashboardLayout
-                          controls={mode === 'manual' ? <ManualControls /> : <AutomaticControls />}
-                        />
+                        <HardwareCommandProvider>
+                          <DashboardLayout
+                            controls={mode === 'manual' ? <ManualControls /> : <AutomaticControls />}
+                          />
+                        </HardwareCommandProvider>
                       </VideoDisplayProvider>
                     )}
                   </AppShell>

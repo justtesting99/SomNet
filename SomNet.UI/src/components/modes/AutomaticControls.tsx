@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   AUTOMATIC_RUN_MODE_OPTIONS,
   type AutomaticControlState,
@@ -8,11 +9,13 @@ import { useLiveSession } from '@/context/SessionProvider';
 import { useOptions } from '@/context/OptionsProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { Panel } from '@/components/ui/Panel';
-import { Button } from '@/components/ui/Button';
-import { VerticalRangeControl } from '@/components/ui/VerticalRangeControl';
+import { CommandButton } from '@/components/ui/CommandButton';
+import { StrokePowerSlider } from '@/components/modes/StrokePowerSlider';
 import { NumberField, MinMaxRow } from '@/components/ui/NumberField';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { RadioGroup, SelectField } from '@/components/ui/RadioGroup';
+import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
+import { computeStrokeMs } from '@/utils/stroke';
 
 export function AutomaticControls() {
   const { settings, updateAutomatic, isLoading } = useOptions();
@@ -40,6 +43,16 @@ export function AutomaticControls() {
 
   const endSessionDisabled = state.endSessionMode === 'noAutoEnd';
 
+  const minimumStrokeMs = useMemo(
+    () => computeStrokeMs(state.minimumPower, state.minimumStrokeMs, state.maximumStrokeMs),
+    [state.minimumPower, state.minimumStrokeMs, state.maximumStrokeMs],
+  );
+
+  const maximumStrokeMs = useMemo(
+    () => computeStrokeMs(state.maximumPower, state.minimumStrokeMs, state.maximumStrokeMs),
+    [state.maximumPower, state.minimumStrokeMs, state.maximumStrokeMs],
+  );
+
   return (
     <div className="space-y-4">
       {isLoading ? (
@@ -48,23 +61,44 @@ export function AutomaticControls() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Power Settings" className="min-w-0 overflow-hidden">
-          <div className="grid min-w-0 grid-cols-2 gap-2 sm:gap-4">
-            <VerticalRangeControl
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
+            <NumberField
+              label="Minimum Stroke (ms)"
+              inline
+              value={state.minimumStrokeMs}
+              min={1}
+              className="w-20"
+              disabled={state.running}
+              onChange={(event) => update('minimumStrokeMs', Number(event.target.value))}
+            />
+            <NumberField
+              label="Maximum Stroke (ms)"
+              inline
+              value={state.maximumStrokeMs}
+              min={1}
+              className="w-20"
+              disabled={state.running}
+              onChange={(event) => update('maximumStrokeMs', Number(event.target.value))}
+            />
+          </div>
+
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-2">
+            <StrokePowerSlider
               label="Minimum"
-              min={0}
-              max={400}
-              value={state.minimumPower}
-              scaleTop={400}
-              scaleBottom={0}
+              percent={state.minimumPower}
+              minimumMs={state.minimumStrokeMs}
+              maximumMs={state.maximumStrokeMs}
+              strokeMs={minimumStrokeMs}
+              disabled={state.running}
               onChange={(event) => update('minimumPower', Number(event.target.value))}
             />
-            <VerticalRangeControl
+            <StrokePowerSlider
               label="Maximum"
-              min={0}
-              max={400}
-              value={state.maximumPower}
-              scaleTop={400}
-              scaleBottom={0}
+              percent={state.maximumPower}
+              minimumMs={state.minimumStrokeMs}
+              maximumMs={state.maximumStrokeMs}
+              strokeMs={maximumStrokeMs}
+              disabled={state.running}
               onChange={(event) => update('maximumPower', Number(event.target.value))}
             />
           </div>
@@ -196,25 +230,27 @@ export function AutomaticControls() {
                 update('automaticMode', event.target.value as AutomaticRunMode)
               }
             />
-            <Button
+            <CommandButton
+              commandKey={HARDWARE_COMMAND_KEYS.automaticStart}
               size="lg"
               fullWidth
               disabled={state.running}
-              onClick={handleStart}
+              onCommand={handleStart}
               className="py-4 text-base"
             >
               Start
-            </Button>
-            <Button
+            </CommandButton>
+            <CommandButton
+              commandKey={HARDWARE_COMMAND_KEYS.automaticStop}
               size="lg"
               fullWidth
               variant="secondary"
               disabled={!state.running}
-              onClick={handleStop}
+              onCommand={handleStop}
               className="py-4 text-base"
             >
               Stop
-            </Button>
+            </CommandButton>
           </div>
         </Panel>
       </div>

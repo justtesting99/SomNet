@@ -17,7 +17,7 @@ export function Panel({ title, children, className = '' }: PanelProps) {
         .join(' ')}
     >
       <legend className="px-2 text-sm font-semibold text-slate-200">{title}</legend>
-      {children}
+      <div className="flex min-w-0 flex-col">{children}</div>
     </fieldset>
   );
 }

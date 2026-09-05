@@ -34,6 +34,14 @@ public static class PairingSettingsSerializer
     public static PairingSettingsDto Normalize(PairingSettingsDto settings)
     {
         var automatic = settings.Automatic;
+        var minimumStrokeMs = automatic.MinimumStrokeMs > 0 ? automatic.MinimumStrokeMs : 25;
+        var maximumStrokeMs = automatic.MaximumStrokeMs > 0 ? automatic.MaximumStrokeMs : 400;
+        var (minimumPower, maximumPower) = NormalizeAutomaticPower(
+            automatic.MinimumPower,
+            automatic.MaximumPower,
+            minimumStrokeMs,
+            maximumStrokeMs);
+
         return new PairingSettingsDto
         {
             AppOptions = settings.AppOptions,
@@ -42,8 +50,10 @@ public static class PairingSettingsSerializer
             {
                 Running = false,
                 AutomaticMode = automatic.AutomaticMode,
-                MinimumPower = automatic.MinimumPower,
-                MaximumPower = automatic.MaximumPower,
+                MinimumStrokeMs = minimumStrokeMs,
+                MaximumStrokeMs = maximumStrokeMs,
+                MinimumPower = minimumPower,
+                MaximumPower = maximumPower,
                 StrokeMinSeconds = automatic.StrokeMinSeconds,
                 StrokeMaxSeconds = automatic.StrokeMaxSeconds,
                 DelayBeforeStartSeconds = automatic.DelayBeforeStartSeconds,
@@ -60,6 +70,46 @@ public static class PairingSettingsSerializer
                 BurstStrokesMax = automatic.BurstStrokesMax,
             },
         };
+    }
+
+    private static (int MinimumPower, int MaximumPower) NormalizeAutomaticPower(
+        int minimumPower,
+        int maximumPower,
+        int minimumStrokeMs,
+        int maximumStrokeMs)
+    {
+        var minPercent = minimumPower;
+        var maxPercent = maximumPower;
+
+        if (minimumPower > 100 || maximumPower > 100)
+        {
+            minPercent = MsToPercent(minimumPower, minimumStrokeMs, maximumStrokeMs);
+            maxPercent = MsToPercent(maximumPower, minimumStrokeMs, maximumStrokeMs);
+        }
+
+        minPercent = Math.Clamp(minPercent, 0, 100);
+        maxPercent = Math.Clamp(maxPercent, 0, 100);
+
+        if (minPercent > maxPercent)
+        {
+            (minPercent, maxPercent) = (maxPercent, minPercent);
+        }
+
+        return (minPercent, maxPercent);
+    }
+
+    private static int MsToPercent(int ms, int minimumMs, int maximumMs)
+    {
+        var min = Math.Min(minimumMs, maximumMs);
+        var max = Math.Max(minimumMs, maximumMs);
+
+        if (max == min)
+        {
+            return 0;
+        }
+
+        var clamped = Math.Clamp(ms, min, max);
+        return (int)Math.Round((clamped - min) * 100.0 / (max - min));
     }
 
     private static JsonSerializerOptions CreateOptions()

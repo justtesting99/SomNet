@@ -15,6 +15,7 @@ import type { OperationMode } from '@/types/modes';
 import {
   buildAutomaticSessionSummary,
   buildManualSessionSummary,
+  type ManualActionEvent,
   type ManualSessionEndReason,
 } from '@/utils/sessionSummary';
 
@@ -23,18 +24,19 @@ interface ActiveSessionState {
   startedAt: string;
   mode: OperationMode;
   subTarget: SubTargetName;
-  strokeCount: number;
-  burstCount: number;
+  events: ManualActionEvent[];
   abortCount: number;
-  burstStrokes: number;
-  burstDelaySeconds: number;
 }
 
 interface SessionContextValue {
   activeSession: ActiveSessionState | null;
   beginAutomaticSession: () => Promise<void>;
-  recordManualStroke: (burstStrokes: number, burstDelaySeconds: number) => Promise<void>;
-  recordManualBurst: (burstStrokes: number, burstDelaySeconds: number) => Promise<void>;
+  recordManualStroke: (powerPercent: number) => Promise<void>;
+  recordManualBurst: (
+    powerPercent: number,
+    burstStrokes: number,
+    burstDelaySeconds: number,
+  ) => Promise<void>;
   endManualSession: (reason: ManualSessionEndReason) => Promise<void>;
   endAutomaticSession: (reason: string) => Promise<void>;
   endActiveSessionIfNeeded: (reason: ManualSessionEndReason | string) => Promise<void>;
@@ -53,19 +55,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const domTarget = user?.displayName ?? user?.username ?? '';
 
-  const buildManualSummary = useCallback((session: ActiveSessionState, abortCount = session.abortCount) => {
-    return buildManualSessionSummary({
-      strokeCount: session.strokeCount,
-      burstCount: session.burstCount,
-      burstStrokes: session.burstStrokes,
-      burstDelaySeconds: session.burstDelaySeconds,
-      abortCount,
-    });
-  }, []);
+  const buildManualSummary = useCallback(
+    (session: ActiveSessionState, abortCount = session.abortCount, inProgress = false) => {
+      return buildManualSessionSummary({
+        events: session.events,
+        abortCount,
+        inProgress,
+      });
+    },
+    [],
+  );
 
   const persistManualProgress = useCallback(
     async (session: ActiveSessionState, abortCount = session.abortCount) => {
-      const summary = buildManualSummary(session, abortCount);
+      const summary = buildManualSummary(session, abortCount, true);
       await updateSessionApi(session.id, summary);
     },
     [buildManualSummary],
@@ -85,11 +88,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         startedAt: entry.startedAt,
         mode: 'manual',
         subTarget: selectedSub,
-        strokeCount: 0,
-        burstCount: 0,
+        events: [],
         abortCount: 0,
-        burstStrokes: 5,
-        burstDelaySeconds: 5,
       };
       activeSessionRef.current = nextSession;
       setActiveSession(nextSession);
@@ -128,11 +128,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         startedAt: entry.startedAt,
         mode: 'automatic',
         subTarget: selectedSub,
-        strokeCount: 0,
-        burstCount: 0,
+        events: [],
         abortCount: 0,
-        burstStrokes: 0,
-        burstDelaySeconds: 0,
       };
       activeSessionRef.current = nextSession;
       setActiveSession(nextSession);
@@ -142,7 +139,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [domTarget, selectedSub]);
 
   const recordManualStroke = useCallback(
-    async (burstStrokes: number, burstDelaySeconds: number) => {
+    async (powerPercent: number) => {
       await ensureManualSession();
 
       const current = activeSessionRef.current;
@@ -150,11 +147,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const nextSession = {
+      const nextSession: ActiveSessionState = {
         ...current,
-        strokeCount: current.strokeCount + 1,
-        burstStrokes,
-        burstDelaySeconds,
+        events: [...current.events, { type: 'stroke', powerPercent }],
       };
       activeSessionRef.current = nextSession;
       setActiveSession(nextSession);
@@ -164,7 +159,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const recordManualBurst = useCallback(
-    async (burstStrokes: number, burstDelaySeconds: number) => {
+    async (powerPercent: number, burstStrokes: number, burstDelaySeconds: number) => {
       await ensureManualSession();
 
       const current = activeSessionRef.current;
@@ -172,11 +167,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const nextSession = {
+      const nextSession: ActiveSessionState = {
         ...current,
-        burstCount: current.burstCount + 1,
-        burstStrokes,
-        burstDelaySeconds,
+        events: [
+          ...current.events,
+          { type: 'burst', powerPercent, burstStrokes, burstDelaySeconds },
+        ],
       };
       activeSessionRef.current = nextSession;
       setActiveSession(nextSession);
@@ -193,7 +189,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       }
 
       const abortCount = reason === 'abort' ? current.abortCount + 1 : current.abortCount;
-      const summary = buildManualSummary(current, abortCount);
+      const summary = buildManualSummary(current, abortCount, false);
 
       await finalizeSession(summary);
     },

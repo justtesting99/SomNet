@@ -21,6 +21,8 @@ export interface ManualControlState {
 export interface AutomaticControlState {
   running: boolean;
   automaticMode: AutomaticRunMode;
+  minimumStrokeMs: number;
+  maximumStrokeMs: number;
   minimumPower: number;
   maximumPower: number;
   strokeMinSeconds: number;
@@ -50,8 +52,10 @@ export const defaultManualState: ManualControlState = {
 export const defaultAutomaticState: AutomaticControlState = {
   running: false,
   automaticMode: 'randomPowerAndTiming',
-  minimumPower: 25,
-  maximumPower: 400,
+  minimumStrokeMs: 25,
+  maximumStrokeMs: 400,
+  minimumPower: 0,
+  maximumPower: 100,
   strokeMinSeconds: 5,
   strokeMaxSeconds: 20,
   delayBeforeStartSeconds: 0,

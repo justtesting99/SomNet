@@ -32,7 +32,93 @@ input[type='range']::-moz-range-thumb {
   box-shadow: 0 0 0 4px rgb(79 70 229 / 0.15);
 }
 
+.vertical-slider-track-shell {
+  --track-height: 9rem;
+  --thumb-size: 1rem;
+  --track-thickness: 0.5rem;
+
+  position: relative;
+  height: var(--track-height);
+  width: 2rem;
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .vertical-slider-track-shell {
+    --track-height: 10rem;
+  }
+}
+
+.vertical-slider-track-shell::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  z-index: 0;
+  height: 100%;
+  width: var(--track-thickness);
+  transform: translateX(-50%);
+  border-radius: 9999px;
+  background: rgb(51 65 85);
+  pointer-events: none;
+}
+
 .vertical-slider {
-  transform: rotate(-90deg);
+  --track-height: 9rem;
+  --thumb-size: 1rem;
+  --track-thickness: 0.5rem;
+
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  width: calc(var(--track-height) + var(--thumb-size));
+  height: var(--track-thickness);
+  margin: 0;
+  padding: 0;
+  transform: translate(-50%, -50%) rotate(-90deg);
   transform-origin: center center;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+@media (min-width: 640px) {
+  .vertical-slider {
+    --track-height: 10rem;
+  }
+}
+
+.vertical-slider::-webkit-slider-runnable-track {
+  height: var(--track-thickness);
+  border-radius: 9999px;
+  background: transparent;
+}
+
+.vertical-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: var(--thumb-size);
+  width: var(--thumb-size);
+  margin-top: calc((var(--track-thickness) - var(--thumb-size)) / 2);
+  border-radius: 9999px;
+  background: rgb(129 140 248);
+  border: 2px solid rgb(30 41 59);
+  box-shadow: 0 0 0 4px rgb(79 70 229 / 0.15);
+}
+
+.vertical-slider::-moz-range-track {
+  height: var(--track-thickness);
+  border-radius: 9999px;
+  background: transparent;
+}
+
+.vertical-slider::-moz-range-thumb {
+  height: var(--thumb-size);
+  width: var(--thumb-size);
+  border-radius: 9999px;
+  background: rgb(129 140 248);
+  border: 2px solid rgb(30 41 59);
+  box-shadow: 0 0 0 4px rgb(79 70 229 / 0.15);
 }

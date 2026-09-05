@@ -7,6 +7,50 @@ interface VerticalRangeControlProps
   scaleTop?: number | string;
   scaleBottom?: number | string;
   hideValueHeader?: boolean;
+  tickDivisions?: number;
+}
+
+function SliderTicks({
+  divisions,
+  side,
+}: {
+  divisions: number;
+  side: 'left' | 'right';
+}) {
+  const ticks = Array.from({ length: divisions + 1 }, (_, index) => index);
+
+  return (
+    <div
+      className="flex h-full w-3 shrink-0 flex-col justify-between"
+      aria-hidden="true"
+    >
+      {ticks.map((tick) => (
+        <span
+          key={tick}
+          className={[
+            'block h-px shrink-0 bg-slate-600',
+            tick === 0 || tick === divisions ? 'w-2.5' : 'w-1.5',
+            side === 'left' ? 'self-end' : 'self-start',
+          ].join(' ')}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ScaleLabels({
+  top,
+  bottom,
+}: {
+  top: number | string;
+  bottom: number | string;
+}) {
+  return (
+    <div className="flex h-full w-8 shrink-0 flex-col justify-between text-xs leading-none text-slate-500">
+      <span className="self-end">{top}</span>
+      <span className="self-end">{bottom}</span>
+    </div>
+  );
 }
 
 export function VerticalRangeControl({
@@ -15,12 +59,14 @@ export function VerticalRangeControl({
   scaleTop,
   scaleBottom,
   hideValueHeader = false,
+  tickDivisions,
   id,
   className = '',
   ...props
 }: VerticalRangeControlProps) {
   const inputId = id ?? label.toLowerCase().replace(/\s+/g, '-');
   const showScale = scaleTop !== undefined || scaleBottom !== undefined;
+  const showTicks = tickDivisions !== undefined && tickDivisions > 0;
 
   return (
     <div className="flex min-w-0 flex-col items-center gap-2">
@@ -30,32 +76,25 @@ export function VerticalRangeControl({
         </p>
       ) : null}
 
-      <div className="flex h-48 items-stretch gap-3 sm:h-56">
-        <div className="flex w-8 shrink-0 flex-col justify-between py-1 text-xs text-slate-500">
-          <span>100%</span>
-          <span>0%</span>
-        </div>
+      <div className="flex h-36 items-stretch gap-2 sm:h-40">
+        <ScaleLabels top="100%" bottom="0%" />
 
-        <div className="flex w-10 shrink-0 items-center justify-center overflow-hidden">
+        {showTicks ? <SliderTicks divisions={tickDivisions} side="left" /> : null}
+
+        <div className="vertical-slider-track-shell">
           <input
             id={inputId}
             type="range"
             value={value}
-            className={[
-              'vertical-slider h-8 w-36 cursor-pointer appearance-none rounded-full bg-slate-700 accent-indigo-500 sm:w-40',
-              className,
-            ]
-              .filter(Boolean)
-              .join(' ')}
+            className={['vertical-slider cursor-pointer', className].filter(Boolean).join(' ')}
             {...props}
           />
         </div>
 
+        {showTicks ? <SliderTicks divisions={tickDivisions} side="right" /> : null}
+
         {showScale ? (
-          <div className="flex w-8 shrink-0 flex-col justify-between py-1 text-xs text-slate-500">
-            <span>{scaleTop ?? ''}</span>
-            <span>{scaleBottom ?? ''}</span>
-          </div>
+          <ScaleLabels top={scaleTop ?? ''} bottom={scaleBottom ?? ''} />
         ) : null}
       </div>
     </div>

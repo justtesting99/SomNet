@@ -3,11 +3,12 @@ import { type ManualControlState } from '@/types/modes';
 import { useOptions } from '@/context/OptionsProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { Panel } from '@/components/ui/Panel';
-import { Button } from '@/components/ui/Button';
+import { CommandButton } from '@/components/ui/CommandButton';
 import { NumberField } from '@/components/ui/NumberField';
-import { ManualPowerSlider } from '@/components/modes/ManualPowerSlider';
+import { StrokePowerSlider } from '@/components/modes/StrokePowerSlider';
 import { useLiveSession } from '@/context/SessionProvider';
 import { computeStrokeMs } from '@/utils/stroke';
+import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 
 export function ManualControls() {
   const { settings, updateManual, isLoading } = useOptions();
@@ -28,13 +29,13 @@ export function ManualControls() {
   function handleStroke() {
     setBurstInProgress(false);
     expandOnAction();
-    void recordManualStroke(state.burstStrokes, state.burstDelaySeconds);
+    void recordManualStroke(state.powerPercent);
   }
 
   function handleBurst() {
     setBurstInProgress(true);
     expandOnAction();
-    void recordManualBurst(state.burstStrokes, state.burstDelaySeconds);
+    void recordManualBurst(state.powerPercent, state.burstStrokes, state.burstDelaySeconds);
   }
 
   function handleAbort() {
@@ -48,44 +49,55 @@ export function ManualControls() {
         <p className="text-sm text-slate-500">Loading saved manual settings…</p>
       ) : null}
 
-      <Panel title="Master Settings">
-        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
-          <NumberField
-            label="Minimum Stroke (ms)"
-            inline
-            value={state.minimumStrokeMs}
-            min={1}
-            className="w-20"
-            onChange={(event) => update('minimumStrokeMs', Number(event.target.value))}
-          />
-          <NumberField
-            label="Maximum Stroke (ms)"
-            inline
-            value={state.maximumStrokeMs}
-            min={1}
-            className="w-20"
-            onChange={(event) => update('maximumStrokeMs', Number(event.target.value))}
-          />
-        </div>
-      </Panel>
-
       <div className="grid gap-4 md:grid-cols-2">
-        <Panel title="Power">
-          <ManualPowerSlider
-            percent={state.powerPercent}
-            minimumMs={state.minimumStrokeMs}
-            maximumMs={state.maximumStrokeMs}
-            strokeMs={strokeMs}
-            onChange={(event) => update('powerPercent', Number(event.target.value))}
-          />
+        <Panel title="Power Settings" className="min-w-0 overflow-hidden">
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
+            <NumberField
+              label="Minimum Stroke (ms)"
+              inline
+              value={state.minimumStrokeMs}
+              min={1}
+              className="w-20"
+              onChange={(event) => update('minimumStrokeMs', Number(event.target.value))}
+            />
+            <NumberField
+              label="Maximum Stroke (ms)"
+              inline
+              value={state.maximumStrokeMs}
+              min={1}
+              className="w-20"
+              onChange={(event) => update('maximumStrokeMs', Number(event.target.value))}
+            />
+          </div>
+
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-2">
+            <StrokePowerSlider
+              label="Power"
+              percent={state.powerPercent}
+              minimumMs={state.minimumStrokeMs}
+              maximumMs={state.maximumStrokeMs}
+              strokeMs={strokeMs}
+              id="manual-power"
+              onChange={(event) => update('powerPercent', Number(event.target.value))}
+            />
+          </div>
         </Panel>
 
         <Panel title="Actions">
-          <div className="flex flex-col gap-3">
-            <Button size="lg" fullWidth className="py-4 text-base" onClick={handleStroke}>
-              Stroke
-            </Button>
+          <CommandButton
+            commandKey={HARDWARE_COMMAND_KEYS.manualStroke}
+            size="lg"
+            fullWidth
+            className="py-4 text-base"
+            onCommand={handleStroke}
+          >
+            Stroke
+          </CommandButton>
 
+          <div
+            className="space-y-3 border-t border-slate-600"
+            style={{ marginTop: 30, paddingTop: 30 }}
+          >
             <div className="grid grid-cols-2 gap-3">
               <NumberField
                 label="Burst Strokes"
@@ -101,20 +113,27 @@ export function ManualControls() {
               />
             </div>
 
-            <Button size="lg" fullWidth className="py-4 text-base" onClick={handleBurst}>
+            <CommandButton
+              commandKey={HARDWARE_COMMAND_KEYS.manualBurst}
+              size="lg"
+              fullWidth
+              className="py-4 text-base"
+              onCommand={handleBurst}
+            >
               Burst
-            </Button>
+            </CommandButton>
 
-            <Button
+            <CommandButton
+              commandKey={HARDWARE_COMMAND_KEYS.manualAbort}
               size="lg"
               fullWidth
               variant="secondary"
               className="py-4 text-base"
               disabled={!burstInProgress}
-              onClick={handleAbort}
+              onCommand={handleAbort}
             >
               Abort
-            </Button>
+            </CommandButton>
           </div>
         </Panel>
       </div>
