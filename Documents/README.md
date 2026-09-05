@@ -15,3 +15,4 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Session & History](./07-Session-And-History.md) | Developers | Live session lifecycle, summaries, and timeline aggregation |
 | [Development Guide](./08-Development-Guide.md) | Developers | Local setup, ports, build pipeline, and common tasks |
 | [User Guide](./User-Guide.md) | Operators | How to use the web application day to day |
+| [ESP32 Device Plan](./09-ESP32-Device-Plan.md) | Developers | Firmware project plan: SignalR, NVS, relay, ack lifecycle |

@@ -43,6 +43,7 @@ Full documentation lives in the [`Documents/`](Documents/) folder:
 | [Session & History](Documents/07-Session-And-History.md) | Session lifecycle and summaries |
 | [Development Guide](Documents/08-Development-Guide.md) | Local setup, ports, troubleshooting |
 | [User Guide](Documents/User-Guide.md) | Operator how-to |
+| [ESP32 Device Plan](Documents/09-ESP32-Device-Plan.md) | ESP32 firmware implementation plan |
 
 See [Documents/README.md](Documents/README.md) for the full index.
 
