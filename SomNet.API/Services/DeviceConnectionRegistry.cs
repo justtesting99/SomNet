@@ -23,7 +23,7 @@ public interface IDeviceConnectionRegistry
 
     string? GetConnectedDeviceId(string domTarget, string subTarget);
 
-    Task<bool> WaitForAcknowledgementAsync(
+    Task<HardwareCommandAckDto?> WaitForAcknowledgementAsync(
         string correlationId,
         TimeSpan timeout,
         CancellationToken cancellationToken = default);
@@ -96,7 +96,7 @@ public sealed class DeviceConnectionRegistry : IDeviceConnectionRegistry
             : null;
     }
 
-    public async Task<bool> WaitForAcknowledgementAsync(
+    public async Task<HardwareCommandAckDto?> WaitForAcknowledgementAsync(
         string correlationId,
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
@@ -104,7 +104,7 @@ public sealed class DeviceConnectionRegistry : IDeviceConnectionRegistry
         var completion = new TaskCompletionSource<HardwareCommandAckDto>(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!_pendingAcks.TryAdd(correlationId, completion))
         {
-            return false;
+            return null;
         }
 
         try
@@ -115,20 +115,14 @@ public sealed class DeviceConnectionRegistry : IDeviceConnectionRegistry
 
             if (completed != completion.Task)
             {
-                completion.TrySetResult(new HardwareCommandAckDto
-                {
-                    CorrelationId = correlationId,
-                    Success = false,
-                    Message = "Device acknowledgement timed out.",
-                });
+                return null;
             }
 
-            var result = await completion.Task;
-            return result.Success;
+            return await completion.Task;
         }
         catch (OperationCanceledException)
         {
-            return false;
+            return null;
         }
         finally
         {

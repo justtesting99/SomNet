@@ -404,7 +404,6 @@ Future phase checklists:
 
 | Phase | Checklist document | Status |
 |-------|-------------------|--------|
-| 0–3 | Prior checklists | Complete |
-| 4 | This document | **Complete** |
-| 5 | *TBD: `09-ESP32-Phase-5-Checklist.md`* | — |
+| 0–4 | Prior checklists | Complete |
+| 5 | [09-ESP32-Phase-5-Checklist.md](./09-ESP32-Phase-5-Checklist.md) | Not started |
 | 6+ | *Created when prior phase completes* | — |

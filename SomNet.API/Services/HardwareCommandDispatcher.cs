@@ -82,20 +82,33 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
             .Group(HardwareHubGroups.Paired(registration.DomTarget, registration.SubName))
             .SendAsync(HardwareHubMethods.ExecuteCommand, message, cancellationToken);
 
-        var acknowledged = await _connectionRegistry.WaitForAcknowledgementAsync(
+        var acknowledgement = await _connectionRegistry.WaitForAcknowledgementAsync(
             correlationId,
             AckTimeout,
             cancellationToken);
+
+        if (acknowledgement is null)
+        {
+            return new SendHardwareCommandResponseDto
+            {
+                CorrelationId = correlationId,
+                Delivered = true,
+                Acknowledged = false,
+                Success = false,
+                Message = "Command was sent but the device did not acknowledge in time.",
+            };
+        }
 
         return new SendHardwareCommandResponseDto
         {
             CorrelationId = correlationId,
             Delivered = true,
-            Acknowledged = acknowledged,
-            Success = acknowledged,
-            Message = acknowledged
-                ? "Device acknowledged the command."
-                : "Command was sent but the device did not acknowledge in time.",
+            Acknowledged = true,
+            Success = acknowledgement.Success,
+            Message = acknowledgement.Message
+                ?? (acknowledgement.Success
+                    ? "Device acknowledged the command."
+                    : "Device rejected the command."),
         };
     }
 }

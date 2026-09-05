@@ -1380,7 +1380,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 | 2 | NVS + MAC device identity | [Phase 2 Checklist](./09-ESP32-Phase-2-Checklist.md) | **Complete** |
 | **3** | **Config web UI + registration UX** | [Phase 3 Checklist](./09-ESP32-Phase-3-Checklist.md) | **Complete** |
 | 4 | SignalR client + pairing | [Phase 4 Checklist](./09-ESP32-Phase-4-Checklist.md) | **Complete** (2026-09-05) |
-| 5 | Single-pulse command + ack | *TBD* | — |
+| 5 | Single-pulse command + ack | [Phase 5 Checklist](./09-ESP32-Phase-5-Checklist.md) | **Complete** (2026-09-05) |
 | 6 | Single-pulse relay | *TBD* | — |
 | 7 | Resilience / production prep | *TBD* | — |
 | **8** | **SomNet UI pairing dialog** + command integration | *TBD* | **Partial** — minimal pairing in Options (2026-09-05); full dialog + commands pending |
@@ -1507,18 +1507,23 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 ### Phase 5 — Single-pulse command handling and ack (2–3 days)
 
+**Checklist:** [09-ESP32-Phase-5-Checklist.md](./09-ESP32-Phase-5-Checklist.md)  
+**Status:** **Complete** — stroke E2E verified on hardware (2026-09-05); optional G.2–G.4 validation tests remain
+
 **Scope:** **`stroke` only** — validate architecture with one mode before burst/automatic.
+
+**Decisions (2026-09-05):** Software timer stub (no GPIO); reject busy/invalid/missing `strokeMs`; ack failures; build `resultJson` locally (serial only until Phase 8); firmware `0.5.0-phase5`; test Sub `Slv66`.
 
 **Deliverables:**
 
-- [ ] Parse `ExecuteCommand` for `commandKey: stroke`
-- [ ] Validation layer (deviceId, token, dom/sub)
-- [ ] `command_handler` → `execution_context` → **`SinglePulseMode`**
-- [ ] Other keys (`burst`, `automatic-start`, …) → stub ack `success: false`, message `"not implemented"`
-- [ ] Invoke `AckCommand` with `correlationId`, **`resultJson`** (actual `strokeMs`), and `message`
-- [ ] Serial logging for every step
+- [x] Parse `ExecuteCommand` for `commandKey: stroke`
+- [x] Validation layer (deviceId, token, dom/sub)
+- [x] `command_handler` → `execution_context` → **`SinglePulseMode`**
+- [x] Other keys (`burst`, `automatic-start`, …) → stub ack `success: false`, message `"not implemented"`
+- [x] Invoke `AckCommand` with `correlationId`, **`message`**, `success` (`resultJson` logged serial only until Phase 8)
+- [x] Serial logging for every step
 
-**Exit criteria:** Swagger `POST /api/devices/commands` with `commandKey: stroke` returns success; serial shows FSM trace (relay may still be stub).
+**Exit criteria:** Swagger `POST /api/devices/commands` with `commandKey: stroke` returns success; serial shows FSM trace (relay stub — GPIO in Phase 6). **Met** on `esp32-84CCA85C36B4` / Sub `Slv66`.
 
 ---
 

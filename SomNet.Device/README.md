@@ -7,7 +7,8 @@ PlatformIO firmware for the SomNet hardware device (ESP32 DevKit V1 clone). Live
 **Plan:** [Documents/09-ESP32-Device-Plan.md](../Documents/09-ESP32-Device-Plan.md)  
 **Phase 1 checklist:** [Documents/09-ESP32-Phase-1-Checklist.md](../Documents/09-ESP32-Phase-1-Checklist.md)  
 **Phase 3 checklist:** [Documents/09-ESP32-Phase-3-Checklist.md](../Documents/09-ESP32-Phase-3-Checklist.md)  
-**Phase 4 checklist:** [Documents/09-ESP32-Phase-4-Checklist.md](../Documents/09-ESP32-Phase-4-Checklist.md)
+**Phase 4 checklist:** [Documents/09-ESP32-Phase-4-Checklist.md](../Documents/09-ESP32-Phase-4-Checklist.md)  
+**Phase 5 checklist:** [Documents/09-ESP32-Phase-5-Checklist.md](../Documents/09-ESP32-Phase-5-Checklist.md)
 
 ## Hardware (default wiring)
 
@@ -89,7 +90,45 @@ See [Phase 4 checklist](../Documents/09-ESP32-Phase-4-Checklist.md) and device p
 
 ---
 
-## Phase 3 behavior (prior)
+## Phase 5 behavior (current)
+
+Firmware **0.5.0-phase5** handles **`stroke`** commands on the paired hub connection.
+
+### Flow
+
+1. Dom sends `POST /api/devices/commands` (Swagger **Authorize** required)
+2. API pushes `ExecuteCommand` over SignalR
+3. Device validates `deviceId`, token, dom/sub
+4. **Software timer** runs for `strokeMs` (no relay GPIO yet — Phase 6)
+5. Device sends **`AckCommand`** → API returns `acknowledged: true`
+
+### Test stroke (Swagger)
+
+```json
+POST /api/devices/commands
+{
+  "subTarget": "Slv66",
+  "commandKey": "stroke",
+  "payloadJson": "{\"powerPercent\":50,\"strokeMs\":200}"
+}
+```
+
+Use a short `strokeMs` (e.g. **200**) for quick feedback. Other command keys return ack `success: false`, message `"not implemented"`.
+
+### Serial trace
+
+```
+[CMD] recv correlationId=... key=stroke
+[STROKE] start strokeMs=200 powerPercent=50
+[STROKE] complete success=true
+[CMD] resultJson={"commandKey":"stroke",...}
+[CMD] ack correlationId=... success=true
+[HUB] AckCommand sent
+```
+
+---
+
+## Phase 4 behavior (prior)
 
 ### Boot modes
 
@@ -170,6 +209,7 @@ Firmware **0.3.0-phase3** adds a LAN config web UI on port **80**.
 | `[BTN]` | Button input |
 | `[HTTP]` | Config web server |
 | `[HUB]` | SignalR hub client |
+| `[STROKE]` | Single-pulse mode (Phase 5+) |
 | `[ID]` | Device identity |
 
 ## Project layout

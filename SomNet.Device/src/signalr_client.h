@@ -27,8 +27,11 @@ public:
     HubConnectionState hubState() const { return state_; }
     const char* hubStateLabel() const;
     bool isHubConnected() const;
+    bool sendAckCommand(const char* correlationId, bool success, const char* message);
 
     void onTransportLost(bool immediateRetry = false);
+    void markHandshakeComplete();
+    void clearHandshakeState();
 
 private:
     NvsStore* nvs_ = nullptr;

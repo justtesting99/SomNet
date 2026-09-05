@@ -1,5 +1,6 @@
 #include "signalr_client.h"
 
+#include "command_handler.h"
 #include "device_identity.h"
 #include "nvs_store.h"
 #include "wifi_manager.h"
@@ -31,6 +32,7 @@ size_t gRxLen = 0;
 bool gUsePairedConnect = false;
 bool gHandshakeComplete = false;
 bool gImmediateReconnect = false;
+uint32_t gAckInvocationCounter = 0;
 
 void resetRxBuffer() {
     gRxLen = 0;
@@ -227,7 +229,11 @@ void handleHubFrame(const char* frame) {
     }
 
     if (frame[0] == '\0') {
-        gHandshakeComplete = true;
+        if (gActiveClient != nullptr) {
+            gActiveClient->markHandshakeComplete();
+        } else {
+            gHandshakeComplete = true;
+        }
         Serial.println(F("[HUB] handshake ok"));
         return;
     }
@@ -256,11 +262,24 @@ void handleHubFrame(const char* frame) {
         }
         gWs.disconnect();
         gHandshakeComplete = false;
+        if (gActiveClient != nullptr) {
+            gActiveClient->clearHandshakeState();
+        }
         return;
     }
 
     if (type != 1) {
         return;
+    }
+
+    // Hub invocations only arrive after handshake; {} may be processed in a later frame.
+    if (!gHandshakeComplete && gWs.isConnected()) {
+        if (gActiveClient != nullptr) {
+            gActiveClient->markHandshakeComplete();
+        } else {
+            gHandshakeComplete = true;
+        }
+        Serial.println(F("[HUB] handshake ok (implicit)"));
     }
 
     const char* target = doc["target"] | "";
@@ -306,9 +325,30 @@ void handleHubFrame(const char* frame) {
     }
 
     if (strcmp(target, "ExecuteCommand") == 0) {
-        const char* commandKey = doc["arguments"][0]["commandKey"] | "";
-        Serial.print(F("[HUB] ExecuteCommand ignored (Phase 5): "));
-        Serial.println(commandKey);
+        JsonObject payload = doc["arguments"][0];
+        if (payload.isNull()) {
+            Serial.println(F("[HUB] ExecuteCommand missing arguments"));
+            return;
+        }
+
+        ExecuteCommandPayload command = {};
+        strncpy(command.correlationId, payload["correlationId"] | "", sizeof(command.correlationId) - 1);
+        strncpy(command.commandKey, payload["commandKey"] | "", sizeof(command.commandKey) - 1);
+        strncpy(command.accessToken, payload["accessToken"] | "", sizeof(command.accessToken) - 1);
+        strncpy(command.domTarget, payload["domTarget"] | "", sizeof(command.domTarget) - 1);
+        strncpy(command.subTarget, payload["subTarget"] | "", sizeof(command.subTarget) - 1);
+        strncpy(command.deviceId, payload["deviceId"] | "", sizeof(command.deviceId) - 1);
+        strncpy(command.payloadJson, payload["payloadJson"] | "{}", sizeof(command.payloadJson) - 1);
+        command.correlationId[sizeof(command.correlationId) - 1] = '\0';
+        command.commandKey[sizeof(command.commandKey) - 1] = '\0';
+        command.accessToken[sizeof(command.accessToken) - 1] = '\0';
+        command.domTarget[sizeof(command.domTarget) - 1] = '\0';
+        command.subTarget[sizeof(command.subTarget) - 1] = '\0';
+        command.deviceId[sizeof(command.deviceId) - 1] = '\0';
+        command.payloadJson[sizeof(command.payloadJson) - 1] = '\0';
+
+        commandHandlerOnExecuteCommand(command);
+        return;
     }
 }
 
@@ -382,6 +422,9 @@ void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
         Serial.println(F("[HUB] websocket disconnected"));
         resetRxBuffer();
         gHandshakeComplete = false;
+        if (gActiveClient != nullptr) {
+            gActiveClient->clearHandshakeState();
+        }
         notifyTransportLost();
         break;
     case WStype_CONNECTED:
@@ -448,7 +491,22 @@ const char* SignalRClient::hubStateLabel() const {
 }
 
 bool SignalRClient::isHubConnected() const {
-    return state_ == HubConnectionState::Unpaired || state_ == HubConnectionState::Paired;
+    return gWs.isConnected() && handshakeComplete_;
+}
+
+void SignalRClient::markHandshakeComplete() {
+    handshakeComplete_ = true;
+    gHandshakeComplete = true;
+    if (nvs_ != nullptr && nvs_->isPaired()) {
+        state_ = HubConnectionState::Paired;
+    } else {
+        state_ = HubConnectionState::Unpaired;
+    }
+}
+
+void SignalRClient::clearHandshakeState() {
+    handshakeComplete_ = false;
+    gHandshakeComplete = false;
 }
 
 void SignalRClient::poll() {
@@ -518,7 +576,7 @@ void SignalRClient::poll() {
 
 void SignalRClient::onTransportLost(bool immediateRetry) {
     pendingConnect_ = false;
-    handshakeComplete_ = false;
+    clearHandshakeState();
     if (immediateRetry) {
         nextAttemptMs_ = 0;
         backoffMs_ = HUB_RETRY_BASE_MS;
@@ -526,4 +584,43 @@ void SignalRClient::onTransportLost(bool immediateRetry) {
         nextAttemptMs_ = millis() + backoffMs_;
         backoffMs_ = min(backoffMs_ * 2, HUB_RETRY_MAX_MS);
     }
+}
+
+bool SignalRClient::sendAckCommand(const char* correlationId, bool success, const char* message) {
+    if (correlationId == nullptr || correlationId[0] == '\0') {
+        return false;
+    }
+    if (!gWs.isConnected() || !handshakeComplete_) {
+        Serial.println(F("[HUB] AckCommand skipped - hub not ready"));
+        return false;
+    }
+
+    ++gAckInvocationCounter;
+    char invocationId[12];
+    snprintf(invocationId, sizeof(invocationId), "%lu", static_cast<unsigned long>(gAckInvocationCounter));
+
+    StaticJsonDocument<512> doc;
+    doc["type"] = 1;
+    doc["target"] = "AckCommand";
+    doc["invocationId"] = invocationId;
+
+    JsonArray args = doc["arguments"].to<JsonArray>();
+    JsonObject ack = args.add<JsonObject>();
+    ack["correlationId"] = correlationId;
+    ack["success"] = success;
+    ack["message"] = message != nullptr ? message : "";
+
+    char buffer[512];
+    const size_t jsonLen = serializeJson(doc, buffer, sizeof(buffer) - 2);
+    if (jsonLen == 0 || jsonLen >= sizeof(buffer) - 2) {
+        Serial.println(F("[HUB] AckCommand JSON too large"));
+        return false;
+    }
+
+    buffer[jsonLen] = kRecordSeparator;
+    buffer[jsonLen + 1] = '\0';
+    gWs.sendTXT(buffer);
+
+    Serial.println(F("[HUB] AckCommand sent"));
+    return true;
 }
