@@ -94,7 +94,7 @@ Configured in `SomNet.API/Properties/launchSettings.json`:
 | Profile | URL | Notes |
 |---------|-----|-------|
 | `http` | http://localhost:5031 | Default development |
-| `https` | https://localhost:7146 + http://5031 | HTTPS + HTTP |
+| `https` | https://localhost:7146 (Swagger) + **http://0.0.0.0:5031** (LAN / ESP32) | HTTPS + HTTP |
 
 Environment: `ASPNETCORE_ENVIRONMENT=Development`
 

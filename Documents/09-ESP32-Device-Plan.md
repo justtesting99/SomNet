@@ -40,7 +40,7 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 - OTA firmware updates
 - Offline command queue
-- SomNet UI pairing dialog (pair via Swagger/API during dev; device UI shows ID only)
+- ~~SomNet UI pairing dialog~~ — **partial (2026-09-05):** minimal pairing in **Options** dialog during Phase 4 dev; full dialog + pending list still Phase 8 (see §4 *SomNet React UI — early pairing*)
 - Changes to SomNet backend or frontend (unless a protocol gap is approved)
 - Full-featured device admin portal (keep config UI minimal)
 - **Fully implemented burst and automatic modes** — architecture and stubs only until single-pulse path is proven (see §6 *Initial vs target implementation*)
@@ -357,13 +357,37 @@ Before production / end of Phase 7, align the on-device config UI with the **Som
 |------|-----------------|---------------------|
 | Login as Dom | ✓ | — |
 | Select Sub | ✓ | — |
-| Pair device to Sub | ✓ (future UI) / Swagger today | Shows **device ID only** |
+| Pair device to Sub | ✓ (minimal — **Options → Hardware device**; refine Phase 8) / Swagger | Shows **device ID only** |
 | Set Wi-Fi on ESP32 | — | ✓ |
 | Set SomNet server URL | — | ✓ |
 | Send stroke/burst commands | ✓ | — |
 | View hub connection status | ✓ (system status) | ✓ (local diagnostic) |
 
-No changes to SomNet are **required** for the device config UI alone. **SomNet UI pairing** (Dom selects Sub, enters device ID from ESP32 screen) is required for production registration — currently Swagger-only; see §4.1 and Phase 8.
+No changes to SomNet are **required** for the device config UI alone. **SomNet UI pairing** (Dom selects Sub, enters device ID from ESP32 screen) is required for production registration — a **minimal pairing panel shipped early in Phase 4** (Options dialog); full UX remains Phase 8 — see §4.1 and §10 Phase 8.
+
+### SomNet React UI — early pairing (Phase 4 bonus; refine later)
+
+**Status (2026-09-05):** Phase 4 firmware pairing was verified end-to-end. To avoid Swagger/Postman during dev, a **minimal Dom-side pairing UI** was added ahead of Phase 8:
+
+| Item | Current state | Future (Phase 8+) |
+|------|---------------|-------------------|
+| **Where** | SomNet **Options** dialog → **Hardware device** section | Dedicated **Pair device** dialog or settings area (not buried in general options) |
+| **What works** | Device status for selected Sub; paste device ID; **Pair** / **Revoke**; JWT auth automatic (logged-in Dom) | **Online now** pending list (`GET /api/devices/unpaired`); QR; friendly name from device metadata |
+| **API client** | `SomNet.UI/src/api/devices.ts` | Extend as needed |
+| **Component** | `SomNet.UI/src/components/layout/DevicePairingPanel.tsx` | Move/refactor; do not assume Options is the long-term home |
+| **System status** | Header pill now passes `subTarget` to `/api/system/status` | Keep aligned with pairing UX |
+| **Swagger dev** | JWT **Authorize** button in API (`Program.cs` Swashbuckle Bearer) | Retain for API debugging |
+
+**UX debt (intentional):** Options currently mixes **app preferences**, **account/password**, and **hardware pairing**. Before production, split into a clearer structure — e.g. **multi-page or tabbed settings**:
+
+- **General / display / notifications** — current app options
+- **Subs & pairing** — Sub selection context, device pair/revoke, connection status (may overlap today’s header Sub picker)
+- **Account** — password change (and future profile)
+
+Living in Options is **practical for Phase 4 dev**; treat it as **provisional** so later readers are not confused that Phase 8 is “missing” when pairing already exists in a rough form.
+
+**Local dev vs production networking:** When the API runs on a **developer PC** (`http://192.168.1.x:5031`), **Windows Firewall** may block inbound TCP from the ESP32 on the LAN — Swagger on the same PC still works. **Production (Azure/cloud):** the device connects **outbound** to the server; end-user PC firewall is not part of the device path. See §11 *Local network note*.
+
 
 ### Device registration and Sub association (§4.1)
 
@@ -551,16 +575,18 @@ This eliminates MAC typing for online devices while keeping email workflow for a
 
 #### SomNet UI (Phase 8) — pairing dialog
 
+**Partial implementation (2026-09-05):** Minimal **paste device ID + Pair/Revoke** lives in **Options → Hardware device** for Phase 4 dev. Phase 8 still owns the **production** pairing experience below.
+
 1. Dom logged in; **Sub selected** in header.
 2. **Pair device** dialog with tabs or sections:
    - **Online now** — pending/unpaired list (preferred when API exists)
-   - **Enter device ID** — paste from email or device screen
+   - **Enter device ID** — paste from email or device screen *(implemented minimally in Options today)*
    - Optional later: **Scan QR**
 3. Show **friendly name** from email or future device metadata when available.
 4. **Pair** → `POST /api/devices/pair?subTarget={currentSub}` with `{ deviceId }`.
 5. Show result + `GET /api/devices/status` connection state.
 
-Until Phase 8: Swagger + device ID from ESP32 status page or email.
+**Until Phase 8 polish:** use **Options → Hardware device** (preferred) or Swagger with Authorize + device ID from ESP32 status page or email.
 
 #### Config UI — registration-focused fields
 
@@ -1353,14 +1379,14 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 | 1 | Project scaffold | [Phase 1 Checklist](./09-ESP32-Phase-1-Checklist.md) | **Complete** |
 | 2 | NVS + MAC device identity | [Phase 2 Checklist](./09-ESP32-Phase-2-Checklist.md) | **Complete** |
 | **3** | **Config web UI + registration UX** | [Phase 3 Checklist](./09-ESP32-Phase-3-Checklist.md) | **Complete** |
-| 4 | SignalR client + pairing | *TBD* | — |
+| 4 | SignalR client + pairing | [Phase 4 Checklist](./09-ESP32-Phase-4-Checklist.md) | **Complete** (2026-09-05) |
 | 5 | Single-pulse command + ack | *TBD* | — |
 | 6 | Single-pulse relay | *TBD* | — |
 | 7 | Resilience / production prep | *TBD* | — |
-| **8** | **SomNet UI pairing dialog** + command integration | *TBD* | — |
+| **8** | **SomNet UI pairing dialog** + command integration | *TBD* | **Partial** — minimal pairing in Options (2026-09-05); full dialog + commands pending |
 | 9 | Burst and automatic modes | *TBD* | — |
 
-**Rationale:** Phase **3** (config UI with MAC-based ID and friendly name) runs **before** SignalR so installers can provision network and obtain the pairing ID without Swagger/serial. Phase **8** completes Dom-side Sub association in the React app.
+**Rationale:** Phase **3** (config UI with MAC-based ID and friendly name) runs **before** SignalR so installers can provision network and obtain the pairing ID without Swagger/serial. Phase **8** completes Dom-side Sub association in the React app (full pairing UX + command integration). A **minimal pairing panel in Options** was added during Phase 4 verification — see §4 *SomNet React UI — early pairing*; do not treat Options as the final product layout.
 
 **Cross-phase polish:** On-device config pages (`/`, `/config`) are **functionally complete in Phase 3** but **visually minimal** until **Phase 7**, when they should match the SomNet web app theme — see §4 *Config UI — visual styling* and open decision **#17**. Do not skip this when closing production prep.
 
@@ -1456,15 +1482,26 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 ### Phase 4 — Minimal SignalR client + pairing (3–5 days)
 
-**Deliverables:**
+**Checklist:** [09-ESP32-Phase-4-Checklist.md](./09-ESP32-Phase-4-Checklist.md)  
+**Status:** Complete (2026-09-05)
 
-- [ ] WebSocket connect to hub (unpaired URL)
-- [ ] SignalR handshake + message framing (0x1E)
-- [ ] Parse `PairDevice` → save token → disconnect → reconnect paired
-- [ ] Ping/pong handling
-- [ ] Reconnect with exponential backoff
+**Summary:** Negotiate + WebSocket to `/hubs/hardware`; unpaired connect with `deviceId`; handle `PairDevice` → NVS token → paired reconnect; ping/pong; exponential backoff. **No** `ExecuteCommand`, relay, or `wss` yet.
 
-**Exit criteria:** End-to-end pairing via Swagger using **device ID from Phase 3 UI**; `GET /api/devices/status` shows `isConnected: true`.
+**Exit criteria:** End-to-end pairing using **device ID from Phase 3 UI**; `GET /api/devices/status` shows `isConnected: true`. Verified with Dom **demo** / Sub **Slv66** via SomNet **Options → Hardware device** (and Swagger with Bearer auth).
+
+**Bonus (SomNet UI/API, not ESP32):** Minimal React pairing panel + Swagger JWT Authorize — documented in §4 *SomNet React UI — early pairing*; Phase 8 still owns production UX.
+
+*Detailed steps, library choices, and verification tests are in the checklist — not duplicated here.*
+
+**Deliverables (reference):**
+
+- [x] WebSocket connect to hub (unpaired URL)
+- [x] SignalR handshake + message framing (0x1E)
+- [x] Parse `PairDevice` → save token → disconnect → reconnect paired
+- [x] Ping/pong handling
+- [x] Reconnect with exponential backoff
+
+**Exit criteria:** End-to-end pairing via UI or Swagger using **device ID from Phase 3 UI**; `GET /api/devices/status` shows `isConnected: true`.
 
 ---
 
@@ -1520,19 +1557,25 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 **Priority:** **Pair device to Sub in UI** — production registration path (§4.1).
 
-**Deliverables:**
+**Already done (Phase 4 dev bonus — refine, do not duplicate):**
 
+- [x] **Paste device ID + Pair/Revoke** — `DevicePairingPanel` in **Options** (provisional placement)
+- [x] **`GET /api/devices/status?subTarget=`** — used by pairing panel + system status header
+- [x] Swagger **Authorize** (JWT Bearer) for API dev testing
+
+**Deliverables (remaining):**
+
+- [ ] **Relocate / redesign pairing UX** — dedicated dialog or multi-page settings (split **network/device** from **Subs** and general options); remove pairing from generic Options long-term
 - [ ] **`GET /api/devices/unpaired`** — list online unpaired devices (§4.1 pending list)
-- [ ] **UI pairing dialog** — **Online now** list + **paste device ID** (from email/device page); Pair → `POST /api/devices/pair`
+- [ ] **UI pairing dialog** — **Online now** list + **paste device ID** (enhance beyond current Options panel)
 - [ ] Optional: QR scan; show friendly name / installer contact when available
-- [ ] Device status in UI (`GET /api/devices/status?subTarget=`) — connected / paired indicators
 - [ ] UI replaces simulated `waitForHardwareAck` with `/api/devices/commands` **including `payloadJson` per §6**
 - [ ] **`HardwareCommandAckDto.resultJson`** + pass-through on REST and SignalR
 - [ ] **Session/history driven by device ack** (§9)
 - [ ] SignalR client in UI for `CommandAcknowledged` with `resultJson`
 - [ ] Optional: two-phase ack API extension; button uplink (TBD)
 
-**Exit criteria:** Dom pairs device to Sub from UI using MAC-based ID from ESP32; stroke command works without Swagger.
+**Exit criteria:** Dom pairs device to Sub from **polished** UI (not dev-only Options placement) using MAC-based ID from ESP32; stroke command works without Swagger.
 
 ---
 
@@ -1569,13 +1612,16 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 1. Dom logged in; **Sub selected** in header (e.g. `Slv66`)
 2. Copy **Device ID** from ESP32 status page (`/` on device)
-3. **Dev:** Swagger → `POST /api/devices/pair?subTarget=Slv66` with `{ "deviceId": "esp32-..." }`
-4. **Production (Phase 8):** SomNet UI → Pair device → paste ID → Pair
-5. ESP32 receives `PairDevice`, stores token, reconnects paired
-6. Verify `GET /api/devices/status?subTarget=Slv66` → `isPaired: true`, `isConnected: true`
-7. Test `POST /api/devices/commands` with `{ "subTarget": "Slv66", "commandKey": "stroke", "payloadJson": "{\"powerPercent\":60,\"strokeMs\":250}" }`
+3. **Dev (preferred):** SomNet UI → **Options → Hardware device** → paste ID → **Pair device**
+4. **Dev (alternate):** Swagger → **Authorize** with login token → `POST /api/devices/pair?subTarget=Slv66` with `{ "deviceId": "esp32-..." }`
+5. **Production (Phase 8):** Dedicated SomNet pairing dialog (pending list + paste ID) — not final Options placement
+6. ESP32 receives `PairDevice`, stores token, reconnects paired
+7. Verify `GET /api/devices/status?subTarget=Slv66` → `isPaired: true`, `isConnected: true`
+8. Test `POST /api/devices/commands` with `{ "subTarget": "Slv66", "commandKey": "stroke", "payloadJson": "{\"powerPercent\":60,\"strokeMs\":250}" }`
 
 **Local network note:** ESP32 `server_url` must use the PC’s **LAN IP**, not `localhost`. The SomNet browser UI can use `localhost` on the PC; the ESP32 cannot.
+
+**Local API on Windows:** If negotiate fails with `connection refused` from the ESP but Swagger works on the same PC, allow inbound TCP **5031** on Private networks (Windows Firewall). Cloud/Azure deployment uses **outbound** device connections — end-user PC firewall is not involved.
 
 ---
 

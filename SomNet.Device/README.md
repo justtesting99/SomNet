@@ -6,7 +6,8 @@ PlatformIO firmware for the SomNet hardware device (ESP32 DevKit V1 clone). Live
 **Hardware user guide:** [Documents/Hardware-User-Guide.md](../Documents/Hardware-User-Guide.md)  
 **Plan:** [Documents/09-ESP32-Device-Plan.md](../Documents/09-ESP32-Device-Plan.md)  
 **Phase 1 checklist:** [Documents/09-ESP32-Phase-1-Checklist.md](../Documents/09-ESP32-Phase-1-Checklist.md)  
-**Phase 3 checklist:** [Documents/09-ESP32-Phase-3-Checklist.md](../Documents/09-ESP32-Phase-3-Checklist.md)
+**Phase 3 checklist:** [Documents/09-ESP32-Phase-3-Checklist.md](../Documents/09-ESP32-Phase-3-Checklist.md)  
+**Phase 4 checklist:** [Documents/09-ESP32-Phase-4-Checklist.md](../Documents/09-ESP32-Phase-4-Checklist.md)
 
 ## Hardware (default wiring)
 
@@ -50,9 +51,45 @@ pio device monitor
 
 Or use the PlatformIO sidebar: **Build**, **Upload**, **Monitor** (115200 baud).
 
-## Phase 3 behavior (current)
+## Phase 4 behavior (current)
 
-Firmware **0.3.0-phase3** adds a LAN config web UI on port **80**.
+Firmware **0.4.0-phase4** adds outbound SignalR hub client + device pairing.
+
+### Hub connection
+
+- Negotiates `POST {server_url}/hubs/hardware/negotiate?negotiateVersion=1`
+- WebSocket to `ws://{host}:{port}/hubs/hardware`
+- **Unpaired:** `?id={connectionToken}&deviceId={esp32-MAC}`
+- **Paired:** `?id={connectionToken}&access_token={device JWT}`
+- SignalR JSON framing with **`0x1E`** record separator; ping/pong (`type:6`)
+- Exponential backoff reconnect (1s → 60s cap)
+
+Hub runs only in **RUNNING** mode when Wi-Fi is up and NVS has `server_url` (not in Soft-AP provisioning).
+
+### Pairing (Dom operator)
+
+1. Device shows **Device ID** on `http://<device-ip>/`
+2. Dom logs into SomNet; selects Sub (e.g. `Slv66`)
+3. **Preferred:** **Options → Hardware device** → paste device ID → **Pair device**
+4. **Alternate (dev):** Swagger → login → **Authorize** → `POST /api/devices/pair?subTarget=Slv66`
+5. Device receives `PairDevice`, saves token to NVS, reconnects paired
+6. Verify: `GET /api/devices/status?subTarget=Slv66` (with Dom JWT) → `isConnected: true`
+
+See [Phase 4 checklist](../Documents/09-ESP32-Phase-4-Checklist.md) and device plan §11.
+
+### Local dev networking
+
+- ESP32 `server_url` must use the PC **LAN IP** (not `localhost`)
+- If negotiate fails with `connection refused` from ESP but Swagger works on the PC, allow inbound TCP **5031** on Windows Firewall (Private network)
+- **Production (Azure):** device connects outbound to cloud — end-user PC firewall is not involved
+
+### Log prefix
+
+| `[HUB]` | SignalR client (negotiate, WS, PairDevice, reconnect) |
+
+---
+
+## Phase 3 behavior (prior)
 
 ### Boot modes
 
@@ -96,7 +133,7 @@ Full **factory reset** (all NVS including pairing) is still available on **`/con
 3. Open **`http://192.168.4.1/`** → **Configure**.
 4. Enter home Wi-Fi SSID/password and SomNet server URL → **Save and reboot**.
 5. Device joins your LAN; serial logs `[HTTP] Config UI: http://<ip>/`.
-6. On the same LAN, open the status page and copy **Device ID** for SomNet pairing (Phase 4 / Swagger).
+6. On the same LAN, open the status page and copy **Device ID** for SomNet pairing (Phase 4).
 
 ### Dev fallback (`secrets.ini`)
 
@@ -106,9 +143,9 @@ If NVS is not provisioned but `secrets.ini` has Wi-Fi credentials, the device sk
 
 **Do not port-forward** the ESP32 HTTP server to the internet. The config UI has no authentication — it is intended for trusted LAN access only.
 
-SignalR / hub connection remains **off** until Phase 4.
+## Phase 3 behavior (prior)
 
-## Phase 2 behavior (prior)
+Firmware **0.3.0-phase3** adds a LAN config web UI on port **80**.
 
 - **Device ID:** `esp32-{MAC}` uppercase, persisted in NVS namespace `somnet`
 - **Banner:** real device ID + raw MAC address
@@ -132,6 +169,7 @@ SignalR / hub connection remains **off** until Phase 4.
 | `[NVS]` | NVS / credential reset |
 | `[BTN]` | Button input |
 | `[HTTP]` | Config web server |
+| `[HUB]` | SignalR hub client |
 | `[ID]` | Device identity |
 
 ## Project layout

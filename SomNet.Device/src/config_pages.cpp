@@ -101,7 +101,9 @@ void renderStatus(
     const DeviceIdentity& identity,
     const WifiManager& wifi,
     const char* effectiveServerUrl,
-    bool provisioningMode) {
+    bool provisioningMode,
+    const char* hubStateLabel,
+    bool hubConnected) {
     size_t offset = 0;
     out[0] = '\0';
 
@@ -154,7 +156,17 @@ void renderStatus(
     append(out, outLen, &offset, wifi.localIp());
     append(out, outLen, &offset, "</p><p><strong>Server:</strong> ");
     append(out, outLen, &offset, escServer[0] != '\0' ? escServer : "(not configured)");
-    append(out, outLen, &offset, "</p><p><strong>Hub:</strong> not connected (Phase 4)</p>");
+    append(out, outLen, &offset, "</p><p><strong>Hub:</strong> ");
+    if (provisioningMode) {
+        append(out, outLen, &offset, "off (provisioning)");
+    } else if (hubConnected) {
+        append(out, outLen, &offset, "connected (");
+        append(out, outLen, &offset, hubStateLabel != nullptr ? hubStateLabel : "unknown");
+        append(out, outLen, &offset, ")");
+    } else {
+        append(out, outLen, &offset, hubStateLabel != nullptr ? hubStateLabel : "offline");
+    }
+    append(out, outLen, &offset, "</p>");
 
     append(out, outLen, &offset, "<p><a href=\"/config\">Configure</a></p>");
     append(out, outLen, &offset, "</body></html>");

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { NumberField } from '@/components/ui/NumberField';
 import { SelectField } from '@/components/ui/RadioGroup';
 import type { MobileVideoExpandDefault } from '@/types/options';
+import { DevicePairingPanel } from '@/components/layout/DevicePairingPanel';
 
 export function OptionsDialog() {
   const { user, updateSession } = useAuth();
@@ -221,6 +222,8 @@ export function OptionsDialog() {
               onChange={(event) => updateOption('defaultNotesPrefix', event.target.value)}
             />
           </section>
+
+          <DevicePairingPanel active={isDialogOpen} />
 
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-slate-200">Account</h3>

@@ -6,6 +6,7 @@
 class NvsStore {
 public:
     static constexpr size_t kMaxStringLen = 128;
+    static constexpr size_t kMaxTokenLen = 512;
     static constexpr size_t kDeviceIdLen = 32;
 
     bool begin();
@@ -54,6 +55,12 @@ public:
     bool setPairedFlag(bool value);
 
     bool isPaired() const;
+
+    bool savePairing(
+        const char* accessToken,
+        const char* domTarget,
+        const char* subTarget,
+        uint64_t expiresAtMs);
 
 private:
     bool getString(const char* key, char* out, size_t outLen) const;

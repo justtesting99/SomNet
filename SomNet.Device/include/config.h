@@ -27,6 +27,10 @@ constexpr unsigned long WIFI_RETRY_BASE_MS = 5000;
 constexpr unsigned long WIFI_RETRY_MAX_MS = 60000;
 constexpr unsigned kWifiConnectFailuresBeforeRecovery = 5;
 
+constexpr unsigned long HUB_RETRY_BASE_MS = 1000;
+constexpr unsigned long HUB_RETRY_MAX_MS = 60000;
+constexpr unsigned long HUB_NEGOTIATE_TIMEOUT_MS = 8000;
+
 constexpr unsigned long CREDENTIAL_RESET_HOLD_MS = 10000;
 constexpr unsigned long CREDENTIAL_RESET_WARN_MS = 5000;
 

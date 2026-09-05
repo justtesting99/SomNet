@@ -96,20 +96,16 @@ void tryWifiRecovery() {
 
     wifiRecoveryAttempted = true;
 
-    if (WIFI_SSID[0] != '\0') {
-        Serial.println(F("[WIFI] NVS credentials failed — clearing provisioning and using secrets.ini"));
-        nvsStore.clearProvisioning();
-        delay(200);
-        ESP.restart();
-        return;
-    }
-
-    Serial.println(F("[WIFI] NVS credentials failed — starting setup AP"));
+    Serial.println(F("[WIFI] saved credentials failed — clearing Wi-Fi and entering setup AP"));
+    Serial.println(F("[WIFI] re-provision at http://192.168.4.1/ (check SSID/password)"));
+    nvsStore.clearProvisioning();
     bootMode = DeviceBootMode::Provisioning;
     configWebServer.setBootMode(DeviceBootMode::Provisioning);
+    signalRClient.poll();
     char apName[32];
     buildSoftApName(apName, sizeof(apName));
     wifiManager.beginSoftAp(apName);
+    configWebServer.poll();
 }
 
 void printSerialBanner() {
@@ -138,7 +134,7 @@ void printSerialBanner() {
     Serial.println(wifiManager.localIp());
     Serial.print(F(" Server: "));
     Serial.println(serverUrl[0] != '\0' ? serverUrl : "(not configured)");
-    Serial.println(F(" Log prefixes: [WIFI] [HTTP] [CMD] [NVS] [ID]"));
+    Serial.println(F(" Log prefixes: [WIFI] [HTTP] [HUB] [CMD] [NVS] [ID]"));
     Serial.println(F("========================================"));
 }
 
@@ -169,10 +165,10 @@ void setup() {
     executionContext.begin();
     commandHandler.begin();
     buttonInput.begin();
-    signalRClient.begin();
+    signalRClient.begin(&nvsStore, &deviceIdentity, &wifiManager);
 
     startNetwork();
-    configWebServer.begin(bootMode, &nvsStore, &deviceIdentity, &wifiManager);
+    configWebServer.begin(bootMode, &nvsStore, &deviceIdentity, &wifiManager, &signalRClient);
 }
 
 void loop() {

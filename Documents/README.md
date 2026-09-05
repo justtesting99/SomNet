@@ -18,4 +18,5 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Hardware User Guide](./Hardware-User-Guide.md) | Installers / owners | ESP32 setup, Wi‑Fi provisioning, button credential reset, Device ID |
 | [ESP32 Device Plan](./09-ESP32-Device-Plan.md) | Developers | Firmware project plan: SignalR, NVS, relay, ack lifecycle |
 | [ESP32 Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | Developers | Protocol capture checklist (Phase 0 — complete) |
-| [ESP32 Phase 3 Checklist](./09-ESP32-Phase-3-Checklist.md) | Developers | Config web UI + registration UX checklist (active phase tracking) |
+| [ESP32 Phase 3 Checklist](./09-ESP32-Phase-3-Checklist.md) | Developers | Config web UI + registration UX checklist (complete) |
+| [ESP32 Phase 4 Checklist](./09-ESP32-Phase-4-Checklist.md) | Developers | SignalR client + pairing checklist (active phase tracking) |

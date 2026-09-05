@@ -15,7 +15,9 @@ void renderStatus(
     const DeviceIdentity& identity,
     const WifiManager& wifi,
     const char* effectiveServerUrl,
-    bool provisioningMode);
+    bool provisioningMode,
+    const char* hubStateLabel,
+    bool hubConnected);
 
 void renderConfigForm(
     char* out,

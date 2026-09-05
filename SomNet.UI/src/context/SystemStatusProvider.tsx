@@ -11,6 +11,7 @@ import type { SystemStatusResponse, SystemStatusSnapshot } from '@/types/systemS
 import { initialSystemStatus } from '@/types/systemStatus';
 import { buildSystemStatus } from '@/utils/systemStatus';
 import { apiFetch } from '@/api/client';
+import { useSubTarget } from '@/context/SubTargetProvider';
 
 const STATUS_ENDPOINT = '/api/system/status';
 const POLL_INTERVAL_MS = 10_000;
@@ -22,9 +23,12 @@ interface SystemStatusContextValue {
 
 const SystemStatusContext = createContext<SystemStatusContextValue | null>(null);
 
-async function fetchSystemStatus(): Promise<SystemStatusSnapshot> {
+async function fetchSystemStatus(subTarget: string): Promise<SystemStatusSnapshot> {
   try {
-    const payload = await apiFetch<SystemStatusResponse>(STATUS_ENDPOINT);
+    const params = new URLSearchParams({ subTarget });
+    const payload = await apiFetch<SystemStatusResponse>(
+      `${STATUS_ENDPOINT}?${params.toString()}`,
+    );
     return buildSystemStatus(payload, true);
   } catch {
     return buildSystemStatus(null, false);
@@ -38,6 +42,7 @@ export function SystemStatusProvider({
   children: ReactNode;
   enabled?: boolean;
 }) {
+  const { selectedSub } = useSubTarget();
   const [status, setStatus] = useState<SystemStatusSnapshot>(initialSystemStatus);
 
   const refresh = useCallback(async () => {
@@ -51,9 +56,9 @@ export function SystemStatusProvider({
       summary: current.lastChecked ? current.summary : 'Checking system status…',
     }));
 
-    const nextStatus = await fetchSystemStatus();
+    const nextStatus = await fetchSystemStatus(selectedSub);
     setStatus(nextStatus);
-  }, [enabled]);
+  }, [enabled, selectedSub]);
 
   useEffect(() => {
     if (!enabled) {

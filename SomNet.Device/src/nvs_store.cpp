@@ -253,11 +253,31 @@ bool NvsStore::setPairedFlag(bool value) {
     return preferences.putBool(kKeyPaired, value) > 0;
 }
 
+bool NvsStore::savePairing(
+    const char* accessToken,
+    const char* domTarget,
+    const char* subTarget,
+    uint64_t expiresAtMs) {
+    if (!setAccessToken(accessToken != nullptr ? accessToken : "")) {
+        return false;
+    }
+    if (!setDomTarget(domTarget != nullptr ? domTarget : "")) {
+        return false;
+    }
+    if (!setSubTarget(subTarget != nullptr ? subTarget : "")) {
+        return false;
+    }
+    if (!setTokenExpires(expiresAtMs)) {
+        return false;
+    }
+    return setPairedFlag(true);
+}
+
 bool NvsStore::isPaired() const {
     if (!getPairedFlag()) {
         return false;
     }
 
-    char token[16];
+    char token[NvsStore::kMaxTokenLen];
     return getAccessToken(token, sizeof(token));
 }

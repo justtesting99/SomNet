@@ -95,12 +95,34 @@ void WifiManager::startConnect() {
 
     Serial.print(F("[WIFI] connecting to "));
     Serial.println(ssid_);
+    WiFi.mode(WIFI_STA);
     WiFi.disconnect(true);
     WiFi.begin(ssid_, password_);
     connectStartedMs_ = millis();
     state_ = WifiConnectionState::Connecting;
     loggedConnected_ = false;
     loggedConfigUi_ = false;
+}
+
+const char* wifiStatusLabel(wl_status_t status) {
+    switch (status) {
+    case WL_IDLE_STATUS:
+        return "idle";
+    case WL_NO_SSID_AVAIL:
+        return "no_ssid";
+    case WL_SCAN_COMPLETED:
+        return "scan_done";
+    case WL_CONNECTED:
+        return "connected";
+    case WL_CONNECT_FAILED:
+        return "connect_failed";
+    case WL_CONNECTION_LOST:
+        return "lost";
+    case WL_DISCONNECTED:
+        return "disconnected";
+    default:
+        return "unknown";
+    }
 }
 
 void WifiManager::handleDisconnected() {
@@ -122,7 +144,10 @@ void WifiManager::handleConnecting() {
 
     if (millis() - connectStartedMs_ >= WIFI_CONNECT_TIMEOUT_MS) {
         Serial.print(F("[WIFI] connect timeout, status="));
-        Serial.println(static_cast<int>(status));
+        Serial.print(static_cast<int>(status));
+        Serial.print(F(" ("));
+        Serial.print(wifiStatusLabel(status));
+        Serial.println(F(")"));
         WiFi.disconnect(true);
         state_ = WifiConnectionState::Disconnected;
         ++connectFailures_;
@@ -153,6 +178,8 @@ void WifiManager::logConnectedOnce() {
     loggedConnected_ = true;
     Serial.print(F("[WIFI] connected IP="));
     Serial.print(WiFi.localIP());
+    Serial.print(F(" gateway="));
+    Serial.print(WiFi.gatewayIP());
     Serial.print(F(" RSSI="));
     Serial.println(WiFi.RSSI());
 

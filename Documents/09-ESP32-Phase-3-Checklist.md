@@ -724,7 +724,7 @@ Future phase checklists:
 
 | 3 | This document | Complete |
 
-| 4 | *TBD: `09-ESP32-Phase-4-Checklist.md`* | — |
+| 4 | [09-ESP32-Phase-4-Checklist.md](./09-ESP32-Phase-4-Checklist.md) | **Complete** |
 
 | 5+ | *Created when prior phase completes* | — |
 

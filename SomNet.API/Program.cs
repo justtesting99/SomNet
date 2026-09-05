@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 using SomNet.API.Configuration;
 using SomNet.API.Data;
 using SomNet.API.Hubs;
@@ -104,6 +105,17 @@ builder.Services.AddSwaggerGen(options =>
         Description = "SomNet session control, history, notifications, and configuration API.",
     });
     options.DescribeAllParametersInCamelCase();
+    options.AddSecurityDefinition("bearer", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "Operator JWT from POST /api/auth/login (paste token.accessToken).",
+    });
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference("bearer", document)] = [],
+    });
 });
 
 var app = builder.Build();

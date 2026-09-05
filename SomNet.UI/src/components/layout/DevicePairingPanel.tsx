@@ -1,0 +1,164 @@
+import { useCallback, useEffect, useState } from 'react';
+import { fetchDeviceStatus, pairDevice, revokeDevicePairing } from '@/api/devices';
+import { ApiError } from '@/api/client';
+import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSystemStatus } from '@/context/SystemStatusProvider';
+import type { DeviceStatusResponse } from '@/types/device';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+
+function formatStatusLine(status: DeviceStatusResponse | null): string {
+  if (!status) {
+    return 'Loading device status…';
+  }
+
+  if (status.isConnected && status.deviceId) {
+    return `Connected — ${status.deviceId}`;
+  }
+
+  if (status.isPaired && status.deviceId) {
+    return `Paired (${status.deviceId}) — waiting for device to connect`;
+  }
+
+  return `No device paired for ${status.subTarget}`;
+}
+
+export function DevicePairingPanel({ active }: { active: boolean }) {
+  const { selectedSub } = useSubTarget();
+  const { refresh: refreshSystemStatus } = useSystemStatus();
+  const [status, setStatus] = useState<DeviceStatusResponse | null>(null);
+  const [deviceId, setDeviceId] = useState('');
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isPairing, setIsPairing] = useState(false);
+  const [isRevoking, setIsRevoking] = useState(false);
+
+  const loadStatus = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const nextStatus = await fetchDeviceStatus(selectedSub);
+      setStatus(nextStatus);
+      if (nextStatus.deviceId) {
+        setDeviceId(nextStatus.deviceId);
+      }
+    } catch (loadError) {
+      const loadMessage =
+        loadError instanceof ApiError && loadError.message
+          ? loadError.message
+          : 'Unable to load device status.';
+      setError(loadMessage);
+      setStatus(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedSub]);
+
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+
+    setMessage('');
+    setError('');
+    setDeviceId('');
+    void loadStatus();
+  }, [active, selectedSub, loadStatus]);
+
+  async function handlePair() {
+    const trimmedId = deviceId.trim();
+    if (!trimmedId) {
+      setError('Device ID is required.');
+      return;
+    }
+
+    setError('');
+    setMessage('');
+    setIsPairing(true);
+
+    try {
+      const response = await pairDevice(selectedSub, trimmedId);
+      setMessage(
+        response.message ??
+          (response.deliveredToDevice
+            ? 'Pairing token sent to device.'
+            : 'Device paired — token saved; deliver when device connects.'),
+      );
+      await loadStatus();
+      await refreshSystemStatus();
+    } catch (pairError) {
+      const pairMessage =
+        pairError instanceof ApiError && pairError.message
+          ? pairError.message
+          : 'Unable to pair device.';
+      setError(pairMessage);
+    } finally {
+      setIsPairing(false);
+    }
+  }
+
+  async function handleRevoke() {
+    if (!window.confirm(`Revoke hardware pairing for ${selectedSub}?`)) {
+      return;
+    }
+
+    setError('');
+    setMessage('');
+    setIsRevoking(true);
+
+    try {
+      await revokeDevicePairing(selectedSub);
+      setMessage('Pairing revoked.');
+      setDeviceId('');
+      await loadStatus();
+      await refreshSystemStatus();
+    } catch (revokeError) {
+      const revokeMessage =
+        revokeError instanceof ApiError && revokeError.message
+          ? revokeError.message
+          : 'Unable to revoke pairing.';
+      setError(revokeMessage);
+    } finally {
+      setIsRevoking(false);
+    }
+  }
+
+  const busy = isLoading || isPairing || isRevoking;
+
+  return (
+    <section className="space-y-3">
+      <h3 className="text-sm font-semibold text-slate-200">Hardware device</h3>
+      <p className="text-xs text-slate-500">
+        Pair an ESP32 for <span className="text-slate-300">{selectedSub}</span>. Copy the device ID
+        from the device config page (e.g. <span className="font-mono text-slate-400">esp32-…</span>
+        ).
+      </p>
+      <p className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">
+        {formatStatusLine(status)}
+      </p>
+      <Input
+        label="Device ID"
+        value={deviceId}
+        placeholder="esp32-84CCA85C36B4"
+        onChange={(event) => setDeviceId(event.target.value)}
+        disabled={busy}
+      />
+      {error ? <p className="text-sm text-red-400">{error}</p> : null}
+      {message ? <p className="text-sm text-emerald-400">{message}</p> : null}
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button onClick={handlePair} disabled={busy}>
+          {isPairing ? 'Pairing…' : 'Pair device'}
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={handleRevoke}
+          disabled={busy || !status?.isPaired}
+        >
+          {isRevoking ? 'Revoking…' : 'Revoke pairing'}
+        </Button>
+      </div>
+    </section>
+  );
+}

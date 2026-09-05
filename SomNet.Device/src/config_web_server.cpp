@@ -4,6 +4,7 @@
 #include "config_pages.h"
 #include "device_identity.h"
 #include "nvs_store.h"
+#include "signalr_client.h"
 #include "wifi_manager.h"
 
 #include <ESPAsyncWebServer.h>
@@ -16,6 +17,7 @@ namespace {
 NvsStore* gNvs = nullptr;
 DeviceIdentity* gIdentity = nullptr;
 WifiManager* gWifi = nullptr;
+SignalRClient* gSignalR = nullptr;
 
 void buildEffectiveServerUrl(char* out, size_t outLen) {
     out[0] = '\0';
@@ -194,7 +196,9 @@ void handleStatus(AsyncWebServerRequest* request) {
         *gIdentity,
         *gWifi,
         serverUrl,
-        gHttpMode == DeviceBootMode::Provisioning);
+        gHttpMode == DeviceBootMode::Provisioning,
+        gSignalR != nullptr ? gSignalR->hubStateLabel() : "offline",
+        gSignalR != nullptr && gSignalR->isHubConnected());
     sendHtml(request, html);
 }
 
@@ -241,11 +245,11 @@ void handleApiStatus(AsyncWebServerRequest* request) {
     buildEffectiveServerUrl(serverUrl, sizeof(serverUrl));
     gNvs->getFriendlyName(friendly, sizeof(friendly));
 
-    char json[512];
+    char json[768];
     snprintf(
         json,
         sizeof(json),
-        "{\"deviceId\":\"%s\",\"mac\":\"%s\",\"friendlyName\":\"%s\",\"paired\":%s,\"wifiConnected\":%s,\"ip\":\"%s\",\"serverUrl\":\"%s\",\"mode\":\"%s\"}",
+        "{\"deviceId\":\"%s\",\"mac\":\"%s\",\"friendlyName\":\"%s\",\"paired\":%s,\"wifiConnected\":%s,\"ip\":\"%s\",\"serverUrl\":\"%s\",\"mode\":\"%s\",\"hubConnected\":%s,\"hubState\":\"%s\"}",
         gIdentity->deviceId(),
         gIdentity->macAddress(),
         friendly,
@@ -253,7 +257,9 @@ void handleApiStatus(AsyncWebServerRequest* request) {
         gWifi->isConnected() ? "true" : "false",
         gWifi->localIp(),
         serverUrl,
-        gHttpMode == DeviceBootMode::Provisioning ? "provisioning" : "running");
+        gHttpMode == DeviceBootMode::Provisioning ? "provisioning" : "running",
+        gSignalR != nullptr && gSignalR->isHubConnected() ? "true" : "false",
+        gSignalR != nullptr ? gSignalR->hubStateLabel() : "offline");
     request->send(200, "application/json", json);
 }
 
@@ -302,7 +308,8 @@ bool ConfigWebServer::begin(
     DeviceBootMode mode,
     NvsStore* nvsStore,
     DeviceIdentity* identity,
-    WifiManager* wifi) {
+    WifiManager* wifi,
+    SignalRClient* signalRClient) {
     if (nvsStore == nullptr || identity == nullptr || wifi == nullptr) {
         return false;
     }
@@ -311,9 +318,11 @@ bool ConfigWebServer::begin(
     nvsStore_ = nvsStore;
     identity_ = identity;
     wifi_ = wifi;
+    signalR_ = signalRClient;
     gNvs = nvsStore;
     gIdentity = identity;
     gWifi = wifi;
+    gSignalR = signalRClient;
     gHttpMode = mode;
     return true;
 }
