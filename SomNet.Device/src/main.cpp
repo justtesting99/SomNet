@@ -32,8 +32,9 @@ void printSerialBanner() {
     Serial.print(F(" Version: "));
     Serial.println(FIRMWARE_VERSION);
     Serial.print(F(" Device ID: "));
-    Serial.print(deviceIdentity.deviceId());
-    Serial.println(F("   (Phase 2: real MAC ID)"));
+    Serial.println(deviceIdentity.deviceId());
+    Serial.print(F(" MAC: "));
+    Serial.println(deviceIdentity.macAddress());
     Serial.print(F(" Pairing: "));
     Serial.println(nvsStore.isPaired() ? F("paired") : F("not paired"));
     Serial.print(F(" Wi-Fi: "));
@@ -48,7 +49,7 @@ void printSerialBanner() {
         Serial.print(':');
         Serial.println(SOMNET_SERVER_PORT);
     }
-    Serial.println(F(" Log prefixes: [WIFI] [CMD] [RELAY] [BTN]"));
+    Serial.println(F(" Log prefixes: [WIFI] [CMD] [RELAY] [BTN] [NVS] [ID]"));
     Serial.println(F("========================================"));
 }
 
@@ -60,8 +61,14 @@ void setup() {
     Serial.println();
     Serial.println(F("[BOOT] SomNet.Device starting"));
 
-    nvsStore.begin();
-    deviceIdentity.begin();
+    if (!nvsStore.begin()) {
+        Serial.println(F("[NVS] failed to open namespace"));
+    } else {
+        Serial.println(F("[NVS] opened"));
+    }
+
+    nvsStoreSetInstance(&nvsStore);
+    deviceIdentity.begin(nvsStore);
     relayController.begin();
     executionContext.begin();
     commandHandler.begin();

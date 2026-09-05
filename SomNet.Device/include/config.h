@@ -23,3 +23,6 @@
 constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 30000;
 constexpr unsigned long WIFI_RETRY_BASE_MS = 5000;
 constexpr unsigned long WIFI_RETRY_MAX_MS = 60000;
+
+constexpr unsigned long FACTORY_RESET_HOLD_MS = 10000;
+constexpr unsigned long FACTORY_RESET_WARN_MS = 5000;

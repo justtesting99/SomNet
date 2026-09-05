@@ -44,7 +44,7 @@ Update **Status** above and check boxes below as work completes. When Phase 1 is
 Phase 1 does **not** require the API. Useful later for Phase 4 smoke tests:
 
 - [ ] API runs at `http://localhost:5031` when needed
-- [x] PC LAN IP noted for future `config.h` / `secrets.ini` — `192.168.1.47:5031` in secrets (2026-09-05)
+- [x] PC LAN IP noted for future `config.h` / `secrets.ini` — set in local `secrets.ini` only (gitignored)
 
 ### Already present in repo (Phase 0)
 
@@ -335,5 +335,5 @@ Future phase checklists:
 |-------|-------------------|--------|
 | 0 | [09-ESP32-Phase-0-Checklist.md](./09-ESP32-Phase-0-Checklist.md) | Complete |
 | 1 | This document | Complete |
-| 2 | *TBD: `09-ESP32-Phase-2-Checklist.md`* | — |
+| 2 | [09-ESP32-Phase-2-Checklist.md](./09-ESP32-Phase-2-Checklist.md) | Not started |
 | 3+ | *Created when prior phase completes* | — |

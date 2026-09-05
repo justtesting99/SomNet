@@ -1329,7 +1329,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 |-------|--------|-----------|--------|
 | **0** | Protocol verification | [Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | **Complete** |
 | 1 | Project scaffold | [Phase 1 Checklist](./09-ESP32-Phase-1-Checklist.md) | **Complete** |
-| 2 | NVS + MAC device identity | *TBD* | — |
+| 2 | NVS + MAC device identity | [Phase 2 Checklist](./09-ESP32-Phase-2-Checklist.md) | **Complete** |
 | **3** | **Config web UI + registration UX** | *TBD* | — |
 | 4 | SignalR client + pairing | *TBD* | — |
 | 5 | Single-pulse command + ack | *TBD* | — |
@@ -1384,12 +1384,21 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 ### Phase 2 — NVS and MAC device identity (1 day)
 
-**Deliverables:**
+**Checklist:** [09-ESP32-Phase-2-Checklist.md](./09-ESP32-Phase-2-Checklist.md)  
+**Status:** Complete
 
-- [ ] `device_identity` module: read MAC → format **`esp32-{12HEX}`** → persist `device_id`
-- [ ] `nvs_store` module: token, pairing metadata, **`device_friendly_name`**
-- [ ] Serial + banner prints device ID and MAC
-- [ ] Factory reset hook (optional: long-press button clears NVS except MAC-derived id)
+**Summary:** `device_identity` reads MAC → `esp32-{12HEX}` and persists via `nvs_store` (Preferences namespace `somnet`). Banner shows real ID + MAC. Optional long-press factory reset. **No** SignalR, config UI, or Wi-Fi-from-NVS yet.
+
+**Exit criteria:** Reboot preserves same `device_id`; MAC-based ID stable and ready for pairing (Phase 4) and config UI (Phase 3).
+
+*Detailed steps, NVS schema, and verification tests are in the checklist — not duplicated here.*
+
+**Deliverables (reference):**
+
+- [x] `device_identity` module: read MAC → format **`esp32-{12HEX}`** → persist `device_id`
+- [x] `nvs_store` module: token, pairing metadata, **`device_friendly_name`**
+- [x] Serial + banner prints device ID and MAC
+- [x] Factory reset hook (optional: long-press button clears NVS except MAC-derived id)
 
 **Exit criteria:** Reboot preserves same `device_id`; MAC-based ID stable and documented for pairing.
 

@@ -4,7 +4,8 @@ PlatformIO firmware for the SomNet hardware device (ESP32 DevKit V1 clone). Live
 
 **Protocol:** [docs/PROTOCOL.md](docs/PROTOCOL.md)  
 **Plan:** [Documents/09-ESP32-Device-Plan.md](../Documents/09-ESP32-Device-Plan.md)  
-**Phase 1 checklist:** [Documents/09-ESP32-Phase-1-Checklist.md](../Documents/09-ESP32-Phase-1-Checklist.md)
+**Phase 1 checklist:** [Documents/09-ESP32-Phase-1-Checklist.md](../Documents/09-ESP32-Phase-1-Checklist.md)  
+**Phase 2 checklist:** [Documents/09-ESP32-Phase-2-Checklist.md](../Documents/09-ESP32-Phase-2-Checklist.md)
 
 ## Hardware (default wiring)
 
@@ -48,7 +49,14 @@ pio device monitor
 
 Or use the PlatformIO sidebar: **Build**, **Upload**, **Monitor** (115200 baud).
 
-## Phase 1 behavior
+## Phase 2 behavior (current)
+
+- **Device ID:** `esp32-{MAC}` uppercase, persisted in NVS namespace `somnet`
+- **Banner:** real device ID + raw MAC address
+- **Factory reset:** hold button **D33** for **10 s** (warning at 5 s) → clears NVS → reboot → same device ID regenerated from MAC
+- Wi-Fi still from compile-time `secrets.ini` until Phase 3
+
+## Phase 1 behavior (prior)
 
 - Serial banner with firmware version and placeholder device ID
 - Non-blocking Wi-Fi connect with exponential backoff retry
@@ -62,7 +70,8 @@ Or use the PlatformIO sidebar: **Build**, **Upload**, **Monitor** (115200 baud).
 | `[WIFI]` | Wi-Fi manager |
 | `[CMD]` | Command handler |
 | `[RELAY]` | Relay controller (Phase 6+) |
-| `[BTN]` | Button input |
+| `[NVS]` | NVS / factory reset |
+| `[ID]` | Device identity |
 
 ## Project layout
 
