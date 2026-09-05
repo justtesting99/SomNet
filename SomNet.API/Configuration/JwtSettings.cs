@@ -10,5 +10,9 @@ public sealed class JwtSettings
 
     public required string Audience { get; init; }
 
+    public required string DeviceAudience { get; init; }
+
     public int ExpireMinutes { get; init; } = 480;
+
+    public int DeviceExpireDays { get; init; } = 365;
 }

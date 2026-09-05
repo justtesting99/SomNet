@@ -22,6 +22,8 @@ public sealed class SomNetDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
 
+    public DbSet<SubDeviceRegistration> SubDeviceRegistrations => Set<SubDeviceRegistration>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<SessionHistoryEntry>(entity =>
@@ -78,6 +80,18 @@ public sealed class SomNetDbContext : DbContext
             entity.Property(user => user.Username).HasMaxLength(128);
             entity.Property(user => user.PasswordHash).HasMaxLength(512);
             entity.Property(user => user.DisplayName).HasMaxLength(256);
+        });
+
+        modelBuilder.Entity<SubDeviceRegistration>(entity =>
+        {
+            entity.ToTable("SubDeviceRegistrations");
+            entity.HasKey(registration => new { registration.DomTarget, registration.SubName });
+            entity.Property(registration => registration.DomTarget).HasMaxLength(128);
+            entity.Property(registration => registration.SubName).HasMaxLength(32);
+            entity.Property(registration => registration.DeviceId).HasMaxLength(64);
+            entity.Property(registration => registration.AccessToken).HasMaxLength(2048);
+            entity.Property(registration => registration.TokenJti).HasMaxLength(64);
+            entity.HasIndex(registration => registration.DeviceId);
         });
     }
 }

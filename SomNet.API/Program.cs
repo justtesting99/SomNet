@@ -7,6 +7,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using SomNet.API.Configuration;
 using SomNet.API.Data;
+using SomNet.API.Hubs;
 using SomNet.API.Services;
 using SomNet.Shared.Serialization;
 
@@ -24,16 +25,33 @@ builder.Services.AddDbContext<SomNetDbContext>(options =>
 
 builder.Services.AddScoped<ISomNetDataStore, SomNetDataStore>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddSingleton<IDeviceConnectionRegistry, DeviceConnectionRegistry>();
+builder.Services.AddScoped<IDeviceTokenService, DeviceTokenService>();
+builder.Services.AddScoped<IHardwareCommandDispatcher, HardwareCommandDispatcher>();
 
 builder.Services
     .AddOptions<JwtSettings>()
     .Bind(builder.Configuration.GetSection(JwtSettings.SectionName))
     .Validate(settings => !string.IsNullOrWhiteSpace(settings.Key), "Jwt:Key is required.")
     .Validate(settings => settings.Key.Length >= 32, "Jwt:Key must be at least 32 characters.")
+    .Validate(settings => !string.IsNullOrWhiteSpace(settings.DeviceAudience), "Jwt:DeviceAudience is required.")
     .ValidateOnStart();
 
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>()
     ?? throw new InvalidOperationException("Jwt configuration is missing.");
+
+if (string.IsNullOrWhiteSpace(jwtSettings.DeviceAudience))
+{
+    jwtSettings = new JwtSettings
+    {
+        Key = jwtSettings.Key,
+        Issuer = jwtSettings.Issuer,
+        Audience = jwtSettings.Audience,
+        DeviceAudience = "SomNet.Device",
+        ExpireMinutes = jwtSettings.ExpireMinutes,
+        DeviceExpireDays = jwtSettings.DeviceExpireDays > 0 ? jwtSettings.DeviceExpireDays : 365,
+    };
+}
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -47,9 +65,24 @@ builder.Services
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSettings.Issuer,
-            ValidAudience = jwtSettings.Audience,
+            ValidAudiences = [jwtSettings.Audience, jwtSettings.DeviceAudience],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Key)),
             NameClaimType = JwtRegisteredClaimNames.Sub,
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            },
         };
     });
 
@@ -57,6 +90,9 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddControllers()
     .AddJsonOptions(options => SomNetJsonOptions.Configure(options.JsonSerializerOptions));
+
+builder.Services.AddSignalR()
+    .AddJsonProtocol(options => SomNetJsonOptions.Configure(options.PayloadSerializerOptions));
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -123,6 +159,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<HardwareHub>("/hubs/hardware");
 
 if (uiDistExists)
 {
