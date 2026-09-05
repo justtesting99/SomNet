@@ -10,7 +10,7 @@ public static class DeviceClaimTypes
 
     public const string DomTarget = "dom";
 
-    public const string SubTarget = "sub";
+    public const string SubTarget = "sub_target";
 
     public const string DeviceId = "device_id";
 }

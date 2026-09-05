@@ -196,7 +196,7 @@ DeviceClaimTypes.Role       = "role"
 DeviceClaimTypes.DeviceRole = "device"
 DeviceClaimTypes.OperatorRole = "operator"
 DeviceClaimTypes.DomTarget  = "dom"
-DeviceClaimTypes.SubTarget  = "sub"
+DeviceClaimTypes.SubTarget  = "sub_target"
 DeviceClaimTypes.DeviceId   = "device_id"
 ```
 

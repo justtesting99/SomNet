@@ -10,6 +10,7 @@ lib_deps/
 
 # Dependencies
 **/node_modules/
+**/SomNet.Device/tools/capture-result.json
 
 # Build outputs
 **/bin/

@@ -190,12 +190,18 @@ Also surfaced via **GET /api/system/status?subTarget=Slv66** for header display 
 
 ## ESP32 Implementation Guide
 
+**Authoritative wire capture:** [`SomNet.Device/docs/PROTOCOL.md`](../SomNet.Device/docs/PROTOCOL.md) (Phase 0, 2026-09-05).
+
+Device JWT Sub claim is the device id; Sub **name** is claim `sub_target` (not `sub`).
+
 ### Initial Boot
 
-1. Generate or read persistent `deviceId`
-2. Connect to `wss://{host}/hubs/hardware?deviceId={id}`
-3. Listen for `PairDevice` event
-4. Persist token to NVS/flash
+1. Read MAC → `deviceId` (`esp32-{MAC}`)
+2. `POST /hubs/hardware/negotiate?negotiateVersion=1` → `connectionToken`
+3. Connect WebSocket `?id={connectionToken}&deviceId={id}`
+4. SignalR handshake (§ PROTOCOL.md)
+5. Listen for `PairDevice` event
+6. Persist token to NVS/flash
 
 ### After Pairing
 

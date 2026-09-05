@@ -1327,7 +1327,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 | Phase | Focus | Checklist | Status |
 |-------|--------|-----------|--------|
-| **0** | Protocol verification | [Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | **Not started** |
+| **0** | Protocol verification | [Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | **Complete** |
 | 1 | Project scaffold | *TBD when Phase 0 complete* | — |
 | 2 | NVS + MAC device identity | *TBD* | — |
 | **3** | **Config web UI + registration UX** | *TBD* | — |
@@ -1657,6 +1657,6 @@ When the device repo is created:
 - [x] Wiring confirmed: relay **D4**, button **D33** → constants in `boardDefs.h`
 - [x] No external status LEDs; relay module has optocoupler + built-in LED(s)
 - [ ] Open decisions in §15 resolved
-- [ ] [Phase 0 checklist](./09-ESP32-Phase-0-Checklist.md) complete — see §10 status table
+- [x] [Phase 0 checklist](./09-ESP32-Phase-0-Checklist.md) complete — see §10 status table
 - [ ] `SomNet.Device` repository created
 - [ ] Explicit approval to begin firmware (and any API changes for two-phase ack)

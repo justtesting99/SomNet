@@ -3,8 +3,8 @@
 Protocol verification before PlatformIO scaffold and firmware coding.
 
 **Parent plan:** [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §10  
-**Status:** Not started  
-**Target output:** `SomNet.Device/docs/PROTOCOL.md` (created when `SomNet.Device/` exists; interim notes may live in this checklist)
+**Status:** Complete (2026-09-05)  
+**Target output:** [`SomNet.Device/docs/PROTOCOL.md`](../SomNet.Device/docs/PROTOCOL.md)
 
 ---
 
@@ -35,10 +35,10 @@ Update **Status** above and check boxes below as work completes. When Phase 0 is
 | # | Decision | Choice | Date |
 |---|----------|--------|------|
 | D1 | **Device ID format** for tests | ☑ **`esp32-{MAC}`** (confirmed §4.1)  ☐ Other: ________ | |
-| D2 | **Test device ID** used in captures | `esp32-________________` (from board MAC or placeholder) | |
-| D3 | **WebSocket URL (dev)** | `ws://__________:5031/hubs/hardware` (PC LAN IP, not `localhost` for device) | |
-| D4 | **WebSocket URL (same-PC test)** | `ws://localhost:5031/hubs/hardware` (browser capture only) | |
-| D5 | **Capture tool** | ☐ Browser DevTools  ☐ wscat  ☐ Other: ________ | |
+| D2 | **Test device ID** used in captures | `esp32-PHASE0FINAL` (capture script placeholder) | 2026-09-05 |
+| D3 | **WebSocket URL (dev)** | `ws://{LAN-IP}:5031/hubs/hardware` (PC LAN IP for ESP32) | 2026-09-05 |
+| D4 | **WebSocket URL (same-PC test)** | `ws://localhost:5031/hubs/hardware` | 2026-09-05 |
+| D5 | **Capture tool** | ☑ Node.js script (`SomNet.Device/tools/phase0-capture.mjs`) | 2026-09-05 |
 
 ### Already confirmed (no Phase 0 decision needed)
 
@@ -228,20 +228,20 @@ Resolve during or immediately after Phase 0 (update [09-ESP32-Device-Plan.md](./
 
 | # | Question | Decision | Date |
 |---|----------|----------|------|
-| H1 | Relay active level (`RELAY_ACTIVE_HIGH`) | ☐ Active-high  ☐ Active-low  ☐ TBD (bench test) | |
-| H2 | Overlapping `stroke` while pulse active | ☐ Reject  ☐ Queue | |
-| H3 | Missing `strokeMs` in payload | ☐ Reject (recommended)  ☐ Compute from powerPercent | |
+| H1 | Relay active level (`RELAY_ACTIVE_HIGH`) | ☐ Active-high  ☐ Active-low  ☑ TBD (bench test) | 2026-09-05 |
+| H2 | Overlapping `stroke` while pulse active | ☑ Reject  ☐ Queue | 2026-09-05 |
+| H3 | Missing `strokeMs` in payload | ☑ Reject (recommended)  ☐ Compute from powerPercent | 2026-09-05 |
 
 ---
 
 ## I. Deliverables
 
-- [ ] **`PROTOCOL.md`** written under `SomNet.Device/docs/` (or interim appendix in this file until folder exists)
-- [ ] Includes: handshake, PairDevice, ExecuteCommand, AckCommand, ping/pong, error cases
-- [ ] Includes: example **stroke** payload and target **ack `resultJson`** (even if API field pending)
-- [ ] Redacted samples (no live JWTs in git)
-- [ ] Link from [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §10 Phase 0 marked **Complete**
-- [ ] Optional: short update to [06-SignalR-And-Hardware.md](./06-SignalR-And-Hardware.md) if capture contradicts doc
+- [x] **`PROTOCOL.md`** written under `SomNet.Device/docs/`
+- [x] Includes: handshake, PairDevice, ExecuteCommand, AckCommand, ping/pong, error cases
+- [x] Includes: example **stroke** payload and target **ack `resultJson`** (API field pending)
+- [x] Redacted samples (no live JWTs in git)
+- [x] Link from [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §10 Phase 0 marked **Complete**
+- [x] Update to [06-SignalR-And-Hardware.md](./06-SignalR-And-Hardware.md) (negotiate + `sub_target` claim)
 
 ---
 
@@ -249,14 +249,14 @@ Resolve during or immediately after Phase 0 (update [09-ESP32-Device-Plan.md](./
 
 | Criterion | Done |
 |-----------|------|
-| All sections A–G complete | ☐ |
-| `PROTOCOL.md` (or equivalent) exists | ☐ |
-| Decisions D1–D5 recorded | ☐ |
-| Parent plan §10 Phase 0 status updated | ☐ |
-| Ready for Phase 1 scaffold | ☐ |
+| All sections A–G complete | ☑ |
+| `PROTOCOL.md` (or equivalent) exists | ☑ |
+| Decisions D1–D5 recorded | ☑ |
+| Parent plan §10 Phase 0 status updated | ☑ |
+| Ready for Phase 1 scaffold | ☑ |
 
-**Completed by:** _______________  
-**Date:** _______________
+**Completed by:** Phase 0 capture script + PROTOCOL.md  
+**Date:** 2026-09-05
 
 ---
 
@@ -268,6 +268,6 @@ Future phase checklists (to be added as phases start):
 
 | Phase | Checklist document | Status |
 |-------|-------------------|--------|
-| 0 | This document | Not started |
+| 0 | This document | Complete |
 | 1 | *TBD: `09-ESP32-Phase-1-Checklist.md`* | — |
 | 2+ | *Created when prior phase completes* | — |
