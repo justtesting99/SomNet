@@ -10,6 +10,9 @@
 #include <HTTPClient.h>
 #include <WebSocketsClient.h>
 #include <WiFi.h>
+#ifdef SOMNET_USE_WSS
+#include <WiFiClientSecure.h>
+#endif
 
 #include <ctype.h>
 #include <mbedtls/base64.h>
@@ -29,6 +32,7 @@ DeviceIdentity* gIdentity = nullptr;
 char gConnectionToken[128] = {};
 char gWsHost[96] = {};
 uint16_t gWsPort = 5031;
+bool gUseTls = false;
 char gRxBuffer[2048];
 size_t gRxLen = 0;
 bool gUsePairedConnect = false;
@@ -350,21 +354,46 @@ bool negotiateConnectionToken(NvsStore& nvs, char* tokenOut, size_t tokenLen) {
         Serial.println(F("[HUB] invalid server_url"));
         return false;
     }
-    if (tls || nvs.getUseTls()) {
-        Serial.println(F("[HUB] TLS/wss not supported until Phase 7"));
+
+    gUseTls = tls || nvs.getUseTls();
+    if (gUseTls) {
+#ifndef SOMNET_USE_WSS
+        Serial.println(F("[HUB] TLS/wss requires prod_cloud firmware — pio run -e prod_cloud -t upload"));
         return false;
+#else
+        Serial.println(F("[HUB] TLS mode (wss) — certificate validation disabled until Azure deploy"));
+#endif
     }
 
     HTTPClient http;
-    char negotiateUrl[192];
-    snprintf(
-        negotiateUrl,
-        sizeof(negotiateUrl),
-        "http://%s:%u/hubs/hardware/negotiate?negotiateVersion=1",
-        gWsHost,
-        gWsPort);
+    char negotiateUrl[256];
+    if (gUseTls) {
+        snprintf(
+            negotiateUrl,
+            sizeof(negotiateUrl),
+            "https://%s:%u/hubs/hardware/negotiate?negotiateVersion=1",
+            gWsHost,
+            gWsPort);
+    } else {
+        snprintf(
+            negotiateUrl,
+            sizeof(negotiateUrl),
+            "http://%s:%u/hubs/hardware/negotiate?negotiateVersion=1",
+            gWsHost,
+            gWsPort);
+    }
 
+#ifdef SOMNET_USE_WSS
+    WiFiClientSecure tlsClient;
+    if (gUseTls) {
+        tlsClient.setInsecure();
+        http.begin(tlsClient, negotiateUrl);
+    } else {
+        http.begin(negotiateUrl);
+    }
+#else
     http.begin(negotiateUrl);
+#endif
     http.addHeader("Content-Type", "application/json");
     http.setTimeout(HUB_NEGOTIATE_TIMEOUT_MS);
 
@@ -616,14 +645,28 @@ bool startWebSocket(NvsStore& nvs, DeviceIdentity& identity) {
         return false;
     }
 
-    Serial.print(F("[HUB] connect ws://"));
+    Serial.print(F("[HUB] connect "));
+    if (gUseTls) {
+        Serial.print(F("wss://"));
+    } else {
+        Serial.print(F("ws://"));
+    }
     Serial.print(gWsHost);
     Serial.print(':');
     Serial.print(gWsPort);
     Serial.println(path);
 
     gWs.disconnect();
-    gWs.begin(gWsHost, gWsPort, path);
+    if (gUseTls) {
+#ifdef SOMNET_USE_WSS
+        gWs.beginSSL(gWsHost, gWsPort, path, "");
+#else
+        Serial.println(F("[HUB] wss connect blocked — flash prod_cloud build"));
+        return false;
+#endif
+    } else {
+        gWs.begin(gWsHost, gWsPort, path);
+    }
     return true;
 }
 

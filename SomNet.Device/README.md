@@ -8,7 +8,7 @@ PlatformIO firmware for the SomNet hardware device (ESP32 DevKit V1 clone). Live
 **Plan:** [Documents/09-ESP32-Device-Plan.md](../Documents/09-ESP32-Device-Plan.md)  
 **Phase checklists (0–6 complete):** [0](../Documents/09-ESP32-Phase-0-Checklist.md) · [1](../Documents/09-ESP32-Phase-1-Checklist.md) · [2](../Documents/09-ESP32-Phase-2-Checklist.md) · [3](../Documents/09-ESP32-Phase-3-Checklist.md) · [4](../Documents/09-ESP32-Phase-4-Checklist.md) · [5](../Documents/09-ESP32-Phase-5-Checklist.md) · [6](../Documents/09-ESP32-Phase-6-Checklist.md) · [7](../Documents/09-ESP32-Phase-7-Checklist.md) (**next**)
 
-**Current firmware:** `0.7.0-phase7` — Phase 7 in progress: **SomNet-themed config UI** on `/` and `/config`. SignalR, stroke, relay unchanged from Phase 6.
+**Current firmware:** `0.7.0-phase7` — Phase 7 in progress: token expiry, **SomNet-themed config UI**, **`prod_cloud` / wss build profile** (compile-only). SignalR stroke/relay unchanged from Phase 6.
 
 ## Hardware (default wiring)
 
@@ -52,14 +52,40 @@ pio device monitor
 
 Or use the PlatformIO sidebar: **Build**, **Upload**, **Monitor** (115200 baud).
 
+### Build environments
+
+| Environment | Use | Hub transport |
+|-------------|-----|---------------|
+| **`dev`** (default) | Local LAN development | `http://` negotiate + `ws://` |
+| **`prod_cloud`** | Cloud / Azure deployment | `https://` negotiate + `wss://` |
+
+**Local dev:** keep `env:dev` and set server URL to `http://192.168.x.x:5031`.
+
+**Cloud (when Azure is available):**
+
+```bash
+pio run -e prod_cloud
+pio run -e prod_cloud -t upload
+```
+
+On the device config page, set server URL to `https://your-api-host` (port **443** default). The `https://` prefix sets the NVS TLS flag automatically.
+
+**Phase 7 note:** `prod_cloud` uses `WiFiClientSecure` with **`setInsecure()`** (no CA validation) until Azure deployment — sufficient for compile verification and initial cloud bring-up. Replace with proper CA bundle or pinning before production (see device plan §15).
+
+If you flash **`dev`** but enter an `https://` server URL, serial logs:
+
+`[HUB] TLS/wss requires prod_cloud firmware — pio run -e prod_cloud -t upload`
+
+**Azure / wss end-to-end testing is deferred** until a cloud API is available — not required for Phase 7 sign-off (P7-D6).
+
 ## Flash and partitions
 
 **Partition table:** `min_spiffs.csv` (set in `platformio.ini`) — dual OTA slots ~**1.9 MB** each. Config HTML uses PROGMEM, not SPIFFS, so the large SPIFFS region from the default profile is unused.
 
-| Metric | Typical (`0.7.0-phase7`, dev build) |
-|--------|--------------------------------------|
-| RAM | ~15% static |
-| Flash (one OTA slot) | ~53% (~1.05 MB / 1.97 MB) |
+| Metric | Typical (`0.7.0-phase7`, `dev`) | `prod_cloud` |
+|--------|-----------------------------------|--------------|
+| RAM | ~15.4% | ~15.4% |
+| Flash (one OTA slot) | ~53.7% (~1.06 MB / 1.97 MB) | ~53.7% (~1.06 MB / 1.97 MB) |
 
 Full notes: [docs/PARTITIONS.md](docs/PARTITIONS.md).
 
@@ -178,8 +204,8 @@ Firmware **0.4.0-phase4** added outbound SignalR hub client + device pairing.
 
 ### Hub connection
 
-- Negotiates `POST {server_url}/hubs/hardware/negotiate?negotiateVersion=1`
-- WebSocket to `ws://{host}:{port}/hubs/hardware`
+- Negotiates `POST {server_url}/hubs/hardware/negotiate?negotiateVersion=1` (`http://` or `https://` when `prod_cloud` build + TLS URL)
+- WebSocket to `ws://` or `wss://` `{host}:{port}/hubs/hardware` (see **Build environments** above)
 - **Unpaired:** `?id={connectionToken}&deviceId={esp32-MAC}`
 - **Paired:** `?id={connectionToken}&access_token={device JWT}`
 - SignalR JSON framing with **`0x1E`** record separator; ping/pong (`type:6`)

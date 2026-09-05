@@ -138,14 +138,14 @@ Not required for Phase 7 exit unless you choose to close timing calibration in t
 
 ## B. `wss://` / `prod_cloud` build profile
 
-- [ ] Uncomment / implement `[env:prod_cloud]` in `platformio.ini` (P7-D7)
-- [ ] `build_flags`: `-D SOMNET_USE_WSS=1` (or equivalent in `config.h`)
-- [ ] `negotiateConnectionToken()`: **`https://`** when TLS (P7-D8)
-- [ ] WebSocket: **`wss://`** with `WiFiClientSecure` (P7-D5)
-- [ ] Remove or guard `[HUB] TLS/wss not supported until Phase 7` message
-- [ ] `server_url` with `https://` sets `use_tls` in NVS (existing config UI path — verify)
-- [ ] **`pio run -e prod_cloud`** succeeds (compile-only — no Azure E2E per P7-D6)
-- [ ] Document cloud flash command in `SomNet.Device/README.md`
+- [x] Uncomment / implement `[env:prod_cloud]` in `platformio.ini` (P7-D7)
+- [x] `build_flags`: `-D SOMNET_USE_WSS=1` (or equivalent in `config.h`)
+- [x] `negotiateConnectionToken()`: **`https://`** when TLS (P7-D8)
+- [x] WebSocket: **`wss://`** with `WiFiClientSecure` (P7-D5) — `beginSSL()` + `setInsecure()` on negotiate
+- [x] Remove or guard `[HUB] TLS/wss not supported until Phase 7` message — dev build hints to flash `prod_cloud`
+- [x] `server_url` with `https://` sets `use_tls` in NVS (existing config UI path — verify)
+- [x] **`pio run -e prod_cloud`** succeeds (compile-only — no Azure E2E per P7-D6) — **2026-09-05:** Flash 53.7%, RAM 15.4%
+- [x] Document cloud flash command in `SomNet.Device/README.md`
 
 **Out of scope for first pass:** Custom cert pinning — use `setInsecure()` in `prod_cloud` until Azure deployment; document in README (P7-D6).
 
@@ -261,7 +261,7 @@ D33 ──► button ──► GND (internal pull-up)
 | Wi‑Fi blip → auto reconnect | ☐ | |
 | Revoke → unpaired → re-pair | ☐ | |
 | Config UI + hub concurrent | ☐ | |
-| `prod_cloud` build (compile-only; wss E2E when Azure ready) | ☐ | |
+| `prod_cloud` build (compile-only; wss E2E when Azure ready) | ☑ | 2026-09-05 |
 | 8 h soak (local ws) | ☐ | |
 | Token expiry → unpaired | ☑ | 2026-09-05 |
 
@@ -272,7 +272,7 @@ Device ID: esp32-84CCA85C36B4
 Sub target: Slv66
 Firmware: 0.7.0-phase7
 Token expiry test: 2026-09-05 — expiry diag ~569→329 s; clear at ~29 s buffer; unpaired WS stable (handshake ok), no PairDevice re-delivery loop
-prod_cloud tested against: (pending)
+prod_cloud tested against: compile-only (Flash 53.7%, RAM 15.4%) — Azure wss E2E deferred
 Soak start / end: (pending)
 Reconnect events: (pending)
 ```
@@ -310,7 +310,7 @@ Reconnect events: (pending)
 ## J. Deliverables
 
 - [x] Token expiry check + unpaired fallback
-- [ ] `env:prod_cloud` + `wss` path (verified at least build; cloud E2E if available)
+- [x] `env:prod_cloud` + `wss` path (verified at least build; cloud E2E if available)
 - [ ] Watchdog strategy implemented and documented
 - [ ] Config UI theme CSS applied to `/`, `/config`, saved page
 - [ ] README + cross-doc updates (§E)
@@ -328,7 +328,7 @@ Reconnect events: (pending)
 | Survives API restart; reconnects without re-pair (valid token) | ☐ |
 | Survives Wi‑Fi blip; hub restores | ☐ |
 | Expired / revoked token → unpaired fallback | ☐ |
-| `prod_cloud` builds; wss path documented (**E2E deferred** — P7-D6) | ☐ |
+| `prod_cloud` builds; wss path documented (**E2E deferred** — P7-D6) | ☑ |
 | Config UI visually aligned with SomNet theme (or deferred with sign-off) | ☐ |
 | Soak test completed per P7-D13 (**8 h** local) | ☐ |
 | Decisions P7-D1–D14 recorded | ☑ 2026-09-05 |

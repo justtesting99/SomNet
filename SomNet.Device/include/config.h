@@ -22,6 +22,10 @@
 #define SOMNET_SERVER_PORT 5031
 #endif
 
+// Defined by env:prod_cloud in platformio.ini — enables https:// negotiate + wss:// hub.
+// env:dev omits this; https:// server_url logs a hint to flash prod_cloud.
+// #define SOMNET_USE_WSS 1
+
 constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 30000;
 constexpr unsigned long WIFI_RETRY_BASE_MS = 5000;
 constexpr unsigned long WIFI_RETRY_MAX_MS = 60000;

@@ -1594,7 +1594,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 - [x] **`min_spiffs.csv`** partition table in `platformio.ini` — OTA headroom ([PARTITIONS.md](../SomNet.Device/docs/PARTITIONS.md))
 - [x] **Config UI visual alignment** (§4) — dark slate + indigo PROGMEM CSS
 - [ ] Token expiry handling → unpaired fallback
-- [ ] `wss://` build profile for cloud (build-only until Azure)
+- [x] `wss://` build profile for cloud (build-only until Azure) — `env:prod_cloud`, compile verified 2026-09-05
 - [ ] Watchdog for hub loop
 - [ ] README: wiring diagram, flash/partition docs, registration pointer
 - [ ] Soak test: **8 h** reconnect stability (SignalR + config HTTP concurrent)
