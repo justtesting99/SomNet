@@ -65,6 +65,8 @@ constexpr uint64_t TOKEN_EXPIRY_DIAG_WINDOW_MS = 7ULL * 24ULL * 60ULL * 60ULL * 
 constexpr unsigned long TOKEN_EXPIRY_DIAG_INTERVAL_MS = 60000UL;
 
 constexpr unsigned long kMaxStrokeMs = 30000;
+constexpr int kMaxBurstStrokes = 100;
+constexpr unsigned long kMaxBurstDelayMs = 300000UL;
 
 constexpr unsigned long CREDENTIAL_RESET_HOLD_MS = 10000;
 constexpr unsigned long CREDENTIAL_RESET_WARN_MS = 5000;

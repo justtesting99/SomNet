@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using SomNet.API.Configuration;
 using SomNet.API.Data;
 using SomNet.API.Data.Entities;
 using SomNet.Shared.DTO.History;
@@ -11,10 +13,12 @@ namespace SomNet.API.Services;
 public sealed class SomNetDataStore : ISomNetDataStore
 {
     private readonly SomNetDbContext _db;
+    private readonly StrokeMsLimitsOptions _strokeMsLimits;
 
-    public SomNetDataStore(SomNetDbContext db)
+    public SomNetDataStore(SomNetDbContext db, IOptions<StrokeMsLimitsOptions> strokeMsLimits)
     {
         _db = db;
+        _strokeMsLimits = strokeMsLimits.Value;
     }
 
     public IReadOnlyList<SessionHistoryEntryDto> GetSessionsForDom(string domTarget, string? subTarget = null)
@@ -304,7 +308,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
     {
         if (string.IsNullOrWhiteSpace(domTarget))
         {
-            return PairingSettingsDefaults.Value;
+            return PairingSettingsSerializer.Normalize(PairingSettingsDefaults.Value, _strokeMsLimits);
         }
 
         var normalizedSub = SubTargetValidation.Normalize(subTarget);
@@ -315,8 +319,8 @@ public sealed class SomNetDataStore : ISomNetDataStore
                 entry.SubName == normalizedSub);
 
         return entity is null
-            ? PairingSettingsDefaults.Value
-            : PairingSettingsSerializer.Deserialize(entity.SettingsJson);
+            ? PairingSettingsSerializer.Normalize(PairingSettingsDefaults.Value, _strokeMsLimits)
+            : PairingSettingsSerializer.Deserialize(entity.SettingsJson, _strokeMsLimits);
     }
 
     public PairingSettingsDto SavePairingSettings(
@@ -330,7 +334,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
         }
 
         var normalizedSub = SubTargetValidation.Normalize(subTarget);
-        var normalized = PairingSettingsSerializer.Normalize(settings);
+        var normalized = PairingSettingsSerializer.Normalize(settings, _strokeMsLimits);
         var key = domTarget.Trim();
         var entity = _db.DomSubSettings.SingleOrDefault(entry =>
             entry.DomTarget == key &&
@@ -347,7 +351,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
             _db.DomSubSettings.Add(entity);
         }
 
-        entity.SettingsJson = PairingSettingsSerializer.Serialize(normalized);
+        entity.SettingsJson = PairingSettingsSerializer.Serialize(normalized, _strokeMsLimits);
         _db.SaveChanges();
 
         return normalized;

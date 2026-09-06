@@ -1,5 +1,6 @@
 #pragma once
 
+#include "modes/burst_sequence_mode.h"
 #include "modes/single_pulse_mode.h"
 
 class RelayController;
@@ -17,7 +18,14 @@ public:
         void* callbackContext,
         StrokeCompleteCallback onComplete);
 
+    bool startBurst(
+        const char* correlationId,
+        const char* payloadJson,
+        void* callbackContext,
+        BurstCompleteCallback onComplete);
+
 private:
     SinglePulseMode singlePulseMode_;
+    BurstSequenceMode burstSequenceMode_;
     IExecutionMode* activeMode_ = nullptr;
 };

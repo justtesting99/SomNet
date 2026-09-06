@@ -9,7 +9,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | SomNet web app | [User Guide](./User-Guide.md) |
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 
-**Firmware status (2026-09-06):** Phases **0–8** — Wi‑Fi provisioning, SomNet pairing over SignalR, **relay control**, pairing token expiry, and **manual stroke/abort from the SomNet web app** (toolbar **Hardware** dialog for pairing). Burst/automatic hardware modes remain Phase 9.
+**Firmware status (2026-09-06):** Phases **0–9 (burst)** — Wi‑Fi provisioning, SomNet pairing, **manual stroke/abort/burst from the web app**, pairing token expiry. **Automatic** hardware mode remains exploratory (Part 2). Toolbar **Hardware** dialog for pairing.
 
 ---
 
@@ -181,10 +181,10 @@ If the device is on your network and you can open its web page:
 | Device connects to SomNet server (SignalR) | **Yes** | After Wi‑Fi + server URL configured and device paired |
 | Pairing from SomNet UI | **Yes** | Toolbar **Hardware** dialog — **All Subs**, **Online now (unpaired)**, **Enter device ID**; Options links to same dialog |
 | Status page shows pairing state | **Yes** | Unpaired / paired / connected indicators |
-| Stroke from SomNet **web app buttons** | **Yes** | Manual mode **Stroke** → `POST /api/devices/commands`; session records device `actualStrokeMs` |
-| **Abort** during long stroke | **Yes** | **Abort** while stroke pending; relay opens; session tracks abort count |
-| Relay responds to server **stroke** command | **Yes** | Duration set in command payload (`strokeMs`) |
-| Burst / automatic modes | **Not yet** | Phase 9 (UI buttons disabled) |
+| Stroke from SomNet **web app buttons** | **Yes** | Manual mode **Stroke** → device ack + session |
+| **Burst** from SomNet **web app** | **Yes** | Manual mode **Burst** — fixed stroke count + delay; device runs full sequence |
+| **Abort** during stroke or burst | **Yes** | Relay opens; session tracks abort / partial burst from device `resultJson` |
+| Automatic modes | **Not yet** | Exploratory — program catalog TBD (Phase 9 Part 2) |
 
 **Server URL reminder:** Use the SomNet API **LAN address** on the device (e.g. `http://192.168.1.47:5031`). The SomNet browser on the same PC can use `localhost`; the ESP32 cannot.
 
@@ -220,7 +220,7 @@ If the device is on your network and you can open its web page:
 
 | Feature | Target |
 |---------|--------|
-| Burst and automatic session modes | Phase 9 |
+| Automatic session programs (timing/power variations) | Phase 9 Part 2 / future |
 | LED indicators for setup / fault | Under consideration |
 | QR code on status page for Device ID | Future polish |
 

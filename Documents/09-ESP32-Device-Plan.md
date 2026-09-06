@@ -911,7 +911,11 @@ THEN AckCommand success
 - **Ack timing:** Send `AckCommand` when the **entire burst finishes** (or fails), not after the first pulse — aligns with single ack on current API (see §9)
 - Phase 6: **`relay_controller`** drives GPIO; log `[RELAY]` transitions (see [Phase 6 Checklist](./09-ESP32-Phase-6-Checklist.md))
 
-### Automatic mode (`automatic-start` / `automatic-stop`) — *Phase 9; stub ack today*
+### Automatic mode (`automatic-start` / `automatic-stop`) — *exploratory; stub ack today*
+
+> **Design intent (2026-09-06):** Automatic mode is a **family of program variations** in timing and power, chosen by the operator through Automatic tab controls and dropdowns (`automaticMode`, ranges, end-session options, etc.). **Specific programs are not yet defined.** The API sends one config snapshot; the device runs the selected program locally until stop/abort/end rule. This is **distinct from manual burst** (Phase 9) — a fixed N-stroke sequence with known parameters. See [Phase 9 Checklist Part 2](./09-ESP32-Phase-9-Checklist.md).
+
+The **first proposed program** below (`randomPowerAndTiming`) is a **placeholder** for documentation — not locked for implementation:
 
 Automatic mode requires **two independent random processes** on the device, both critical to perceived “power” at the valve:
 
@@ -1416,7 +1420,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 | 6 | Single-pulse relay | [Phase 6 Checklist](./09-ESP32-Phase-6-Checklist.md) | **Signed off** (2026-09-05) |
 | 7 | Resilience / production prep | [Phase 7 Checklist](./09-ESP32-Phase-7-Checklist.md) | **Signed off** (2026-09-06) — `0.7.0-phase7` |
 | **8** | **SomNet UI pairing dialog** + command integration | [Phase 8 Checklist](./09-ESP32-Phase-8-Checklist.md) | **Signed off** (2026-09-06) — `0.8.10-phase8`; Hardware dialog + stroke/abort UI |
-| 9 | Burst and automatic modes | *TBD* | **Next** |
+| 9 | Burst mode (+ automatic exploratory) | [Phase 9 Checklist](./09-ESP32-Phase-9-Checklist.md) | **Signed off** (2026-09-06) — `0.9.0-phase9`; burst UI |
 
 **Rationale:** Phase **3** (config UI with MAC-based ID and friendly name) runs **before** SignalR so installers can provision network and obtain the pairing ID without Swagger/serial. Phase **8** completes Dom-side Sub association in the React app (full pairing UX + command integration). A **minimal pairing panel in Options** was added during Phase 4 verification — see §4 *SomNet React UI — early pairing*; do not treat Options as the final product layout.
 
@@ -1616,18 +1620,28 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 ---
 
-### Phase 9 — Burst and automatic modes (future)
+### Phase 9 — Burst mode (signed off); automatic exploratory
 
-**Not part of initial development** — implement after single-pulse path is stable.
+**Checklist:** [09-ESP32-Phase-9-Checklist.md](./09-ESP32-Phase-9-Checklist.md)  
+**Status:** **Signed off** (2026-09-06) — firmware `0.9.0-phase9`; manual **burst** + abort-during-burst E2E from UI
 
-**Deliverables:**
+**Phase 9 sign-off (complete):**
 
-- [ ] **`BurstSequenceMode`** — full burst FSM
-- [ ] **`AutomaticSessionMode`** — dual random timing + `power_timing`
-- [ ] **`abort` / `automatic-stop`** — full `execution_context` cancellation across modes
-- [ ] Session summary `resultJson` on automatic stop
+- [x] **`BurstSequenceMode`** — deterministic multi-stroke FSM
+- [x] **`burst`** + **`abort`** during burst
+- [x] API ack timeout formula for long bursts (P9-D1)
+- [x] UI **Burst** button enabled; session from burst `resultJson`
+- [x] Firmware **`0.9.0-phase9`**
 
-**Exit criteria:** Burst and automatic commands work end-to-end per §6; no refactor of `SinglePulseMode` or `relay_controller` required.
+**Exploratory / future (Part 2):**
+
+- [ ] **`AutomaticSessionMode`** — **program catalog TBD**: variations of timing/power selected via Automatic UI dropdowns and controls (distinct from manual burst)
+- [ ] `power_timing` helpers as required by chosen programs; `automatic-start/stop`, automatic UI wiring
+- [ ] Decisions P9-D2/D4/D5/D6 reserved until first program(s) are defined
+
+**Exit criteria:** **`burst`** E2E from UI per §6. **Met.**
+
+*Optional follow-up: F.3 busy reject smoke test; API doc timeout note.*
 
 ---
 

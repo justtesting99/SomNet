@@ -280,6 +280,6 @@ Update **Status** above and check boxes below as work completes. When Phase 8 is
 
 ## Next phase
 
-→ [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §10 **Phase 9 — Burst and automatic modes**
+→ [09-ESP32-Phase-9-Checklist.md](./09-ESP32-Phase-9-Checklist.md) — burst and automatic modes
 
-**Phase 9 carry-forward:** Enable burst/automatic UI buttons; `BurstSequenceMode` / `AutomaticSessionMode` firmware; session summaries from multi-stroke `resultJson`.
+**Phase 9 carry-forward:** **Burst mode** primary (`BurstSequenceMode`, UI Burst button, `resultJson`). Automatic mode exploratory — see [09-ESP32-Phase-9-Checklist.md](./09-ESP32-Phase-9-Checklist.md) Part 2.

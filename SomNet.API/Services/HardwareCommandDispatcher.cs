@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using SomNet.API.Configuration;
 using SomNet.API.Hubs;
 using SomNet.Shared.DTO.Devices;
 using SomNet.Shared.Models;
@@ -18,23 +20,24 @@ public interface IHardwareCommandDispatcher
 
 public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
 {
-    private static readonly TimeSpan AckTimeout = TimeSpan.FromSeconds(10);
-
     private readonly IDeviceTokenService _deviceTokenService;
     private readonly IDeviceConnectionRegistry _connectionRegistry;
     private readonly IHubContext<HardwareHub> _hubContext;
     private readonly ILogger<HardwareCommandDispatcher> _logger;
+    private readonly StrokeMsLimitsOptions _strokeMsLimits;
 
     public HardwareCommandDispatcher(
         IDeviceTokenService deviceTokenService,
         IDeviceConnectionRegistry connectionRegistry,
         IHubContext<HardwareHub> hubContext,
-        ILogger<HardwareCommandDispatcher> logger)
+        ILogger<HardwareCommandDispatcher> logger,
+        IOptions<StrokeMsLimitsOptions> strokeMsLimits)
     {
         _deviceTokenService = deviceTokenService;
         _connectionRegistry = connectionRegistry;
         _hubContext = hubContext;
         _logger = logger;
+        _strokeMsLimits = strokeMsLimits.Value;
     }
 
     public async Task<SendHardwareCommandResponseDto> SendCommandAsync(
@@ -82,6 +85,29 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
             };
         }
 
+        if (!HardwareCommandPayloadValidator.TryValidate(
+                commandKey,
+                payloadJson,
+                ResolveMaxStrokeMs(),
+                out var validationError))
+        {
+            _logger.LogWarning(
+                "Hardware command {CommandKey} rejected — invalid payload for {DomTarget}/{SubTarget}: {ValidationError}",
+                commandKey,
+                domTarget,
+                subTarget,
+                validationError);
+
+            return new SendHardwareCommandResponseDto
+            {
+                CorrelationId = Guid.NewGuid().ToString("N"),
+                Delivered = false,
+                Acknowledged = false,
+                Success = false,
+                Message = validationError,
+            };
+        }
+
         var correlationId = Guid.NewGuid().ToString("N");
         var message = new HardwareCommandMessageDto
         {
@@ -107,9 +133,11 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
             .Group(hubGroup)
             .SendAsync(HardwareHubMethods.ExecuteCommand, message, cancellationToken);
 
+        var ackTimeout = HardwareCommandAckTimeout.Resolve(commandKey, payloadJson);
+
         var acknowledgement = await _connectionRegistry.WaitForAcknowledgementAsync(
             correlationId,
-            AckTimeout,
+            ackTimeout,
             cancellationToken);
 
         if (acknowledgement is null)
@@ -142,5 +170,18 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
                     : "Device rejected the command."),
             ResultJson = acknowledgement.ResultJson,
         };
+    }
+
+    private int ResolveMaxStrokeMs()
+    {
+        var absoluteMinimum = _strokeMsLimits.AbsoluteMinimum;
+        var absoluteMaximum = _strokeMsLimits.AbsoluteMaximum;
+
+        if (absoluteMaximum < absoluteMinimum)
+        {
+            (absoluteMinimum, absoluteMaximum) = (absoluteMaximum, absoluteMinimum);
+        }
+
+        return absoluteMaximum;
     }
 }

@@ -15,16 +15,30 @@ import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCommand';
 import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
 import { parseStrokeResultJson } from '@/utils/strokeResultJson';
+import { parseBurstResultJson } from '@/utils/burstResultJson';
 import { ApiError } from '@/api/client';
+import {
+  clampMaximumStrokeMs,
+  clampMinimumStrokeMs,
+  normalizeStrokeMsPair,
+  resolveStrokeMsBounds,
+} from '@/utils/strokeMsLimits';
 
-const PHASE9_TOOLTIP = 'Burst and automatic hardware modes are coming in Phase 9.';
+const MIN_BURST_STROKES = 1;
+const MIN_BURST_DELAY_SECONDS = 1;
+
+function clampBurstValue(key: 'burstStrokes' | 'burstDelaySeconds', value: number): number {
+  const min = key === 'burstStrokes' ? MIN_BURST_STROKES : MIN_BURST_DELAY_SECONDS;
+  return Math.max(min, Number.isFinite(value) ? Math.trunc(value) : min);
+}
 
 export function ManualControls() {
-  const { settings, updateManual, isLoading } = useOptions();
+  const { settings, updateManual, isLoading, strokeLimits } = useOptions();
   const state = settings.manual;
+  const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { selectedSub } = useSubTarget();
   const { expandOnAction } = useVideoDisplay();
-  const { recordManualStroke, recordManualAbort } = useLiveSession();
+  const { recordManualStroke, recordManualBurst, recordManualAbort } = useLiveSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
   const [commandError, setCommandError] = useState('');
@@ -39,12 +53,45 @@ export function ManualControls() {
     }
   }, [systemStatus.isReady]);
 
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    const normalizedBurstStrokes = clampBurstValue('burstStrokes', state.burstStrokes);
+    const normalizedBurstDelay = clampBurstValue('burstDelaySeconds', state.burstDelaySeconds);
+    const normalizedStroke = normalizeStrokeMsPair(
+      state.minimumStrokeMs,
+      state.maximumStrokeMs,
+      strokeLimits,
+    );
+
+    const burstValuesValid =
+      state.burstStrokes === normalizedBurstStrokes &&
+      state.burstDelaySeconds === normalizedBurstDelay;
+    const strokeValuesValid =
+      state.minimumStrokeMs === normalizedStroke.minimumStrokeMs &&
+      state.maximumStrokeMs === normalizedStroke.maximumStrokeMs;
+
+    if (burstValuesValid && strokeValuesValid) {
+      return;
+    }
+
+    updateManual({
+      ...state,
+      burstStrokes: normalizedBurstStrokes,
+      burstDelaySeconds: normalizedBurstDelay,
+      ...normalizedStroke,
+    });
+  }, [isLoading, state, strokeLimits, updateManual]);
+
   const strokeMs = useMemo(
     () => computeStrokeMs(state.powerPercent, state.minimumStrokeMs, state.maximumStrokeMs),
     [state.powerPercent, state.minimumStrokeMs, state.maximumStrokeMs],
   );
 
   const strokePending = isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke);
+  const burstPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualBurst);
   const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
   const hardwareReady = systemStatus.isReady;
   const strokeDisabledReason = hardwareReady
@@ -52,6 +99,39 @@ export function ManualControls() {
     : systemStatus.detail || systemStatus.summary;
 
   function update<K extends keyof ManualControlState>(key: K, value: ManualControlState[K]) {
+    if (key === 'burstStrokes') {
+      updateManual({
+        ...state,
+        burstStrokes: clampBurstValue('burstStrokes', value as number),
+      });
+      return;
+    }
+
+    if (key === 'burstDelaySeconds') {
+      updateManual({
+        ...state,
+        burstDelaySeconds: clampBurstValue('burstDelaySeconds', value as number),
+      });
+      return;
+    }
+
+    if (key === 'minimumStrokeMs') {
+      const nextStroke = clampMinimumStrokeMs(Number(value), state.maximumStrokeMs, strokeLimits);
+      updateManual({
+        ...state,
+        ...nextStroke,
+      });
+      return;
+    }
+
+    if (key === 'maximumStrokeMs') {
+      updateManual({
+        ...state,
+        maximumStrokeMs: clampMaximumStrokeMs(Number(value), state.minimumStrokeMs, strokeLimits),
+      });
+      return;
+    }
+
     updateManual({ ...state, [key]: value });
   }
 
@@ -84,6 +164,45 @@ export function ManualControls() {
       if (error instanceof HardwareCommandError) {
         const parsed = parseStrokeResultJson(error.response.resultJson);
         if (parsed?.interrupted) {
+          return;
+        }
+      }
+      setCommandError(formatCommandError(error));
+    }
+  }
+
+  async function handleBurst() {
+    setCommandError('');
+    expandOnAction();
+
+    const payloadJson = JSON.stringify({
+      powerPercent: state.powerPercent,
+      strokeMs,
+      burstStrokes: state.burstStrokes,
+      burstDelayMs: state.burstDelaySeconds * 1000,
+    });
+
+    try {
+      const response = await sendHardwareCommand(selectedSub, 'burst', payloadJson);
+      const parsed = parseBurstResultJson(response.resultJson);
+      await recordManualBurst(
+        state.powerPercent,
+        state.burstStrokes,
+        state.burstDelaySeconds,
+        parsed?.strokesCompleted,
+      );
+    } catch (error) {
+      if (error instanceof HardwareCommandError) {
+        const parsed = parseBurstResultJson(error.response.resultJson);
+        if (parsed?.interrupted) {
+          if (parsed.strokesCompleted && parsed.strokesCompleted > 0) {
+            await recordManualBurst(
+              state.powerPercent,
+              state.burstStrokes,
+              state.burstDelaySeconds,
+              parsed.strokesCompleted,
+            );
+          }
           return;
         }
       }
@@ -131,7 +250,8 @@ export function ManualControls() {
               label="Minimum Stroke (ms)"
               inline
               value={state.minimumStrokeMs}
-              min={1}
+              min={absoluteMinimum}
+              max={absoluteMaximum}
               className="w-20"
               onChange={(event) => update('minimumStrokeMs', Number(event.target.value))}
             />
@@ -139,7 +259,8 @@ export function ManualControls() {
               label="Maximum Stroke (ms)"
               inline
               value={state.maximumStrokeMs}
-              min={1}
+              min={state.minimumStrokeMs}
+              max={absoluteMaximum}
               className="w-20"
               onChange={(event) => update('maximumStrokeMs', Number(event.target.value))}
             />
@@ -159,7 +280,7 @@ export function ManualControls() {
         </Panel>
 
         <Panel title="Actions">
-          {!hardwareReady && !commandError && !strokePending ? (
+          {!hardwareReady && !commandError && !strokePending && !burstPending ? (
             <p className="mb-3 text-sm text-amber-400/90" role="status">
               {strokeDisabledReason}
             </p>
@@ -176,7 +297,7 @@ export function ManualControls() {
             size="lg"
             fullWidth
             className="py-4 text-base"
-            disabled={!hardwareReady}
+            disabled={!hardwareReady || burstPending}
             title={strokeDisabledReason}
             onCommand={handleStroke}
           >
@@ -191,17 +312,15 @@ export function ManualControls() {
               <NumberField
                 label="Burst Strokes"
                 value={state.burstStrokes}
-                min={1}
-                disabled
-                title={PHASE9_TOOLTIP}
+                min={MIN_BURST_STROKES}
+                disabled={!hardwareReady || strokePending || burstPending}
                 onChange={(event) => update('burstStrokes', Number(event.target.value))}
               />
               <NumberField
                 label="Burst Delay (sec)"
                 value={state.burstDelaySeconds}
-                min={0}
-                disabled
-                title={PHASE9_TOOLTIP}
+                min={MIN_BURST_DELAY_SECONDS}
+                disabled={!hardwareReady || strokePending || burstPending}
                 onChange={(event) => update('burstDelaySeconds', Number(event.target.value))}
               />
             </div>
@@ -211,9 +330,9 @@ export function ManualControls() {
               size="lg"
               fullWidth
               className="py-4 text-base"
-              disabled
-              title={PHASE9_TOOLTIP}
-              onCommand={() => undefined}
+              disabled={!hardwareReady || strokePending}
+              title={strokeDisabledReason}
+              onCommand={handleBurst}
             >
               Burst
             </CommandButton>
@@ -224,7 +343,7 @@ export function ManualControls() {
               fullWidth
               variant="secondary"
               className="py-4 text-base"
-              disabled={(!strokePending && !abortPending) || abortPending}
+              disabled={(!strokePending && !burstPending) || abortPending}
               onCommand={handleAbort}
             >
               Abort

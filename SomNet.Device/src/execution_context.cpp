@@ -5,6 +5,7 @@
 void ExecutionContext::begin(RelayController* relay) {
     activeMode_ = nullptr;
     singlePulseMode_.setRelay(relay);
+    burstSequenceMode_.setRelay(relay);
 }
 
 void ExecutionContext::poll() {
@@ -41,5 +42,22 @@ bool ExecutionContext::startSinglePulse(
     }
 
     activeMode_ = &singlePulseMode_;
+    return true;
+}
+
+bool ExecutionContext::startBurst(
+    const char* correlationId,
+    const char* payloadJson,
+    void* callbackContext,
+    BurstCompleteCallback onComplete) {
+    if (isActive()) {
+        return false;
+    }
+
+    if (!burstSequenceMode_.beginBurst(correlationId, payloadJson, callbackContext, onComplete)) {
+        return false;
+    }
+
+    activeMode_ = &burstSequenceMode_;
     return true;
 }

@@ -186,7 +186,25 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
         }
 
         executionContext_->abortActive();
-        sendAck(command.correlationId, true, "stroke aborted", nullptr);
+        sendAck(command.correlationId, true, "command aborted", nullptr);
+        return;
+    }
+
+    if (strcmp(command.commandKey, "burst") == 0) {
+        if (executionContext_->isActive()) {
+            Serial.println(F("[CMD] reject: device busy"));
+            sendAck(command.correlationId, false, "device busy", nullptr);
+            return;
+        }
+
+        if (!executionContext_->startBurst(
+                command.correlationId,
+                command.payloadJson,
+                this,
+                &CommandHandler::onStrokeComplete)) {
+            sendAck(command.correlationId, false, "invalid burst payload", nullptr);
+        }
+
         return;
     }
 

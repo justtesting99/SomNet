@@ -2,6 +2,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using SomNet.API.Configuration;
 using SomNet.API.Services;
 using SomNet.Shared.DTO.Settings;
 
@@ -13,10 +15,25 @@ namespace SomNet.API.Controllers;
 public class SettingsController : ControllerBase
 {
     private readonly ISomNetDataStore _dataStore;
+    private readonly StrokeMsLimitsOptions _strokeMsLimits;
 
-    public SettingsController(ISomNetDataStore dataStore)
+    public SettingsController(
+        ISomNetDataStore dataStore,
+        IOptions<StrokeMsLimitsOptions> strokeMsLimits)
     {
         _dataStore = dataStore;
+        _strokeMsLimits = strokeMsLimits.Value;
+    }
+
+    [HttpGet("stroke-limits")]
+    public ActionResult<StrokeMsLimitsDto> GetStrokeLimits()
+    {
+        var (absoluteMinimum, absoluteMaximum) = ResolveStrokeMsBounds(_strokeMsLimits);
+        return Ok(new StrokeMsLimitsDto
+        {
+            AbsoluteMinimum = absoluteMinimum,
+            AbsoluteMaximum = absoluteMaximum,
+        });
     }
 
     [HttpGet]
@@ -69,5 +86,18 @@ public class SettingsController : ControllerBase
             User.Identity?.Name;
 
         return string.IsNullOrWhiteSpace(username) ? null : username.Trim();
+    }
+
+    private static (int AbsoluteMinimum, int AbsoluteMaximum) ResolveStrokeMsBounds(StrokeMsLimitsOptions limits)
+    {
+        var absoluteMinimum = limits.AbsoluteMinimum;
+        var absoluteMaximum = limits.AbsoluteMaximum;
+
+        if (absoluteMaximum < absoluteMinimum)
+        {
+            (absoluteMinimum, absoluteMaximum) = (absoluteMaximum, absoluteMinimum);
+        }
+
+        return (absoluteMinimum, absoluteMaximum);
     }
 }

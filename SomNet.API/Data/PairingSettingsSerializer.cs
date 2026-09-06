@@ -1,5 +1,6 @@
 using System.Text.Json;
-using SomNet.API.Data.Entities;
+using SomNet.API.Configuration;
+using SomNet.API.Services;
 using SomNet.Shared.DTO.Settings;
 using SomNet.Shared.Enums;
 using SomNet.Shared.Serialization;
@@ -10,48 +11,49 @@ public static class PairingSettingsSerializer
 {
     private static readonly JsonSerializerOptions JsonOptions = CreateOptions();
 
-    public static string Serialize(PairingSettingsDto settings) =>
-        JsonSerializer.Serialize(Normalize(settings), JsonOptions);
+    public static string Serialize(PairingSettingsDto settings, StrokeMsLimitsOptions limits) =>
+        JsonSerializer.Serialize(Normalize(settings, limits), JsonOptions);
 
-    public static PairingSettingsDto Deserialize(string json)
+    public static PairingSettingsDto Deserialize(string json, StrokeMsLimitsOptions limits)
     {
         if (string.IsNullOrWhiteSpace(json))
         {
-            return PairingSettingsDefaults.Value;
+            return Normalize(PairingSettingsDefaults.Value, limits);
         }
 
         try
         {
             var settings = JsonSerializer.Deserialize<PairingSettingsDto>(json, JsonOptions);
-            return settings is null ? PairingSettingsDefaults.Value : Normalize(settings);
+            return settings is null
+                ? Normalize(PairingSettingsDefaults.Value, limits)
+                : Normalize(settings, limits);
         }
         catch (JsonException)
         {
-            return PairingSettingsDefaults.Value;
+            return Normalize(PairingSettingsDefaults.Value, limits);
         }
     }
 
-    public static PairingSettingsDto Normalize(PairingSettingsDto settings)
+    public static PairingSettingsDto Normalize(PairingSettingsDto settings, StrokeMsLimitsOptions limits)
     {
-        var automatic = settings.Automatic;
-        var minimumStrokeMs = automatic.MinimumStrokeMs > 0 ? automatic.MinimumStrokeMs : 25;
-        var maximumStrokeMs = automatic.MaximumStrokeMs > 0 ? automatic.MaximumStrokeMs : 400;
+        var manual = StrokeMsLimitsNormalizer.NormalizeManual(settings.Manual, limits);
+        var automatic = StrokeMsLimitsNormalizer.NormalizeAutomaticStrokeMs(settings.Automatic, limits);
         var (minimumPower, maximumPower) = NormalizeAutomaticPower(
             automatic.MinimumPower,
             automatic.MaximumPower,
-            minimumStrokeMs,
-            maximumStrokeMs);
+            automatic.MinimumStrokeMs,
+            automatic.MaximumStrokeMs);
 
         return new PairingSettingsDto
         {
             AppOptions = settings.AppOptions,
-            Manual = settings.Manual,
+            Manual = manual,
             Automatic = new()
             {
                 Running = false,
                 AutomaticMode = automatic.AutomaticMode,
-                MinimumStrokeMs = minimumStrokeMs,
-                MaximumStrokeMs = maximumStrokeMs,
+                MinimumStrokeMs = automatic.MinimumStrokeMs,
+                MaximumStrokeMs = automatic.MaximumStrokeMs,
                 MinimumPower = minimumPower,
                 MaximumPower = maximumPower,
                 StrokeMinSeconds = automatic.StrokeMinSeconds,

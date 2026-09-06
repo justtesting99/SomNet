@@ -8,16 +8,20 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { fetchPairingSettings, savePairingSettings } from '@/api/settings';
+import { fetchPairingSettings, fetchStrokeLimits, savePairingSettings } from '@/api/settings';
 import { useAuth } from '@/context/AuthProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { DEFAULT_STROKE_MS_LIMITS } from '@/config/strokeLimits';
 import type { AppOptions } from '@/types/options';
 import type { AutomaticControlState, ManualControlState } from '@/types/modes';
 import { DEFAULT_PAIRING_SETTINGS, type PairingSettings } from '@/types/pairingSettings';
+import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
+import { normalizeStrokeMsPair } from '@/utils/strokeMsLimits';
 
 interface OptionsContextValue {
   settings: PairingSettings;
   options: AppOptions;
+  strokeLimits: StrokeMsLimits;
   isLoading: boolean;
   setOptions: (options: AppOptions) => Promise<void>;
   updateManual: (manual: ManualControlState) => void;
@@ -36,6 +40,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
   const { selectedSub } = useSubTarget();
   const domTarget = user?.displayName ?? user?.username ?? '';
   const [settings, setSettings] = useState<PairingSettings>(DEFAULT_PAIRING_SETTINGS);
+  const [strokeLimits, setStrokeLimits] = useState<StrokeMsLimits>(DEFAULT_STROKE_MS_LIMITS);
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const settingsRef = useRef(settings);
@@ -79,10 +84,31 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     setIsLoading(true);
 
-    fetchPairingSettings(selectedSub)
-      .then((loadedSettings) => {
+    Promise.all([fetchPairingSettings(selectedSub), fetchStrokeLimits()])
+      .then(([loadedSettings, loadedStrokeLimits]) => {
         if (!cancelled) {
-          setSettings(loadedSettings);
+          setStrokeLimits(loadedStrokeLimits);
+          const manualStroke = normalizeStrokeMsPair(
+            loadedSettings.manual.minimumStrokeMs,
+            loadedSettings.manual.maximumStrokeMs,
+            loadedStrokeLimits,
+          );
+          const automaticStroke = normalizeStrokeMsPair(
+            loadedSettings.automatic.minimumStrokeMs,
+            loadedSettings.automatic.maximumStrokeMs,
+            loadedStrokeLimits,
+          );
+          setSettings({
+            ...loadedSettings,
+            manual: {
+              ...loadedSettings.manual,
+              ...manualStroke,
+            },
+            automatic: {
+              ...loadedSettings.automatic,
+              ...automaticStroke,
+            },
+          });
         }
       })
       .catch(() => {
@@ -148,22 +174,38 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
   const updateManual = useCallback(
     (manual: ManualControlState) => {
+      const normalizedStroke = normalizeStrokeMsPair(
+        manual.minimumStrokeMs,
+        manual.maximumStrokeMs,
+        strokeLimits,
+      );
       applySettings({
         ...settingsRef.current,
-        manual,
+        manual: {
+          ...manual,
+          ...normalizedStroke,
+        },
       });
     },
-    [applySettings],
+    [applySettings, strokeLimits],
   );
 
   const updateAutomatic = useCallback(
     (automatic: AutomaticControlState) => {
+      const normalizedStroke = normalizeStrokeMsPair(
+        automatic.minimumStrokeMs,
+        automatic.maximumStrokeMs,
+        strokeLimits,
+      );
       applySettings({
         ...settingsRef.current,
-        automatic,
+        automatic: {
+          ...automatic,
+          ...normalizedStroke,
+        },
       });
     },
-    [applySettings],
+    [applySettings, strokeLimits],
   );
 
   const openDialog = useCallback(() => {
@@ -178,6 +220,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     () => ({
       settings,
       options: settings.appOptions,
+      strokeLimits,
       isLoading,
       setOptions,
       updateManual,
@@ -188,6 +231,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     }),
     [
       settings,
+      strokeLimits,
       isLoading,
       setOptions,
       updateManual,

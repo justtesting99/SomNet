@@ -49,6 +49,13 @@ builder.Services.AddScoped<IDeviceTokenService, DeviceTokenService>();
 builder.Services.AddScoped<IHardwareCommandDispatcher, HardwareCommandDispatcher>();
 builder.Services.Configure<HardwareReachabilityOptions>(
     builder.Configuration.GetSection(HardwareReachabilityOptions.SectionName));
+builder.Services
+    .AddOptions<StrokeMsLimitsOptions>()
+    .Bind(builder.Configuration.GetSection(StrokeMsLimitsOptions.SectionName))
+    .Validate(
+        limits => limits.AbsoluteMaximum >= limits.AbsoluteMinimum,
+        "Hardware:StrokeMs AbsoluteMaximum must be greater than or equal to AbsoluteMinimum.")
+    .ValidateOnStart();
 
 if (builder.Environment.IsDevelopment())
 {

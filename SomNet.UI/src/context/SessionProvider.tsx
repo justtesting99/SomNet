@@ -37,6 +37,7 @@ interface SessionContextValue {
     powerPercent: number,
     burstStrokes: number,
     burstDelaySeconds: number,
+    strokesCompleted?: number,
   ) => Promise<void>;
   endManualSession: (reason: ManualSessionEndReason) => Promise<void>;
   endAutomaticSession: (reason: string) => Promise<void>;
@@ -177,7 +178,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [ensureManualSession, persistManualProgress]);
 
   const recordManualBurst = useCallback(
-    async (powerPercent: number, burstStrokes: number, burstDelaySeconds: number) => {
+    async (
+      powerPercent: number,
+      burstStrokes: number,
+      burstDelaySeconds: number,
+      strokesCompleted?: number,
+    ) => {
       await ensureManualSession();
 
       const current = activeSessionRef.current;
@@ -185,11 +191,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      const completedStrokes = strokesCompleted ?? burstStrokes;
+
       const nextSession: ActiveSessionState = {
         ...current,
         events: [
           ...current.events,
-          { type: 'burst', powerPercent, burstStrokes, burstDelaySeconds },
+          { type: 'burst', powerPercent, burstStrokes: completedStrokes, burstDelaySeconds },
         ],
       };
       activeSessionRef.current = nextSession;

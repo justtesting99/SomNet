@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   AUTOMATIC_RUN_MODE_OPTIONS,
   type AutomaticControlState,
@@ -16,12 +16,19 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { RadioGroup, SelectField } from '@/components/ui/RadioGroup';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 import { computeStrokeMs } from '@/utils/stroke';
+import {
+  clampMaximumStrokeMs,
+  clampMinimumStrokeMs,
+  normalizeStrokeMsPair,
+  resolveStrokeMsBounds,
+} from '@/utils/strokeMsLimits';
 
 const PHASE9_TOOLTIP = 'Automatic hardware mode is coming in Phase 9.';
 
 export function AutomaticControls() {
-  const { settings, updateAutomatic, isLoading } = useOptions();
+  const { settings, updateAutomatic, isLoading, strokeLimits } = useOptions();
   const state = settings.automatic;
+  const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { expandOnAction } = useVideoDisplay();
   const { beginAutomaticSession, endAutomaticSession } = useLiveSession();
 
@@ -29,8 +36,48 @@ export function AutomaticControls() {
     key: K,
     value: AutomaticControlState[K],
   ) {
+    if (key === 'minimumStrokeMs') {
+      const nextStroke = clampMinimumStrokeMs(Number(value), state.maximumStrokeMs, strokeLimits);
+      updateAutomatic({
+        ...state,
+        ...nextStroke,
+      });
+      return;
+    }
+
+    if (key === 'maximumStrokeMs') {
+      updateAutomatic({
+        ...state,
+        maximumStrokeMs: clampMaximumStrokeMs(Number(value), state.minimumStrokeMs, strokeLimits),
+      });
+      return;
+    }
+
     updateAutomatic({ ...state, [key]: value });
   }
+
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    const normalizedStroke = normalizeStrokeMsPair(
+      state.minimumStrokeMs,
+      state.maximumStrokeMs,
+      strokeLimits,
+    );
+    if (
+      normalizedStroke.minimumStrokeMs === state.minimumStrokeMs &&
+      normalizedStroke.maximumStrokeMs === state.maximumStrokeMs
+    ) {
+      return;
+    }
+
+    updateAutomatic({
+      ...state,
+      ...normalizedStroke,
+    });
+  }, [isLoading, state, strokeLimits, updateAutomatic]);
 
   function handleStart() {
     update('running', true);
@@ -68,7 +115,8 @@ export function AutomaticControls() {
               label="Minimum Stroke (ms)"
               inline
               value={state.minimumStrokeMs}
-              min={1}
+              min={absoluteMinimum}
+              max={absoluteMaximum}
               className="w-20"
               disabled={state.running}
               onChange={(event) => update('minimumStrokeMs', Number(event.target.value))}
@@ -77,7 +125,8 @@ export function AutomaticControls() {
               label="Maximum Stroke (ms)"
               inline
               value={state.maximumStrokeMs}
-              min={1}
+              min={state.minimumStrokeMs}
+              max={absoluteMaximum}
               className="w-20"
               disabled={state.running}
               onChange={(event) => update('maximumStrokeMs', Number(event.target.value))}
