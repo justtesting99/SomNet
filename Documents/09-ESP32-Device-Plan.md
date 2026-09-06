@@ -1414,8 +1414,8 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 | 4 | SignalR client + pairing | [Phase 4 Checklist](./09-ESP32-Phase-4-Checklist.md) | **Complete** (2026-09-05) |
 | 5 | Single-pulse command + ack | [Phase 5 Checklist](./09-ESP32-Phase-5-Checklist.md) | **Complete** (2026-09-05) |
 | 6 | Single-pulse relay | [Phase 6 Checklist](./09-ESP32-Phase-6-Checklist.md) | **Signed off** (2026-09-05) |
-| 7 | Resilience / production prep | [Phase 7 Checklist](./09-ESP32-Phase-7-Checklist.md) | **Next** — [checklist](./09-ESP32-Phase-7-Checklist.md) created |
-| **8** | **SomNet UI pairing dialog** + command integration | *TBD* | **Partial** — minimal pairing in Options (2026-09-05); full dialog + commands pending |
+| 7 | Resilience / production prep | [Phase 7 Checklist](./09-ESP32-Phase-7-Checklist.md) | **Signed off** (2026-09-06) — `0.7.0-phase7` |
+| **8** | **SomNet UI pairing dialog** + command integration | *TBD* | **Next** — partial pairing in Options; full dialog + commands pending |
 | 9 | Burst and automatic modes | *TBD* | — |
 
 **Rationale:** Phase **3** (config UI with MAC-based ID and friendly name) runs **before** SignalR so installers can provision network and obtain the pairing ID without Swagger/serial. Phase **8** completes Dom-side Sub association in the React app (full pairing UX + command integration). A **minimal pairing panel in Options** was added during Phase 4 verification — see §4 *SomNet React UI — early pairing*; do not treat Options as the final product layout.
@@ -1585,21 +1585,21 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 ### Phase 7 — Resilience and production prep (2–3 days)
 
 **Checklist:** [09-ESP32-Phase-7-Checklist.md](./09-ESP32-Phase-7-Checklist.md)  
-**Status:** **In progress** (2026-09-05) — config UI theme, `min_spiffs` partitions
+**Status:** **Signed off** (2026-09-06) — firmware **`0.7.0-phase7`** on `esp32-84CCA85C36B4` / Slv66
 
-**Carry-forward from Phase 6:** ~~Update [Hardware User Guide](./Hardware-User-Guide.md) (relay on D4)~~ — done 2026-09-05; oscilloscope timing validation; optional fixed offset in `relay_controller` if scope shows systematic error (TBD).
+**Carry-forward from Phase 6:** oscilloscope timing validation; optional fixed offset in `relay_controller` if scope shows systematic error (TBD). Azure **`wss` E2E** when cloud deploy available.
 
 **Deliverables:**
 
 - [x] **`min_spiffs.csv`** partition table in `platformio.ini` — OTA headroom ([PARTITIONS.md](../SomNet.Device/docs/PARTITIONS.md))
 - [x] **Config UI visual alignment** (§4) — dark slate + indigo PROGMEM CSS
-- [ ] Token expiry handling → unpaired fallback
+- [x] Token expiry handling → unpaired fallback (+ SNTP, 5 min buffer, UI expiry display)
 - [x] `wss://` build profile for cloud (build-only until Azure) — `env:prod_cloud`, compile verified 2026-09-05
-- [ ] Watchdog for hub loop
-- [ ] README: wiring diagram, flash/partition docs, registration pointer
-- [ ] Soak test: **8 h** reconnect stability (SignalR + config HTTP concurrent)
+- [x] Watchdog for hub loop — P7-D9: cooperative loop; 8 h soak, no WDT resets
+- [x] README: `prod_cloud`, partitions, resilience notes — wiring diagram deferred
+- [x] Soak test: **8 h** reconnect stability (SignalR + config HTTP concurrent) — passed 2026-09-06
 
-**Exit criteria:** Survives API restart and Wi-Fi blip; reconnects without manual re-pair if token valid.
+**Exit criteria:** Survives API restart and Wi-Fi blip; reconnects without manual re-pair if token valid. **Met.**
 
 ---
 
@@ -1822,6 +1822,6 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 - [x] Pairing + `stroke` E2E via Swagger on hardware (`esp32-84CCA85C36B4` / Sub `Slv66`)
 - [x] Relay GPIO on D4 with `micros()` pulse FSM
 - [x] Open decisions #1–6, #11–12 resolved (§15)
-- [ ] Phase 7 resilience / production prep — **next**
+- [x] Phase 7 resilience / production prep — **signed off** 2026-09-06 (`0.7.0-phase7`)
 - [ ] Phase 8 UI commands + `resultJson` wire + abort/busy E2E
 - [ ] Explicit approval only if pursuing two-phase ack API change
