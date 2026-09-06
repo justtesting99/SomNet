@@ -17,12 +17,12 @@ public static class DeviceClaimTypes
 
 public static class HardwareHubGroups
 {
-    public static string Unpaired(string deviceId) => $"unpaired:{deviceId.Trim()}";
+    public static string Unpaired(string deviceId) => $"unpaired:{deviceId.Trim().ToLowerInvariant()}";
 
     public static string Paired(string domTarget, string subTarget) =>
-        $"paired:{domTarget.Trim()}:{subTarget.Trim()}";
+        $"paired:{domTarget.Trim().ToLowerInvariant()}:{subTarget.Trim()}";
 
-    public static string Operator(string domTarget) => $"operator:{domTarget.Trim()}";
+    public static string Operator(string domTarget) => $"operator:{domTarget.Trim().ToLowerInvariant()}";
 }
 
 public static class HardwareHubMethods

@@ -18,3 +18,17 @@ export interface PairDeviceResponse {
   deliveredToDevice: boolean;
   message?: string | null;
 }
+
+export interface SendHardwareCommandResponse {
+  correlationId: string;
+  delivered: boolean;
+  acknowledged: boolean;
+  success: boolean;
+  message?: string | null;
+  resultJson?: string | null;
+}
+
+export interface UnpairedDeviceResponse {
+  deviceId: string;
+  connectedAt: string;
+}

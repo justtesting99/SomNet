@@ -11,11 +11,12 @@ import { Input } from '@/components/ui/Input';
 import { NumberField } from '@/components/ui/NumberField';
 import { SelectField } from '@/components/ui/RadioGroup';
 import type { MobileVideoExpandDefault } from '@/types/options';
-import { DevicePairingPanel } from '@/components/layout/DevicePairingPanel';
+import { useHardwareDialog } from '@/context/HardwareProvider';
 
 export function OptionsDialog() {
   const { user, updateSession } = useAuth();
   const { isDialogOpen, closeDialog, options, setOptions } = useOptions();
+  const { openDialog: openHardwareDialog } = useHardwareDialog();
   const [pendingOptions, setPendingOptions] = useState<AppOptions>(options);
   const [saveError, setSaveError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -223,7 +224,22 @@ export function OptionsDialog() {
             />
           </section>
 
-          <DevicePairingPanel active={isDialogOpen} />
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-200">Hardware</h3>
+            <p className="text-xs text-slate-500">
+              Pair ESP32 devices, review all Subs, and manage token expiry from the dedicated
+              Hardware dialog.
+            </p>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                closeDialog();
+                openHardwareDialog();
+              }}
+            >
+              Open Hardware…
+            </Button>
+          </section>
 
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-slate-200">Account</h3>

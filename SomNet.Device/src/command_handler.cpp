@@ -134,7 +134,11 @@ void CommandHandler::sendAck(
     Serial.print(F(" success="));
     Serial.println(success ? F("true") : F("false"));
 
-    if (!signalR_->sendAckCommand(correlationId, success, message != nullptr ? message : "")) {
+    if (!signalR_->sendAckCommand(
+            correlationId,
+            success,
+            message != nullptr ? message : "",
+            resultJson)) {
         Serial.println(F("[CMD] failed to send AckCommand"));
     }
 }

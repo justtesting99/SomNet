@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
 using SomNet.API.Services;
@@ -52,7 +53,7 @@ public sealed class HardwareHub : Hub
         if (!string.IsNullOrWhiteSpace(queryDeviceId))
         {
             var deviceId = queryDeviceId.Trim();
-            _connectionRegistry.RegisterUnpaired(deviceId, Context.ConnectionId);
+            _connectionRegistry.RegisterUnpaired(deviceId, Context.ConnectionId, GetRemoteIp(httpContext));
             await Groups.AddToGroupAsync(Context.ConnectionId, HardwareHubGroups.Unpaired(deviceId));
             _logger.LogInformation("Unpaired device {DeviceId} connected with connection {ConnectionId}.", deviceId, Context.ConnectionId);
 
@@ -70,7 +71,35 @@ public sealed class HardwareHub : Hub
 
     public override Task OnDisconnectedAsync(Exception? exception)
     {
-        _connectionRegistry.Unregister(Context.ConnectionId);
+        var removed = _connectionRegistry.Unregister(Context.ConnectionId);
+        if (removed is { Role: HardwareConnectionRole.Paired })
+        {
+            if (exception is null)
+            {
+                _logger.LogInformation(
+                    "Paired device {DeviceId} disconnected from {DomTarget}/{SubTarget}.",
+                    removed.DeviceId,
+                    removed.DomTarget,
+                    removed.SubTarget);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    exception,
+                    "Paired device {DeviceId} disconnected from {DomTarget}/{SubTarget}: {DisconnectReason}",
+                    removed.DeviceId,
+                    removed.DomTarget,
+                    removed.SubTarget,
+                    exception.Message);
+            }
+        }
+        else if (removed is { Role: HardwareConnectionRole.Unpaired })
+        {
+            _logger.LogInformation(
+                "Unpaired device {DeviceId} disconnected.",
+                removed.DeviceId);
+        }
+
         return base.OnDisconnectedAsync(exception);
     }
 
@@ -103,7 +132,7 @@ public sealed class HardwareHub : Hub
             return;
         }
 
-        _connectionRegistry.RegisterPaired(deviceId, domTarget, subTarget, Context.ConnectionId);
+        _connectionRegistry.RegisterPaired(deviceId, domTarget, subTarget, Context.ConnectionId, GetRemoteIp(Context.GetHttpContext()));
         await Groups.AddToGroupAsync(Context.ConnectionId, HardwareHubGroups.Paired(domTarget, subTarget));
         await _deviceTokenService.MarkConnectedAsync(domTarget, subTarget, deviceId, Context.ConnectionAborted);
 
@@ -129,6 +158,22 @@ public sealed class HardwareHub : Hub
             user.Identity?.Name;
 
         return string.IsNullOrWhiteSpace(username) ? null : username.Trim();
+    }
+
+    private static string? GetRemoteIp(HttpContext? httpContext)
+    {
+        var address = httpContext?.Connection.RemoteIpAddress;
+        if (address is null)
+        {
+            return null;
+        }
+
+        if (address.IsIPv4MappedToIPv6)
+        {
+            address = address.MapToIPv4();
+        }
+
+        return address.ToString();
     }
 }
 

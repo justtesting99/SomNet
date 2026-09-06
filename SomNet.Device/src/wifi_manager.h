@@ -24,6 +24,18 @@ public:
     int rssi() const;
     unsigned connectFailureCount() const { return connectFailures_; }
     bool isTimeSynced() const { return timeSynced_; }
+    /** True while SNTP is in progress (paired hub may wait briefly). False after sync or timeout. */
+    bool isTimeSyncPending() const;
+    /** One-shot: true once after each successful Wi-Fi association (STA). */
+    bool takeLinkRestored();
+    /** Disconnect and re-associate STA (transport recovery after repeated hub failures). */
+    void refreshAssociation();
+    /** Send one lwIP ARP request (non-blocking). */
+    void pokeHostArp(const IPAddress& host);
+    /** True when the STA netif has a cached ARP entry for host. */
+    bool isHostArpResolved(const IPAddress& host) const;
+    /** Brief blocking warm (~1 s max); prefer poke + pollArpWarm in hub FSM. */
+    bool resolveHostArp(const IPAddress& host);
 
 private:
     void startConnect();
@@ -47,5 +59,7 @@ private:
     unsigned connectFailures_ = 0;
     bool sntpStarted_ = false;
     bool timeSynced_ = false;
+    bool sntpTimedOut_ = false;
+    bool linkJustRestored_ = false;
     unsigned long sntpStartedMs_ = 0;
 };

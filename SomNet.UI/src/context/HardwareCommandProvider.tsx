@@ -7,7 +7,6 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { waitForHardwareAck } from '@/services/hardwareCommandAck';
 import type { HardwareCommandKey, HardwareCommandStatus } from '@/types/hardwareCommand';
 
 interface HardwareCommandContextValue {
@@ -42,7 +41,6 @@ export function HardwareCommandProvider({ children }: { children: ReactNode }) {
 
       try {
         await action();
-        await waitForHardwareAck(commandKey);
       } finally {
         pendingRef.current.delete(commandKey);
         syncPendingState();

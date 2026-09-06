@@ -11,6 +11,7 @@
 #include "nvs_store.h"
 #include "relay_controller.h"
 #include "signalr_client.h"
+#include "status_led.h"
 #include "wifi_manager.h"
 
 namespace {
@@ -24,6 +25,7 @@ CommandHandler commandHandler;
 ButtonInput buttonInput;
 SignalRClient signalRClient;
 ConfigWebServer configWebServer;
+StatusLed statusLed;
 
 DeviceBootMode bootMode = DeviceBootMode::Running;
 bool bannerPrinted = false;
@@ -166,6 +168,7 @@ void setup() {
     buttonInput.begin();
     signalRClient.begin(&nvsStore, &deviceIdentity, &wifiManager);
     commandHandler.begin(&executionContext, &nvsStore, &deviceIdentity, &signalRClient);
+    statusLed.begin();
 
     startNetwork();
     configWebServer.begin(bootMode, &nvsStore, &deviceIdentity, &wifiManager, &signalRClient);
@@ -175,11 +178,12 @@ void loop() {
     wifiManager.poll();
     tryWifiRecovery();
     signalRClient.poll();
+    configWebServer.poll();
+    statusLed.poll(signalRClient.isHubConnected());
     relayController.poll();
     executionContext.poll();
     commandHandler.poll();
     buttonInput.poll();
-    configWebServer.poll();
 
     if (!bannerPrinted && millis() >= 1500) {
         printSerialBanner();

@@ -1,46 +1,117 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { type ManualControlState } from '@/types/modes';
 import { useOptions } from '@/context/OptionsProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
+import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSystemStatus } from '@/context/SystemStatusProvider';
 import { Panel } from '@/components/ui/Panel';
 import { CommandButton } from '@/components/ui/CommandButton';
 import { NumberField } from '@/components/ui/NumberField';
 import { StrokePowerSlider } from '@/components/modes/StrokePowerSlider';
 import { useLiveSession } from '@/context/SessionProvider';
+import { useHardwareCommand } from '@/context/HardwareCommandProvider';
 import { computeStrokeMs } from '@/utils/stroke';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
+import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCommand';
+import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
+import { parseStrokeResultJson } from '@/utils/strokeResultJson';
+import { ApiError } from '@/api/client';
+
+const PHASE9_TOOLTIP = 'Burst and automatic hardware modes are coming in Phase 9.';
 
 export function ManualControls() {
   const { settings, updateManual, isLoading } = useOptions();
   const state = settings.manual;
-  const [burstInProgress, setBurstInProgress] = useState(false);
+  const { selectedSub } = useSubTarget();
   const { expandOnAction } = useVideoDisplay();
-  const { recordManualStroke, recordManualBurst, endManualSession } = useLiveSession();
+  const { recordManualStroke, recordManualAbort } = useLiveSession();
+  const { isCommandPending } = useHardwareCommand();
+  const { status: systemStatus } = useSystemStatus();
+  const [commandError, setCommandError] = useState('');
+
+  useEffect(() => {
+    setCommandError('');
+  }, [selectedSub]);
+
+  useEffect(() => {
+    if (systemStatus.isReady) {
+      setCommandError('');
+    }
+  }, [systemStatus.isReady]);
 
   const strokeMs = useMemo(
     () => computeStrokeMs(state.powerPercent, state.minimumStrokeMs, state.maximumStrokeMs),
     [state.powerPercent, state.minimumStrokeMs, state.maximumStrokeMs],
   );
 
+  const strokePending = isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke);
+  const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
+
   function update<K extends keyof ManualControlState>(key: K, value: ManualControlState[K]) {
     updateManual({ ...state, [key]: value });
   }
 
-  function handleStroke() {
-    setBurstInProgress(false);
-    expandOnAction();
-    void recordManualStroke(state.powerPercent);
+  function formatCommandError(error: unknown): string {
+    if (error instanceof HardwareCommandError) {
+      return error.message;
+    }
+
+    if (error instanceof ApiError && error.message) {
+      return error.message;
+    }
+
+    return 'Hardware command failed. Check that the API and device are connected.';
   }
 
-  function handleBurst() {
-    setBurstInProgress(true);
+  async function handleStroke() {
+    setCommandError('');
     expandOnAction();
-    void recordManualBurst(state.powerPercent, state.burstStrokes, state.burstDelaySeconds);
+
+    const payloadJson = JSON.stringify({
+      powerPercent: state.powerPercent,
+      strokeMs,
+    });
+
+    try {
+      const response = await sendHardwareCommand(selectedSub, 'stroke', payloadJson);
+      const parsed = parseStrokeResultJson(response.resultJson);
+      await recordManualStroke(state.powerPercent, parsed?.actualStrokeMs);
+    } catch (error) {
+      if (error instanceof HardwareCommandError) {
+        const parsed = parseStrokeResultJson(error.response.resultJson);
+        if (parsed?.interrupted) {
+          return;
+        }
+      }
+      setCommandError(formatCommandError(error));
+    }
   }
 
-  function handleAbort() {
-    setBurstInProgress(false);
-    void endManualSession('abort');
+  async function handleAbort() {
+    setCommandError('');
+
+    try {
+      const response = await sendHardwareCommandRaw(selectedSub, 'abort', '{}');
+
+      if (!response.delivered) {
+        setCommandError(response.message ?? 'Abort could not be delivered.');
+        return;
+      }
+
+      if (!response.acknowledged) {
+        setCommandError(response.message ?? 'Device did not acknowledge abort in time.');
+        return;
+      }
+
+      if (!response.success) {
+        setCommandError(response.message ?? 'Nothing to abort.');
+        return;
+      }
+
+      await recordManualAbort();
+    } catch (error) {
+      setCommandError(formatCommandError(error));
+    }
   }
 
   return (
@@ -84,6 +155,12 @@ export function ManualControls() {
         </Panel>
 
         <Panel title="Actions">
+          {commandError ? (
+            <p className="mb-3 text-sm text-red-400" role="alert">
+              {commandError}
+            </p>
+          ) : null}
+
           <CommandButton
             commandKey={HARDWARE_COMMAND_KEYS.manualStroke}
             size="lg"
@@ -103,12 +180,16 @@ export function ManualControls() {
                 label="Burst Strokes"
                 value={state.burstStrokes}
                 min={1}
+                disabled
+                title={PHASE9_TOOLTIP}
                 onChange={(event) => update('burstStrokes', Number(event.target.value))}
               />
               <NumberField
                 label="Burst Delay (sec)"
                 value={state.burstDelaySeconds}
                 min={0}
+                disabled
+                title={PHASE9_TOOLTIP}
                 onChange={(event) => update('burstDelaySeconds', Number(event.target.value))}
               />
             </div>
@@ -118,7 +199,9 @@ export function ManualControls() {
               size="lg"
               fullWidth
               className="py-4 text-base"
-              onCommand={handleBurst}
+              disabled
+              title={PHASE9_TOOLTIP}
+              onCommand={() => undefined}
             >
               Burst
             </CommandButton>
@@ -129,7 +212,7 @@ export function ManualControls() {
               fullWidth
               variant="secondary"
               className="py-4 text-base"
-              disabled={!burstInProgress}
+              disabled={(!strokePending && !abortPending) || abortPending}
               onCommand={handleAbort}
             >
               Abort

@@ -8,9 +8,11 @@ import { SubSelectionDialog } from '@/components/layout/SubSelectionDialog';
 import { HistoryDialog } from '@/components/layout/HistoryDialog';
 import { DomSessionsDialog } from '@/components/layout/DomSessionsDialog';
 import { OptionsDialog } from '@/components/layout/OptionsDialog';
+import { HardwareDialog } from '@/components/layout/HardwareDialog';
 import { NotifyDialog } from '@/components/layout/NotifyDialog';
 import { useHistory } from '@/context/HistoryProvider';
 import { useOptions } from '@/context/OptionsProvider';
+import { useHardwareDialog } from '@/context/HardwareProvider';
 import { useNotify } from '@/context/NotifyProvider';
 import { useLiveSession } from '@/context/SessionProvider';
 
@@ -24,6 +26,7 @@ export function AppShell({ children, wide = false }: AppShellProps) {
   const { mode, setMode } = useMode();
   const { openDialog: openHistory } = useHistory();
   const { openDialog: openOptions } = useOptions();
+  const { openDialog: openHardware } = useHardwareDialog();
   const { openDialog: openNotify } = useNotify();
   const { endActiveSessionIfNeeded } = useLiveSession();
 
@@ -78,6 +81,9 @@ export function AppShell({ children, wide = false }: AppShellProps) {
                 </Button>
               ) : null}
               <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={openHardware}>
+                  Hardware
+                </Button>
                 <Button variant="ghost" size="sm" onClick={openHistory}>
                   History
                 </Button>
@@ -106,6 +112,7 @@ export function AppShell({ children, wide = false }: AppShellProps) {
       <HistoryDialog />
       <DomSessionsDialog />
       <OptionsDialog />
+      <HardwareDialog />
       <NotifyDialog />
     </div>
   );

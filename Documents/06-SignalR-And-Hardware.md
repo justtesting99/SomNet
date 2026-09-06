@@ -65,7 +65,7 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 |--------|---------|--------|---------|
 | `AckCommand` | `HardwareCommandAckDto` | Paired device | Confirm command execution |
 
-**DTO note:** `HardwareCommandAckDto` today has `correlationId`, `success`, and `message` only. Firmware builds **`resultJson`** locally (serial log); wire pass-through to REST/UI is **Phase 8** — see [Device Plan §9](./09-ESP32-Device-Plan.md).
+**DTO note:** `HardwareCommandAckDto` includes `correlationId`, `success`, `message`, and optional **`resultJson`** (string containing JSON). REST `POST /api/devices/commands` forwards `resultJson` to the UI; `CommandAcknowledged` hub events include it for future multi-tab use.
 
 ---
 
@@ -317,25 +317,23 @@ wifi_manager → signalr_client → relay_controller → execution_context → c
 | SignalR hub | ✅ Complete |
 | Command dispatcher (ack vs success) | ✅ Complete (Phase 5 fix) |
 | Swagger JWT Authorize | ✅ Complete |
-| **Pair / revoke device** | ✅ **Minimal** — Options → Hardware device (`DevicePairingPanel`) |
-| **Device status API** | ✅ Used by pairing panel + system status |
+| **Pair / revoke device** | ✅ **Hardware** toolbar dialog (all Subs + unpaired list) |
+| **Device status API** | ✅ Used by Hardware dialog + system status |
 | **System status with subTarget** | ✅ `SystemStatusProvider` passes selected Sub |
-| UI calls `/api/devices/commands` for stroke/burst | ❌ Uses simulated 450 ms ack (`hardwareCommandAck.ts`) |
-| UI SignalR client for live acks | ❌ Not implemented |
-| Dedicated pairing dialog + pending list | ❌ Phase 8 |
-| Session/history from device `resultJson` | ❌ Phase 8 |
+| UI calls `/api/devices/commands` for stroke/abort | ✅ REST + device ack; session after ack |
+| UI SignalR client for live acks | ❌ Not implemented (REST-only ack path) |
+| Dedicated pairing dialog + pending list | ✅ Phase 8 |
+| Session/history from device `resultJson` | ✅ `actualStrokeMs` on stroke; abort count on abort ack |
 
-### Phase 8 — planned UI changes
+### Phase 8 — completed (2026-09-06)
 
-1. Replace `waitForHardwareAck` in `hardwareCommandAck.ts` with `POST /api/devices/commands` + real payload
-2. Add `@microsoft/signalr` client in `HardwareCommandProvider` for `CommandAcknowledged`
-3. Relocate pairing UX from Options to dedicated dialog; add `GET /api/devices/unpaired` pending list
-4. Show pairing token expiry on Hardware device panel (`tokenExpiresAt` + proactive re-pair warning) — **partial (Options, 2026-09-05)**
-5. **Dom all-Subs hardware admin dialog** — one view for every Sub: expiry per row, yellow (≤30 days) / red (expired), Pair/Revoke without per-Sub Options drill-down
-6. Add `resultJson` to `HardwareCommandAckDto` and defer session writes until device ack
-7. E2E verify `abort` dual-ack and busy reject (REST is synchronous — parallel commands need UI or async pattern)
+1. `POST /api/devices/commands` from Manual mode Stroke/Abort buttons
+2. Hardware toolbar dialog — all Subs admin, online unpaired list, paste device ID
+3. `GET /api/devices/unpaired`; `resultJson` on shared DTOs and REST response
+4. Session writes after device ack; burst/automatic UI disabled until Phase 9
+5. Dev LAN: API reachability ping + firmware reconnect hardening (`0.8.10-phase8`)
 
-See [Device Plan §10 Phase 8](./09-ESP32-Device-Plan.md).
+See [Phase 8 Checklist](./09-ESP32-Phase-8-Checklist.md).
 
 ---
 
@@ -351,7 +349,7 @@ See [Device Plan §10 Phase 8](./09-ESP32-Device-Plan.md).
 | `hub not ready` on first command (fixed Phase 5) | Handshake race — ensure firmware ≥ `0.5.0-phase5` |
 | PairDevice not received | Device not in `unpaired:{deviceId}` group or wrong deviceId |
 | 401 / type 7 on reconnect | Expired or revoked device token — re-pair |
-| Stroke works in Swagger but not UI | Expected until Phase 8 — UI still simulates ack |
+| Stroke works in Swagger but not UI | UI should match Swagger — hard refresh browser if buttons still simulate ack |
 
 **Development tip:** Use Swagger (Authorize with Dom JWT) + ESP32 serial monitor. Optional: browser devtools WebSocket tab on `/hubs/hardware` for frame inspection.
 

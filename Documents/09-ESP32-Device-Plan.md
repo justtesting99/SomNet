@@ -1415,8 +1415,8 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 | 5 | Single-pulse command + ack | [Phase 5 Checklist](./09-ESP32-Phase-5-Checklist.md) | **Complete** (2026-09-05) |
 | 6 | Single-pulse relay | [Phase 6 Checklist](./09-ESP32-Phase-6-Checklist.md) | **Signed off** (2026-09-05) |
 | 7 | Resilience / production prep | [Phase 7 Checklist](./09-ESP32-Phase-7-Checklist.md) | **Signed off** (2026-09-06) — `0.7.0-phase7` |
-| **8** | **SomNet UI pairing dialog** + command integration | *TBD* | **Next** — partial pairing in Options; full dialog + commands pending |
-| 9 | Burst and automatic modes | *TBD* | — |
+| **8** | **SomNet UI pairing dialog** + command integration | [Phase 8 Checklist](./09-ESP32-Phase-8-Checklist.md) | **Signed off** (2026-09-06) — `0.8.10-phase8`; Hardware dialog + stroke/abort UI |
+| 9 | Burst and automatic modes | *TBD* | **Next** |
 
 **Rationale:** Phase **3** (config UI with MAC-based ID and friendly name) runs **before** SignalR so installers can provision network and obtain the pairing ID without Swagger/serial. Phase **8** completes Dom-side Sub association in the React app (full pairing UX + command integration). A **minimal pairing panel in Options** was added during Phase 4 verification — see §4 *SomNet React UI — early pairing*; do not treat Options as the final product layout.
 
@@ -1603,32 +1603,16 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 ---
 
-### Phase 8 — SomNet UI pairing and command integration (when approved)
+### Phase 8 — SomNet UI pairing and command integration
 
-**Priority:** **Pair device to Sub in UI** — production registration path (§4.1).
+**Checklist:** [09-ESP32-Phase-8-Checklist.md](./09-ESP32-Phase-8-Checklist.md)  
+**Status:** **Signed off** (2026-09-06) — firmware `0.8.10-phase8`
 
-**Already done (Phase 4 dev bonus — refine, do not duplicate):**
+**Summary:** Hardware toolbar dialog (all Subs + online unpaired list); manual **stroke** and **abort** from UI via `POST /api/devices/commands`; **`resultJson`** end-to-end; session writes after device ack; busy reject; USB reconnect hardening + dev API reachability ping.
 
-- [x] **Paste device ID + Pair/Revoke** — `DevicePairingPanel` in **Options** (provisional placement)
-- [x] **`GET /api/devices/status?subTarget=`** — used by pairing panel + system status header
-- [x] Swagger **Authorize** (JWT Bearer) for API dev testing
+**Exit criteria:** Dom pairs and strokes from polished UI without Swagger; abort mid-pulse E2E. **Met.**
 
-**Deliverables (remaining):**
-
-- [ ] **Relocate / redesign pairing UX** — dedicated dialog or multi-page settings (split **network/device** from **Subs** and general options); remove pairing from generic Options long-term
-- [ ] **Dom hardware admin — all Subs view** — single dialog listing **every Sub** the Dom operates: paired device ID, connection state, **`tokenExpiresAt`**, Pair/Revoke per row; **yellow** highlight when expiry is within 30 days (soon), **red** when expired or past effective deadline (−5 min device buffer); enables proactive annual re-pair without opening each Sub in Options (may need batch `GET /api/devices/status` or new list endpoint)
-- [ ] **`GET /api/devices/unpaired`** — list online unpaired devices (§4.1 pending list)
-- [ ] **UI pairing dialog** — **Online now** list + **paste device ID** (enhance beyond current Options panel)
-- [ ] **Show pairing token expiry** in Hardware device UI — display `tokenExpiresAt` from `GET /api/devices/status`; warn when within 30 days; note device may disconnect up to **5 minutes** before server expiry (Phase 7 buffer) — **partial:** implemented in Options `DevicePairingPanel` (2026-09-05); relocate with dedicated dialog
-- [ ] Optional: QR scan; show friendly name / installer contact when available
-- [ ] UI replaces simulated `waitForHardwareAck` with `/api/devices/commands` **including `payloadJson` per §6**
-- [ ] **Verify `abort` dual-ack and busy reject** (deferred from Phase 6 — Swagger REST is synchronous)
-- [ ] **`HardwareCommandAckDto.resultJson`** + pass-through on REST and SignalR
-- [ ] **Session/history driven by device ack** (§9)
-- [ ] SignalR client in UI for `CommandAcknowledged` with `resultJson`
-- [ ] Optional: two-phase ack API extension; button uplink (TBD)
-
-**Exit criteria:** Dom pairs device to Sub from **polished** UI (not dev-only Options placement) using MAC-based ID from ESP32; stroke command works without Swagger.
+*Optional follow-ups (non-blocking): F.2 offline error smoke tests, F.6 unpaired-list pairing demo, expiry row colors re-check in all-Subs table.*
 
 ---
 

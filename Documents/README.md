@@ -24,4 +24,5 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [ESP32 Phase 4 Checklist](./09-ESP32-Phase-4-Checklist.md) | Developers | SignalR client + pairing — **Complete** (2026-09-05) |
 | [ESP32 Phase 5 Checklist](./09-ESP32-Phase-5-Checklist.md) | Developers | Single-pulse command + ack — **Complete** (2026-09-05; busy reject E2E → Phase 8) |
 | [ESP32 Phase 6 Checklist](./09-ESP32-Phase-6-Checklist.md) | Developers | Relay GPIO — **Signed off** (2026-09-05; abort E2E → Phase 8) |
-| [ESP32 Phase 7 Checklist](./09-ESP32-Phase-7-Checklist.md) | Developers | Resilience / production prep — **Not started** |
+| [ESP32 Phase 7 Checklist](./09-ESP32-Phase-7-Checklist.md) | Developers | Resilience / production prep — **Signed off** (2026-09-06) |
+| [ESP32 Phase 8 Checklist](./09-ESP32-Phase-8-Checklist.md) | Developers | UI commands + pairing polish — **Signed off** (2026-09-06) |

@@ -8,6 +8,7 @@ import { SubTargetProvider } from '@/context/SubTargetProvider';
 import { HistoryProvider } from '@/context/HistoryProvider';
 import { DomSessionsProvider } from '@/context/DomSessionsProvider';
 import { OptionsProvider } from '@/context/OptionsProvider';
+import { HardwareProvider } from '@/context/HardwareProvider';
 import { NotifyProvider } from '@/context/NotifyProvider';
 import { VideoDisplayProvider } from '@/context/VideoDisplayProvider';
 import { SessionProvider } from '@/context/SessionProvider';
@@ -36,27 +37,31 @@ export function App() {
     <SubTargetProvider>
       <SessionProvider>
         <DomSessionsProvider>
-          <OptionsProvider>
-            <NotifyProvider>
-              <HistoryProvider>
-                <SystemStatusProvider enabled>
-                  <AppShell wide={mode !== null}>
-                    {!mode ? (
-                      <ModeSelector />
-                    ) : (
-                      <VideoDisplayProvider>
-                        <HardwareCommandProvider>
-                          <DashboardLayout
-                            controls={mode === 'manual' ? <ManualControls /> : <AutomaticControls />}
-                          />
-                        </HardwareCommandProvider>
-                      </VideoDisplayProvider>
-                    )}
-                  </AppShell>
-                </SystemStatusProvider>
-              </HistoryProvider>
-            </NotifyProvider>
-          </OptionsProvider>
+          <HardwareProvider>
+            <OptionsProvider>
+              <NotifyProvider>
+                <HistoryProvider>
+                  <SystemStatusProvider enabled>
+                    <AppShell wide={mode !== null}>
+                      {!mode ? (
+                        <ModeSelector />
+                      ) : (
+                        <VideoDisplayProvider>
+                          <HardwareCommandProvider>
+                            <DashboardLayout
+                              controls={
+                                mode === 'manual' ? <ManualControls /> : <AutomaticControls />
+                              }
+                            />
+                          </HardwareCommandProvider>
+                        </VideoDisplayProvider>
+                      )}
+                    </AppShell>
+                  </SystemStatusProvider>
+                </HistoryProvider>
+              </NotifyProvider>
+            </OptionsProvider>
+          </HardwareProvider>
         </DomSessionsProvider>
       </SessionProvider>
     </SubTargetProvider>

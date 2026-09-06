@@ -1,7 +1,7 @@
 export type ManualSessionEndReason = 'abort' | 'mode-switch' | 'sign-out' | 'sub-change';
 
 export type ManualActionEvent =
-  | { type: 'stroke'; powerPercent: number }
+  | { type: 'stroke'; powerPercent: number; actualStrokeMs?: number }
   | {
       type: 'burst';
       powerPercent: number;
@@ -57,7 +57,18 @@ function formatManualBreakdown(events: ManualActionEvent[]): string {
   [...strokeCounts.entries()]
     .sort(([left], [right]) => left - right)
     .forEach(([powerPercent, count]) => {
-      parts.push(`${count} stroke${count === 1 ? '' : 's'} at ${powerPercent}%`);
+      const strokeEvents = events.filter(
+        (event): event is Extract<ManualActionEvent, { type: 'stroke' }> =>
+          event.type === 'stroke' && event.powerPercent === powerPercent,
+      );
+      const measuredMs = strokeEvents.find((event) => event.actualStrokeMs !== undefined)
+        ?.actualStrokeMs;
+
+      if (count === 1 && measuredMs !== undefined) {
+        parts.push(`1 stroke at ${powerPercent}% (${measuredMs} ms)`);
+      } else {
+        parts.push(`${count} stroke${count === 1 ? '' : 's'} at ${powerPercent}%`);
+      }
     });
 
   [...burstCounts.values()]

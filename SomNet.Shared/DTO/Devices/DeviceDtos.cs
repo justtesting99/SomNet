@@ -78,6 +78,8 @@ public sealed class HardwareCommandAckDto
     public bool Success { get; init; }
 
     public string? Message { get; init; }
+
+    public string? ResultJson { get; init; }
 }
 
 public sealed class SendHardwareCommandRequestDto
@@ -100,4 +102,13 @@ public sealed class SendHardwareCommandResponseDto
     public bool Success { get; init; }
 
     public string? Message { get; init; }
+
+    public string? ResultJson { get; init; }
+}
+
+public sealed class UnpairedDeviceResponseDto
+{
+    public required string DeviceId { get; init; }
+
+    public required DateTimeOffset ConnectedAt { get; init; }
 }

@@ -5,6 +5,38 @@
 #include <Arduino.h>
 #include <time.h>
 
+extern "C" {
+#include "lwip/etharp.h"
+#include "lwip/ip4_addr.h"
+#include "lwip/netif.h"
+}
+
+extern struct netif* netif_list;
+
+namespace {
+
+struct netif* findStaNetif() {
+    const IPAddress local = WiFi.localIP();
+    if (local == IPAddress(0, 0, 0, 0)) {
+        return nullptr;
+    }
+
+    const uint32_t localAddr = static_cast<uint32_t>(local);
+    for (struct netif* netif = netif_list; netif != nullptr; netif = netif->next) {
+        if (!netif_is_up(netif)) {
+            continue;
+        }
+        const ip4_addr_t* ip = netif_ip4_addr(netif);
+        if (ip != nullptr && ip4_addr_get_u32(ip) == localAddr) {
+            return netif;
+        }
+    }
+
+    return netif_list;
+}
+
+} // namespace
+
 void WifiManager::beginStation(const char* ssid, const char* password) {
     softApMode_ = false;
     loggedConfigUi_ = false;
@@ -14,6 +46,7 @@ void WifiManager::beginStation(const char* ssid, const char* password) {
     password_[sizeof(password_) - 1] = '\0';
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(false);
+    WiFi.setSleep(WIFI_PS_NONE);
     state_ = WifiConnectionState::Disconnected;
     retryDelayMs_ = WIFI_RETRY_BASE_MS;
     nextRetryMs_ = millis();
@@ -86,6 +119,104 @@ int WifiManager::rssi() const {
         return 0;
     }
     return WiFi.RSSI();
+}
+
+bool WifiManager::isTimeSyncPending() const {
+    if (softApMode_ || !sntpStarted_ || timeSynced_ || sntpTimedOut_) {
+        return false;
+    }
+    return millis() - sntpStartedMs_ < SNTP_SYNC_TIMEOUT_MS;
+}
+
+bool WifiManager::takeLinkRestored() {
+    if (!linkJustRestored_) {
+        return false;
+    }
+    linkJustRestored_ = false;
+    return true;
+}
+
+void WifiManager::refreshAssociation() {
+    if (softApMode_ || ssid_[0] == '\0') {
+        return;
+    }
+
+    Serial.println(F("[WIFI] refresh association (transport recovery)"));
+    const bool hadTimeSync = timeSynced_;
+    loggedConnected_ = false;
+    loggedConfigUi_ = false;
+    WiFi.disconnect(false);
+    delay(200);
+    state_ = WifiConnectionState::Disconnected;
+    nextRetryMs_ = millis();
+    retryDelayMs_ = WIFI_RETRY_BASE_MS;
+    if (!hadTimeSync) {
+        resetTimeSync();
+    }
+}
+
+void WifiManager::pokeHostArp(const IPAddress& host) {
+    if (softApMode_ || !isConnected() || host == IPAddress(0, 0, 0, 0)) {
+        return;
+    }
+
+    struct netif* lwipNetif = findStaNetif();
+    if (lwipNetif == nullptr) {
+        return;
+    }
+
+    ip4_addr_t target = {};
+    IP4_ADDR(&target, host[0], host[1], host[2], host[3]);
+    etharp_request(lwipNetif, &target);
+}
+
+bool WifiManager::isHostArpResolved(const IPAddress& host) const {
+    if (softApMode_ || !isConnected() || host == IPAddress(0, 0, 0, 0)) {
+        return false;
+    }
+
+    struct netif* lwipNetif = findStaNetif();
+    if (lwipNetif == nullptr) {
+        return false;
+    }
+
+    ip4_addr_t target = {};
+    IP4_ADDR(&target, host[0], host[1], host[2], host[3]);
+    struct eth_addr* ethRet = nullptr;
+    const ip4_addr_t* ipRet = nullptr;
+    return etharp_find_addr(lwipNetif, &target, &ethRet, &ipRet) >= 0 && ethRet != nullptr;
+}
+
+bool WifiManager::resolveHostArp(const IPAddress& host) {
+    if (softApMode_ || !isConnected() || host == IPAddress(0, 0, 0, 0)) {
+        return false;
+    }
+
+    pokeHostArp(host);
+    for (uint8_t poll = 0; poll < 20; ++poll) {
+        delay(50);
+        yield();
+        pokeHostArp(host);
+        if (isHostArpResolved(host)) {
+            Serial.print(F("[WIFI] ARP resolved "));
+            Serial.println(host);
+            return true;
+        }
+    }
+
+    WiFiClient client;
+    client.setTimeout(500);
+    if (client.connect(host, SOMNET_SERVER_PORT, 500)) {
+        client.stop();
+        Serial.print(F("[WIFI] ARP resolved (tcp) "));
+        Serial.println(host);
+        return true;
+    }
+    client.stop();
+
+    Serial.print(F("[WIFI] ARP unresolved "));
+    Serial.println(host);
+    return false;
 }
 
 void WifiManager::startConnect() {
@@ -181,6 +312,8 @@ void WifiManager::logConnectedOnce() {
         return;
     }
     loggedConnected_ = true;
+    linkJustRestored_ = true;
+    WiFi.setSleep(WIFI_PS_NONE);
     Serial.print(F("[WIFI] connected IP="));
     Serial.print(WiFi.localIP());
     Serial.print(F(" gateway="));
@@ -201,6 +334,7 @@ void WifiManager::logConnectedOnce() {
 void WifiManager::resetTimeSync() {
     sntpStarted_ = false;
     timeSynced_ = false;
+    sntpTimedOut_ = false;
     sntpStartedMs_ = 0;
 }
 
@@ -243,6 +377,7 @@ void WifiManager::pollTimeSync() {
     }
 
     if (millis() - sntpStartedMs_ >= SNTP_SYNC_TIMEOUT_MS) {
-        Serial.println(F("[TIME] SNTP sync timeout — expiry check deferred to hub type-7"));
+        sntpTimedOut_ = true;
+        Serial.println(F("[TIME] SNTP sync timeout — hub connect proceeds; expiry deferred to hub type-7"));
     }
 }

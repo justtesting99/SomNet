@@ -210,6 +210,7 @@ Hardware pairing and command dispatch (backend complete).
 
 | Method | Route | Query / Body | Description |
 |--------|-------|--------------|-------------|
+| GET | `/api/devices/unpaired` | — | Online unpaired devices (Dom JWT) |
 | GET | `/api/devices/status` | `subTarget` | Device registration and connection status |
 | POST | `/api/devices/pair` | `subTarget`, body: `{ deviceId }` | Pair device to Sub |
 | DELETE | `/api/devices/pair` | `subTarget` | Revoke pairing |
@@ -226,6 +227,12 @@ Hardware pairing and command dispatch (backend complete).
 ```
 
 **Response:** Pairing confirmation including token metadata (device receives token via SignalR `PairDevice` message).
+
+### List Unpaired (online)
+
+**Request:** `GET /api/devices/unpaired` (Dom JWT)
+
+**Response:** Array of `{ deviceId, connectedAt }` for devices currently connected without a pairing token.
 
 ### Send Command
 
@@ -247,9 +254,12 @@ Hardware pairing and command dispatch (backend complete).
   "acknowledged": true,
   "success": true,
   "correlationId": "...",
-  "message": "Command acknowledged"
+  "message": "Command acknowledged",
+  "resultJson": "{\"commandKey\":\"stroke\",\"actualStrokeMs\":408,\"success\":true}"
 }
 ```
+
+On **abort during an active stroke**, the device sends two acks (stroke `success: false` with `interrupted: true` in `resultJson`, then abort `success: true`). Each REST command receives one response for its own `correlationId`.
 
 Command keys used by the UI (defined in `hardwareCommand.ts`):
 

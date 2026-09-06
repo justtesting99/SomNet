@@ -25,4 +25,5 @@ private:
     WifiManager* wifi_ = nullptr;
     SignalRClient* signalR_ = nullptr;
     bool started_ = false;
+    unsigned long deferStartUntilMs_ = 0;
 };

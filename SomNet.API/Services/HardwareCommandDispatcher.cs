@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using SomNet.API.Hubs;
 using SomNet.Shared.DTO.Devices;
 using SomNet.Shared.Models;
@@ -22,15 +23,18 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
     private readonly IDeviceTokenService _deviceTokenService;
     private readonly IDeviceConnectionRegistry _connectionRegistry;
     private readonly IHubContext<HardwareHub> _hubContext;
+    private readonly ILogger<HardwareCommandDispatcher> _logger;
 
     public HardwareCommandDispatcher(
         IDeviceTokenService deviceTokenService,
         IDeviceConnectionRegistry connectionRegistry,
-        IHubContext<HardwareHub> hubContext)
+        IHubContext<HardwareHub> hubContext,
+        ILogger<HardwareCommandDispatcher> logger)
     {
         _deviceTokenService = deviceTokenService;
         _connectionRegistry = connectionRegistry;
         _hubContext = hubContext;
+        _logger = logger;
     }
 
     public async Task<SendHardwareCommandResponseDto> SendCommandAsync(
@@ -44,6 +48,12 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
 
         if (registration is null)
         {
+            _logger.LogWarning(
+                "Hardware command {CommandKey} rejected — no active registration for {DomTarget}/{SubTarget}.",
+                commandKey,
+                domTarget,
+                subTarget);
+
             return new SendHardwareCommandResponseDto
             {
                 CorrelationId = Guid.NewGuid().ToString("N"),
@@ -56,6 +66,12 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
 
         if (!_connectionRegistry.IsPairedDeviceConnected(domTarget, subTarget))
         {
+            _logger.LogWarning(
+                "Hardware command {CommandKey} rejected — paired device offline for {DomTarget}/{SubTarget}.",
+                commandKey,
+                domTarget,
+                subTarget);
+
             return new SendHardwareCommandResponseDto
             {
                 CorrelationId = Guid.NewGuid().ToString("N"),
@@ -78,8 +94,17 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
             PayloadJson = string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson,
         };
 
+        var hubGroup = HardwareHubGroups.Paired(registration.DomTarget, registration.SubName);
+
+        _logger.LogInformation(
+            "Sending hardware command {CommandKey} correlationId={CorrelationId} to group {HubGroup} deviceId={DeviceId}.",
+            commandKey,
+            correlationId,
+            hubGroup,
+            registration.DeviceId);
+
         await _hubContext.Clients
-            .Group(HardwareHubGroups.Paired(registration.DomTarget, registration.SubName))
+            .Group(hubGroup)
             .SendAsync(HardwareHubMethods.ExecuteCommand, message, cancellationToken);
 
         var acknowledgement = await _connectionRegistry.WaitForAcknowledgementAsync(
@@ -89,6 +114,12 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
 
         if (acknowledgement is null)
         {
+            _logger.LogWarning(
+                "Hardware command {CommandKey} correlationId={CorrelationId} timed out waiting for device ack (group {HubGroup}).",
+                commandKey,
+                correlationId,
+                hubGroup);
+
             return new SendHardwareCommandResponseDto
             {
                 CorrelationId = correlationId,
@@ -109,6 +140,7 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
                 ?? (acknowledgement.Success
                     ? "Device acknowledged the command."
                     : "Device rejected the command."),
+            ResultJson = acknowledgement.ResultJson,
         };
     }
 }

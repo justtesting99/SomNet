@@ -276,7 +276,20 @@ After executing (or rejecting) a command, invoke hub method `AckCommand`:
 
 Plus **`0x1E`**.
 
-Matches `HardwareCommandAckDto`: `correlationId`, `success`, `message`.
+Matches `HardwareCommandAckDto`: `correlationId`, `success`, `message`, optional **`resultJson`** (string containing JSON).
+
+When present, `resultJson` is a **string containing JSON** (not a nested object). Inner shape for stroke:
+
+```json
+{
+  "commandKey": "stroke",
+  "deviceId": "esp32-A4C1389F2B01",
+  "strokeMs": 200,
+  "powerPercent": 50,
+  "actualStrokeMs": 205,
+  "success": true
+}
+```
 
 ### REST result (operator)
 
@@ -288,23 +301,8 @@ If ack arrives within **10 seconds**:
   "delivered": true,
   "acknowledged": true,
   "success": true,
-  "message": "Device acknowledged the command."
-}
-```
-
-### Proposed `resultJson` (not in API yet)
-
-Firmware should **prepare** a JSON result string for future API/UI use; send via `message` today or hold locally until `HardwareCommandAckDto` gains `resultJson`:
-
-```json
-{
-  "commandKey": "stroke",
-  "deviceId": "esp32-A4C1389F2B01",
-  "startedAt": "2026-09-05T02:38:58.000Z",
-  "completedAt": "2026-09-05T02:38:58.200Z",
-  "strokeMs": 200,
-  "powerPercent": 50,
-  "success": true
+  "message": "Device acknowledged the command.",
+  "resultJson": "{\"commandKey\":\"stroke\",\"actualStrokeMs\":205,...}"
 }
 ```
 

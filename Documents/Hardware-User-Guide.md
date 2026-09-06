@@ -9,7 +9,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | SomNet web app | [User Guide](./User-Guide.md) |
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 
-**Firmware status (2026-09-05):** Phases **0–7** (in progress) — Wi‑Fi provisioning, SomNet pairing over SignalR, **relay control**, and **pairing token expiry** with unpaired fallback. SomNet **web app stroke buttons** are not wired to hardware yet (Phase 8); pairing and stroke testing use the device status page + SomNet **Options → Hardware device** or Swagger.
+**Firmware status (2026-09-06):** Phases **0–8** — Wi‑Fi provisioning, SomNet pairing over SignalR, **relay control**, pairing token expiry, and **manual stroke/abort from the SomNet web app** (toolbar **Hardware** dialog for pairing). Burst/automatic hardware modes remain Phase 9.
 
 ---
 
@@ -179,11 +179,12 @@ If the device is on your network and you can open its web page:
 | Capability | Available? | Notes |
 |------------|------------|--------|
 | Device connects to SomNet server (SignalR) | **Yes** | After Wi‑Fi + server URL configured and device paired |
-| Pairing from SomNet UI | **Yes** | Options → Hardware device (dedicated dialog planned) |
+| Pairing from SomNet UI | **Yes** | Toolbar **Hardware** dialog (all Subs + online unpaired list); Options links to same dialog |
 | Status page shows pairing state | **Yes** | Unpaired / paired / connected indicators |
-| Stroke from SomNet **web app buttons** | **Not yet** | Phase 8 — operators use API/Swagger for hardware testing today |
+| Stroke from SomNet **web app buttons** | **Yes** | Manual mode **Stroke** → `POST /api/devices/commands`; session records device `actualStrokeMs` |
+| **Abort** during long stroke | **Yes** | **Abort** while stroke pending; relay opens; session tracks abort count |
 | Relay responds to server **stroke** command | **Yes** | Duration set in command payload (`strokeMs`) |
-| Burst / automatic modes | **Not yet** | Phase 9 |
+| Burst / automatic modes | **Not yet** | Phase 9 (UI buttons disabled) |
 
 **Server URL reminder:** Use the SomNet API **LAN address** on the device (e.g. `http://192.168.1.47:5031`). The SomNet browser on the same PC can use `localhost`; the ESP32 cannot.
 
@@ -199,7 +200,7 @@ If the device is on your network and you can open its web page:
 | Device ID needed for pairing | Status page at `http://<device-ip>/` after Wi‑Fi works, or USB serial log for installers |
 | Paired but “not connected” in SomNet | Check server URL on device; confirm API is running; same LAN; Windows Firewall on dev PC may block LAN inbound port 5031 |
 | Device was paired; now “not paired” after ~1 year | **Expected** — pairing token expired. Dom: Options → Hardware device → **Pair device** again (same Device ID). See [Pairing token renewal](./Hardware-User-Guide.md#pairing-token-renewal-about-once-a-year) |
-| Stroke does nothing | Confirm pairing + connected status; relay wiring on **D4**; support may test via Swagger while UI wiring is pending |
+| Stroke does nothing | Confirm pairing + connected status; relay wiring on **D4**; check Hardware dialog shows connected |
 | Lost pairing / start over completely | On `/config`, use **Factory reset** (when reachable), or contact support |
 
 ---

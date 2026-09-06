@@ -1,0 +1,2 @@
+# loopTask stack — hub negotiate + WebSocket connect need more than default 8192
+CONFIG_ARDUINO_LOOP_STACK_SIZE=16384

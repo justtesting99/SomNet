@@ -326,11 +326,18 @@ bool ConfigWebServer::begin(
     gWifi = wifi;
     gSignalR = signalRClient;
     gHttpMode = mode;
+    deferStartUntilMs_ = millis() + CONFIG_HTTP_MAX_DEFER_MS;
     return true;
 }
 
 void ConfigWebServer::poll() {
     if (started_ || wifi_ == nullptr || !wifi_->isConnected()) {
+        return;
+    }
+
+    const bool hubConnected = signalR_ != nullptr && signalR_->isHubConnected();
+    const bool maxDeferReached = deferStartUntilMs_ != 0 && millis() >= deferStartUntilMs_;
+    if (!hubConnected && !maxDeferReached) {
         return;
     }
 

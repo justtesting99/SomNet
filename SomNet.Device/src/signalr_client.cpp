@@ -10,6 +10,7 @@
 #include <HTTPClient.h>
 #include <WebSocketsClient.h>
 #include <WiFi.h>
+#include <esp_system.h>
 #ifdef SOMNET_USE_WSS
 #include <WiFiClientSecure.h>
 #endif
@@ -28,6 +29,7 @@ WebSocketsClient gWs;
 SignalRClient* gActiveClient = nullptr;
 NvsStore* gNvs = nullptr;
 DeviceIdentity* gIdentity = nullptr;
+WiFiClient gNegotiateClient;
 
 char gConnectionToken[128] = {};
 char gWsHost[96] = {};
@@ -44,6 +46,12 @@ unsigned long gHandshakeStartedMs = 0;
 unsigned long gLastExpiryDiagMs = 0;
 unsigned long gIgnorePairDeviceUntilMs = 0;
 unsigned long gPendingConnectStartedMs = 0;
+bool gPendingHandshakeSend = false;
+
+// Static buffers — path + url-encoded JWT exceed loopTask stack during gWs.begin().
+char gWsConnectPath[1600];
+char gWsPathToken[NvsStore::kMaxTokenLen];
+char gWsUrlEncodedToken[NvsStore::kMaxTokenLen * 3];
 
 void disableLibraryWebSocketReconnect() {
     gWs.setReconnectInterval(HUB_LIBRARY_RECONNECT_DISABLED_MS);
@@ -363,6 +371,90 @@ uint64_t parseExpiresAtMs(const char* iso) {
     return utcToUnixMs(year, month, day, hour, minute, second);
 }
 
+void warmNetworkPath(WifiManager* wifi, NvsStore* nvs) {
+    WiFiClient client;
+    const IPAddress gateway = WiFi.gatewayIP();
+    if (gateway != IPAddress(0, 0, 0, 0)) {
+        client.setTimeout(1500);
+        client.connect(gateway, 80);
+        client.stop();
+    }
+    yield();
+
+    if (wifi == nullptr || nvs == nullptr) {
+        return;
+    }
+
+    char serverUrl[NvsStore::kMaxStringLen];
+    buildEffectiveServerUrl(*nvs, serverUrl, sizeof(serverUrl));
+    char host[96];
+    uint16_t port = 5031;
+    bool tls = false;
+    if (!parseServerUrl(serverUrl, host, sizeof(host), &port, &tls)) {
+        return;
+    }
+
+    IPAddress apiIp;
+    if (apiIp.fromString(host)) {
+        wifi->pokeHostArp(apiIp);
+    }
+}
+
+bool getApiHostIp(NvsStore& nvs, IPAddress& out) {
+    char serverUrl[NvsStore::kMaxStringLen];
+    buildEffectiveServerUrl(nvs, serverUrl, sizeof(serverUrl));
+    char host[96];
+    uint16_t port = 5031;
+    bool tls = false;
+    if (!parseServerUrl(serverUrl, host, sizeof(host), &port, &tls)) {
+        return false;
+    }
+    return out.fromString(host);
+}
+
+bool probeTcpHost(const char* host, uint16_t port) {
+    if (host == nullptr || host[0] == '\0') {
+        return false;
+    }
+
+    IPAddress ip;
+    if (!ip.fromString(host)) {
+        Serial.print(F("[HUB] TCP probe bad host "));
+        Serial.println(host);
+        return false;
+    }
+
+    WiFiClient client;
+    client.setTimeout(2000);
+    const bool ok = client.connect(ip, port, 2000);
+    if (ok) {
+        client.stop();
+    }
+
+    Serial.print(F("[HUB] TCP probe "));
+    Serial.print(host);
+    Serial.print(':');
+    Serial.print(port);
+    Serial.println(ok ? F(" ok") : F(" failed"));
+    return ok;
+}
+
+void logNetworkDiagnostics() {
+    WiFiClient client;
+    const IPAddress gateway = WiFi.gatewayIP();
+    Serial.print(F("[HUB] gateway "));
+    Serial.print(gateway);
+    Serial.print(F(" probe "));
+    if (gateway != IPAddress(0, 0, 0, 0) && client.connect(gateway, 80, 1500)) {
+        Serial.println(F("ok"));
+        client.stop();
+    } else {
+        Serial.println(F("failed"));
+    }
+    Serial.print(F("[HUB] local IP="));
+    Serial.println(WiFi.localIP());
+}
+
 bool negotiateConnectionToken(NvsStore& nvs, char* tokenOut, size_t tokenLen) {
     char serverUrl[NvsStore::kMaxStringLen];
     buildEffectiveServerUrl(nvs, serverUrl, sizeof(serverUrl));
@@ -405,18 +497,24 @@ bool negotiateConnectionToken(NvsStore& nvs, char* tokenOut, size_t tokenLen) {
             gWsPort);
     }
 
+    if (gNegotiateClient.connected()) {
+        gNegotiateClient.stop();
+    }
+
 #ifdef SOMNET_USE_WSS
     WiFiClientSecure tlsClient;
     if (gUseTls) {
         tlsClient.setInsecure();
         http.begin(tlsClient, negotiateUrl);
     } else {
-        http.begin(negotiateUrl);
+        http.begin(gNegotiateClient, negotiateUrl);
     }
 #else
-    http.begin(negotiateUrl);
+    http.begin(gNegotiateClient, negotiateUrl);
 #endif
     http.addHeader("Content-Type", "application/json");
+    http.setReuse(false);
+    http.setConnectTimeout(3000);
     http.setTimeout(HUB_NEGOTIATE_TIMEOUT_MS);
 
     Serial.print(F("[HUB] negotiate "));
@@ -430,17 +528,22 @@ bool negotiateConnectionToken(NvsStore& nvs, char* tokenOut, size_t tokenLen) {
             Serial.print(F(" ("));
             Serial.print(http.errorToString(status).c_str());
             Serial.print(F(")"));
+            if (gActiveClient != nullptr) {
+                gActiveClient->onNegotiateTransportError();
+            }
         }
         Serial.println();
         if (status < 0) {
             Serial.println(F("[HUB] hint: same LAN subnet as API? API bound to 0.0.0.0:5031?"));
         }
         http.end();
+        gNegotiateClient.stop();
         return false;
     }
 
     const String body = http.getString();
     http.end();
+    gNegotiateClient.stop();
 
     StaticJsonDocument<768> doc;
     const DeserializationError err = deserializeJson(doc, body);
@@ -458,6 +561,9 @@ bool negotiateConnectionToken(NvsStore& nvs, char* tokenOut, size_t tokenLen) {
 
     strncpy(tokenOut, token, tokenLen - 1);
     tokenOut[tokenLen - 1] = '\0';
+    if (gActiveClient != nullptr) {
+        gActiveClient->clearTransportFailures();
+    }
     return true;
 }
 
@@ -652,26 +758,24 @@ void processIncomingText(const uint8_t* data, size_t len) {
     }
 }
 
-bool buildWebSocketPath(NvsStore& nvs, DeviceIdentity& identity, char* pathOut, size_t pathLen) {
+bool buildWebSocketPath(NvsStore& nvs, DeviceIdentity& identity) {
     if (gUsePairedConnect && nvs.isPaired()) {
-        char token[NvsStore::kMaxTokenLen];
-        if (!nvs.getAccessToken(token, sizeof(token))) {
+        if (!nvs.getAccessToken(gWsPathToken, sizeof(gWsPathToken))) {
             return false;
         }
-        char encoded[NvsStore::kMaxTokenLen * 3];
-        urlEncode(token, encoded, sizeof(encoded));
+        urlEncode(gWsPathToken, gWsUrlEncodedToken, sizeof(gWsUrlEncodedToken));
         return snprintf(
-                   pathOut,
-                   pathLen,
+                   gWsConnectPath,
+                   sizeof(gWsConnectPath),
                    "%s?id=%s&access_token=%s",
                    kHubPath,
                    gConnectionToken,
-                   encoded) > 0;
+                   gWsUrlEncodedToken) > 0;
     }
 
     return snprintf(
-               pathOut,
-               pathLen,
+               gWsConnectPath,
+               sizeof(gWsConnectPath),
                "%s?id=%s&deviceId=%s",
                kHubPath,
                gConnectionToken,
@@ -679,8 +783,7 @@ bool buildWebSocketPath(NvsStore& nvs, DeviceIdentity& identity, char* pathOut, 
 }
 
 bool startWebSocket(NvsStore& nvs, DeviceIdentity& identity) {
-    char path[1600];
-    if (!buildWebSocketPath(nvs, identity, path, sizeof(path))) {
+    if (!buildWebSocketPath(nvs, identity)) {
         Serial.println(F("[HUB] failed to build websocket path"));
         return false;
     }
@@ -694,22 +797,31 @@ bool startWebSocket(NvsStore& nvs, DeviceIdentity& identity) {
     Serial.print(gWsHost);
     Serial.print(':');
     Serial.print(gWsPort);
-    Serial.println(path);
+    Serial.println(gWsConnectPath);
 
+    gPendingHandshakeSend = false;
     gWs.disconnect();
     enableLibraryWebSocketConnect();
     if (gUseTls) {
 #ifdef SOMNET_USE_WSS
-        gWs.beginSSL(gWsHost, gWsPort, path, "");
+        gWs.beginSSL(gWsHost, gWsPort, gWsConnectPath, "");
 #else
         Serial.println(F("[HUB] wss connect blocked — flash prod_cloud build"));
         return false;
 #endif
     } else {
-        gWs.begin(gWsHost, gWsPort, path);
+        gWs.begin(gWsHost, gWsPort, gWsConnectPath);
     }
     gPendingConnectStartedMs = millis();
     return true;
+}
+
+void sendPendingHandshake() {
+    if (!gPendingHandshakeSend || !gWs.isConnected()) {
+        return;
+    }
+    gPendingHandshakeSend = false;
+    sendHandshake();
 }
 
 void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
@@ -719,6 +831,7 @@ void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
         resetRxBuffer();
         gHandshakeComplete = false;
         gHandshakeStartedMs = 0;
+        gPendingHandshakeSend = false;
         if (gActiveClient != nullptr) {
             gActiveClient->clearHandshakeState();
         }
@@ -733,7 +846,7 @@ void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
         resetRxBuffer();
         gHandshakeComplete = false;
         gHandshakeStartedMs = millis();
-        sendHandshake();
+        gPendingHandshakeSend = true;
         break;
     case WStype_TEXT:
         processIncomingText(payload, length);
@@ -763,6 +876,14 @@ bool SignalRClient::begin(NvsStore* nvsStore, DeviceIdentity* identity, WifiMana
     backoffMs_ = HUB_RETRY_BASE_MS;
     handshakeComplete_ = false;
     pendingConnect_ = false;
+
+    const esp_reset_reason_t resetReason = esp_reset_reason();
+    hubBootSettleMs_ = (resetReason == ESP_RST_POWERON || resetReason == ESP_RST_BROWNOUT)
+        ? HUB_COLD_BOOT_SETTLE_MS
+        : HUB_BOOT_SETTLE_MS;
+    Serial.print(F("[HUB] boot settle "));
+    Serial.print(hubBootSettleMs_ / 1000);
+    Serial.println(F(" s"));
 
     gWs.onEvent(onWebSocketEvent);
     disableLibraryWebSocketReconnect();
@@ -811,12 +932,156 @@ void SignalRClient::clearHandshakeState() {
     gHandshakeComplete = false;
 }
 
+void SignalRClient::beginArpWarm(const IPAddress& target) {
+    if (wifi_ == nullptr || target == IPAddress(0, 0, 0, 0)) {
+        return;
+    }
+    if (wifi_->isHostArpResolved(target)) {
+        arpWarmActive_ = false;
+        return;
+    }
+
+    arpWarmTarget_ = target;
+    arpWarmActive_ = true;
+    arpWarmStartedMs_ = millis();
+    lastArpPokeMs_ = 0;
+    wifi_->pokeHostArp(target);
+    Serial.print(F("[WIFI] ARP warm started "));
+    Serial.println(target);
+}
+
+bool SignalRClient::pollArpWarm() {
+    if (!arpWarmActive_ || wifi_ == nullptr) {
+        return true;
+    }
+
+    const unsigned long now = millis();
+    if (now - lastArpPokeMs_ >= LAN_ARP_POKE_INTERVAL_MS) {
+        lastArpPokeMs_ = now;
+        wifi_->pokeHostArp(arpWarmTarget_);
+    }
+
+    if (wifi_->isHostArpResolved(arpWarmTarget_)) {
+        arpWarmActive_ = false;
+        Serial.print(F("[WIFI] ARP resolved "));
+        Serial.println(arpWarmTarget_);
+        return true;
+    }
+
+    if (now - arpWarmStartedMs_ >= LAN_ARP_WARM_MAX_MS) {
+        arpWarmActive_ = false;
+        Serial.print(F("[WIFI] ARP warm timeout "));
+        Serial.println(arpWarmTarget_);
+        return true;
+    }
+
+    return false;
+}
+
+void SignalRClient::onWifiLinkRestored() {
+    Serial.println(F("[HUB] Wi-Fi link restored — resetting hub reconnect"));
+    wifiLinkUpMs_ = millis();
+    lastStallRecoveryMs_ = 0;
+    consecutiveTransportFailures_ = 0;
+    transportRecoveryUsed_ = false;
+    warmNetworkPath(wifi_, nvs_);
+    IPAddress apiIp;
+    if (getApiHostIp(*nvs_, apiIp)) {
+        beginArpWarm(apiIp);
+    }
+    gSuppressDisconnectNotify = true;
+    gWs.disconnect();
+    disableLibraryWebSocketReconnect();
+    pendingConnect_ = false;
+    gPendingConnectStartedMs = 0;
+    clearHandshakeState();
+    onTransportLost(true);
+}
+
+void SignalRClient::recoverStalledConnection() {
+    if (lastStallRecoveryMs_ != 0 && millis() - lastStallRecoveryMs_ < HUB_STALL_RECOVERY_MS) {
+        return;
+    }
+
+    lastStallRecoveryMs_ = millis();
+    Serial.print(F("[HUB] stall recovery — state="));
+    Serial.print(hubStateLabel());
+    Serial.println(F(" — forcing reconnect"));
+    warmNetworkPath(wifi_, nvs_);
+    if (consecutiveTransportFailures_ > 0 && !transportRecoveryUsed_) {
+        recoverNetworkTransport();
+        return;
+    }
+    gSuppressDisconnectNotify = true;
+    gWs.disconnect();
+    disableLibraryWebSocketReconnect();
+    pendingConnect_ = false;
+    gPendingConnectStartedMs = 0;
+    clearHandshakeState();
+    onTransportLost(true);
+}
+
+void SignalRClient::onNegotiateTransportError() {
+    if (wifi_ != nullptr && nvs_ != nullptr) {
+        IPAddress apiIp;
+        if (getApiHostIp(*nvs_, apiIp) && !wifi_->isHostArpResolved(apiIp)) {
+            beginArpWarm(apiIp);
+            return;
+        }
+    }
+
+    ++consecutiveTransportFailures_;
+    if (consecutiveTransportFailures_ >= HUB_TRANSPORT_FAILURE_REBOOT_COUNT) {
+        Serial.println(F("[HUB] transport failures — rebooting device"));
+        delay(100);
+        ESP.restart();
+    }
+}
+
+void SignalRClient::clearTransportFailures() {
+    consecutiveTransportFailures_ = 0;
+    transportRecoveryUsed_ = false;
+}
+
+void SignalRClient::recoverNetworkTransport() {
+    Serial.print(F("[HUB] transport recovery after "));
+    Serial.print(consecutiveTransportFailures_);
+    Serial.println(F(" failures — refreshing Wi-Fi"));
+    transportRecoveryUsed_ = true;
+    wifiLinkUpMs_ = millis();
+
+    for (uint8_t i = 0; i < 5; ++i) {
+        gWs.loop();
+        yield();
+    }
+
+    gSuppressDisconnectNotify = true;
+    gWs.disconnect();
+    disableLibraryWebSocketReconnect();
+    pendingConnect_ = false;
+    gPendingConnectStartedMs = 0;
+    clearHandshakeState();
+
+    if (gNegotiateClient.connected()) {
+        gNegotiateClient.stop();
+    }
+
+    if (wifi_ != nullptr) {
+        wifi_->refreshAssociation();
+    }
+
+    onTransportLost(true);
+}
+
 void SignalRClient::poll() {
+    static bool loggedWaitingForSntp = false;
+
     if (!initialized_ || nvs_ == nullptr || identity_ == nullptr || wifi_ == nullptr) {
         return;
     }
 
     if (wifi_->isSoftAp() || !wifi_->isConnected() || !hasHubServerConfig(*nvs_)) {
+        wifiLinkUpMs_ = 0;
         if (state_ != HubConnectionState::Offline) {
             gSuppressDisconnectNotify = true;
             gWs.disconnect();
@@ -830,15 +1095,29 @@ void SignalRClient::poll() {
         return;
     }
 
+    if (wifiLinkUpMs_ == 0) {
+        wifiLinkUpMs_ = millis();
+    }
+
+    if (wifi_->takeLinkRestored()) {
+        onWifiLinkRestored();
+    }
+
     gWs.loop();
+    sendPendingHandshake();
     handshakeComplete_ = gHandshakeComplete;
 
-    if (nvs_->isPaired() && !wifi_->isTimeSynced()) {
-        static bool loggedWaitingForSntp = false;
+    if (nvs_->isPaired() && wifi_->isTimeSyncPending()) {
         if (!loggedWaitingForSntp) {
             loggedWaitingForSntp = true;
             Serial.println(F("[HUB] waiting for SNTP before paired hub connect"));
         }
+        state_ = HubConnectionState::Backoff;
+        return;
+    }
+    loggedWaitingForSntp = false;
+
+    if (millis() - wifiLinkUpMs_ < hubBootSettleMs_) {
         state_ = HubConnectionState::Backoff;
         return;
     }
@@ -853,9 +1132,16 @@ void SignalRClient::poll() {
     if (gWs.isConnected() && handshakeComplete_) {
         gHandshakeStartedMs = 0;
         gPendingConnectStartedMs = 0;
+        wifiLinkUpMs_ = millis();
+        lastStallRecoveryMs_ = 0;
         state_ = (gUsePairedConnect && nvs_->isPaired()) ? HubConnectionState::Paired : HubConnectionState::Unpaired;
         pendingConnect_ = false;
         return;
+    }
+
+    if (!isHubConnected() && millis() - wifiLinkUpMs_ >= HUB_STALL_RECOVERY_MS) {
+        recoverStalledConnection();
+        wifiLinkUpMs_ = millis();
     }
 
     if (gWs.isConnected()) {
@@ -897,10 +1183,53 @@ void SignalRClient::poll() {
         return;
     }
 
+    if (arpWarmActive_ && !pollArpWarm()) {
+        state_ = HubConnectionState::Backoff;
+        return;
+    }
+
+    if (!transportRecoveryUsed_ &&
+        consecutiveTransportFailures_ >= HUB_TRANSPORT_FAILURE_RECOVERY_COUNT) {
+        recoverNetworkTransport();
+        return;
+    }
+
+    for (uint8_t i = 0; i < 3; ++i) {
+        gWs.loop();
+        yield();
+    }
+
+    IPAddress apiIp;
+    const bool hasApiIp = getApiHostIp(*nvs_, apiIp);
+
+    if (consecutiveTransportFailures_ > 0 && hasApiIp) {
+        char serverUrl[NvsStore::kMaxStringLen];
+        buildEffectiveServerUrl(*nvs_, serverUrl, sizeof(serverUrl));
+        char probeHost[96];
+        uint16_t probePort = 5031;
+        bool probeTls = false;
+        if (parseServerUrl(serverUrl, probeHost, sizeof(probeHost), &probePort, &probeTls) &&
+            !probeTcpHost(probeHost, probePort)) {
+            logNetworkDiagnostics();
+            if (wifi_->isHostArpResolved(apiIp)) {
+                onNegotiateTransportError();
+            } else {
+                beginArpWarm(apiIp);
+            }
+        }
+    }
+
+    if (hasApiIp) {
+        wifi_->pokeHostArp(apiIp);
+    }
+
     state_ = HubConnectionState::Negotiating;
     handshakeComplete_ = false;
 
     if (!negotiateConnectionToken(*nvs_, gConnectionToken, sizeof(gConnectionToken))) {
+        if (hasApiIp && !wifi_->isHostArpResolved(apiIp)) {
+            beginArpWarm(apiIp);
+        }
         Serial.print(F("[HUB] retry in "));
         Serial.print(backoffMs_ / 1000);
         Serial.println(F(" s"));
@@ -919,7 +1248,11 @@ void SignalRClient::poll() {
         nextAttemptMs_ = millis() + backoffMs_;
         backoffMs_ = min(backoffMs_ * 2, HUB_RETRY_MAX_MS);
         state_ = HubConnectionState::Backoff;
+        return;
     }
+
+    // Defer handshake + further hub work to next loop iteration (shallower stack).
+    return;
 }
 
 void SignalRClient::onTransportLost(bool immediateRetry) {
@@ -936,7 +1269,11 @@ void SignalRClient::onTransportLost(bool immediateRetry) {
     }
 }
 
-bool SignalRClient::sendAckCommand(const char* correlationId, bool success, const char* message) {
+bool SignalRClient::sendAckCommand(
+    const char* correlationId,
+    bool success,
+    const char* message,
+    const char* resultJson) {
     if (correlationId == nullptr || correlationId[0] == '\0') {
         return false;
     }
@@ -949,7 +1286,7 @@ bool SignalRClient::sendAckCommand(const char* correlationId, bool success, cons
     char invocationId[12];
     snprintf(invocationId, sizeof(invocationId), "%lu", static_cast<unsigned long>(gAckInvocationCounter));
 
-    StaticJsonDocument<512> doc;
+    StaticJsonDocument<768> doc;
     doc["type"] = 1;
     doc["target"] = "AckCommand";
     doc["invocationId"] = invocationId;
@@ -959,8 +1296,11 @@ bool SignalRClient::sendAckCommand(const char* correlationId, bool success, cons
     ack["correlationId"] = correlationId;
     ack["success"] = success;
     ack["message"] = message != nullptr ? message : "";
+    if (resultJson != nullptr && resultJson[0] != '\0') {
+        ack["resultJson"] = resultJson;
+    }
 
-    char buffer[512];
+    char buffer[768];
     const size_t jsonLen = serializeJson(doc, buffer, sizeof(buffer) - 2);
     if (jsonLen == 0 || jsonLen >= sizeof(buffer) - 2) {
         Serial.println(F("[HUB] AckCommand JSON too large"));

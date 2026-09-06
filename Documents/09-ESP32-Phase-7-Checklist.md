@@ -357,4 +357,5 @@ Future phase checklists:
 | 0–5 | Prior checklists | Complete |
 | 6 | [09-ESP32-Phase-6-Checklist.md](./09-ESP32-Phase-6-Checklist.md) | **Signed off** 2026-09-05 |
 | 7 | [09-ESP32-Phase-7-Checklist.md](./09-ESP32-Phase-7-Checklist.md) | **Signed off** 2026-09-06 |
-| 8+ | *Created when prior phase completes* | — |
+| 8 | [09-ESP32-Phase-8-Checklist.md](./09-ESP32-Phase-8-Checklist.md) | **Next** |
+| 9+ | *Created when prior phase completes* | — |

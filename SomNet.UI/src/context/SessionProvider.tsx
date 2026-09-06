@@ -31,7 +31,8 @@ interface ActiveSessionState {
 interface SessionContextValue {
   activeSession: ActiveSessionState | null;
   beginAutomaticSession: () => Promise<void>;
-  recordManualStroke: (powerPercent: number) => Promise<void>;
+  recordManualStroke: (powerPercent: number, actualStrokeMs?: number) => Promise<void>;
+  recordManualAbort: () => Promise<void>;
   recordManualBurst: (
     powerPercent: number,
     burstStrokes: number,
@@ -139,7 +140,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [domTarget, selectedSub]);
 
   const recordManualStroke = useCallback(
-    async (powerPercent: number) => {
+    async (powerPercent: number, actualStrokeMs?: number) => {
       await ensureManualSession();
 
       const current = activeSessionRef.current;
@@ -149,7 +150,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
       const nextSession: ActiveSessionState = {
         ...current,
-        events: [...current.events, { type: 'stroke', powerPercent }],
+        events: [...current.events, { type: 'stroke', powerPercent, actualStrokeMs }],
       };
       activeSessionRef.current = nextSession;
       setActiveSession(nextSession);
@@ -157,6 +158,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     },
     [ensureManualSession, persistManualProgress],
   );
+
+  const recordManualAbort = useCallback(async () => {
+    await ensureManualSession();
+
+    const current = activeSessionRef.current;
+    if (!current || current.mode !== 'manual') {
+      return;
+    }
+
+    const nextSession: ActiveSessionState = {
+      ...current,
+      abortCount: current.abortCount + 1,
+    };
+    activeSessionRef.current = nextSession;
+    setActiveSession(nextSession);
+    await persistManualProgress(nextSession);
+  }, [ensureManualSession, persistManualProgress]);
 
   const recordManualBurst = useCallback(
     async (powerPercent: number, burstStrokes: number, burstDelaySeconds: number) => {
@@ -240,6 +258,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       activeSession,
       beginAutomaticSession,
       recordManualStroke,
+      recordManualAbort,
       recordManualBurst,
       endManualSession,
       endAutomaticSession,
@@ -253,6 +272,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       endManualSession,
       recordManualBurst,
       recordManualStroke,
+      recordManualAbort,
     ],
   );
 

@@ -14,6 +14,17 @@ using SomNet.Shared.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var showSql = builder.Configuration.GetValue("Logging:ShowSql", false);
+if (showSql)
+{
+    builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Information);
+}
+else
+{
+    builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
+    builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
+}
+
 var dataDirectory = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "data"));
 Directory.CreateDirectory(dataDirectory);
 
@@ -22,13 +33,27 @@ var connectionString =
     $"Server=(localdb)\\MSSQLLocalDB;AttachDbFilename={databaseFilePath};Database=SomNet;Trusted_Connection=True;TrustServerCertificate=True";
 
 builder.Services.AddDbContext<SomNetDbContext>(options =>
-    options.UseSqlServer(connectionString));
+{
+    options.UseSqlServer(connectionString);
+    if (showSql && builder.Environment.IsDevelopment())
+    {
+        options.EnableSensitiveDataLogging();
+        options.EnableDetailedErrors();
+    }
+});
 
 builder.Services.AddScoped<ISomNetDataStore, SomNetDataStore>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddSingleton<IDeviceConnectionRegistry, DeviceConnectionRegistry>();
 builder.Services.AddScoped<IDeviceTokenService, DeviceTokenService>();
 builder.Services.AddScoped<IHardwareCommandDispatcher, HardwareCommandDispatcher>();
+builder.Services.Configure<HardwareReachabilityOptions>(
+    builder.Configuration.GetSection(HardwareReachabilityOptions.SectionName));
+
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddHostedService<DeviceReachabilityBackgroundService>();
+}
 
 builder.Services
     .AddOptions<JwtSettings>()
@@ -92,7 +117,12 @@ builder.Services.AddAuthorization();
 builder.Services.AddControllers()
     .AddJsonOptions(options => SomNetJsonOptions.Configure(options.JsonSerializerOptions));
 
-builder.Services.AddSignalR()
+builder.Services.AddSignalR(options =>
+{
+    options.KeepAliveInterval = TimeSpan.FromSeconds(10);
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+    options.HandshakeTimeout = TimeSpan.FromSeconds(15);
+})
     .AddJsonProtocol(options => SomNetJsonOptions.Configure(options.PayloadSerializerOptions));
 
 builder.Services.AddEndpointsApiExplorer();
@@ -120,6 +150,24 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+if (app.Environment.IsDevelopment())
+{
+    app.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.Register(() =>
+    {
+        var reachability = app.Configuration
+            .GetSection(HardwareReachabilityOptions.SectionName)
+            .Get<HardwareReachabilityOptions>();
+        if (reachability?.Enabled == true)
+        {
+            app.Logger.LogInformation(
+                "LAN tip: if ESP32 only connects after you open http://<device-ip>/, enable reachability ping " +
+                "and/or run scripts/Allow-SomNetApiFirewall.ps1 — often AP/client isolation, not SQL or SignalR.");
+        }
+    });
+}
+
+app.Logger.LogInformation("SQL console logging is {SqlLoggingState}", showSql ? "enabled" : "disabled");
+
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<SomNetDbContext>();
@@ -132,6 +180,18 @@ var uiDistExists = Directory.Exists(uiDistPath);
 
 if (app.Environment.IsDevelopment())
 {
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Path.StartsWithSegments("/hubs/hardware/negotiate"))
+        {
+            app.Logger.LogInformation(
+                "Hub negotiate from {RemoteIp}",
+                context.Connection.RemoteIpAddress);
+        }
+
+        await next();
+    });
+
     app.UseSwagger();
     app.UseSwaggerUI(options =>
     {

@@ -14,13 +14,16 @@ public class DevicesController : ControllerBase
 {
     private readonly IDeviceTokenService _deviceTokenService;
     private readonly IHardwareCommandDispatcher _commandDispatcher;
+    private readonly IDeviceConnectionRegistry _connectionRegistry;
 
     public DevicesController(
         IDeviceTokenService deviceTokenService,
-        IHardwareCommandDispatcher commandDispatcher)
+        IHardwareCommandDispatcher commandDispatcher,
+        IDeviceConnectionRegistry connectionRegistry)
     {
         _deviceTokenService = deviceTokenService;
         _commandDispatcher = commandDispatcher;
+        _connectionRegistry = connectionRegistry;
     }
 
     [HttpGet("status")]
@@ -40,6 +43,17 @@ public class DevicesController : ControllerBase
         }
 
         return Ok(await _deviceTokenService.GetStatusAsync(domTarget, subTarget, cancellationToken));
+    }
+
+    [HttpGet("unpaired")]
+    public ActionResult<IReadOnlyList<UnpairedDeviceResponseDto>> ListUnpairedDevices()
+    {
+        if (GetDomTarget() is null)
+        {
+            return Unauthorized();
+        }
+
+        return Ok(_connectionRegistry.ListUnpairedDevices());
     }
 
     [HttpPost("pair")]
@@ -102,6 +116,11 @@ public class DevicesController : ControllerBase
         if (domTarget is null)
         {
             return Unauthorized();
+        }
+
+        if (request is null)
+        {
+            return BadRequest("Request body is required.");
         }
 
         if (string.IsNullOrWhiteSpace(request.SubTarget))

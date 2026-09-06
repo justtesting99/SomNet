@@ -17,6 +17,8 @@ import { RadioGroup, SelectField } from '@/components/ui/RadioGroup';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 import { computeStrokeMs } from '@/utils/stroke';
 
+const PHASE9_TOOLTIP = 'Automatic hardware mode is coming in Phase 9.';
+
 export function AutomaticControls() {
   const { settings, updateAutomatic, isLoading } = useOptions();
   const state = settings.automatic;
@@ -221,6 +223,7 @@ export function AutomaticControls() {
 
         <Panel title="Controls">
           <div className="flex h-full flex-col justify-center gap-3">
+            <p className="text-xs text-amber-200/90">{PHASE9_TOOLTIP}</p>
             <SelectField
               label="Automatic Mode"
               value={state.automaticMode}
@@ -234,7 +237,8 @@ export function AutomaticControls() {
               commandKey={HARDWARE_COMMAND_KEYS.automaticStart}
               size="lg"
               fullWidth
-              disabled={state.running}
+              disabled
+              title={PHASE9_TOOLTIP}
               onCommand={handleStart}
               className="py-4 text-base"
             >
@@ -245,7 +249,8 @@ export function AutomaticControls() {
               size="lg"
               fullWidth
               variant="secondary"
-              disabled={!state.running}
+              disabled
+              title={PHASE9_TOOLTIP}
               onCommand={handleStop}
               className="py-4 text-base"
             >
