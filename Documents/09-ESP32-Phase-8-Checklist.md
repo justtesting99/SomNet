@@ -198,11 +198,12 @@ Update **Status** above and check boxes below as work completes. When Phase 8 is
 - [x] Session history reflects stroke **after** ack (not before); UI pending state tracks relay duration
 - [x] Command button shows pending during request (~stroke duration + network)
 
-### F.2 Device reject / offline
+### F.2 Device reject / offline — verified 2026-09-06
 
-- [ ] Unpaired Sub → clear error in UI
-- [ ] Device disconnected → “not connected” message
-- [ ] Invalid payload (if testable) → no session write
+- [x] Unpaired Sub → clear error in UI
+- [x] Device disconnected → “not connected” message
+- [x] Invalid payload (if testable) → no session write
+- [x] **Stroke disabled** when device/SignalR not ready for selected Sub (`systemStatus.isReady`)
 
 ### F.3 Abort mid-pulse — verified 2026-09-06
 

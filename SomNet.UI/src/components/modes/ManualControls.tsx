@@ -46,6 +46,10 @@ export function ManualControls() {
 
   const strokePending = isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke);
   const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
+  const hardwareReady = systemStatus.isReady;
+  const strokeDisabledReason = hardwareReady
+    ? undefined
+    : systemStatus.detail || systemStatus.summary;
 
   function update<K extends keyof ManualControlState>(key: K, value: ManualControlState[K]) {
     updateManual({ ...state, [key]: value });
@@ -155,6 +159,12 @@ export function ManualControls() {
         </Panel>
 
         <Panel title="Actions">
+          {!hardwareReady && !commandError && !strokePending ? (
+            <p className="mb-3 text-sm text-amber-400/90" role="status">
+              {strokeDisabledReason}
+            </p>
+          ) : null}
+
           {commandError ? (
             <p className="mb-3 text-sm text-red-400" role="alert">
               {commandError}
@@ -166,6 +176,8 @@ export function ManualControls() {
             size="lg"
             fullWidth
             className="py-4 text-base"
+            disabled={!hardwareReady}
+            title={strokeDisabledReason}
             onCommand={handleStroke}
           >
             Stroke

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SubTargetName } from '@/config/sessionUsers';
 import { fetchSubs } from '@/api/subs';
 import {
@@ -86,7 +86,7 @@ function expiryLabel(status: DeviceStatusResponse | null): string {
 export function HardwareDialog() {
   const { isDialogOpen, closeDialog } = useHardwareDialog();
   const { selectedSub } = useSubTarget();
-  const { refresh: refreshSystemStatus } = useSystemStatus();
+  const { refresh: refreshSystemStatus, status: systemStatus } = useSystemStatus();
   const [activeTab, setActiveTab] = useState<HardwareTab>('all-subs');
   const [rows, setRows] = useState<SubHardwareRow[]>([]);
   const [unpairedDevices, setUnpairedDevices] = useState<UnpairedDeviceResponse[]>([]);
@@ -96,9 +96,13 @@ export function HardwareDialog() {
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [busySub, setBusySub] = useState<SubTargetName | null>(null);
+  const skipNextStatusSyncRef = useRef(false);
 
-  const loadAll = useCallback(async () => {
-    setIsLoading(true);
+  const loadAll = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setIsLoading(true);
+    }
     setError('');
 
     try {
@@ -129,11 +133,15 @@ export function HardwareDialog() {
         loadError instanceof ApiError && loadError.message
           ? loadError.message
           : 'Unable to load hardware data.';
-      setError(loadMessage);
-      setRows([]);
-      setUnpairedDevices([]);
+      if (!silent) {
+        setError(loadMessage);
+        setRows([]);
+        setUnpairedDevices([]);
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      }
     }
   }, [selectedSub]);
 
@@ -146,8 +154,22 @@ export function HardwareDialog() {
     setDeviceId('');
     setMessage('');
     setError('');
+    skipNextStatusSyncRef.current = true;
     void loadAll();
   }, [isDialogOpen, loadAll]);
+
+  useEffect(() => {
+    if (!isDialogOpen || systemStatus.lastChecked === null) {
+      return;
+    }
+
+    if (skipNextStatusSyncRef.current) {
+      skipNextStatusSyncRef.current = false;
+      return;
+    }
+
+    void loadAll({ silent: true });
+  }, [isDialogOpen, systemStatus.lastChecked, loadAll]);
 
   useEffect(() => {
     if (!isDialogOpen) {
