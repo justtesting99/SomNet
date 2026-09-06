@@ -183,7 +183,8 @@ public sealed class DeviceTokenService : IDeviceTokenService
             DomTarget = normalizedDom,
             SubTarget = normalizedSub,
             IsPaired = registration is not null,
-            IsConnected = _connectionRegistry.IsPairedDeviceConnected(normalizedDom, normalizedSub),
+            IsConnected = registration is not null &&
+                _connectionRegistry.IsPairedDeviceConnected(normalizedDom, normalizedSub),
             DeviceId = registration?.DeviceId ?? _connectionRegistry.GetConnectedDeviceId(normalizedDom, normalizedSub),
             PairedAt = registration?.PairedAt,
             LastConnectedAt = registration?.LastConnectedAt,
@@ -226,6 +227,15 @@ public sealed class DeviceTokenService : IDeviceTokenService
 
         registration.IsRevoked = true;
         await _db.SaveChangesAsync(cancellationToken);
+
+        var normalizedDom = domTarget.Trim();
+        var normalizedSub = subTarget.Trim();
+        if (_connectionRegistry.IsPairedDeviceConnected(normalizedDom, normalizedSub))
+        {
+            await _hubContext.Clients
+                .Group(HardwareHubGroups.Paired(normalizedDom, normalizedSub))
+                .SendAsync(HardwareHubMethods.RevokePairing, cancellationToken);
+        }
     }
 
     public async Task<bool> TryDeliverPendingPairingAsync(

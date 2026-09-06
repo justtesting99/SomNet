@@ -225,42 +225,42 @@ D33 ──► button ──► GND (internal pull-up)
 
 ### F.1 API restart
 
-- [ ] Device paired + hub connected
-- [ ] Stop SomNet API ≥ 30 s; restart
-- [ ] Device reconnects automatically (serial backoff → negotiate → paired)
-- [ ] `GET /api/devices/status` → `isConnected: true` without re-pair
-- [ ] `stroke` command still works after recovery
+- [x] Device paired + hub connected
+- [x] Stop SomNet API ≥ 30 s; restart
+- [x] Device reconnects automatically (serial backoff → negotiate → paired)
+- [x] `GET /api/devices/status` → `isConnected: true` without re-pair
+- [x] `stroke` command still works after recovery — verified 2026-09-06 (post F.1/F.4)
 
 ### F.2 Wi‑Fi blip
 
-- [ ] Disable Wi‑Fi or reboot AP ≥ 30 s
-- [ ] Device reconnects Wi‑Fi then hub
-- [ ] No manual re-pair if token still valid
+- [x] Disable Wi‑Fi or reboot AP ≥ 30 s
+- [x] Device reconnects Wi‑Fi then hub
+- [x] No manual re-pair if token still valid
 
 ### F.3 Token revoke
 
-- [ ] `DELETE /api/devices/pair?subTarget=Slv66`
-- [ ] Device receives close / fails paired auth → unpaired mode
-- [ ] Re-pair from Options succeeds
+- [x] `DELETE /api/devices/pair?subTarget=Slv66`
+- [x] Device receives close / fails paired auth → unpaired mode
+- [x] Re-pair from Options succeeds
 
 ### F.4 Config HTTP + SignalR concurrent
 
-- [ ] While hub connected, open `http://<device-ip>/` and `/config` from phone
-- [ ] Pages load; no hub disconnect during browse
-- [ ] Save config (test unit) → reboot → still pairs if token retained
+- [x] While hub connected, open `http://<device-ip>/` and `/config` from phone
+- [x] Pages load; no hub disconnect during browse
+- [x] Save config (test unit) → reboot → still pairs if token retained
 
 ### F.5 Soak test (P7-D13 — 8 hours)
 
-- [ ] Run device **8 h** — API up on LAN (`ws://`), optional stroke every ~30–60 min
+- [ ] Run device **8 h** — API up on LAN (`ws://`), optional stroke every ~30–60 min — **started ~2026-09-06 20:44 local**; user monitoring, report failures only
 - [ ] Log: reconnect count, heap minimum, any WDT resets
 - [ ] Exit: hub connected or stable backoff; no crash loop
 
 | Test | Pass? | Date |
 |------|-------|------|
-| API restart → auto reconnect | ☐ | |
-| Wi‑Fi blip → auto reconnect | ☐ | |
-| Revoke → unpaired → re-pair | ☐ | |
-| Config UI + hub concurrent | ☐ | |
+| API restart → auto reconnect | ☑ | 2026-09-06 |
+| Wi‑Fi blip → auto reconnect | ☑ | 2026-09-06 |
+| Revoke → unpaired → re-pair | ☑ | 2026-09-06 |
+| Config UI + hub concurrent | ☑ | 2026-09-06 |
 | `prod_cloud` build (compile-only; wss E2E when Azure ready) | ☑ | 2026-09-05 |
 | 8 h soak (local ws) | ☐ | |
 | Token expiry → unpaired | ☑ | 2026-09-05 |
@@ -272,8 +272,12 @@ Device ID: esp32-84CCA85C36B4
 Sub target: Slv66
 Firmware: 0.7.0-phase7
 Token expiry test: 2026-09-05 — expiry diag ~569→329 s; clear at ~29 s buffer; unpaired WS stable (handshake ok), no PairDevice re-delivery loop
+F.1 API restart: 2026-09-06 — single disconnect; backoff 2→32 s; fresh negotiate token; handshake ok paired; no re-pair (same JWT)
+F.2 Wi-Fi blip: 2026-09-06 — link lost; Wi-Fi retry 10→20 s; reconnected; hub negotiate + handshake ok; same JWT
+F.3 Revoke/re-pair: 2026-09-06 — RevokePairing → clearing; unpaired WS; re-pair + handshake ok
+F.4 Config + hub: 2026-09-06 — friendly name save (drewtest2); reboot; paired retained; handshake ok; HTTP served during hub
 prod_cloud tested against: compile-only (Flash 53.7%, RAM 15.4%) — Azure wss E2E deferred
-Soak start / end: (pending)
+Soak start / end: started ~2026-09-06 20:44 local (8 h) / (pending)
 Reconnect events: (pending)
 ```
 
@@ -325,9 +329,9 @@ Reconnect events: (pending)
 
 | Criterion | Done |
 |-----------|------|
-| Survives API restart; reconnects without re-pair (valid token) | ☐ |
-| Survives Wi‑Fi blip; hub restores | ☐ |
-| Expired / revoked token → unpaired fallback | ☐ |
+| Survives API restart; reconnects without re-pair (valid token) | ☑ |
+| Survives Wi‑Fi blip; hub restores | ☑ |
+| Expired / revoked token → unpaired fallback | ☑ |
 | `prod_cloud` builds; wss path documented (**E2E deferred** — P7-D6) | ☑ |
 | Config UI visually aligned with SomNet theme (or deferred with sign-off) | ☐ |
 | Soak test completed per P7-D13 (**8 h** local) | ☐ |

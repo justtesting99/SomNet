@@ -43,6 +43,15 @@ uint32_t gAckInvocationCounter = 0;
 unsigned long gHandshakeStartedMs = 0;
 unsigned long gLastExpiryDiagMs = 0;
 unsigned long gIgnorePairDeviceUntilMs = 0;
+unsigned long gPendingConnectStartedMs = 0;
+
+void disableLibraryWebSocketReconnect() {
+    gWs.setReconnectInterval(HUB_LIBRARY_RECONNECT_DISABLED_MS);
+}
+
+void enableLibraryWebSocketConnect() {
+    gWs.setReconnectInterval(0);
+}
 
 uint64_t parseExpiresAtMs(const char* iso);
 
@@ -158,18 +167,31 @@ void logExpiryDiagnostics(NvsStore& nvs, WifiManager& wifi) {
         return;
     }
 
-    const unsigned long nowMs = millis();
-    if (nowMs - gLastExpiryDiagMs < 60000UL) {
-        return;
-    }
-    gLastExpiryDiagMs = nowMs;
-
     const uint64_t expiresMs = nvs.getTokenExpires();
     const time_t nowSec = time(nullptr);
     if (expiresMs == 0 || nowSec <= 0) {
+        const unsigned long nowMs = millis();
+        if (nowMs - gLastExpiryDiagMs < TOKEN_EXPIRY_DIAG_INTERVAL_MS) {
+            return;
+        }
+        gLastExpiryDiagMs = nowMs;
         Serial.println(F("[HUB] expiry diag: token_expires not set — re-pair after API restart"));
         return;
     }
+
+    const uint64_t nowMsWall = static_cast<uint64_t>(nowSec) * 1000ULL;
+    const uint64_t effectiveExpiresMs =
+        expiresMs > TOKEN_EXPIRY_BUFFER_MS ? expiresMs - TOKEN_EXPIRY_BUFFER_MS : 0;
+    if (effectiveExpiresMs <= nowMsWall ||
+        effectiveExpiresMs - nowMsWall > TOKEN_EXPIRY_DIAG_WINDOW_MS) {
+        return;
+    }
+
+    const unsigned long nowMs = millis();
+    if (nowMs - gLastExpiryDiagMs < TOKEN_EXPIRY_DIAG_INTERVAL_MS) {
+        return;
+    }
+    gLastExpiryDiagMs = nowMs;
 
     const int64_t remainingSec = static_cast<int64_t>(expiresMs / 1000ULL) - static_cast<int64_t>(nowSec);
     Serial.print(F("[HUB] expiry diag: remaining_s="));
@@ -507,6 +529,24 @@ void handleHubFrame(const char* frame) {
     }
 
     const char* target = doc["target"] | "";
+    if (strcmp(target, "RevokePairing") == 0) {
+        Serial.println(F("[HUB] pairing revoked — clearing"));
+        if (gNvs != nullptr && gNvs->isPaired()) {
+            gNvs->clearPairing();
+            gUsePairedConnect = false;
+        }
+        gImmediateReconnect = true;
+        gSuppressDisconnectNotify = true;
+        gWs.disconnect();
+        disableLibraryWebSocketReconnect();
+        gHandshakeComplete = false;
+        if (gActiveClient != nullptr) {
+            gActiveClient->clearHandshakeState();
+            gActiveClient->onTransportLost(true);
+        }
+        return;
+    }
+
     if (strcmp(target, "PairDevice") == 0) {
         JsonObject payload = doc["arguments"][0];
         if (payload.isNull()) {
@@ -657,6 +697,7 @@ bool startWebSocket(NvsStore& nvs, DeviceIdentity& identity) {
     Serial.println(path);
 
     gWs.disconnect();
+    enableLibraryWebSocketConnect();
     if (gUseTls) {
 #ifdef SOMNET_USE_WSS
         gWs.beginSSL(gWsHost, gWsPort, path, "");
@@ -667,6 +708,7 @@ bool startWebSocket(NvsStore& nvs, DeviceIdentity& identity) {
     } else {
         gWs.begin(gWsHost, gWsPort, path);
     }
+    gPendingConnectStartedMs = millis();
     return true;
 }
 
@@ -723,7 +765,7 @@ bool SignalRClient::begin(NvsStore* nvsStore, DeviceIdentity* identity, WifiMana
     pendingConnect_ = false;
 
     gWs.onEvent(onWebSocketEvent);
-    gWs.setReconnectInterval(0);
+    disableLibraryWebSocketReconnect();
     gWs.enableHeartbeat(0, 0, 0);
 
     return true;
@@ -776,10 +818,13 @@ void SignalRClient::poll() {
 
     if (wifi_->isSoftAp() || !wifi_->isConnected() || !hasHubServerConfig(*nvs_)) {
         if (state_ != HubConnectionState::Offline) {
+            gSuppressDisconnectNotify = true;
             gWs.disconnect();
+            disableLibraryWebSocketReconnect();
             state_ = HubConnectionState::Offline;
             handshakeComplete_ = false;
             pendingConnect_ = false;
+            gPendingConnectStartedMs = 0;
         }
         gWs.loop();
         return;
@@ -807,6 +852,7 @@ void SignalRClient::poll() {
 
     if (gWs.isConnected() && handshakeComplete_) {
         gHandshakeStartedMs = 0;
+        gPendingConnectStartedMs = 0;
         state_ = (gUsePairedConnect && nvs_->isPaired()) ? HubConnectionState::Paired : HubConnectionState::Unpaired;
         pendingConnect_ = false;
         return;
@@ -827,6 +873,21 @@ void SignalRClient::poll() {
     gHandshakeStartedMs = 0;
 
     if (pendingConnect_) {
+        if (gWs.isConnected()) {
+            state_ = HubConnectionState::Connecting;
+            return;
+        }
+        if (gPendingConnectStartedMs != 0 &&
+            millis() - gPendingConnectStartedMs >= HUB_CONNECT_TIMEOUT_MS) {
+            Serial.println(F("[HUB] connect timeout — retrying"));
+            gSuppressDisconnectNotify = true;
+            gWs.disconnect();
+            disableLibraryWebSocketReconnect();
+            pendingConnect_ = false;
+            gPendingConnectStartedMs = 0;
+            onTransportLost(false);
+            return;
+        }
         state_ = HubConnectionState::Connecting;
         return;
     }
@@ -863,7 +924,9 @@ void SignalRClient::poll() {
 
 void SignalRClient::onTransportLost(bool immediateRetry) {
     pendingConnect_ = false;
+    gPendingConnectStartedMs = 0;
     clearHandshakeState();
+    disableLibraryWebSocketReconnect();
     if (immediateRetry) {
         nextAttemptMs_ = 0;
         backoffMs_ = HUB_RETRY_BASE_MS;
