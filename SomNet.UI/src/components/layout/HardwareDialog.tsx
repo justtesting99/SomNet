@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SubTargetName } from '@/config/sessionUsers';
 import { fetchSubs } from '@/api/subs';
 import {
@@ -186,6 +186,11 @@ export function HardwareDialog() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isDialogOpen, closeDialog]);
 
+  const pairedOnlineRows = useMemo(
+    () => rows.filter((row) => row.status?.isConnected && row.status.deviceId),
+    [rows],
+  );
+
   if (!isDialogOpen) {
     return null;
   }
@@ -275,7 +280,7 @@ export function HardwareDialog() {
           {(
             [
               ['all-subs', 'All Subs'],
-              ['online', 'Online now'],
+              ['online', 'Online now (unpaired)'],
               ['paste-id', 'Enter device ID'],
             ] as const
           ).map(([tab, label]) => (
@@ -356,14 +361,17 @@ export function HardwareDialog() {
 
           {activeTab === 'online' ? (
             <div className="space-y-4">
+              <p className="text-sm text-slate-400">
+                Devices appear here when they connect to SomNet{' '}
+                <span className="text-slate-300">without a pairing token</span> — e.g. new units,
+                after factory reset, or after <span className="text-slate-300">Revoke</span> on All
+                Subs. Hardware already paired to a Sub stays on{' '}
+                <span className="text-slate-300">All Subs</span> as Connected.
+              </p>
+
               {isLoading ? (
                 <p className="text-sm text-slate-500">Loading online devices…</p>
-              ) : unpairedDevices.length === 0 ? (
-                <p className="text-sm text-slate-400">
-                  No unpaired devices are connected right now. Use Enter device ID if the device
-                  is offline.
-                </p>
-              ) : (
+              ) : unpairedDevices.length > 0 ? (
                 <ul className="space-y-2">
                   {unpairedDevices.map((device) => (
                     <li
@@ -373,7 +381,7 @@ export function HardwareDialog() {
                       <div>
                         <p className="font-mono text-sm text-slate-200">{device.deviceId}</p>
                         <p className="text-xs text-slate-500">
-                          Connected {formatSessionDateTimeDisplay(device.connectedAt)}
+                          Unpaired · connected {formatSessionDateTimeDisplay(device.connectedAt)}
                         </p>
                       </div>
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -405,6 +413,33 @@ export function HardwareDialog() {
                     </li>
                   ))}
                 </ul>
+              ) : (
+                <>
+                  <p className="text-sm text-slate-400">
+                    No unpaired devices are connected to the server right now.
+                  </p>
+                  {pairedOnlineRows.length > 0 ? (
+                    <div className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-3">
+                      <p className="text-sm font-medium text-slate-200">Paired and online</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        These units are already linked to a Sub — use All Subs to manage them.
+                      </p>
+                      <ul className="mt-3 space-y-2">
+                        {pairedOnlineRows.map((row) => (
+                          <li key={row.subTarget} className="text-sm text-slate-300">
+                            <span className="font-mono">{row.status?.deviceId}</span>
+                            <span className="text-slate-500"> → {row.subTarget}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      No hardware is connected. Use Enter device ID if the device has not joined
+                      the hub yet.
+                    </p>
+                  )}
+                </>
               )}
             </div>
           ) : null}
@@ -444,10 +479,7 @@ export function HardwareDialog() {
           ) : null}
         </div>
 
-        <footer className="flex shrink-0 justify-end gap-2 border-t border-slate-800 px-5 py-4">
-          <Button variant="ghost" onClick={() => void loadAll()} disabled={busy}>
-            Refresh
-          </Button>
+        <footer className="flex shrink-0 justify-end border-t border-slate-800 px-5 py-4">
           <Button variant="secondary" onClick={closeDialog}>
             Close
           </Button>

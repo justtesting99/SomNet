@@ -179,7 +179,7 @@ If the device is on your network and you can open its web page:
 | Capability | Available? | Notes |
 |------------|------------|--------|
 | Device connects to SomNet server (SignalR) | **Yes** | After Wi‑Fi + server URL configured and device paired |
-| Pairing from SomNet UI | **Yes** | Toolbar **Hardware** dialog (all Subs + online unpaired list); Options links to same dialog |
+| Pairing from SomNet UI | **Yes** | Toolbar **Hardware** dialog — **All Subs**, **Online now (unpaired)**, **Enter device ID**; Options links to same dialog |
 | Status page shows pairing state | **Yes** | Unpaired / paired / connected indicators |
 | Stroke from SomNet **web app buttons** | **Yes** | Manual mode **Stroke** → `POST /api/devices/commands`; session records device `actualStrokeMs` |
 | **Abort** during long stroke | **Yes** | **Abort** while stroke pending; relay opens; session tracks abort count |
@@ -187,6 +187,16 @@ If the device is on your network and you can open its web page:
 | Burst / automatic modes | **Not yet** | Phase 9 (UI buttons disabled) |
 
 **Server URL reminder:** Use the SomNet API **LAN address** on the device (e.g. `http://192.168.1.47:5031`). The SomNet browser on the same PC can use `localhost`; the ESP32 cannot.
+
+### Hardware dialog tabs
+
+| Tab | What it shows |
+|-----|----------------|
+| **All Subs** | Every Sub’s device ID, connection state, token expiry, Pair/Revoke |
+| **Online now (unpaired)** | ESP32 units connected to the server **without** a pairing token — new units, after factory reset, or after **Revoke**. Use **Pair** on a row to link to a Sub without typing the ID. |
+| **Enter device ID** | Paste the ID from the device status page when the unit is not on the unpaired list yet |
+
+**Important:** Hardware that is **already paired and online** appears on **All Subs** as **Connected**, not on **Online now**. After **Revoke**, the device reconnects unpaired and should appear on **Online now** within about 10 seconds.
 
 ---
 
@@ -200,7 +210,8 @@ If the device is on your network and you can open its web page:
 | Device ID needed for pairing | Status page at `http://<device-ip>/` after Wi‑Fi works, or USB serial log for installers |
 | Paired but “not connected” in SomNet | Check server URL on device; confirm API is running; same LAN; Windows Firewall on dev PC may block LAN inbound port 5031 |
 | Device was paired; now “not paired” after ~1 year | **Expected** — pairing token expired. Dom: Options → Hardware device → **Pair device** again (same Device ID). See [Pairing token renewal](./Hardware-User-Guide.md#pairing-token-renewal-about-once-a-year) |
-| Stroke does nothing | Confirm pairing + connected status; relay wiring on **D4**; check Hardware dialog shows connected |
+| Stroke does nothing | Confirm pairing + connected status on **All Subs**; relay wiring on **D4** |
+| **Online now** is empty but device works | **Expected** if already paired — check **All Subs** for **Connected** |
 | Lost pairing / start over completely | On `/config`, use **Factory reset** (when reachable), or contact support |
 
 ---
@@ -209,8 +220,6 @@ If the device is on your network and you can open its web page:
 
 | Feature | Target |
 |---------|--------|
-| Stroke / burst from SomNet web app buttons | Phase 8 |
-| Dedicated pairing dialog + “online now” device list | Phase 8 |
 | Burst and automatic session modes | Phase 9 |
 | LED indicators for setup / fault | Under consideration |
 | QR code on status page for Device ID | Future polish |

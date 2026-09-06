@@ -1612,7 +1612,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 **Exit criteria:** Dom pairs and strokes from polished UI without Swagger; abort mid-pulse E2E. **Met.**
 
-*Optional follow-ups (non-blocking): F.2 offline error smoke tests, F.6 unpaired-list pairing demo, expiry row colors re-check in all-Subs table.*
+*Optional follow-ups (non-blocking): F.2 offline error smoke tests, expiry row colors re-check in all-Subs table.*
 
 ---
 

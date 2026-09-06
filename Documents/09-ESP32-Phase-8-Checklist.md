@@ -174,7 +174,7 @@ Update **Status** above and check boxes below as work completes. When Phase 8 is
 
 - [x] New dialog component (tabs or sections per plan §4.1):
   - [x] **All Subs** — table: Sub, device ID, paired/connected, token expiry, Pair/Revoke per row
-  - [x] **Online now** — unpaired list (when §B done); select row → pair to chosen Sub
+  - [x] **Online now (unpaired)** — `GET /api/devices/unpaired`; select row → pair to chosen Sub; explanatory copy + **Paired and online** fallback when list is empty
   - [x] **Enter device ID** — migrate from `DevicePairingPanel`
 - [x] Reuse `deviceTokenExpiry.ts` — **yellow** (≤30 days), **red** (expired)
 - [x] Entry point per P8-D3; Options panel per P8-D4
@@ -184,7 +184,7 @@ Update **Status** above and check boxes below as work completes. When Phase 8 is
 - [x] Load Sub list via `fetchSubs()`
 - [x] Fetch status per Sub (or batch endpoint per P8-D5)
 - [x] Row actions: Pair (opens paste or pre-filled ID), Revoke with confirm
-- [x] Refresh after pair/revoke; sync system status header
+- [x] Refresh after pair/revoke; silent auto-sync while dialog open (system status poll ~10 s); no manual Refresh button
 
 ---
 
@@ -227,10 +227,13 @@ Update **Status** above and check boxes below as work completes. When Phase 8 is
 - [x] Re-pair same device ID
 - [ ] Expiry notice still correct in all-Subs table (not re-checked this session)
 
-### F.6 Optional — unpaired list
+### F.6 Unpaired list + Online now UX — verified 2026-09-06
 
-- [ ] Factory-reset or clear pairing on device; device online unpaired
-- [ ] **Online now** shows device ID; pair to Sub without typing MAC
+- [x] **Online now (unpaired)** tab semantics documented in UI (only hub connections without pairing token)
+- [x] Paired + connected devices show on **All Subs** as Connected; **Paired and online** summary when unpaired list empty
+- [x] Unpaired list populated via `GET /api/devices/unpaired` (revoke / factory reset / new unit path)
+- [x] Pair from list without typing device ID when row present
+- [x] Dialog auto-refreshes on open + system status poll; manual Refresh removed
 
 | Test | Pass? |
 |------|-------|
@@ -240,9 +243,9 @@ Update **Status** above and check boxes below as work completes. When Phase 8 is
 | UI abort mid-pulse | ☑ |
 | Busy reject from UI | ☑ |
 | Pair/revoke via new dialog | ☑ |
-| Unpaired list (if built) | ☐ |
+| Unpaired list + Online now UX | ☑ |
 
-**Verification notes (2026-09-06):** Browser hard refresh required to load Phase 8 bundle (Hardware header button). Device `esp32-84CCA85C36B4`, Sub `Slv66`, firmware **`0.8.10-phase8`**. USB unplug/replug reconnect (5×) + strokes verified without browser refresh; API reachability ping + timestamp/disconnect logging. **Abort mid-pulse:** two runs — `actualStrokeMs` 1399 ms and 2320 ms on 5000 ms requested strokes; dual ack on serial and API dispatcher.
+**Verification notes (2026-09-06):** Browser hard refresh required to load Phase 8 bundle (Hardware header button). Device `esp32-84CCA85C36B4`, Sub `Slv66`, firmware **`0.8.10-phase8`**. USB unplug/replug reconnect (5×) + strokes verified without browser refresh; API reachability ping + timestamp/disconnect logging. **Abort mid-pulse:** two runs — `actualStrokeMs` 1399 ms and 2320 ms on 5000 ms requested strokes; dual ack on serial and API dispatcher. **Online now:** tab renamed **Online now (unpaired)** with in-dialog explanation; paired online units listed under All Subs / fallback section; hooks fix + UI rebuild for footer (Close only).
 
 ---
 
