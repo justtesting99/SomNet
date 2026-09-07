@@ -80,8 +80,10 @@ disableNoAutoEnd = mode ∈ { buildUp, powerWave, powerAndTimingWave }
 Each automatic session loop (simplified):
 
 ```
-wait gap → pick power% → map to strokeMs → single relay pulse → repeat until stop / end rule / abort
+optional delayBeforeStart → pick power% → map to strokeMs → pulse → wait gap → repeat until stop / end rule / abort
 ```
+
+**Stroke-first (P9P2-D41):** first pulse fires immediately after start ack (or after **Delay Before Start** when set). Inter-stroke **`gapSec`** applies **between** strokes only — same pattern as manual **burst** (pulse → gap → pulse), not gap-before-first-stroke.
 
 Power maps to pulse length via `strokeMsFromPower(power, minimumStrokeMs, maximumStrokeMs)` (device-side, same as manual). **All timing runs on the ESP32** after one `automatic-start` payload (P9-D2 immediate ack).
 
@@ -175,13 +177,15 @@ For **Power and Timing Wave**, gap wave is **inverse** to power (180° out of ph
 ### ASCII — session loop (all modes, bursts off)
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐     ┌──────────┐
-│ delayBefore │────►│  wait gap    │────►│ pick power  │────►│  pulse   │──┐
-│   Start     │     │ (mode logic) │     │ → strokeMs  │     │ (relay)  │  │
-└─────────────┘     └──────────────┘     └─────────────┘     └──────────┘  │
-       ▲                                                                    │
-       └──────────────── end rule / stop / abort ──────────────────────────┘
+┌─────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────┐
+│ delayBefore │────►│ pick power  │────►│    pulse     │────►│ wait gap │──┐
+│   Start     │     │ → strokeMs  │     │   (relay)    │     │(mode log)│  │
+└─────────────┘     └─────────────┘     └──────────────┘     └──────────┘  │
+       │ skip if 0        ▲                                                    │
+       └──────────────────┴──── end rule / stop / abort ─────────────────────┘
 ```
+
+(`delayBeforeStart` optional; when zero, first pulse is immediate after ack.)
 
 ### Burst Settings (`burstsOn`) — deferred
 
@@ -219,7 +223,7 @@ on automatic-start:
 on each stroke i:
   (power, gapSec) = schedule[i]   // or schedule[i mod len] for repeating wave within longer session
   strokeMs = strokeMsFromPower(power, minStrokeMs, maxStrokeMs)
-  pulse; wait gapSec
+  pulse; wait gapSec   // stroke-first: first pulse before any gap (P9P2-D41)
   if session end rule (minutes / strokes / stop / abort):
       stop + summary ack
 ```
@@ -275,6 +279,7 @@ When switching into wave/build-up while `noAutoEnd` selected → coerce to **`mi
 | P9P2-D36 | **Random mode planner** | On-the-fly / pre-fill table | ☑ **On-the-fly** — sample power/gap each stroke; no `schedule[]` | 2026-09-07 |
 | P9P2-D37 | **Command keys (UI → hub)** | `automatic:start` / **`automatic-start`** | ☑ **`automatic-start`** / **`automatic-stop`** (hyphen, match P9-D5 + API) — **fix UI** in Phase D | 2026-09-07 |
 | P9P2-D38 | **Firmware version at Part 2 sign-off** | `0.9.1-phase9p2` / `0.10.0-phase9p2` / other | ☑ **`0.9.1-phase9p2`** when all §7.2 pass | 2026-09-07 |
+| P9P2-D41 | **Session cadence** | Gap before first stroke / **stroke-first** | ☑ **Stroke-first** — pulse immediately after start (or after `delayBeforeStartSeconds`); gap **between** strokes only; matches burst UX | 2026-09-07 |
 
 ### Confirmed (inherits parent Phase 9 — no new Part 2 decision)
 
@@ -309,38 +314,39 @@ When switching into wave/build-up while `noAutoEnd` selected → coerce to **`mi
 | Layer | When | Job |
 |-------|------|-----|
 | **1. Planner** | Once at `automatic-start` | Turn config into **what** each stroke is: `schedule[i] = (power, gapSec, strokeMs)` — from pre-computed table, RNG seed plan, or parametric wave |
-| **2. Sequencer** | Every `loop()` → `AutomaticSessionMode::poll()` | Turn plan into **when** strokes fire: wait gap → pulse → wait → next index |
+| **2. Sequencer** | Every `loop()` → `AutomaticSessionMode::poll()` | Turn plan into **when** strokes fire: pulse → wait gap → pulse → … (stroke-first, P9P2-D41) |
 
 The **sequencer is the “scheduler”** in embedded terms: it does not recalculate the wave; it **plays back** the plan on **`millis()` deadlines**.
 
 ### Sequencer FSM (applies to periodic, random, wave, build-up)
 
 ```
-StartDelay → WaitingGap → Pulse → (relay off callback) → WaitingGap → … → SessionComplete
+StartDelay (optional) → Pulse → WaitingGap → Pulse → WaitingGap → … → SessionComplete
 ```
 
 | State | Responsibility |
 |-------|----------------|
-| **StartDelay** | Wait `delayBeforeStartSeconds` |
-| **WaitingGap** | Until `millis() >= nextDeadline`, use `schedule[i].gapSec` (from plan) |
+| **StartDelay** | Wait `delayBeforeStartSeconds`, then **first pulse immediately** (P9P2-D41) |
+| **WaitingGap** | After each pulse, until `millis() >= nextDeadline`, use row **`gapSec`** (from plan or on-the-fly) |
 | **Pulse** | `relay->requestPulse(strokeMs)` — **`relay_controller`** owns GPIO pulse width |
 | **Between strokes** | `relay_controller.poll()` runs in main loop (same as manual/burst today) |
 
-**Trigger rule:** if relay **idle** and **now ≥ nextDeadline** → load row **`i`** from plan → start pulse → on complete, set **`nextDeadline = now + gapSec`**, **`i++`**, check end-session.
+**Trigger rule:** on start (or after StartDelay): **first pulse immediately**. After each pulse completes: set **`nextDeadline = now + gapSec`**, enter **WaitingGap**, then load next row when deadline reached. Same as burst cadence for the inter-stroke gap only.
 
 ```text
 automatic-start:
   plan = buildPlan(payload)     // planner: all modes
+  if delayBeforeStart > 0: StartDelay
+  else: start first pulse immediately
 
 each poll() [AutomaticSessionMode]:
   if state == WaitingGap && now >= nextDeadline && !relay.active:
-      row = plan[i]             // or sample row on the fly for parametric waves
+      row = plan[i]             // or sample on the fly
       relay.requestPulse(row.strokeMs, …)
       state = Pulse
-  if state == Pulse:
-      relay_controller.poll()   // elsewhere in loop — turns relay off at strokeMs
   on pulse complete:
       nextDeadline = millis() + row.gapSec * 1000
+      state = WaitingGap
       i++; checkEndSession()
 ```
 
@@ -670,7 +676,7 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 #### A.2 Session mode + wiring
 
 - [x] Expand `automatic_session_mode.*` — states: `Idle`, `StartDelay`, `WaitingGap`, `Pulse` (Complete via `finishSession`)
-- [x] Sequencer: `millis()` deadlines; relay callback advances index; track `strokesCompleted`, `sessionStartMs`
+- [x] Sequencer: stroke-first (P9P2-D41) — pulse immediately after start or `delayBeforeStartSeconds`; gap between strokes only
 - [x] End session: `minutes`, `strokes`, `noAutoEnd`, manual stop, abort (reuse burst abort pattern)
 - [x] `execution_context` — member + `startAutomatic()` / `stopAutomatic()` / extend `abortActive()`
 - [x] `command_handler` — route `automatic-start` (immediate ack P9-D2), `automatic-stop` (summary P9-D4)
@@ -793,4 +799,4 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 | 2026-09-07 | §8 modular layout locked — `AutomaticProgramBase` subclasses + factory (P9P2-D32–D34) |
 | 2026-09-07 | §6 UI signed off; §4 decisions locked; §7 expanded to Phases A–D firmware checklist |
 | 2026-09-07 | Walkthrough decisions: D23-A, D8 triangle, D19, D35–D37 |
-| 2026-09-07 | Phase B bench smoke passed (all three random modes) |
+| 2026-09-07 | P9P2-D41 stroke-first verified on bench (randomPowerOnly); B.1 still valid under new cadence |

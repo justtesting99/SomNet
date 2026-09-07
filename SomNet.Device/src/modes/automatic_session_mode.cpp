@@ -93,21 +93,24 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
     nextGapDeadlineMs_ = 0;
     active_ = true;
 
-    if (config.delayBeforeStartSeconds > 0) {
-        state_ = State::StartDelay;
-    } else {
-        sessionStartMs_ = millis();
-        state_ = State::WaitingGap;
-        nextGapDeadlineMs_ =
-            millis() + static_cast<unsigned long>(effectiveGapSecondsForMode(config)) * 1000UL;
-    }
-
     Serial.print(F("[AUTO] start mode="));
     Serial.print(automaticMode_);
     Serial.print(F(" delaySec="));
     Serial.print(config.delayBeforeStartSeconds);
-    Serial.print(F(" gapSec="));
-    Serial.println(effectiveGapSecondsForMode(config));
+    Serial.println(F(" (stroke-first)"));
+
+    if (config.delayBeforeStartSeconds > 0) {
+        state_ = State::StartDelay;
+    } else {
+        sessionStartMs_ = millis();
+        if (!startNextPulse()) {
+            active_ = false;
+            state_ = State::Idle;
+            destroyAutomaticProgram(program_);
+            program_ = nullptr;
+            return false;
+        }
+    }
 
     return true;
 }
@@ -152,9 +155,10 @@ void AutomaticSessionMode::poll() {
         }
 
         sessionStartMs_ = millis();
-        state_ = State::WaitingGap;
-        nextGapDeadlineMs_ = millis() + static_cast<unsigned long>(effectiveGapSecondsForMode(config)) * 1000UL;
         Serial.println(F("[AUTO] start delay complete"));
+        if (!startNextPulse()) {
+            finishSession(false, "automatic session failed — relay busy", "error", true);
+        }
         return;
     }
 
