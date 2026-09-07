@@ -545,7 +545,7 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 
 1. **Lock §4 decisions** — review this doc; mark choices ☑ — **done 2026-09-07**
 2. **Phase A — Config + reject removal** — parse/validate burst fields; `burstsOn: true` accepted; still no burst FSM (or stub log) — **done 2026-09-07**
-3. **Phase B — Burst sub-FSM on Periodic** — `burstPercent=100` smoke (always burst); serial `[AUTO] burst …`; then real percent
+3. **Phase B — Burst sub-FSM on Periodic** — `burstPercent=100` smoke (always burst); serial `[AUTO] burst …`; then real percent — **implemented 2026-09-07** (Periodic + endSession strokes)
 4. **Phase C — All seven programs + abort/stop** — burst rolls with random/wave/build-up; stop/abort during burst
 5. **Phase D — API + UI** — enable panel; validator; E2E Periodic with bursts on
 6. **Phase E — Docs + version** — `0.10.0-phase10`, sign-off
@@ -562,14 +562,21 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 - [x] `BurstStyle` enum — four values in Shared + firmware parse
 - [x] Firmware **`0.10.0-phase10`** (Phase A bump)
 
+### 7.0 Phase B — Periodic burst FSM (2026-09-07)
+
+- [x] `burstPercent=100`, endSession 4 strokes — burst after every main; 4 events; program gaps ~5s; `resultJson` tier 1
+- [x] `burstPercent=50`, endSession 8 strokes — bursts at mains 2, 4, 6, 8; 4 events; singles between
+- [x] P10-D25 — final milestone burst runs, then `endSession`
+- [x] P10-D2 — `mainStrokesCompleted` / `strokesCompleted` = mains only; `intraBurstStrokesCompleted` separate
+
 ### 7.1 Firmware smoke (Swagger / serial)
 
 - [x] `automatic-start` with `burstsOn: true` — ack success (no reject) — verified 2026-09-07 serial
-- [ ] Periodic + `burstPercent=100` — serial shows burst clusters + program gaps
+- [x] Periodic + `burstPercent=100` — serial shows burst clusters + program gaps — verified 2026-09-07
 - [ ] Periodic + `burstPercent=0` — identical to Part 2 (singles only)
 - [ ] Abort mid-burst — relay open; `[AUTO] aborted`; hub/session `(aborted)` with partial stroke count
 - [ ] Stop mid-burst — cooperative stop per P10-D3
-- [ ] End-session **strokes** limit — counts **main** strokes only; intra-burst pulses do **not** increment limit (P10-D2)
+- [x] End-session **strokes** limit — counts **main** strokes only; intra-burst pulses do **not** increment limit (P10-D2) — verified 2026-09-07
 
 ### 7.2 UI E2E
 
@@ -598,7 +605,7 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 
 | Date | Change |
 |------|--------|
-| 2026-09-07 | **§4 complete** — P10-D7–D12 locked (architecture, validation, version, UI, RNG) |
+| 2026-09-07 | Phase 10B verified — Periodic burstPercent 100% + 50% smoke (serial) |
 | 2026-09-07 | P10-D4/D5 locked — program gap after burst; burst power relative to main Power Settings (§2.2) |
 | 2026-09-07 | §3.3 — main strokes vs burst events; `resultJson` / history fields |
 | 2026-09-07 | P10-D3/21/20 locked — stop/abort during burst; stroke milestones; `resultJson` tiers |

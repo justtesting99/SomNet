@@ -1,5 +1,6 @@
 #pragma once
 
+#include "modes/automatic/automatic_burst_runtime.h"
 #include "modes/i_execution_mode.h"
 
 class RelayController;
@@ -31,24 +32,37 @@ public:
     bool isActive() const override;
 
 private:
-    enum class State { Idle, StartDelay, WaitingGap, Pulse };
+    enum class State { Idle, StartDelay, WaitingGap, Pulse, BurstPulse, BurstGap };
 
     static void onRelayPulseComplete(void* context, unsigned long actualMs);
+    static void onBurstPulseComplete(void* context, unsigned long actualMs);
 
     void buildResultJson(const char* endReason, bool interrupted);
     void finishSession(bool success, const char* message, const char* endReason, bool interrupted);
     bool startNextPulse();
     bool shouldEndSession() const;
+    bool beginBurstEvent();
+    bool startNextBurstPulse();
+    void finishBurstEvent();
 
     RelayController* relay_ = nullptr;
     AutomaticProgramBase* program_ = nullptr;
     State state_ = State::Idle;
     bool active_ = false;
+    bool burstsOn_ = false;
     bool stopRequested_ = false;
     int strokeMs_ = 0;
     int powerPercent_ = 0;
     int gapSec_ = 0;
     int strokesCompleted_ = 0;
+    int burstEventsCompleted_ = 0;
+    int intraBurstStrokesCompleted_ = 0;
+    int burstStrokesTarget_ = 0;
+    int burstStrokesCompletedInEvent_ = 0;
+    int postBurstGapSec_ = 0;
+    unsigned long burstDelayMs_ = 0;
+    unsigned long burstGapStartMs_ = 0;
+    AutomaticBurstPlan burstPlan_{};
     unsigned long sessionStartMs_ = 0;
     unsigned long delayStartMs_ = 0;
     unsigned long nextGapDeadlineMs_ = 0;
