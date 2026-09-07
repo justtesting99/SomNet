@@ -22,7 +22,7 @@
 | **Duration** | ~2–3 weeks (phased — Periodic first, then random, then wave/build-up) |
 | **Hardware scope** | Same DevKit (`esp32-84CCA85C36B4` / `Slv66`); relay **D4**; serial `[RELAY]` / `[AUTO]` logs |
 | **Software scope** | `AutomaticSessionMode` + program factory; `automatic-start`/`stop`; UI wiring; SignalR auto-end/abort sync; API payload validation |
-| **Explicitly out of scope** | Burst-in-automatic (Part 3); live `automatic-update` (§9); `esp_timer` gap precision |
+| **Explicitly out of scope** | Burst-in-automatic ([Phase 10](./09-ESP32-Phase-10-Checklist.md)); live `automatic-update` (§9); `esp_timer` gap precision |
 | **Blocks** | ~~Operators using **Automatic Start/Stop** from web app~~ — **unblocked** (Phase D, 2026-09-07) |
 
 Update **Status** above and check boxes in **§7** as work completes. When Part 2 is done, update [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §6 and bump firmware version (P9P2-D38).
@@ -189,7 +189,7 @@ For **Power and Timing Wave**, gap wave is **inverse** to power (180° out of ph
 
 ### Burst Settings (`burstsOn`) — deferred
 
-When **Bursts On** is checked, behavior is **additive** on top of the selected mode (P9-D6 deferred). Part 2 sign-off assumes **`burstsOn: false`**. Revisit burst-in-automatic after base seven modes work.
+When **Bursts On** is checked, behavior is **additive** on top of the selected mode (P9-D6 deferred). Part 2 sign-off assumes **`burstsOn: false`**. See **[Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md)** for burst-in-automatic design and implementation.
 
 ### Session envelope + End Session (wave / build-up)
 
@@ -257,7 +257,7 @@ When switching into wave/build-up while `noAutoEnd` selected → coerce to **`mi
 | P9P2-D10 | **Build-Up curve** | Linear / ease-in / half triangle | ☑ **Half-wave** ascending ramp (linear segments) | 2026-09-06 |
 | P9P2-D11 | **Build-Up reset** | Once / repeat | ☑ **Once per session** | 2026-09-06 |
 | P9P2-D12 | **Power vs timing coupling** | Independent / inverse | ☑ **Inverse** for Build-Up and P+T Wave | 2026-09-07 |
-| P9P2-D13 | **Burst Settings panel** | Part 2 / Part 3 / defer | ☑ **Part 3** — out of scope Part 2 | 2026-09-06 |
+| P9P2-D13 | **Burst Settings panel** | Part 2 / Phase 10 / defer | ☑ **Phase 10** — out of scope Part 2 | 2026-09-06 |
 | P9P2-D14 | **End Session panel** | Unaffected / partial | ☑ **`noAutoEnd` disabled** for wave + build-up | 2026-09-06 |
 | P9P2-D15 | **Inverse wave phasing** | 180° / independent | ☑ **180° inverse** for P+T Wave | 2026-09-06 |
 | P9P2-D16 | **Build-Up duration** | Full session / other | ☑ **End Session envelope = full half-wave** | 2026-09-06 |
@@ -287,7 +287,7 @@ When switching into wave/build-up while `noAutoEnd` selected → coerce to **`mi
 - **P9-D2** — immediate ack on `automatic-start` when config valid + engine armed
 - **P9-D4** — summary `resultJson` on stop/abort/end-rule only (no per-stroke hub events)
 - **P9-D5** — camelCase payload aligned with `AutomaticControlStateDto`
-- **P9-D6** — reject or ignore `burstsOn: true` until Part 3
+- **P9-D6** — reject or ignore `burstsOn: true` until **Phase 10**
 - **P9-D1** — ack timeouts: `automatic-start` **5 s**; `automatic-stop` **30 s**
 - **P9-D9** — caps: auto session hard cap **24 h**; stroke ms per existing limits
 
@@ -432,9 +432,11 @@ SomNet.Device/src/modes/
 
 **UI mirror:** one `AutomaticControls` + `getAutomaticFieldRules(mode)` — same modularity as firmware factory.
 
-### Part 3 — burst-in-automatic (deferred, unrelated to sequencer design)
+### Burst-in-automatic — moved to Phase 10
 
-Bursts-on-at-% is an add-on to the planner/sequencer later. Part 2 sequencer stays **single-stroke steps** only.
+Design, decisions, and implementation checklist: **[09-ESP32-Phase-10-Checklist.md](./09-ESP32-Phase-10-Checklist.md)**.
+
+Part 2 sequencer stays **single-stroke steps** only. Phase 10 adds an optional burst sub-FSM on top of the existing program cadence.
 
 ---
 
@@ -533,7 +535,7 @@ Heavy replan (large `schedule[]`) may still add one loop iteration — acceptabl
 | P9P2-D30 | **Command key** | `automatic-update` / other | ☐ **Proposed:** `automatic-update` | |
 | P9P2-D31 | **UI debounce** | Every keystroke / blur-save / explicit Apply | ☐ TBD | |
 
-**Explicitly out of scope:** Part 2 sign-off, Part 3 burst-in-auto.
+**Explicitly out of scope:** Part 2 sign-off; burst-in-automatic → [Phase 10](./09-ESP32-Phase-10-Checklist.md).
 
 ---
 
@@ -603,13 +605,13 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 | **noAutoEnd** | On Random P+T, under **End Session After** select **No AutoEnd** | The number box (left of the radios) greys out |
 | | Switch to **Power Wave** | **No AutoEnd** radio disabled; selection becomes **Minutes**; number box editable |
 | | Switch back to Random P+T, pick **No AutoEnd** again | Number box greys out again |
-| **burstsOn** | **Burst Settings** panel | All burst controls disabled (Part 3); **Bursts On** unchecked; values still save/load with settings |
+| **burstsOn** | **Burst Settings** panel | All burst controls disabled until [Phase 10](./09-ESP32-Phase-10-Checklist.md); **Bursts On** unchecked; values still save/load with settings |
 | **Stroke limits** | **Power Settings:** edit **Minimum Stroke (ms)** / **Maximum Stroke (ms)** outside device limits | Clamps to API stroke limits on commit/load |
 | | Set maximum stroke below minimum | Minimum adjusts so min ≤ max |
 
-**Note:** Pre–Part 3, burst sub-fields are hard-disabled in UI (not only `burstsOn === false`). Saved `burstsOn` and burst ranges should still round-trip in JSON.
+**Note:** Pre–Phase 10, burst sub-fields are hard-disabled in UI (not only `burstsOn === false`). Saved `burstsOn` and burst ranges should still round-trip in JSON.
 
-**Automated sign-off (2026-09-07):** `automaticFieldRules.test.ts` (noAutoEnd coercion); `strokeMsLimits.test.ts` (clamp); burst panel intentionally all-disabled until Part 3.
+**Automated sign-off (2026-09-07):** `automaticFieldRules.test.ts` (noAutoEnd coercion); `strokeMsLimits.test.ts` (clamp); burst panel intentionally all-disabled until Phase 10.
 
 #### 6.3.3 API round-trip after mode change
 
@@ -804,6 +806,7 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 7. ~~**Phase E** — auto-end UI sync (hub listener)~~ — **signed off** 2026-09-07
 8. ~~**Phase F** — abort during automatic UI~~ — **signed off** 2026-09-07 (`sess-032`)
 9. ~~**Update** device plan + PROTOCOL + firmware version~~ — **done** 2026-09-07
+10. **Phase 10** — burst-in-automatic — [09-ESP32-Phase-10-Checklist.md](./09-ESP32-Phase-10-Checklist.md) (planning)
 
 ---
 

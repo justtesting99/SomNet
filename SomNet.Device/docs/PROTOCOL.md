@@ -300,7 +300,7 @@ Device runs the full sequence locally; one completing ack with `resultJson` when
 | `delayBeforeStartSeconds` | int | Optional | Wait before first pulse |
 | `endSessionMode` | string | Optional | `minutes`, `strokes`, or `noAutoEnd` — wave/build-up require minutes or strokes |
 | `endSessionValue` | int | Optional | End after N minutes or strokes |
-| `burstsOn` | bool | Optional | Must be **`false`** until Part 3 — rejected if `true` |
+| `burstsOn` | bool | Optional | Must be **`false`** until **Phase 10** — rejected if `true` ([Phase 10 checklist](../../Documents/09-ESP32-Phase-10-Checklist.md)) |
 
 **UI rule:** Send full automatic settings snapshot; **omit `running`**. Device applies mode-specific ignore rules for disabled minimum fields.
 

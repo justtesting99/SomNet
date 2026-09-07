@@ -186,7 +186,7 @@ internal static class HardwareCommandPayloadValidator
             if (root.TryGetProperty("burstsOn", out var burstsOnElement) &&
                 burstsOnElement.ValueKind == JsonValueKind.True)
             {
-                errorMessage = "burstsOn is not supported until automatic burst (Part 3).";
+                errorMessage = "burstsOn is not supported until Phase 10 (burst-in-automatic).";
                 return false;
             }
 

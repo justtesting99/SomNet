@@ -267,7 +267,7 @@ Update **Status** above and check boxes below as work completes. When Phase 9 is
 
 ## Next phase
 
-→ **Part 3** — burst-in-automatic (`burstsOn`) in [Part 2 checklist § Part 3](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#part-3--burst-in-automatic-deferred-unrelated-to-sequencer-design), or [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §15 (OTA, deployment)
+→ **[Phase 10](./09-ESP32-Phase-10-Checklist.md)** — burst-in-automatic (`burstsOn`), or [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §15 (OTA, deployment)
 
 **Suggested order of work (burst sign-off):** (1) API timeout + burst validation → (2) `BurstSequenceMode` + `command_handler` → (3) Swagger burst → (4) UI burst + session → (5) verification + docs + **`0.9.0-phase9`**
 
@@ -313,3 +313,11 @@ Use plan §6, locked P9-D2/D4/D5/D6 + Part 2 §4 when implementing.
 
 - [x] Part 2 §7.2 per-mode smoke (Swagger) + E2E UI sign-off (Periodic start/stop, auto-end)
 - [x] Phase F E2E — abort mid-session → history `(aborted)` — **2026-09-07** (`sess-032`)
+
+---
+
+## Next — Phase 10 (burst-in-automatic)
+
+**Checklist:** [09-ESP32-Phase-10-Checklist.md](./09-ESP32-Phase-10-Checklist.md) — **planning**; lock §4 decisions before coding.
+
+**Scope:** Enable **Bursts On** during automatic sessions (`burstsOn: true` on `automatic-start`); burst sub-FSM inside `AutomaticSessionMode`; enable UI Burst Settings panel.

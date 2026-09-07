@@ -395,7 +395,7 @@ export function AutomaticControls() {
 
         <Panel title="Burst Settings">
           <div className="space-y-4">
-            <p className="text-xs text-slate-500">Burst-in-automatic — Part 3 (not yet available).</p>
+            <p className="text-xs text-slate-500">Burst-in-automatic — Phase 10 (see checklist); controls disabled until then.</p>
             <div className="flex flex-wrap items-center gap-4">
               <Checkbox
                 label="Bursts On"

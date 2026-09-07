@@ -9,7 +9,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | SomNet web app | [User Guide](./User-Guide.md) |
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 
-**Firmware status (2026-09-07):** Phases **0–9 Part 2** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app. Firmware **`0.9.1-phase9p2`**. Burst-in-automatic (Bursts On) remains Part 3.
+**Firmware status (2026-09-07):** Phases **0–9 Part 2** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app. Firmware **`0.9.1-phase9p2`**. Burst-in-automatic (Bursts On) → [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
 
 ---
 
@@ -212,7 +212,7 @@ If the device is on your network and you can open its web page:
 - Operator selects **Automatic** in SomNet, configures the program, presses **Start**.
 - SomNet sends **one configuration snapshot** to the device; the **ESP32 runs the full session locally** (gaps between strokes, power changes, end rules) until **Stop**, **Abort**, or **End Session After**.
 - Unlike **manual burst** (fixed number of strokes you choose each time), automatic mode runs **ongoing single strokes** according to the selected **program** — with optional randomness or waves between min/max power and timing settings.
-- **Bursts during automatic** (Bursts On checkbox) are a **later phase** — not part of the initial automatic release.
+- **Bursts during automatic** (Bursts On checkbox) — planned [Phase 10](./09-ESP32-Phase-10-Checklist.md); not yet available on device.
 
 ### Seven automatic programs (Automatic Mode dropdown)
 
@@ -268,7 +268,7 @@ Reported **`actualStrokeMs`** in session history reflects what the device measur
 
 | Feature | When |
 |---------|------|
-| **Bursts On** during automatic | Part 3 |
+| **Bursts On** during automatic | [Phase 10](./09-ESP32-Phase-10-Checklist.md) |
 | **Change settings while running** (live replan) | Future — original product supported this; needs mid-session device updates |
 
 ## Relay timing validation (oscilloscope)
@@ -350,7 +350,7 @@ From an operator or Dom perspective:
 | Feature | Target |
 |---------|--------|
 | Automatic session programs (timing/power variations) | [Automatic mode](#automatic-mode) — **available** (Phase 9 Part 2) |
-| Automatic bursts during session | Part 3 |
+| Automatic bursts during session | [Phase 10](./09-ESP32-Phase-10-Checklist.md) |
 | Live settings change during automatic playback | Future |
 | Air-line pressure timing vs GPIO pulse | Optional installer follow-up — operators tune power / max stroke for felt impact |
 | LED indicators for setup / fault | Under consideration |

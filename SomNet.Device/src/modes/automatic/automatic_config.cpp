@@ -148,7 +148,7 @@ bool parseAutomaticConfig(const char* payloadJson, AutomaticConfig* outConfig) {
     }
 
     if (outConfig->burstsOn) {
-        Serial.println(F("[AUTO] reject: burstsOn not supported (Part 3)"));
+        Serial.println(F("[AUTO] reject: burstsOn not supported (Phase 10)"));
         return false;
     }
 

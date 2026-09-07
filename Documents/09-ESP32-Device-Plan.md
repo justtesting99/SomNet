@@ -45,7 +45,7 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 - Offline command queue
 - ~~SomNet UI pairing dialog~~ — **Done (Phase 8, 2026-09-06):** toolbar **Hardware** dialog — All Subs, Online now (unpaired), Enter device ID
 - Changes to SomNet backend or frontend (unless a protocol gap is approved — **historical exceptions:** Phase 4 minimal pairing UI, Phase 5 ack dispatcher fix, Phases 8–9 `resultJson` + commands)
-- **Burst-in-automatic (`burstsOn`)** — deferred to Part 3 (see [Phase 9 Part 2 checklist](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md))
+- **Burst-in-automatic (`burstsOn`)** — deferred to [Phase 10](./09-ESP32-Phase-10-Checklist.md)
 
 ### Hardware (confirmed)
 
@@ -916,7 +916,7 @@ Wave/build-up modes require **End Session** minutes or strokes (`noAutoEnd` reje
 
 **Stroke-first (P9P2-D41):** first pulse fires immediately after start ack (or after **`delayBeforeStartSeconds`**). Inter-stroke gap applies **between** strokes only — same pattern as manual burst.
 
-**Future (not Part 2):** Live settings during playback via proposed **`automatic-update`** — see [Part 2 checklist §9](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#9-future--live-settings-during-automatic-playback-not-part-2). **Burst-in-automatic (`burstsOn`)** — Part 3.
+**Future (not Part 2):** Live settings during playback via proposed **`automatic-update`** — see [Part 2 checklist §9](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#9-future--live-settings-during-automatic-playback-not-part-2). **Burst-in-automatic (`burstsOn`)** — [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
 
 **Firmware structure:** One **`AutomaticSessionMode`** (sequencer FSM); per-program **`AutomaticProgramBase`** subclasses + factory — see [Part 2 checklist §8](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#8-architecture--planner--stroke-sequencer-automatic-timing).
 
@@ -941,7 +941,7 @@ Wave/build-up modes require **End Session** minutes or strokes (`noAutoEnd` reje
 | Field | Notes |
 |-------|-------|
 | `automaticMode` | **Required** — one of seven enum strings above |
-| `burstsOn` | Must be **`false`** until Part 3 — device and API reject `true` |
+| `burstsOn` | Must be **`false`** until **Phase 10** — device and API reject `true` ([Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md)) |
 | Disabled UI mins | Send full snapshot; device ignores per §3 rules (uses max power/gap) |
 
 **Device behavior (`AutomaticSessionMode`):**
@@ -1435,7 +1435,8 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 | 6 | Single-pulse relay | [Phase 6 Checklist](./09-ESP32-Phase-6-Checklist.md) | **Signed off** (2026-09-05) |
 | 7 | Resilience / production prep | [Phase 7 Checklist](./09-ESP32-Phase-7-Checklist.md) | **Signed off** (2026-09-06) — `0.7.0-phase7` |
 | **8** | **SomNet UI pairing dialog** + command integration | [Phase 8 Checklist](./09-ESP32-Phase-8-Checklist.md) | **Signed off** (2026-09-06) — `0.8.10-phase8`; Hardware dialog + stroke/abort UI |
-| 9 | Burst mode (+ automatic exploratory) | [Phase 9 Checklist](./09-ESP32-Phase-9-Checklist.md) | **Signed off** (2026-09-06) — `0.9.0-phase9`; burst UI |
+| 9 | Burst mode (+ automatic Part 2) | [Phase 9 Checklist](./09-ESP32-Phase-9-Checklist.md) · [Part 2](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) | **Signed off** (2026-09-07) — `0.9.1-phase9p2` |
+| **10** | **Burst-in-automatic (`burstsOn`)** | [Phase 10 Checklist](./09-ESP32-Phase-10-Checklist.md) | **Planning** |
 
 **Rationale:** Phase **3** (config UI) runs **before** SignalR so installers can provision network and obtain the pairing ID without Swagger/serial. Phase **8** delivers Dom-side pairing in the **Hardware** dialog and manual command integration. Phase **9** adds **burst**. **Options** is tabbed settings (General / Notifications / Account) — separate from Hardware. See §4 *SomNet React UI — pairing and settings*.
 
@@ -1657,6 +1658,17 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 **Exit criteria:** **`burst`** E2E from UI per §6. **Met.** Automatic Periodic E2E from UI + all seven programs bench-verified. **Met.**
 
 *Optional follow-up: F.3 busy reject smoke test.*
+
+---
+
+### Phase 10 — Burst-in-automatic (`burstsOn`)
+
+**Checklist:** [09-ESP32-Phase-10-Checklist.md](./09-ESP32-Phase-10-Checklist.md)  
+**Status:** **Planning** — design discussion; lock §4 decisions before coding.
+
+**Goal:** Enable **Bursts On** during automatic sessions — burst clusters interleaved with the seven automatic programs. Reuses manual burst timing patterns; embedded sub-FSM in `AutomaticSessionMode`.
+
+**Target firmware:** **`0.10.0-phase10`** (proposed).
 
 ---
 
