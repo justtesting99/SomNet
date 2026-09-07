@@ -279,7 +279,7 @@ _Not required for Phase 9 (burst) sign-off._
 
 **Checklist:** [09-ESP32-Phase-9-Part2-Automatic-Checklist.md](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) — **§6 UI signed off**; **§4 decisions locked**; **§7 Phases A–D** firmware tracking.
 
-**Status (2026-09-07):** UI complete. Phase A + **Phase B bench signed off**. Phase C (wave + build-up) next.
+**Status (2026-09-07):** UI complete. **All 7 firmware programs bench signed off.** Phase D (UI Start/Stop + E2E) next.
 
 **Design intent:** Automatic mode is **not** burst with random gaps. It is **seven program variations** from the Automatic Mode dropdown. See Part 2 checklist §3.
 
@@ -291,7 +291,7 @@ Use plan §6, locked P9-D2/D4/D5/D6 + Part 2 §4 when implementing.
 
 - [x] **Phase A** — shell + Periodic bench signed off 2026-09-07 ([Part 2 §7 Phase A](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#phase-a--shell--periodic-p9p2-d35))
 - [x] **Phase B** — Random family bench signed off 2026-09-07
-- [ ] **Phase C** — Wave + Build-Up (triangle, D23-A)
+- [x] **Phase C** — Wave + Build-Up bench signed off 2026-09-07
 - [ ] `automatic-start` / `automatic-stop` / abort + summary `resultJson` (P9-D2, P9-D4)
 
 ## H. Firmware + API integration

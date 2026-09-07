@@ -152,6 +152,15 @@ bool parseAutomaticConfig(const char* payloadJson, AutomaticConfig* outConfig) {
         return false;
     }
 
+    if (outConfig->mode == AutomaticRunMode::PowerWave ||
+        outConfig->mode == AutomaticRunMode::PowerAndTimingWave ||
+        outConfig->mode == AutomaticRunMode::BuildUp) {
+        if (outConfig->endSessionMode == EndSessionMode::NoAutoEnd || outConfig->endSessionValue <= 0) {
+            Serial.println(F("[AUTO] reject: wave/buildUp requires end session"));
+            return false;
+        }
+    }
+
     outConfig->valid = true;
     return true;
 }

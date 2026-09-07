@@ -1,6 +1,6 @@
 # Phase 9 Part 2 — Automatic mode checklist
 
-**Status:** **UI complete** (§6). **Phase A + B bench signed off** (2026-09-07). **Phase C** (wave + build-up) next. Abort/stop UI tests → Phase D.
+**Status:** **UI complete** (§6). **All 7 firmware programs bench signed off** (2026-09-07). **Phase D** — UI/API wiring + E2E sign-off next.
 
 | Related | Link |
 |---------|------|
@@ -280,6 +280,7 @@ When switching into wave/build-up while `noAutoEnd` selected → coerce to **`mi
 | P9P2-D37 | **Command keys (UI → hub)** | `automatic:start` / **`automatic-start`** | ☑ **`automatic-start`** / **`automatic-stop`** (hyphen, match P9-D5 + API) — **fix UI** in Phase D | 2026-09-07 |
 | P9P2-D38 | **Firmware version at Part 2 sign-off** | `0.9.1-phase9p2` / `0.10.0-phase9p2` / other | ☑ **`0.9.1-phase9p2`** when all §7.2 pass | 2026-09-07 |
 | P9P2-D41 | **Session cadence** | Gap before first stroke / **stroke-first** | ☑ **Stroke-first** — pulse immediately after start (or after `delayBeforeStartSeconds`); gap **between** strokes only; matches burst UX | 2026-09-07 |
+| P9P2-D40 | **Schedule buffer RAM cap** | Unbounded / fixed cap | ☑ **`kMaxAutomaticScheduleRows = 2048`** in `automatic_plan.h` | 2026-09-07 |
 
 ### Confirmed (inherits parent Phase 9 — no new Part 2 decision)
 
@@ -668,7 +669,7 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 #### A.1 Scaffolding
 
 - [x] `automatic/automatic_config.*` — parse JSON payload (camelCase fields, `automaticMode` enum string)
-- [ ] `automatic/automatic_plan.*` — deferred to **Phase C** (wave/build-up pre-compute); Periodic uses on-the-fly `getStrokeParameters`
+- [x] `automatic/automatic_plan.*` — pre-compute `StrokeScheduleRow[]` at start (wave + build-up); cap **2048** rows (P9P2-D40)
 - [x] `automatic/automatic_program_base.h` — virtual `getStrokeParameters(session, index, config, …)`
 - [x] `automatic/automatic_program_factory.*` — `create(automaticMode)`; Periodic case first; others reject "not implemented yet"
 - [x] `automatic/programs/periodic_program.*` — max power + max gap; apply D2/D5/D6 ignore rules
@@ -722,21 +723,23 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 
 **Goal:** Triangle waves + half-wave build-up; inverse gap for P+T and build-up.
 
-- [ ] `power_timing` — `sampleTriangle(t)`, `inverseTriangle(t)`, `strokeMsFromPower()` (existing)
-- [ ] `wave_program.*` — power-only vs P+T inverse (P9P2-D12, D15); `T_rise` from D23-A
-- [ ] `build_up_program.*` — half-wave table; `t = i/(N−1)` (P9P2-D19); inverse gap
-- [ ] Schedule buffer — max rows cap (document RAM budget; e.g. 24 h @ min gap → define P9P2-D40 if needed)
-- [ ] **Power Wave** — repeating triangle power; fixed `strokeMaxSeconds` gap
-- [ ] **Power and Timing Wave** — inverse periodic gap wave
-- [ ] **Build-Up** — single ramp; ends at max power + min gap
+- [x] `power_timing` — `sampleTriangle01`, inverse gap helpers, `sampleBuildUpRow`; `strokeMsFromPower()` (existing)
+- [x] `table_program.*` — indexed schedule playback (`TableProgram`)
+- [x] `automatic_plan.*` — Power Wave, P+T Wave, Build-Up schedule builders
+- [x] Schedule buffer cap **`kMaxAutomaticScheduleRows = 2048`** (~16 KB, P9P2-D40)
+- [x] **Power Wave** — repeating triangle power; fixed `strokeMaxSeconds` gap; T_rise from D23-A
+- [x] **Power and Timing Wave** — inverse periodic gap wave (180°, P9P2-D15)
+- [x] **Build-Up** — half-wave ramp `t = i/(N−1)` (P9P2-D19); inverse gap
+- [x] Reject `noAutoEnd` / missing end session for wave + build-up modes
+- [x] **`pio run -e dev`** compiles (2026-09-07)
 
 #### C.1 Smoke tests (§7.2 #5–7)
 
-- [ ] Power Wave — visible power oscillation in `strokeMs`; fixed gap
-- [ ] P+T Wave — power up when gap shortens (serial timing)
-- [ ] Build-Up — monotonic power increase over session
+- [x] Power Wave — oscillating `strokeMs` (20→100→80→40%); fixed 20 s gap (2026-09-07, 8 strokes)
+- [x] P+T Wave — power rises as gap shortens; inverse coupling visible (2026-09-07)
+- [x] Build-Up — monotonic power 20→100%; gap 25→8 s (2026-09-07)
 
-**Phase C exit:** All seven programs pass bench smoke.
+**Phase C exit:** All seven programs pass bench smoke. **Met** 2026-09-07.
 
 ---
 
@@ -762,9 +765,9 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 | 2 | Random Power Only | B | ☑ |
 | 3 | Random Timing Only | B | ☑ |
 | 4 | Random Power and Timing | B | ☑ |
-| 5 | Power Wave | C | ☐ |
-| 6 | Power and Timing Wave | C | ☐ |
-| 7 | Build-Up | C | ☐ |
+| 5 | Power Wave | C | ☑ |
+| 6 | Power and Timing Wave | C | ☑ |
+| 7 | Build-Up | C | ☑ |
 
 ---
 
@@ -783,8 +786,8 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 2. ~~**Implement §6 UI**~~ — done 2026-09-07
 3. ~~**Phase A** — shell + Periodic (§7 Phase A)~~ — **bench signed off** 2026-09-07; optional stop/abort smoke
 4. ~~**Phase B** — random family~~ — **bench signed off** 2026-09-07
-5. **Phase C** — wave + build-up (triangle, D23-A) — **start here**
-6. **Phase D** — UI/API integration + E2E sign-off (incl. abort smoke)
+5. ~~**Phase C** — wave + build-up~~ — **bench signed off** 2026-09-07
+6. **Phase D** — UI/API integration + E2E sign-off — **start here**
 7. **Update** device plan + PROTOCOL + firmware version
 
 ---
@@ -799,4 +802,4 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 | 2026-09-07 | §8 modular layout locked — `AutomaticProgramBase` subclasses + factory (P9P2-D32–D34) |
 | 2026-09-07 | §6 UI signed off; §4 decisions locked; §7 expanded to Phases A–D firmware checklist |
 | 2026-09-07 | Walkthrough decisions: D23-A, D8 triangle, D19, D35–D37 |
-| 2026-09-07 | P9P2-D41 stroke-first verified on bench (randomPowerOnly); B.1 still valid under new cadence |
+| 2026-09-07 | Phase C bench smoke passed — all 7 programs verified on device |
