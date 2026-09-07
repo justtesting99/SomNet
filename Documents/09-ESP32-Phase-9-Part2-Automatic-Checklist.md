@@ -1,6 +1,6 @@
 # Phase 9 Part 2 — Automatic mode checklist
 
-**Status:** UI rules + §6 implementation complete (2026-09-07). Firmware and Start/Stop wiring **not started**. Assumes **Burst Settings unchecked** (`burstsOn: false`) unless noted.
+**Status:** UI rules + §6 complete (2026-09-07). Firmware and Start/Stop wiring **not started**. Assumes **Burst Settings unchecked** (`burstsOn: false`) unless noted.
 
 | Related | Link |
 |---------|------|
@@ -526,9 +526,54 @@ These apply **in addition** to §2 (first match wins for `disabled`):
 ### 6.3 Verification (UI only)
 
 - [x] For each dropdown value, confirm min power and min sec enable/disable match §1 table (vitest matrix)
-- [ ] Switch modes with saved settings — values persist (P9P2-D2 behavior documented)
-- [ ] Regression: `noAutoEnd`, `burstsOn`, stroke limit clamping unchanged
-- [ ] Saved settings round-trip via API after mode change
+- [x] Switch modes with saved settings — values persist (P9P2-D2) — vitest + manual confirm below
+- [x] Regression: `noAutoEnd`, `burstsOn`, stroke limit clamping unchanged — vitest + code review 2026-09-07
+- [x] Saved settings round-trip via API after mode change — `Scripts/verify-settings-roundtrip.ps1` 2026-09-07
+
+#### 6.3.1 Mode switch — values persist (P9P2-D2)
+
+**Expected:** Changing automatic mode only updates `automaticMode` (and coerces `endSessionMode` for wave/build-up). Disabled min fields keep their stored values; firmware will ignore them at runtime.
+
+Use **distinctive numbers** so you can spot accidental resets. Example using on-screen labels:
+
+| Step | Action | Pass if |
+|------|--------|---------|
+| 1 | **Power Settings:** set **Minimum Power** to **15%**, **Maximum Power** to **80%** | Sliders/readouts show 15% and 80% |
+| 1b | **Timing Settings → Time Between Strokes:** set **Minimum (sec)** to **3**, **Maximum (sec)** to **25** | Fields show 3 and 25 |
+| 1c | **Timing Settings → End Session After:** set the number box to **42**, choose **Minutes** | Shows 42 + Minutes selected |
+| 2 | **Controls:** switch **Random Power and Timing → Periodic** | **Minimum Power** and **Minimum (sec)** grey out; 15%, 80%, 3, 25, and 42 unchanged |
+| 3 | Switch **Periodic → Build-Up** | **End Session After** coerces to **Minutes** (No AutoEnd unavailable); power and timing numbers still 15%, 80%, 3, 25, 42 |
+| 4 | Hard refresh | Same automatic mode + same numbers reload |
+
+**Manual sign-off:** ☑ passed 2026-09-07
+
+#### 6.3.2 Regression — noAutoEnd, burstsOn, stroke limits
+
+| Area | Step | Pass if |
+|------|------|---------|
+| **noAutoEnd** | On Random P+T, under **End Session After** select **No AutoEnd** | The number box (left of the radios) greys out |
+| | Switch to **Power Wave** | **No AutoEnd** radio disabled; selection becomes **Minutes**; number box editable |
+| | Switch back to Random P+T, pick **No AutoEnd** again | Number box greys out again |
+| **burstsOn** | **Burst Settings** panel | All burst controls disabled (Part 3); **Bursts On** unchecked; values still save/load with settings |
+| **Stroke limits** | **Power Settings:** edit **Minimum Stroke (ms)** / **Maximum Stroke (ms)** outside device limits | Clamps to API stroke limits on commit/load |
+| | Set maximum stroke below minimum | Minimum adjusts so min ≤ max |
+
+**Note:** Pre–Part 3, burst sub-fields are hard-disabled in UI (not only `burstsOn === false`). Saved `burstsOn` and burst ranges should still round-trip in JSON.
+
+**Automated sign-off (2026-09-07):** `automaticFieldRules.test.ts` (noAutoEnd coercion); `strokeMsLimits.test.ts` (clamp); burst panel intentionally all-disabled until Part 3.
+
+#### 6.3.3 API round-trip after mode change
+
+| Step | Action | Pass if |
+|------|--------|---------|
+| 1 | Open DevTools → **Network** | — |
+| 2 | Change automatic mode (wait ~500 ms for debounced save) | **PUT** `/api/settings?subTarget=…` with `"automaticMode":"…"` camelCase |
+| 3 | Hard refresh | **GET** `/api/settings` returns same `automaticMode` and numeric fields |
+| 4 | Optional: inspect DB / `SettingsJson` | Contains `"automaticMode":"powerWave"` (or chosen mode), not PascalCase enum integer |
+
+**All seven enum strings:** `periodic`, `randomPowerOnly`, `randomTimingOnly`, `randomPowerAndTiming`, `powerWave`, `powerAndTimingWave`, `buildUp`
+
+**Automated sign-off (2026-09-07):** `Scripts/verify-settings-roundtrip.ps1` — login demo/demo, PUT `powerWave` + test values, GET confirms, restores prior mode.
 
 ---
 

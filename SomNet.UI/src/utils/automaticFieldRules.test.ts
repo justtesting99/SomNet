@@ -77,4 +77,29 @@ describe('applyAutomaticModeChange', () => {
     expect(next.automaticMode).toBe('buildUp');
     expect(next.endSessionMode).toBe('minutes');
   });
+
+  it('preserves stored values when switching modes (P9P2-D2)', () => {
+    const state = {
+      ...defaultAutomaticState,
+      minimumPower: 15,
+      maximumPower: 80,
+      strokeMinSeconds: 3,
+      strokeMaxSeconds: 25,
+      endSessionValue: 42,
+      automaticMode: 'randomPowerAndTiming' as const,
+    };
+
+    const periodic = applyAutomaticModeChange(state, 'periodic');
+    expect(periodic.minimumPower).toBe(15);
+    expect(periodic.maximumPower).toBe(80);
+    expect(periodic.strokeMinSeconds).toBe(3);
+    expect(periodic.strokeMaxSeconds).toBe(25);
+    expect(periodic.endSessionValue).toBe(42);
+    expect(periodic.automaticMode).toBe('periodic');
+    expect(periodic.endSessionMode).toBe('noAutoEnd');
+
+    const buildUp = applyAutomaticModeChange(state, 'buildUp');
+    expect(buildUp.minimumPower).toBe(15);
+    expect(buildUp.endSessionMode).toBe('minutes');
+  });
 });
