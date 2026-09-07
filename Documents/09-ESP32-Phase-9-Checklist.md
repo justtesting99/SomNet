@@ -277,11 +277,13 @@ Update **Status** above and check boxes below as work completes. When Phase 9 is
 
 _Not required for Phase 9 sign-off._
 
-**Design intent:** Automatic mode is **not** burst with random gaps. It is a set of **program variations** (timing + power behavior) the operator selects via Automatic tab controls and dropdowns. Each variation becomes a device-side execution program after one start message. **Specific programs are not yet defined** — the current UI (`AutomaticControls`, `AutomaticRunMode`, ranges, end-session, burst-in-auto toggles) is scaffolding for that future catalog.
+**Checklist (UI rules + decisions + execution semantics):** [09-ESP32-Phase-9-Part2-Automatic-Checklist.md](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) — program catalog, enable/disable matrix, §3 device behavior (bursts off), P9P2-D* decisions.
+
+**Design intent:** Automatic mode is **not** burst with random gaps. It is a set of **seven program variations** selected by the **Automatic Mode** dropdown. Each defines how **power** and **inter-stroke gap** are chosen over a long-running session (single strokes until stop/end rule). See Part 2 checklist §3 for Periodic → Build-Up semantics.
 
 **Relationship to burst:** Manual **burst** (Part 1) is a fixed, operator-specified multi-stroke sequence. Automatic programs may *include* burst-like behavior as one variation, but automatic and burst remain **separate modes** with separate UI entry points.
 
-Use plan §6, locked P9-D2/D4/D5/D6, and the table above when defining the first automatic program(s).
+Use plan §6, locked P9-D2/D4/D5/D6, and the Part 2 checklist when implementing.
 
 ## G. Firmware — `power_timing` + `AutomaticSessionMode`
 
@@ -299,9 +301,10 @@ Use plan §6, locked P9-D2/D4/D5/D6, and the table above when defining the first
 
 ## I. UI — automatic command path
 
+- [ ] **Part 2 UI rules** — [Part 2 checklist §5](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#5-ui-implementation-checklist) (dropdown catalog + min field disable matrix)
 - [ ] Enable Start/Stop when automatic firmware ready
 - [ ] Config snapshot payload (P9-D5); session from stop `resultJson`
-- [ ] Keep disabled until Part 2 implementation begins
+- [ ] Keep Start/Stop disabled until Part 2 firmware begins
 
 ## J. Verification (automatic — when implemented)
 

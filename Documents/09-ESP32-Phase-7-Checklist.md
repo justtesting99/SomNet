@@ -63,8 +63,8 @@ Not required for Phase 7 exit unless you choose to close timing calibration in t
 
 | Item | Status | Notes |
 |------|--------|-------|
-| Oscilloscope on **D4** | Deferred | [Phase 6 post sign-off](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration-deferred) |
-| Fixed offset on `strokeMs` | **TBD after scope** | Only if systematic error confirmed |
+| Oscilloscope on **D4** | ☑ Initial (2026-09-06) | [Phase 6 post sign-off](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration) |
+| Fixed offset on `strokeMs` | ☑ Not planned | ~3% scale + poll jitter; use `actualStrokeMs` as truth |
 | Abort / busy E2E | Phase 8 | Swagger REST is synchronous |
 
 ---
@@ -285,11 +285,36 @@ Reconnect events: none reported
 
 ## G. Optional — timing calibration (Phase 6 carry-forward)
 
-- [ ] Oscilloscope capture on D4 for 200 ms and 5000 ms stroke
-- [ ] If systematic error > agreed threshold: fixed offset in `relay_controller` (document in README)
-- [ ] If within tolerance: note “no offset applied” in sign-off
+- [x] Oscilloscope capture on D4 — initial points 25 ms and 201 ms (2026-09-06)
+- [x] Fixed offset on `strokeMs` — **not applied** (~3% scale + poll jitter; see Phase 6 post sign-off)
+- [ ] Long pulse spot-check (5000 ms) on scope — optional
 
-**Default:** Defer again with explicit sign-off note — not blocking Phase 7 exit.
+**Default:** Not blocking Phase 7+ exit. Operator tuning (power / max stroke) addresses felt impact when tank pressure drops.
+
+### G2. Future — relay timing precision (deferred)
+
+**Status:** Documented for later; **no firmware change planned** until requirements justify it (e.g. automatic Part 2, tighter calibration).
+
+**Observed behavior (2026-09-06 bench):** Relay OFF is detected in `relayController.poll()` when `micros()` exceeds `durationUs_`. Main loop also runs Wi‑Fi, SignalR, HTTP, and serial — so turn-off waits for the **next loop iteration** (~±5 ms jitter; single stroke at 201 ms → median 211 ms; burst steady-state ~207–209 ms). Single and burst share the same `requestPulse()` path.
+
+**Improvement options** (in recommended order):
+
+| # | Approach | Notes |
+|---|----------|--------|
+| 1 | **`esp_timer` one-shot** | Schedule GPIO OFF at `startUs + durationUs`; sub-ms accuracy; smallest change inside `relay_controller` |
+| 2 | **Optimized poll** | Move `relayController.poll()` earlier in `loop()` or call twice per iteration; cheap mitigation only |
+| 3 | **Pinned FreeRTOS task** | High-priority task on one core for relay deadline + burst gap; network/HTML on the other; mutex on GPIO |
+| 4 | **Timer ISR** | Fastest OFF edge; keep ISR minimal (flag or `esp_timer` dispatch) |
+
+**OTA:** All of the above are **compatible** with dual-bank OTA (`min_spiffs.csv`). OTA depends on flash partitions, not which core runs timing. Do **not** switch to `no_ota` / `huge_app` profiles if OTA remains a goal ([PARTITIONS.md](../SomNet.Device/docs/PARTITIONS.md)).
+
+**Architecture rules if revisited:**
+
+- Preserve non-blocking hub path — no `delay()` in hot paths.
+- **`actualStrokeMs`** remains measured at turn-off; compensation (if any) is on the command path only.
+- Re-validate on scope at short (25 ms) and medium (~200 ms) pulses after any change.
+
+References: [Phase 6 post sign-off](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration) · [Hardware User Guide](./Hardware-User-Guide.md#relay-timing-validation-oscilloscope) · [Device plan §6](./09-ESP32-Device-Plan.md#future--relay-timing-precision-optional)
 
 ---
 
@@ -298,7 +323,7 @@ Reconnect events: none reported
 - [ ] No `delay()` in hub or relay paths (except brief setup)
 - [ ] Phase 6 stroke / abort / relay FSM unchanged in behavior (unless offset added in G)
 - [ ] Burst/automatic stubs untouched
-- [ ] Single cooperative `loop()` — no new FreeRTOS timing tasks unless justified
+- [ ] Single cooperative `loop()` — no new FreeRTOS timing tasks **unless justified** ([§G2 future timing](./09-ESP32-Phase-7-Checklist.md#g2-future--relay-timing-precision-deferred))
 - [ ] PROGMEM-only assets — no SPIFFS requirement for theme
 
 ---

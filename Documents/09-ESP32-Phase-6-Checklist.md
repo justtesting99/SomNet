@@ -192,18 +192,49 @@ Timing offset: TBD after scope — may subtract fixed ms from requested strokeMs
 
 ---
 
-## Post sign-off — timing calibration (deferred)
+## Post sign-off — timing calibration
 
-Not blocking Phase 6 or Phase 7 start. Revisit after oscilloscope measurement on **D4** (and optionally air-line pressure).
+**Initial oscilloscope validation (2026-09-06)** on bench unit **D4** (relay module input / GPIO pulse):
+
+| Requested `strokeMs` | Scope measured | Serial / `actualStrokeMs` | Notes |
+|---------------------|----------------|---------------------------|--------|
+| 25 ms | **25.8 ms** | ~26 ms | Short pulse — scope |
+| 201 ms | **~208 ms** | **207 ms** | Burst stroke 2026-09-06 — serial matches relay **input** exactly |
+| 5000 ms | *(not re-tested this session)* | 5005 ms | Prior `micros()` refinement |
+
+**Conclusion:** Firmware **`actualStrokeMs`** (serial log + UI `resultJson`) reflects **actual relay output** on the scope — not an inflated software estimate. Operators and history should continue to treat **`actualStrokeMs` as source of truth** for what the hardware did.
 
 | Item | Status |
 |------|--------|
-| Scope validation of GPIO pulse width | Deferred — user to test later |
-| Fixed **offset** applied to incoming `strokeMs` | **TBD** — only if scope shows systematic error |
-| Where to apply offset | Likely `relay_controller` (threshold or OFF trigger in `poll()` / callback) — decide after scope data |
-| `actualStrokeMs` in `resultJson` | Always reports **measured** GPIO time; never inflated by offset |
+| Scope validation of GPIO pulse width on **D4** | ☑ **Initial complete** (2026-09-06) — 25 ms and 201 ms points |
+| Fixed **offset** applied to incoming `strokeMs` | ☑ **Not needed** — error is not a simple constant; measured time is already reported accurately |
+| Where to apply offset | N/A unless future air-line pressure testing shows separate mechanical lag |
+| `actualStrokeMs` in `resultJson` | Always reports **measured** GPIO/relay time; validated against scope |
+| Air-line / valve pressure timing | Optional follow-up — GPIO timing validated; pneumatic lag is a separate measurement |
 
-**Principle:** Do not add compensation code until scope characterizes error (software poll lag vs relay module vs mechanical). Current ~+5 ms at 5000 ms is acceptable for phase exit.
+**Principle:** Do not add compensation to **requested** `strokeMs`. The over-run is roughly **~3%** of commanded time (~0.8 ms at 25 ms, ~6 ms at 201 ms) plus **poll jitter** (~±5 ms) and is captured in **`actualStrokeMs`**. Revisit compensation only if production pneumatic testing requires different behavior.
+
+**Bench notes (2026-09-06):** Single stroke at 201 ms commanded → median **211 ms** serial (occasional 207–213 ms). Burst at 201 ms → stroke 1 often **211 ms**, strokes 2+ typically **207–209 ms**. Same `relay_controller.requestPulse()` path for both modes. See [Hardware User Guide — Relay timing validation](./Hardware-User-Guide.md#relay-timing-validation-oscilloscope).
+
+### Future — tighter GPIO timing (deferred)
+
+**Not required for current operation** — air-line pressure and operator power adjustment dominate felt impact. Revisit if tighter relay pulse repeatability is needed (e.g. automatic mode Part 2, calibration curve).
+
+| Option | Effort | Expected gain | OTA / dual-core |
+|--------|--------|---------------|-----------------|
+| **`esp_timer` one-shot** for relay OFF | Low | Sub-ms GPIO cutoff; recommended first step | **Compatible** — runtime only; `min_spiffs.csv` OTA slots unchanged |
+| **Optimized poll** — call `relayController.poll()` first (or twice) in `loop()` | Trivial | Reduces worst-case overshoot; does not eliminate jitter | Compatible |
+| **Dedicated FreeRTOS task** pinned to a core for relay + gap deadlines | Medium | Isolates timing from Wi‑Fi/SignalR loop load | **Compatible with OTA** — OTA is flash partition layout, not core assignment |
+| **Hardware timer ISR** for OFF transition | Medium–high | Most deterministic; needs ISR-safe GPIO + callback rules | Compatible |
+
+**Constraints if implemented:**
+
+- Keep **`actualStrokeMs`** as **measured** turn-off time (honest reporting).
+- Any **command-path compensation** (scale/LUT) stays separate from measurement — UI/API or optional NVS cal, not hidden in serial.
+- **`execution_context`** / mode FSM boundaries unchanged — only `relay_controller` (and optionally burst gap scheduling) becomes timer-driven.
+- Document in README + re-run scope spot-check at 25 ms and ~200 ms.
+
+Cross-reference: [Phase 7 checklist §G](./09-ESP32-Phase-7-Checklist.md#g-optional--timing-calibration-phase-6-carry-forward) · [Device plan §6 — Future relay timing precision](./09-ESP32-Device-Plan.md#future--relay-timing-precision-optional).
 
 ---
 

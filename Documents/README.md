@@ -27,3 +27,4 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [ESP32 Phase 7 Checklist](./09-ESP32-Phase-7-Checklist.md) | Developers | Resilience / production prep — **Signed off** (2026-09-06) |
 | [ESP32 Phase 8 Checklist](./09-ESP32-Phase-8-Checklist.md) | Developers | UI commands + pairing polish — **Signed off** (2026-09-06) |
 | [ESP32 Phase 9 Checklist](./09-ESP32-Phase-9-Checklist.md) | Developers | Burst mode — **Signed off** (2026-09-06); automatic Part 2 exploratory |
+| [ESP32 Phase 9 Part 2 — Automatic](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) | Developers | Automatic mode UI rules, decisions (P9P2-D*), implementation checklist |

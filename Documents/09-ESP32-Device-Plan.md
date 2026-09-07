@@ -848,7 +848,7 @@ In manual mode the UI maps power percent to a stroke duration using the Dom+Sub 
 4. **Open relay** (de-energize)
 5. Send `AckCommand` with `success`, `message`, and **`resultJson`** (includes measured `actualStrokeMs`)
 
-Measured **`actualStrokeMs`** in serial and UI `resultJson` (e.g. 5000 requested → 5005 actual on test unit). **Oscilloscope validation** on **D4** and optional fixed offset — deferred until scope characterization ([Phase 6 checklist *Post sign-off*](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration-deferred)); user testing planned 2026-09.
+Measured **`actualStrokeMs`** in serial and UI `resultJson` (e.g. 5000 requested → 5005 actual; 201 → 207 ms). **Oscilloscope validation on D4 (2026-09-06):** 25 ms → 25.8 ms scope; 201 ms commanded → 207 ms serial / ~208 ms scope — **matches `actualStrokeMs`**. No fixed offset on incoming `strokeMs` planned ([Phase 6 checklist *Post sign-off*](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration)).
 
 The device does **not** recalculate power from percent when `strokeMs` is omitted — **reject** with clear message (P5-D3).
 
@@ -907,7 +907,9 @@ Automatic mode requires **two independent random processes** on the device, both
 1. **Random time between pulses** — gap before the next valve actuation (`strokeMinSeconds` … `strokeMaxSeconds` from payload).
 2. **Random length of each pulse** — duration the valve stays energized, mapped from random power or random `strokeMs` within configured min/max (correlates to output strength).
 
-The UI/API sends a **one-time config snapshot** (`AutomaticControlStateDto`); the ESP32 **generates all automatic stroke timings locally** until stop, abort, or end-session rule.
+The UI/API sends a **one-time config snapshot** (`AutomaticControlStateDto`) at start in **Part 2**; the ESP32 **generates all automatic stroke timings locally** until stop, abort, or end-session rule.
+
+**Future (not Part 2):** Original product allowed **settings changes during playback** with on-the-fly pattern recalculation. That will need a mid-session device command (proposed **`automatic-update`**) and replan from **remaining** strokes/minutes — see [Phase 9 Part 2 checklist §9](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#9-future--live-settings-during-automatic-playback-not-part-2).
 
 **Proposed `payloadJson` (automatic start):** mirrors shared DTO fields, camelCase:
 
@@ -1055,6 +1057,21 @@ Timestamp **`onSinceUs_` after `relayWrite(true)`** so GPIO transition time is e
 - Compare requested vs actual pulse length (serial log: `requested=5000 actual=5005` from `actualStrokeMs` in `resultJson`)
 - Run burst while sending SignalR ping — connection must stay up (verified for long single pulse in Phase 6)
 - Long automatic session soak without watchdog resets
+
+#### Future — relay timing precision (optional)
+
+**Current (Phase 6+):** Cooperative `relay_controller.poll()` in main `loop()` — `micros()` deadline, relay OFF on next poll after duration elapsed. **Validated 2026-09-06:** serial/`actualStrokeMs` matches relay input; ~3% over-run plus **~±5 ms poll jitter** (see [Hardware User Guide](./Hardware-User-Guide.md#relay-timing-validation-oscilloscope), [Phase 6 post sign-off](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration)).
+
+**Not a priority today** — felt tool impact is dominated by air-line pressure; operators adjust power / max stroke. Revisit if tighter GPIO repeatability is required.
+
+| Approach | When to consider | OTA impact |
+|----------|------------------|------------|
+| **`esp_timer` one-shot** for OFF | First choice if implementing — best effort/accuracy ratio | None — compatible with `min_spiffs.csv` dual-bank OTA |
+| **Optimized poll order** | Quick experiment before timer work | None |
+| **FreeRTOS task on second core** | Heavy automatic mode + network load still causes jitter after timers | None — core pinning ≠ flash layout |
+| **Timer ISR** | Hard real-time requirement | None |
+
+**If changed:** keep FSM/mode boundaries; report honest `actualStrokeMs`; scope re-check at 25 ms and ~200 ms. Details: [Phase 7 §G2](./09-ESP32-Phase-7-Checklist.md#g2-future--relay-timing-precision-deferred).
 
 ### Serial monitor (development)
 
@@ -1567,7 +1584,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 - [x] Serial logging on **every state transition** (`[RELAY]`)
 - [x] `button_input`: debounced read; serial log on press (unchanged)
 
-**Exit criteria:** Stroke closes relay ~requested ms then opens; SignalR stays connected during pulse; serial shows `[RELAY]` FSM transitions. **Met** on `esp32-84CCA85C36B4` / Sub `Slv66` (5000 ms → 5005 ms `actualStrokeMs` after `micros()` refinement). Abort mid-pulse E2E → **Phase 8 met**. Oscilloscope validation + optional `strokeMs` offset → deferred ([Phase 6 checklist *Post sign-off*](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration-deferred)).
+**Exit criteria:** Stroke closes relay ~requested ms then opens; SignalR stays connected during pulse; serial shows `[RELAY]` FSM transitions. **Met** on `esp32-84CCA85C36B4` / Sub `Slv66`. Abort mid-pulse E2E → **Phase 8 met**. **Scope (2026-09-06):** D4 pulse width matches `actualStrokeMs` at 25 ms and 201 ms — no incoming `strokeMs` offset ([Phase 6 checklist *Post sign-off*](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration)).
 
 ---
 
@@ -1576,7 +1593,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 **Checklist:** [09-ESP32-Phase-7-Checklist.md](./09-ESP32-Phase-7-Checklist.md)  
 **Status:** **Signed off** (2026-09-06) — firmware **`0.7.0-phase7`** on `esp32-84CCA85C36B4` / Slv66
 
-**Carry-forward from Phase 6:** oscilloscope timing validation; optional fixed offset in `relay_controller` if scope shows systematic error (TBD). Azure **`wss` E2E** when cloud deploy available.
+**Carry-forward from Phase 6:** ~~oscilloscope timing validation~~ **initial D4 scope complete (2026-09-06)**; air-line pressure optional. Azure **`wss` E2E** when cloud deploy available.
 
 **Deliverables:**
 
@@ -1714,7 +1731,7 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 - Pairing succeeds within 5 s of API call
 - Command ack within command timeout for relay pulse; measured `actualStrokeMs` logged on serial
 - Zero false accepts of commands for other device IDs (manual test with forged payload)
-- Long pulse (e.g. 5 s): hub stays connected; GPIO pulse within ~±5 ms of requested at ms scale (serial `micros()`); scope validation deferred
+- Long pulse (e.g. 5 s): hub stays connected; GPIO pulse within ~±5 ms of requested at ms scale (serial `micros()`); **D4 scope validated 2026-09-06** at 25 ms and 201 ms — matches `actualStrokeMs`
 
 ---
 
@@ -1812,5 +1829,5 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 - [x] Phase 8 UI pairing dialog + manual stroke/abort — **signed off** 2026-09-06
 - [x] Phase 9 manual burst — **signed off** 2026-09-06
 - [ ] Phase 9 Part 2 — automatic mode (program catalog TBD)
-- [ ] Oscilloscope timing validation + optional `strokeMs` offset ([Phase 6 post sign-off](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration-deferred))
+- [x] Oscilloscope timing validation on D4 — initial complete 2026-09-06; no incoming `strokeMs` offset ([Phase 6 post sign-off](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration))
 - [ ] Explicit approval only if pursuing two-phase ack API change

@@ -9,7 +9,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | SomNet web app | [User Guide](./User-Guide.md) |
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 
-**Firmware status (2026-09-06):** Phases **0–9 (burst)** — Wi‑Fi provisioning, SomNet pairing, **manual stroke / abort / burst from the web app**, pairing token expiry. **Automatic** hardware mode remains exploratory (Phase 9 Part 2). Toolbar **Hardware** button for pairing; **Options** for app settings (General / Notifications / Account).
+**Firmware status (2026-09-07):** Phases **0–9 (burst)** — manual **stroke / abort / burst** from the web app. **Automatic** program catalog defined (Part 2) — UI implementation next; device Start/Stop not wired yet.
 
 ---
 
@@ -185,7 +185,7 @@ If the device is on your network and you can open its web page:
 | Stroke from SomNet **web app** | **Yes** | Manual mode **Stroke** → device ack + session from `resultJson` |
 | **Burst** from SomNet **web app** | **Yes** | Manual mode **Burst** — fixed stroke count + delay; device runs full sequence |
 | **Abort** during stroke or burst | **Yes** | Relay opens; session tracks abort / partial burst from device `resultJson` |
-| Automatic modes | **Not yet** | Exploratory — program catalog TBD (Phase 9 Part 2) |
+| Automatic modes | **Not yet** | UI + program catalog defined — see [Automatic mode (planned)](#automatic-mode-planned--phase-9-part-2); Start/Stop not on device yet |
 
 **Server URL reminder:** Use the SomNet API **LAN address** on the device (e.g. `http://192.168.1.47:5031`). The SomNet browser on the same PC can use `localhost`; the ESP32 cannot.
 
@@ -201,20 +201,135 @@ If the device is on your network and you can open its web page:
 
 ---
 
-## Relay timing validation (oscilloscope — planned)
+## Automatic mode (planned — Phase 9 Part 2)
 
-Firmware reports **measured** pulse time in `actualStrokeMs` (serial log and SomNet session). Bench testing showed ~+5 ms at long pulses (e.g. 5000 ms requested → 5005 ms actual) — acceptable for phase sign-off.
+**Status (2026-09-07):** Program catalog and UI rules are **defined**; **Start / Stop are not wired to hardware yet**. Manual **Stroke**, **Burst**, and **Abort** work today. This section describes what Automatic mode **will** do so Dom/operators and installers know what the Automatic tab controls mean.
 
-**Before production airline / valve use**, installers or developers should validate **D4** (relay output) with an oscilloscope:
+**Developer detail:** [Phase 9 Part 2 — Automatic checklist](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md)
+
+### What automatic mode is
+
+- Operator selects **Automatic** in SomNet, configures the program, presses **Start**.
+- SomNet sends **one configuration snapshot** to the device; the **ESP32 runs the full session locally** (gaps between strokes, power changes, end rules) until **Stop**, **Abort**, or **End Session After**.
+- Unlike **manual burst** (fixed number of strokes you choose each time), automatic mode runs **ongoing single strokes** according to the selected **program** — with optional randomness or waves between min/max power and timing settings.
+- **Bursts during automatic** (Bursts On checkbox) are a **later phase** — not part of the initial automatic release.
+
+### Seven automatic programs (Automatic Mode dropdown)
+
+| Program | What it does (plain language) |
+|---------|-------------------------------|
+| **Periodic** | Steady rhythm — fixed **maximum power**, fixed **maximum** time between strokes |
+| **Random Power Only** | Random strength between min/max power; steady **maximum** gap between strokes |
+| **Random Timing Only** | Fixed **maximum** power; random wait between min/max seconds |
+| **Random Power and Timing** | Random power **and** random wait each stroke |
+| **Power Wave** | Power breathes up and down (triangle/sine) between min/max; steady gap |
+| **Power and Timing Wave** | Power **and** wait time both wave (faster/harder ↔ slower/gentler) |
+| **Build-Up** | One ramp from gentle/slow (min power, long gaps) to intense/fast (max power, short gaps) |
+
+Power maps to **how long the valve stays open** (same as manual mode). Longer open time + adequate air pressure = stronger effect at the tool.
+
+### Which controls grey out for each program
+
+Only **Minimum power** and **Minimum (sec) time between strokes** change with the dropdown (plus rules below for End Session):
+
+| Program | Minimum power | Minimum (sec) between strokes |
+|---------|---------------|-------------------------------|
+| Periodic | disabled | disabled |
+| Random Power Only | enabled | disabled |
+| Random Timing Only | disabled | enabled |
+| Random Power and Timing | enabled | enabled |
+| Power Wave | enabled | disabled |
+| Power and Timing Wave | enabled | enabled |
+| Build-Up | enabled | enabled |
+
+When a minimum control is disabled, the device uses the **maximum** setting for that dimension (fixed power or fixed gap).
+
+### End Session After
+
+| Setting | Use |
+|---------|-----|
+| **Minutes** | Stop after N minutes |
+| **Strokes** | Stop after N strokes |
+| **No AutoEnd** | Run until operator presses **Stop** (not available for **Build-Up** or **wave** programs — they need a defined length to shape the ramp or wave) |
+
+For **wave** programs, the device uses your End Session value to calculate how long one full power “breath” takes (peak-to-peak timing is derived from that — see developer checklist). For **Build-Up**, End Session is the length of the single ramp.
+
+### What operators should expect at the tool
+
+Automatic mode controls **relay open time**, not tank pressure. On a charged compressor with no pump during the session, **line pressure slowly drops**. Adjust **power** or **maximum stroke** if impact softens — do not expect every stroke to feel identical when pressure is changing.
+
+Reported **`actualStrokeMs`** in session history reflects what the device measured on the relay; small variation (a few ms) between strokes is normal.
+
+### Not in the first automatic release
+
+| Feature | When |
+|---------|------|
+| **Start / Stop** on device | Part 2 firmware |
+| **Bursts On** during automatic | Part 3 |
+| **Change settings while running** (live replan) | Future — original product supported this; needs mid-session device updates |
+
+### Part 2 implementation order (for reference)
+
+1. Automatic tab UI — seven programs + grey-out rules  
+2. Device firmware — run programs locally after Start  
+3. Session summaries from device when Stop or end rule fires  
+
+---
+
+## Relay timing validation (oscilloscope)
+
+Firmware reports **measured** pulse time in **`actualStrokeMs`** (USB serial `[RELAY]` log and SomNet session/history). **Initial scope validation (2026-09-06)** on **D4** confirmed that these values match **relay module input** (GPIO pulse):
+
+| Requested stroke | Scope (D4) | Typical `actualStrokeMs` |
+|------------------|------------|---------------------------|
+| 25 ms | 25.8 ms | ~26 ms |
+| 201 ms | ~208 ms | **207 ms** (burst — matches relay input) |
+
+**Takeaway:** What you see in SomNet history and serial logs is what the relay **input** received — not a software guess. Over-run is roughly **~3%** of commanded time (~0.8 ms at 25 ms, ~6 ms at 201 ms). No user-facing correction is applied to requested stroke times today.
+
+### Bench testing notes (2026-09-06)
+
+Further USB-serial testing at **201 ms** commanded (`strokeMs=201`) showed:
+
+| Mode | Typical `[RELAY] OFF after …` | Notes |
+|------|-------------------------------|--------|
+| **Single stroke** | **211 ms** (most runs) | Consistent median; **occasional** 207–213 ms |
+| **Burst** (15 × 201 ms, 1 s gap) | **207–209 ms** (strokes 2+) | Stroke **1** often **211 ms** (same as single) |
+
+**Why values differ slightly**
+
+- The device turns the relay off on the **next firmware loop pass** after the requested duration — not on a dedicated hardware timer interrupt. Wi‑Fi, SignalR, and serial logging share that loop, so pulse width can vary by **~±5 ms** (rarely a bit more).
+- **Single** and **burst** use the **same** relay timing code; burst looks more variable only because many strokes are logged back-to-back.
+- **`[RELAY] OFF after …` is measured at GPIO turn-off** — before any network ack. For **burst**, the server receives **one** result when the whole sequence finishes; per-stroke relay times in serial do **not** affect when SomNet updates mid-burst.
+- Relay **contact** (screw-terminal) output and **air at the valve** were not fully characterized in this session; mechanical pick-up/drop-out and line pressure are separate from GPIO timing.
+
+For calibration or support, use the **median** of several strokes at a setpoint rather than a single reading.
+
+**Future firmware (developers):** Tighter GPIO timing (`esp_timer`, optimized poll, optional dual-core task) is documented but **not planned** until needed — see [Phase 7 checklist §G2](./09-ESP32-Phase-7-Checklist.md#g2-future--relay-timing-precision-deferred) and [Device plan §6](./09-ESP32-Device-Plan.md#future--relay-timing-precision-optional). OTA dual-bank layout is unaffected.
+
+Details and decision record: [Phase 6 checklist — timing calibration](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration).
+
+### Air line, pressure, and what operators should adjust
+
+SomNet controls **how long the valve relay is energized** (`strokeMs`, derived from power % and min/max stroke settings). **Impact at the tool** also depends on **air pressure at the valve** when the stroke fires.
+
+Typical install: a compressor charges a tank; the session runs **without the pump running**, so line pressure **gradually falls** during use. A regulator holds pressure within a band, but some tolerance is normal. **Effective strike force ≈ valve open time × available air pressure** at that moment.
+
+From an operator or Dom perspective:
+
+- Adjust **power %** (or min/max stroke range in settings) so the **felt impact** matches intent — not to chase ±5 ms on the serial log.
+- If impact softens late in a session, **raise power slightly** or **raise maximum stroke** so the same percentage still delivers enough air for the current line pressure.
+- GPIO/`actualStrokeMs` timing is validated separately from pneumatic behavior; do not expect millisecond-perfect repeatability at the tool tip when tank pressure is changing.
+
+### Optional follow-up (installers)
 
 | Step | Action |
 |------|--------|
-| 1 | Pair device; run Manual **Stroke** at known settings (e.g. 50% power, or fixed ms via developer Swagger) |
-| 2 | Probe **D4** (or relay module input) — confirm active-high energize matches `RELAY_ACTIVE_HIGH` in firmware |
-| 3 | Compare scope pulse width to SomNet **actualStrokeMs** in session/history and USB serial `[RELAY]` log |
-| 4 | If a **systematic offset** is found, document it — optional firmware compensation is deferred until scope data exists ([Phase 6 checklist](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration-deferred)) |
-
-**Principle:** Do not change timing in firmware until scope characterizes software vs relay module vs mechanical lag. `actualStrokeMs` always reports **measured** GPIO time.
+| 1 | Pair device; run Manual **Stroke** at known min/max settings |
+| 2 | Probe **D4** (or relay module input) — confirm active-high matches module behavior |
+| 3 | Compare scope pulse width to **actualStrokeMs** in session and serial log |
+| 4 | **Air-line pressure** at the valve — separate from GPIO timing; optional pressure gauge during a session |
+| 5 | Relay **NO contacts** (load side) — optional; may differ slightly from input timing |
 
 ---
 
@@ -239,8 +354,10 @@ Firmware reports **measured** pulse time in `actualStrokeMs` (serial log and Som
 
 | Feature | Target |
 |---------|--------|
-| Automatic session programs (timing/power variations) | Phase 9 Part 2 / future |
-| Optional relay timing offset after scope validation | After oscilloscope characterization |
+| Automatic session programs (timing/power variations) | [Automatic mode (planned)](#automatic-mode-planned--phase-9-part-2) — Part 2 UI first, then firmware |
+| Automatic bursts during session | Part 3 |
+| Live settings change during automatic playback | Future |
+| Air-line pressure timing vs GPIO pulse | Optional installer follow-up — operators tune power / max stroke for felt impact |
 | LED indicators for setup / fault | Under consideration |
 | QR code on status page for Device ID | Future polish |
 
@@ -253,4 +370,7 @@ Firmware reports **measured** pulse time in `actualStrokeMs` (serial log and Som
 | 2026-09-05 | Initial guide: provisioning, config UI, 10 s credential reset |
 | 2026-09-05 | SignalR pairing, relay on D4; Options pairing path (Phase 4 dev) |
 | 2026-09-05 | Annual pairing token expiry and re-pair procedure (Phase 7) |
-| 2026-09-06 | Phases 8–9: Hardware toolbar dialog; stroke/burst/abort from UI; Options tabbed (separate from Hardware); oscilloscope validation section |
+| 2026-09-06 | Initial oscilloscope validation on D4 — `actualStrokeMs` matches relay input (25→25.8 ms, 201→207 ms serial) |
+| 2026-09-06 | Bench notes: single/burst poll jitter (~±5 ms); air-line pressure vs operator power adjustment |
+| 2026-09-06 | Link to Phase 7 §G2 / device plan — deferred timing options (`esp_timer`, poll, dual-core; OTA-safe) |
+| 2026-09-07 | Automatic mode overview (seven programs, UI rules, End Session) — Part 2 planned |
