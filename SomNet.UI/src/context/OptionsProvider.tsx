@@ -17,6 +17,7 @@ import type { AutomaticControlState, ManualControlState } from '@/types/modes';
 import { DEFAULT_PAIRING_SETTINGS, type PairingSettings } from '@/types/pairingSettings';
 import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
 import { normalizeStrokeMsPair } from '@/utils/strokeMsLimits';
+import { normalizeAutomaticControlState } from '@/utils/automaticFieldRules';
 
 interface OptionsContextValue {
   settings: PairingSettings;
@@ -104,10 +105,10 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
               ...loadedSettings.manual,
               ...manualStroke,
             },
-            automatic: {
+            automatic: normalizeAutomaticControlState({
               ...loadedSettings.automatic,
               ...automaticStroke,
-            },
+            }),
           });
         }
       })

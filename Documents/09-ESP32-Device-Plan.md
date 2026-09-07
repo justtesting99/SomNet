@@ -911,6 +911,8 @@ The UI/API sends a **one-time config snapshot** (`AutomaticControlStateDto`) at 
 
 **Future (not Part 2):** Original product allowed **settings changes during playback** with on-the-fly pattern recalculation. That will need a mid-session device command (proposed **`automatic-update`**) and replan from **remaining** strokes/minutes — see [Phase 9 Part 2 checklist §9](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#9-future--live-settings-during-automatic-playback-not-part-2).
 
+**Firmware structure (Part 2):** One **`AutomaticSessionMode`** on `IExecutionMode` (FSM, hub, session); per-program **`AutomaticProgramBase`** subclasses + factory — see [Part 2 checklist §8](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#modular-class-layout-locked--p9p2-d32d34).
+
 **Proposed `payloadJson` (automatic start):** mirrors shared DTO fields, camelCase:
 
 ```json

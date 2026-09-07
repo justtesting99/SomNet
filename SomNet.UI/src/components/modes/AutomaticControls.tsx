@@ -18,13 +18,25 @@ import { RadioGroup, SelectField } from '@/components/ui/RadioGroup';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 import { computeStrokeMs } from '@/utils/stroke';
 import {
+  applyAutomaticModeChange,
+  getAutomaticFieldRules,
+  normalizeAutomaticControlState,
+} from '@/utils/automaticFieldRules';
+import { getAutomaticModeInfo } from '@/utils/automaticModeInfo';
+import {
   clampMaximumStrokeMs,
   clampMinimumStrokeMs,
   normalizeStrokeMsPair,
   resolveStrokeMsBounds,
 } from '@/utils/strokeMsLimits';
 
-const PHASE9_TOOLTIP = 'Automatic hardware mode is coming in Phase 9.';
+const HARDWARE_START_STOP_TOOLTIP = 'Automatic Start/Stop on device — coming in Phase 9 Part 2.';
+
+const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
+  { value: 'minutes', label: 'Minutes' },
+  { value: 'strokes', label: 'Strokes' },
+  { value: 'noAutoEnd', label: 'No AutoEnd' },
+];
 
 export function AutomaticControls() {
   const { settings, updateAutomatic, isLoading, strokeLimits } = useOptions();
@@ -32,6 +44,18 @@ export function AutomaticControls() {
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { expandOnAction } = useVideoDisplay();
   const { beginAutomaticSession, endAutomaticSession } = useLiveSession();
+
+  const fieldRules = useMemo(
+    () => getAutomaticFieldRules(state.automaticMode),
+    [state.automaticMode],
+  );
+
+  const modeInfo = useMemo(
+    () => getAutomaticModeInfo(state.automaticMode),
+    [state.automaticMode],
+  );
+
+  const configLocked = state.running;
 
   function update<K extends keyof AutomaticControlState>(
     key: K,
@@ -44,6 +68,10 @@ export function AutomaticControls() {
     updateAutomatic({ ...state, [key]: value });
   }
 
+  function handleAutomaticModeChange(nextMode: AutomaticRunMode) {
+    updateAutomatic(applyAutomaticModeChange(state, nextMode));
+  }
+
   useEffect(() => {
     if (isLoading) {
       return;
@@ -54,17 +82,23 @@ export function AutomaticControls() {
       state.maximumStrokeMs,
       strokeLimits,
     );
-    if (
-      normalizedStroke.minimumStrokeMs === state.minimumStrokeMs &&
-      normalizedStroke.maximumStrokeMs === state.maximumStrokeMs
-    ) {
-      return;
-    }
-
-    updateAutomatic({
+    const normalizedAutomatic = normalizeAutomaticControlState({
       ...state,
       ...normalizedStroke,
     });
+
+    const strokeUnchanged =
+      normalizedStroke.minimumStrokeMs === state.minimumStrokeMs &&
+      normalizedStroke.maximumStrokeMs === state.maximumStrokeMs;
+    const automaticUnchanged =
+      normalizedAutomatic.automaticMode === state.automaticMode &&
+      normalizedAutomatic.endSessionMode === state.endSessionMode;
+
+    if (strokeUnchanged && automaticUnchanged) {
+      return;
+    }
+
+    updateAutomatic(normalizedAutomatic);
   }, [isLoading, state, strokeLimits, updateAutomatic]);
 
   function handleStart() {
@@ -78,7 +112,16 @@ export function AutomaticControls() {
     void endAutomaticSession('stopped manually');
   }
 
-  const endSessionDisabled = state.endSessionMode === 'noAutoEnd';
+  const endSessionValueDisabled = configLocked || state.endSessionMode === 'noAutoEnd';
+
+  const endSessionOptions = useMemo(
+    () =>
+      END_SESSION_OPTIONS.map((option) => ({
+        ...option,
+        disabled: option.value === 'noAutoEnd' ? fieldRules.disableNoAutoEnd : false,
+      })),
+    [fieldRules.disableNoAutoEnd],
+  );
 
   const minimumStrokeMs = useMemo(
     () => computeStrokeMs(state.minimumPower, state.minimumStrokeMs, state.maximumStrokeMs),
@@ -96,6 +139,12 @@ export function AutomaticControls() {
         <p className="text-sm text-slate-500">Loading saved automatic settings…</p>
       ) : null}
 
+      {configLocked ? (
+        <p className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200">
+          Session running — settings are read-only until you stop.
+        </p>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Power Settings" className="min-w-0 overflow-hidden">
           <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
@@ -104,7 +153,7 @@ export function AutomaticControls() {
               value={state.minimumStrokeMs}
               min={absoluteMinimum}
               max={absoluteMaximum}
-              disabled={state.running}
+              disabled={configLocked}
               onCommit={(nextMin) => {
                 const nextStroke = clampMinimumStrokeMs(
                   nextMin,
@@ -122,7 +171,7 @@ export function AutomaticControls() {
               value={state.maximumStrokeMs}
               min={state.minimumStrokeMs}
               max={absoluteMaximum}
-              disabled={state.running}
+              disabled={configLocked}
               onCommit={(nextMax) => {
                 updateAutomatic({
                   ...state,
@@ -137,22 +186,34 @@ export function AutomaticControls() {
           </div>
 
           <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-2">
+            <div className="space-y-1">
+              <StrokePowerSlider
+                label="Minimum Power"
+                percent={state.minimumPower}
+                minimumMs={state.minimumStrokeMs}
+                maximumMs={state.maximumStrokeMs}
+                strokeMs={minimumStrokeMs}
+                disabled={configLocked || fieldRules.disableMinimumPower}
+                title={
+                  fieldRules.disableMinimumPower
+                    ? 'Not used in this automatic mode — device uses maximum power'
+                    : undefined
+                }
+                onChange={(event) => update('minimumPower', Number(event.target.value))}
+              />
+              {fieldRules.disableMinimumPower && !configLocked ? (
+                <p className="text-center text-xs text-slate-500 sm:text-left">
+                  Not used — device uses maximum power.
+                </p>
+              ) : null}
+            </div>
             <StrokePowerSlider
-              label="Minimum"
-              percent={state.minimumPower}
-              minimumMs={state.minimumStrokeMs}
-              maximumMs={state.maximumStrokeMs}
-              strokeMs={minimumStrokeMs}
-              disabled={state.running}
-              onChange={(event) => update('minimumPower', Number(event.target.value))}
-            />
-            <StrokePowerSlider
-              label="Maximum"
+              label="Maximum Power"
               percent={state.maximumPower}
               minimumMs={state.minimumStrokeMs}
               maximumMs={state.maximumStrokeMs}
               strokeMs={maximumStrokeMs}
-              disabled={state.running}
+              disabled={configLocked}
               onChange={(event) => update('maximumPower', Number(event.target.value))}
             />
           </div>
@@ -163,22 +224,38 @@ export function AutomaticControls() {
             <div>
               <p className="mb-3 text-sm font-medium text-slate-300">Time Between Strokes</p>
               <div className="grid gap-3 sm:grid-cols-3">
-                <NumberField
-                  label="Minimum (sec)"
-                  value={state.strokeMinSeconds}
-                  min={0}
-                  onChange={(event) => update('strokeMinSeconds', Number(event.target.value))}
-                />
+                <div className="space-y-1">
+                  <NumberField
+                    label="Minimum (sec)"
+                    alignLabelHeight
+                    value={state.strokeMinSeconds}
+                    min={0}
+                    disabled={configLocked || fieldRules.disableStrokeMinSeconds}
+                    title={
+                      fieldRules.disableStrokeMinSeconds
+                        ? 'Not used in this automatic mode — device uses maximum interval'
+                        : undefined
+                    }
+                    onChange={(event) => update('strokeMinSeconds', Number(event.target.value))}
+                  />
+                  {fieldRules.disableStrokeMinSeconds && !configLocked ? (
+                    <p className="text-xs text-slate-500">Not used — device uses maximum gap.</p>
+                  ) : null}
+                </div>
                 <NumberField
                   label="Maximum (sec)"
+                  alignLabelHeight
                   value={state.strokeMaxSeconds}
                   min={0}
+                  disabled={configLocked}
                   onChange={(event) => update('strokeMaxSeconds', Number(event.target.value))}
                 />
                 <NumberField
                   label="Delay Before Start (sec)"
+                  alignLabelHeight
                   value={state.delayBeforeStartSeconds}
                   min={0}
+                  disabled={configLocked}
                   onChange={(event) =>
                     update('delayBeforeStartSeconds', Number(event.target.value))
                   }
@@ -192,31 +269,33 @@ export function AutomaticControls() {
                 <NumberField
                   value={state.endSessionValue}
                   min={0}
-                  disabled={endSessionDisabled}
+                  disabled={endSessionValueDisabled}
                   className="w-20 text-center"
                   onChange={(event) => update('endSessionValue', Number(event.target.value))}
                 />
                 <RadioGroup
                   name="endSessionMode"
                   value={state.endSessionMode}
-                  options={[
-                    { value: 'minutes', label: 'Minutes' },
-                    { value: 'strokes', label: 'Strokes' },
-                    { value: 'noAutoEnd', label: 'No AutoEnd' },
-                  ]}
+                  disabled={configLocked}
+                  options={endSessionOptions}
                   onChange={(value) => update('endSessionMode', value as EndSessionMode)}
                 />
               </div>
+              {modeInfo.endSessionNote && !configLocked ? (
+                <p className="mt-2 text-xs text-slate-500">{modeInfo.endSessionNote}</p>
+              ) : null}
             </div>
           </div>
         </Panel>
 
         <Panel title="Burst Settings">
           <div className="space-y-4">
+            <p className="text-xs text-slate-500">Burst-in-automatic — Part 3 (not yet available).</p>
             <div className="flex flex-wrap items-center gap-4">
               <Checkbox
                 label="Bursts On"
                 checked={state.burstsOn}
+                disabled
                 onChange={(event) => update('burstsOn', event.target.checked)}
               />
               <NumberField
@@ -225,7 +304,7 @@ export function AutomaticControls() {
                 value={state.burstPercent}
                 min={0}
                 max={100}
-                disabled={!state.burstsOn}
+                disabled
                 onChange={(event) => update('burstPercent', Number(event.target.value))}
               />
             </div>
@@ -233,7 +312,7 @@ export function AutomaticControls() {
             <SelectField
               label="Burst Style"
               value={state.burstStyle}
-              disabled={!state.burstsOn}
+              disabled
               options={[{ value: 'fixedPowerDelay', label: 'Fixed Power/Delay' }]}
               onChange={(event) =>
                 update('burstStyle', event.target.value as AutomaticControlState['burstStyle'])
@@ -246,7 +325,7 @@ export function AutomaticControls() {
               max={state.burstStrokePowerMax}
               minLimit={0}
               maxLimit={100}
-              disabled={!state.burstsOn}
+              disabled
               onMinChange={(value) => update('burstStrokePowerMin', value)}
               onMaxChange={(value) => update('burstStrokePowerMax', value)}
             />
@@ -256,7 +335,7 @@ export function AutomaticControls() {
               min={state.burstDelayMin}
               max={state.burstDelayMax}
               minLimit={0}
-              disabled={!state.burstsOn}
+              disabled
               onMinChange={(value) => update('burstDelayMin', value)}
               onMaxChange={(value) => update('burstDelayMax', value)}
             />
@@ -266,7 +345,7 @@ export function AutomaticControls() {
               min={state.burstStrokesMin}
               max={state.burstStrokesMax}
               minLimit={1}
-              disabled={!state.burstsOn}
+              disabled
               onMinChange={(value) => update('burstStrokesMin', value)}
               onMaxChange={(value) => update('burstStrokesMax', value)}
             />
@@ -275,22 +354,22 @@ export function AutomaticControls() {
 
         <Panel title="Controls">
           <div className="flex h-full flex-col justify-center gap-3">
-            <p className="text-xs text-amber-200/90">{PHASE9_TOOLTIP}</p>
             <SelectField
               label="Automatic Mode"
               value={state.automaticMode}
-              disabled={state.running}
+              disabled={configLocked}
               options={AUTOMATIC_RUN_MODE_OPTIONS}
               onChange={(event) =>
-                update('automaticMode', event.target.value as AutomaticRunMode)
+                handleAutomaticModeChange(event.target.value as AutomaticRunMode)
               }
             />
+            <p className="text-xs leading-relaxed text-slate-500">{modeInfo.summary}</p>
             <CommandButton
               commandKey={HARDWARE_COMMAND_KEYS.automaticStart}
               size="lg"
               fullWidth
               disabled
-              title={PHASE9_TOOLTIP}
+              title={HARDWARE_START_STOP_TOOLTIP}
               onCommand={handleStart}
               className="py-4 text-base"
             >
@@ -302,12 +381,13 @@ export function AutomaticControls() {
               fullWidth
               variant="secondary"
               disabled
-              title={PHASE9_TOOLTIP}
+              title={HARDWARE_START_STOP_TOOLTIP}
               onCommand={handleStop}
               className="py-4 text-base"
             >
               Stop
             </CommandButton>
+            <p className="text-xs text-slate-500">{HARDWARE_START_STOP_TOOLTIP}</p>
           </div>
         </Panel>
       </div>

@@ -122,3 +122,23 @@ input[type='range']::-moz-range-thumb {
   border: 2px solid rgb(30 41 59);
   box-shadow: 0 0 0 4px rgb(79 70 229 / 0.15);
 }
+
+.vertical-slider-track-shell--disabled::before {
+  background: rgb(30 41 59);
+}
+
+.vertical-slider-track-shell--disabled .vertical-slider:disabled {
+  cursor: not-allowed;
+}
+
+.vertical-slider-track-shell--disabled .vertical-slider:disabled::-webkit-slider-thumb {
+  background: rgb(71 85 105);
+  border-color: rgb(30 41 59);
+  box-shadow: none;
+}
+
+.vertical-slider-track-shell--disabled .vertical-slider:disabled::-moz-range-thumb {
+  background: rgb(71 85 105);
+  border-color: rgb(30 41 59);
+  box-shadow: none;
+}

@@ -4,10 +4,23 @@ export type EndSessionMode = 'minutes' | 'strokes' | 'noAutoEnd';
 
 export type BurstStyle = 'fixedPowerDelay';
 
-export type AutomaticRunMode = 'randomPowerAndTiming';
+export type AutomaticRunMode =
+  | 'periodic'
+  | 'randomPowerOnly'
+  | 'randomTimingOnly'
+  | 'randomPowerAndTiming'
+  | 'powerWave'
+  | 'powerAndTimingWave'
+  | 'buildUp';
 
 export const AUTOMATIC_RUN_MODE_OPTIONS: { value: AutomaticRunMode; label: string }[] = [
+  { value: 'periodic', label: 'Periodic' },
+  { value: 'randomPowerOnly', label: 'Random Power Only' },
+  { value: 'randomTimingOnly', label: 'Random Timing Only' },
   { value: 'randomPowerAndTiming', label: 'Random Power and Timing' },
+  { value: 'powerWave', label: 'Power Wave' },
+  { value: 'powerAndTimingWave', label: 'Power and Timing Wave' },
+  { value: 'buildUp', label: 'Build-Up' },
 ];
 
 export interface ManualControlState {

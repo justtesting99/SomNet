@@ -1,6 +1,6 @@
 # Phase 9 Part 2 — Automatic mode checklist
 
-**Status:** UI rules + execution semantics captured (2026-09-06). Firmware and Start/Stop wiring **not started**. Assumes **Burst Settings unchecked** (`burstsOn: false`) unless noted.
+**Status:** UI rules + §6 implementation complete (2026-09-07). Firmware and Start/Stop wiring **not started**. Assumes **Burst Settings unchecked** (`burstsOn: false`) unless noted.
 
 | Related | Link |
 |---------|------|
@@ -239,8 +239,8 @@ When switching into wave/build-up while `noAutoEnd` selected → coerce to **`mi
 | P9P2-D14 | **End Session panel** | Unaffected by mode dropdown | ☑ **Partial:** **`noAutoEnd` disabled** for build-up + both wave modes; minutes/strokes required (§3) | 2026-09-06 |
 | P9P2-D15 | **Inverse wave phasing** | 180° out of phase / independent | ☑ **180° inverse** for P+T Wave (same triangle/sine shape, gap inverted) | 2026-09-06 |
 | P9P2-D16 | **Build-Up duration** | Full session / other | ☑ **End Session envelope = full half-wave** | 2026-09-06 |
-| P9P2-D17 | **Tooltip on disabled min fields** | None / short hint (“Not used in Periodic mode”) | ☐ TBD | |
-| P9P2-D18 | **Disable timing fields while running** | All config read-only / editable with live update | ☐ **Part 2:** read-only while running; **future §9** allows edit + `automatic-update` | |
+| P9P2-D17 | **Tooltip on disabled min fields** | None / short hint (“Not used in Periodic mode”) | ☑ **Visible helper text** under disabled min power / min gap; mode summary in Controls panel | 2026-09-07 |
+| P9P2-D18 | **Disable timing fields while running** | All config read-only / editable with live update | ☑ **Part 2:** read-only while running (banner + all fields); **future §9** allows edit + `automatic-update` | 2026-09-07 |
 | P9P2-D19 | **Stroke-based `t` formula** | `n/N` / `(n-1)/(N-1)` at last stroke | ☐ **Proposed:** reach `t=1` on **last** of N strokes: `(strokeCount-1)/(N-1)` for N>1 | |
 | P9P2-D20 | **`noAutoEnd` + wave/build-up** | Allow / **disable option in UI** | ☑ **Disable `noAutoEnd`** for `buildUp`, `powerWave`, `powerAndTimingWave` | 2026-09-06 |
 | P9P2-D21 | **Wave repetition** | Single cycle / repeat until session end | ☑ **Periodic repeat** (`T_wave = 2×T_rise`); session stops on End Session rule | 2026-09-06 |
@@ -250,6 +250,9 @@ When switching into wave/build-up while `noAutoEnd` selected → coerce to **`mi
 | P9P2-D25 | **Wave sample shape** | Triangle / sine | ☐ **Proposed:** triangle default; sine optional (P9P2-D8) | |
 | P9P2-D26 | **Planner vs sequencer split** | Monolithic FSM / **planner + sequencer FSM** | ☑ **Planner at start + sequencer in `poll()`** — see §8 (all automatic modes) | 2026-09-06 |
 | P9P2-D27 | **Dedicated OS scheduler for stroke timing** | FreeRTOS timer task / **sequencer FSM + `millis()`** | ☑ **Sequencer FSM** for Part 2; not a separate scheduler task | 2026-09-06 |
+| P9P2-D32 | **Automatic firmware class split** | Monolithic mode / **session shell + program subclasses** | ☑ **`AutomaticSessionMode` + `AutomaticProgramBase` subclasses + factory** (§8) | 2026-09-07 |
+| P9P2-D33 | **Seven `IExecutionMode` classes** | One per program / **one automatic mode only** | ☑ **One** `AutomaticSessionMode` on `IExecutionMode`; programs are **not** top-level modes | 2026-09-07 |
+| P9P2-D34 | **Program lifecycle hooks** | Virtual only / **subclass + session callbacks** | ☑ **Subclasses** for `buildPlan`; **session mode** owns FSM, relay, hub ack via callbacks/context | 2026-09-07 |
 
 ---
 
@@ -319,6 +322,66 @@ each poll() [AutomaticSessionMode]:
 - `esp_timer` per gap (optional later for ±ms gap precision — Phase 7 §G2)
 
 **Division of labour:** sequencer = **when** + **which row**; `relay_controller` = **how long** relay stays on for that row.
+
+### Modular class layout (locked — P9P2-D32–D34)
+
+**Goal:** Avoid a monolithic `AutomaticSessionMode` that grows every time a program is added. **One hub-facing mode**; **subclassed programs** for mode-specific logic; **callbacks** for shared lifecycle hooks (project convention).
+
+**Do not** register seven separate `IExecutionMode` implementations — `execution_context` still holds **one** `AutomaticSessionMode` for `automatic-start` / `automatic-stop` (same command key as today).
+
+```
+execution_context
+    └── AutomaticSessionMode          ← only IExecutionMode; FSM + hub + session
+            │
+            ├── owns AutomaticProgram*   ← factory from automaticMode enum
+            │
+            └── AutomaticProgramBase     ← abstract program (subclass per catalog entry)
+                    ├── PeriodicProgram
+                    ├── RandomProgram      (power / timing / both via flags or subclasses)
+                    ├── WaveProgram        (power-only vs P+T inverse)
+                    └── BuildUpProgram
+```
+
+| Class / module | Responsibility | Changes when adding program #8 |
+|----------------|----------------|--------------------------------|
+| **`AutomaticSessionMode`** | Sequencer FSM, relay, end-session, abort, ack/`resultJson`, session counters, future `automatic-update` | **None** (or factory registration only) |
+| **`AutomaticProgramBase`** | Virtual **`buildPlan()`**; optional **`strokeAt(i)`** for parametric rows; config validation | Unchanged |
+| **`PeriodicProgram`**, etc. | Mode-specific plan / wave math only | **New subclass file** + factory case |
+| **`automatic_program_factory.*`** | `create(AutomaticRunMode)` → `AutomaticProgram*` | One `case` + `#include` |
+
+**Callbacks (common hooks — avoid duplicating hub/session code in subclasses):**
+
+`AutomaticSessionMode` owns the **`IExecutionMode` lifecycle** and invokes program code through a small **`AutomaticProgramContext`** (or registered callbacks), e.g.:
+
+| Hook | Owner | Used for |
+|------|-------|----------|
+| Pulse complete → next gap | **Session mode** (sequencer) | All programs |
+| `buildPlan(config, envelope)` | **Program subclass** | Start + future replan |
+| `onPlanBuilt(plan)` optional | **Session mode** callback | Arm `schedule`, log serial |
+| `complete(success, resultJson)` | **Session mode** → `command_handler` | Hub ack |
+| `shouldEndSession()` | **Session mode** | Minutes / strokes |
+
+Programs **do not** call SignalR or touch `relay_controller` directly — they return **data**; the session mode **acts**. Subclasses stay testable and small.
+
+**Suggested firmware paths:**
+
+```text
+SomNet.Device/src/modes/
+  automatic_session_mode.*
+  automatic/
+    automatic_program_base.*
+    automatic_program_factory.*
+    automatic_plan.*              ← schedule row, plan buffer
+    programs/
+      periodic_program.*
+      random_program.*
+      wave_program.*
+      build_up_program.*
+```
+
+**Adding a future program:** extend `AutomaticRunMode` enum (Shared + UI) → new `FooProgram : AutomaticProgramBase` → factory case → UI dropdown + `getAutomaticFieldRules` row. **No edit** to sequencer FSM unless the new program needs a genuinely new execution primitive (unlikely).
+
+**UI mirror:** one `AutomaticControls` + `getAutomaticFieldRules(mode)` — same modularity as firmware factory.
 
 ### Part 3 — burst-in-automatic (deferred, unrelated to sequencer design)
 
@@ -444,24 +507,25 @@ These apply **in addition** to §2 (first match wins for `disabled`):
 
 ### 6.1 Shared types and API
 
-- [ ] Extend `SomNet.Shared/Enums/AutomaticRunMode.cs` with seven values (P9P2-D1)
-- [ ] Extend `SomNet.UI/src/types/modes.ts` — `AutomaticRunMode` + `AUTOMATIC_RUN_MODE_OPTIONS` labels
-- [ ] Confirm `JsonStringEnumConverter` serializes new values for saved pairing settings
-- [ ] Default remains `randomPowerAndTiming` for new Subs / missing key
+- [x] Extend `SomNet.Shared/Enums/AutomaticRunMode.cs` with seven values (P9P2-D1)
+- [x] Extend `SomNet.UI/src/types/modes.ts` — `AutomaticRunMode` + `AUTOMATIC_RUN_MODE_OPTIONS` labels
+- [x] Confirm `JsonStringEnumConverter` serializes new values for saved pairing settings
+- [x] Default remains `randomPowerAndTiming` for new Subs / missing key
 
 ### 6.2 Rules helper + component
 
-- [ ] Add `getAutomaticFieldRules(mode)` → `{ disableMinimumPower, disableStrokeMinSeconds, disableNoAutoEnd }`
-- [ ] Unit tests: all seven modes → expected disable flags + `disableNoAutoEnd` for 3 modes
-- [ ] `AutomaticControls`: End Session — disable **No AutoEnd** radio when `rules.disableNoAutoEnd`; coerce mode on dropdown change (P9P2-D22)
-- [ ] `AutomaticControls`: pass `disabled={rules.disableMinimumPower \|\| state.running}` to minimum power slider
-- [ ] `AutomaticControls`: pass `disabled={rules.disableStrokeMinSeconds}` to minimum (sec) field — **and** `state.running` if P9P2-D18
-- [ ] Populate dropdown with all seven options
-- [ ] Optional: `title` / helper text on disabled controls (P9P2-D17)
+- [x] Add `getAutomaticFieldRules(mode)` → `{ disableMinimumPower, disableStrokeMinSeconds, disableNoAutoEnd }`
+- [x] Unit tests: all seven modes → expected disable flags + `disableNoAutoEnd` for 3 modes
+- [x] `AutomaticControls`: End Session — disable **No AutoEnd** radio when `rules.disableNoAutoEnd`; coerce mode on dropdown change (P9P2-D22)
+- [x] `AutomaticControls`: pass `disabled={rules.disableMinimumPower \|\| state.running}` to minimum power slider
+- [x] `AutomaticControls`: pass `disabled={rules.disableStrokeMinSeconds}` to minimum (sec) field — **and** `state.running` if P9P2-D18
+- [x] Populate dropdown with all seven options
+- [x] Optional: `title` / helper text on disabled controls (P9P2-D17)
+- [x] Mode summary + wave/build-up end-session hints (`automaticModeInfo.ts`)
 
 ### 6.3 Verification (UI only)
 
-- [ ] For each dropdown value, confirm min power and min sec enable/disable match §1 table
+- [x] For each dropdown value, confirm min power and min sec enable/disable match §1 table (vitest matrix)
 - [ ] Switch modes with saved settings — values persist (P9P2-D2 behavior documented)
 - [ ] Regression: `noAutoEnd`, `burstsOn`, stroke limit clamping unchanged
 - [ ] Saved settings round-trip via API after mode change
@@ -474,10 +538,11 @@ _Not required for UI-only pass._
 
 ### 7.1 Core engine
 
-- [ ] `AutomaticSessionMode` — **sequencer** FSM (StartDelay / Gap / Pulse) for all modes
-- [ ] **`buildAutomaticPlan()`** — **planner** at start (table, parametric wave, or random bounds)
-- [ ] `power_timing` helpers: `randomPower`, `randomGapSec`, **`buildWaveformSchedule()`** (triangle/sine, T_rise, T_wave, T_mid)
-- [ ] Pre-computed **`schedule[]`** buffer sized for max session strokes (RAM budget — P9P2-D26?)
+- [ ] **`AutomaticSessionMode`** — sequencer FSM, relay, end-session, abort, hub ack (§8 shell)
+- [ ] **`AutomaticProgramBase`** + **`automatic_program_factory`** — `create(automaticMode)`
+- [ ] **Program subclasses** in `modes/automatic/programs/` — Periodic, Random, Wave, BuildUp (§8)
+- [ ] **`AutomaticProgramContext`** or callbacks — pulse complete, plan built, session complete (P9P2-D34)
+- [ ] `automatic_plan.*` — schedule row buffer; parametric sampler helpers in `power_timing`
 - [ ] End-session rules: minutes / strokes / manual stop (device-side count + timers)
 - [ ] `automatic-start` immediate ack (P9-D2); `automatic-stop` + abort + summary `resultJson` (P9-D4)
 - [ ] `command_handler` + `execution_context.startAutomatic()`
@@ -504,7 +569,7 @@ _Not required for UI-only pass._
 1. **Confirm** P9P2-D8, D9, D11, D16, D17, D18 against original product (wave shape, period, build-up reset).
 2. **Lock** D1–D7, D12–D15 (semantics in §3 are sufficient to start UI + firmware design).
 3. **Implement §6** — dropdown + disable matrix (no hardware).
-4. **Implement §7** — `AutomaticSessionMode` + mode strategies.
+4. **Implement §7** — `AutomaticSessionMode` shell + `AutomaticProgramBase` subclasses (§8 modular layout).
 5. **Update** [device plan §6](./09-ESP32-Device-Plan.md) program catalog when decisions marked ☑.
 
 ---
@@ -514,4 +579,6 @@ _Not required for UI-only pass._
 | Date | Change |
 |------|--------|
 | 2026-09-06 | Initial checklist from original product automatic mode dropdown rules |
-| 2026-09-07 | §9 overlapped replan during current stroke finish (P9P2-D28) |
+| 2026-09-06 | §3 execution semantics, session envelope, §8 planner/sequencer, §9 live update |
+| 2026-09-07 | §9 overlapped replan (P9P2-D28); waveform pre-compute model |
+| 2026-09-07 | §8 modular layout locked — `AutomaticProgramBase` subclasses + factory (P9P2-D32–D34) |

@@ -3,7 +3,7 @@ import type { InputHTMLAttributes } from 'react';
 interface RadioGroupProps {
   name: string;
   value: string;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; disabled?: boolean }[];
   onChange: (value: string) => void;
   disabled?: boolean;
 }
@@ -11,23 +11,30 @@ interface RadioGroupProps {
 export function RadioGroup({ name, value, options, onChange, disabled = false }: RadioGroupProps) {
   return (
     <div className={`flex flex-col gap-2 ${disabled ? 'opacity-50' : ''}`}>
-      {options.map((option) => (
-        <label
-          key={option.value}
-          className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-300"
-        >
-          <input
-            type="radio"
-            name={name}
-            value={option.value}
-            checked={value === option.value}
-            disabled={disabled}
-            onChange={() => onChange(option.value)}
-            className="h-4 w-4 border-slate-600 bg-slate-900 text-indigo-500 focus:ring-indigo-500/50"
-          />
-          {option.label}
-        </label>
-      ))}
+      {options.map((option) => {
+        const optionDisabled = disabled || option.disabled === true;
+
+        return (
+          <label
+            key={option.value}
+            className={[
+              'inline-flex items-center gap-2 text-sm text-slate-300',
+              optionDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+            ].join(' ')}
+          >
+            <input
+              type="radio"
+              name={name}
+              value={option.value}
+              checked={value === option.value}
+              disabled={optionDisabled}
+              onChange={() => onChange(option.value)}
+              className="h-4 w-4 border-slate-600 bg-slate-900 text-indigo-500 focus:ring-indigo-500/50"
+            />
+            {option.label}
+          </label>
+        );
+      })}
     </div>
   );
 }
