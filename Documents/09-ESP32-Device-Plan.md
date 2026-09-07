@@ -8,18 +8,18 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 **Timing architecture:** Firmware is **non-blocking** — explicit **state machines** drive relay pulses, bursts, and automatic schedules using `millis()` / **`micros()`** (relay pulse, Phase 6+) polling so SignalR and Wi-Fi stay responsive while timing stays accurate.
 
-**Initial development scope:** Phases **5–6** delivered **`stroke` (single pulse) + `abort`** — pairing, SignalR, relay timing, and ack on hardware. The codebase **remains structured** for `burst` and `automatic` modes (`IExecutionMode`, `execution_context`, separate mode classes) so Phase 9 features plug in without rework. See §6 and §10.
+**Initial development scope:** Phases **5–6** delivered **`stroke` (single pulse) + `abort`**; Phase **9** added **`burst`**. **`automatic-start/stop`** remains Part 2 (exploratory). Architecture uses `IExecutionMode`, `execution_context`, and separate mode classes — see §6 and §10.
 
-**Critical path after scaffold:** **Device registration** — associating a physical unit with a **Sub** on the SomNet server so SignalR commands reach the right device. The on-device config web UI (MAC-based ID, optional friendly name) plus a SomNet UI pairing flow address this. See **§4.1**.
+**Critical path after scaffold:** **Device registration** — associating a physical unit with a **Sub** on the SomNet server so SignalR commands reach the right device. The on-device config web UI (MAC-based ID, optional friendly name) plus the SomNet **Hardware** dialog address this. See **§4.1**.
 
-**End-user / installer documentation:** [Hardware User Guide](./Hardware-User-Guide.md) — provisioning, Wi‑Fi recovery (10 s button hold), Device ID.
+**End-user / installer documentation:** [Hardware User Guide](./Hardware-User-Guide.md) — provisioning, Wi‑Fi recovery (10 s button hold), Device ID, relay operation.
 
-**Implementation progress (2026-09-05):** Phases **0–6 signed off**. Current firmware **`0.6.0-phase6`** — paired SignalR, `stroke` command + ack, **real relay GPIO** on D4 (`micros()` pulse FSM). Next: **Phase 7** (resilience / production prep). Phase **8**: UI commands + abort/busy E2E. See §10.
+**Implementation progress (2026-09-06):** Phases **0–9 (burst) signed off**. Current firmware **`0.9.0-phase9`** — paired SignalR; manual **stroke**, **burst**, and **abort** from SomNet UI; **`resultJson`** end-to-end; **`BurstSequenceMode`** FSM. **Automatic** hardware mode remains exploratory (Phase 9 Part 2). See §10.
 
-**Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 6 signed off (2026-09-05).** SomNet API/UI changes remain gated unless noted (Phase 4 pairing bonus, Phase 5 ack fix).
+**Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 9 (burst) signed off (2026-09-06).** SomNet API/UI integration for manual commands complete (Phase 8–9).
 
 **Related docs:** [Hardware User Guide](./Hardware-User-Guide.md), [SignalR & Hardware](./06-SignalR-And-Hardware.md), [Authentication & Security](./05-Authentication-And-Security.md), [API Reference](./02-API-Reference.md), [SomNet.Device/README](../SomNet.Device/README.md), [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md)  
-**Phase checklists (0–6 done):** [0](./09-ESP32-Phase-0-Checklist.md) · [1](./09-ESP32-Phase-1-Checklist.md) · [2](./09-ESP32-Phase-2-Checklist.md) · [3](./09-ESP32-Phase-3-Checklist.md) · [4](./09-ESP32-Phase-4-Checklist.md) · [5](./09-ESP32-Phase-5-Checklist.md) · [6](./09-ESP32-Phase-6-Checklist.md) · [7](./09-ESP32-Phase-7-Checklist.md) (**next**)
+**Phase checklists (0–9 burst done):** [0](./09-ESP32-Phase-0-Checklist.md) · [1](./09-ESP32-Phase-1-Checklist.md) · [2](./09-ESP32-Phase-2-Checklist.md) · [3](./09-ESP32-Phase-3-Checklist.md) · [4](./09-ESP32-Phase-4-Checklist.md) · [5](./09-ESP32-Phase-5-Checklist.md) · [6](./09-ESP32-Phase-6-Checklist.md) · [7](./09-ESP32-Phase-7-Checklist.md) · [8](./09-ESP32-Phase-8-Checklist.md) · [9](./09-ESP32-Phase-9-Checklist.md)
 
 ---
 
@@ -43,10 +43,9 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 - OTA firmware updates (**partition table ready** — `min_spiffs.csv` since Phase 7; OTA client not implemented)
 - Offline command queue
-- ~~SomNet UI pairing dialog~~ — **partial (2026-09-05):** minimal pairing in **Options** dialog during Phase 4 dev; full dialog + pending list still Phase 8 (see §4 *SomNet React UI — early pairing*)
-- Changes to SomNet backend or frontend (unless a protocol gap is approved — **exceptions:** Phase 4 minimal pairing UI, Phase 5 ack dispatcher fix, Phase 8 `resultJson` + commands)
-- Full-featured device admin portal (keep config UI minimal)
-- **Fully implemented burst and automatic modes** — architecture and stubs only; **single-pulse path proven** (Phases 5–6); burst/automatic remain Phase 9 (see §6 *Initial vs target implementation*)
+- ~~SomNet UI pairing dialog~~ — **Done (Phase 8, 2026-09-06):** toolbar **Hardware** dialog — All Subs, Online now (unpaired), Enter device ID
+- Changes to SomNet backend or frontend (unless a protocol gap is approved — **historical exceptions:** Phase 4 minimal pairing UI, Phase 5 ack dispatcher fix, Phases 8–9 `resultJson` + commands)
+- **Fully implemented automatic mode** — **`AutomaticSessionMode` stub**; manual **stroke**, **abort**, and **burst** proven (Phases 6–9); automatic remains Phase 9 Part 2 (see §6 *Initial vs target implementation*)
 
 ### Hardware (confirmed)
 
@@ -345,13 +344,13 @@ Before production / end of Phase 7, align the on-device config UI with the **Som
 
 | Item | Target |
 |------|--------|
-| **When** | After Phase 3 exit criteria met; **scheduled in Phase 7** (production prep) or optional Phase 3 polish if time allows |
+| **When** | After Phase 3 exit criteria met; **completed Phase 7** (2026-09-06) |
 | **Scope** | `/`, `/config`, and POST “Saved / please wait for reboot” pages |
 | **Approach** | Shared compact CSS in PROGMEM (colors, typography, buttons, form fields) — no external CDN, no heavy JS; keep total HTML+CSS within ESP32 RAM budget (~20 KB combined) |
 | **Source of truth** | SomNet React app theme (header background, primary button, text colors, spacing) — extract hex/font values from frontend CSS or design tokens |
 | **Out of scope** | Pixel-perfect clone, dark-mode toggle, or loading the full web app on the device |
 
-**Checklist reminder:** When closing Phase 7, verify this item is done or explicitly deferred with sign-off.
+**Status:** **Done** — dark slate + indigo theme shipped Phase 7. Wiring diagram in device README remains deferred.
 
 **End-user doc:** [Hardware User Guide](./Hardware-User-Guide.md) describes flows only; styling is invisible to procedure.
 
@@ -361,41 +360,33 @@ Before production / end of Phase 7, align the on-device config UI with the **Som
 |------|-----------------|---------------------|
 | Login as Dom | ✓ | — |
 | Select Sub | ✓ | — |
-| Pair device to Sub | ✓ (minimal — **Options → Hardware device**; refine Phase 8) / Swagger | Shows **device ID only** |
+| Pair device to Sub | ✓ — toolbar **Hardware** dialog / Swagger | Shows **device ID only** |
 | Set Wi-Fi on ESP32 | — | ✓ |
 | Set SomNet server URL | — | ✓ |
-| Send stroke/burst commands | Swagger ✓ (Phases 5–6); React UI → Phase 8 | — |
-| View hub connection status | ✓ (system status) | ✓ (local diagnostic) |
+| Send stroke/burst commands | ✓ — Manual mode UI + Swagger | — |
+| View hub connection status | ✓ (system status + Hardware dialog) | ✓ (local diagnostic) |
 
-No changes to SomNet are **required** for the device config UI alone. **SomNet UI pairing** (Dom selects Sub, enters device ID from ESP32 screen) is required for production registration — a **minimal pairing panel shipped early in Phase 4** (Options dialog); full UX remains Phase 8 — see §4.1 and §10 Phase 8.
+No changes to SomNet are **required** for the device config UI alone. **SomNet UI pairing** (Dom selects Sub, enters or picks device ID) is implemented in the **Hardware** dialog — see §4.1 and §10 Phase 8.
 
-### SomNet React UI — early pairing (Phase 4 bonus; refine later)
+### SomNet React UI — pairing and settings (current, 2026-09-06)
 
-**Status (2026-09-05):** Phase 4 firmware pairing was verified end-to-end. To avoid Swagger/Postman during dev, a **minimal Dom-side pairing UI** was added ahead of Phase 8:
+| Area | Location | Notes |
+|------|----------|-------|
+| **Hardware pairing** | Toolbar **Hardware** button → dedicated dialog | **All Subs**, **Online now (unpaired)**, **Enter device ID**; token expiry on All Subs grid |
+| **App settings** | Toolbar **Options** button → tabbed dialog | **General** (operation + display), **Notifications**, **Account** (password) |
+| **Manual commands** | Manual mode dashboard | **Stroke**, **Burst**, **Abort** via REST; session from device `resultJson` (Phases 8–9) |
+| **Automatic mode** | Automatic mode dashboard | UI scaffolding only; Start/Stop disabled until Phase 9 Part 2 |
 
-| Item | Current state | Future (Phase 8+) |
-|------|---------------|-------------------|
-| **Where** | SomNet **Options** dialog → **Hardware device** section | Dedicated **Pair device** dialog or settings area (not buried in general options) |
-| **What works** | Device status for selected Sub; paste device ID; **Pair** / **Revoke**; JWT auth automatic (logged-in Dom) | **Online now** pending list (`GET /api/devices/unpaired`); QR; friendly name from device metadata |
-| **API client** | `SomNet.UI/src/api/devices.ts` | Extend as needed |
-| **Component** | `SomNet.UI/src/components/layout/DevicePairingPanel.tsx` | Move/refactor; do not assume Options is the long-term home |
-| **System status** | Header pill now passes `subTarget` to `/api/system/status` | Keep aligned with pairing UX |
-| **Swagger dev** | JWT **Authorize** button in API (`Program.cs` Swashbuckle Bearer) | Retain for API debugging |
+**History:** Phase 4 shipped minimal pairing inside **Options**. Phase 8 moved pairing to the **Hardware** dialog with pending list and multi-Sub grid. Options was later split into tabs; **Hardware stays a separate dialog** (operator preference, 2026-09-06).
 
-**UX debt (intentional):** Options currently mixes **app preferences**, **account/password**, and **hardware pairing**. Before production, split into a clearer structure — e.g. **multi-page or tabbed settings**:
-
-- **General / display / notifications** — current app options
-- **Subs & pairing** — Sub selection context, device pair/revoke, connection status (may overlap today’s header Sub picker)
-- **Account** — password change (and future profile)
-
-Living in Options is **practical for Phase 4 dev**; treat it as **provisional** so later readers are not confused that Phase 8 is “missing” when pairing already exists in a rough form.
+**Components:** `SomNet.UI/src/components/layout/HardwareDialog.tsx`, `options/HardwarePanel.tsx`; `OptionsDialog.tsx` (settings tabs). Legacy `DevicePairingPanel.tsx` may remain for reference — **Hardware dialog is the production path.**
 
 **Local dev vs production networking:** When the API runs on a **developer PC** (`http://192.168.1.x:5031`), **Windows Firewall** may block inbound TCP from the ESP32 on the LAN — Swagger on the same PC still works. **Production (Azure/cloud):** the device connects **outbound** to the server; end-user PC firewall is not part of the device path. See §11 *Local network note*.
 
 
 ### Device registration and Sub association (§4.1)
 
-This is the **registration model** for production: the operator links **this physical ESP32** to **one Sub** under their Dom so `ExecuteCommand` messages reach the device. **Verified Phases 4–6** via Options panel + Swagger on test unit `esp32-84CCA85C36B4` / Sub `Slv66`.
+This is the **registration model** for production: the operator links **this physical ESP32** to **one Sub** under their Dom so `ExecuteCommand` messages reach the device. **Verified Phases 4–9** via **Hardware** dialog + Manual mode commands on test unit `esp32-84CCA85C36B4` / Sub `Slv66`.
 
 #### Split of responsibility
 
@@ -494,7 +485,7 @@ Several approaches work with the existing `POST /api/devices/pair` + unpaired Si
 |----------|--------------|------|------|
 | **A. MAC ID + paste in UI** | Dom copies `esp32-{MAC}` from device page into pair dialog | Simple; no API change; works offline-first on device | Typo risk; tedious at scale |
 | **B. Email / message handoff** | Installer emails Dom: device ID + friendly name + location; Dom pairs from email | Fits real-world install (installer ≠ Dom); async | Manual process; not automated |
-| **C. Pending devices list (recommended API add)** | Device connects unpaired; server lists **online unpaired** devices; Dom picks one + Sub | **Best UX at scale**; no typing; server already tracks unpaired connections in memory | Device must be online; needs new `GET /api/devices/unpaired` (Phase 8) |
+| **C. Pending devices list (recommended API add)** | Device connects unpaired; server lists **online unpaired** devices; Dom picks one + Sub | **Best UX at scale**; no typing; server already tracks unpaired connections in memory | **Implemented Phase 8** — `GET /api/devices/unpaired`; **Online now (unpaired)** tab in Hardware dialog |
 | **D. QR code on device page** | Status page shows QR encoding `deviceId`; Dom scans in UI | Fast, no typos | UI camera/scanner work; still MAC underneath |
 | **E. Dom-generated pairing code** | Dom creates code in UI; installer enters code on ESP32 | Dom-driven | Extra step on device; worse for “installer on site first” |
 | **F. UUID not tied to MAC** | Random ID in NVS | Hides MAC | User must copy random string; **worse** than MAC for your case |
@@ -564,36 +555,31 @@ Optional config UI field (Phase 3+):
 |-------|---------|
 | **Installer name / email** | Shown on status page; included in “copy setup summary” for email — stored NVS only until API stores it |
 
-#### Pending devices list — suggested API (Phase 8)
-
-Server **already registers** unpaired connections (`DeviceConnectionRegistry.RegisterUnpaired`). Extend SomNet when approved:
+#### Pending devices list — API (Phase 8 — implemented)
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /api/devices/unpaired` | List `{ deviceId, connectedAt, lastSeen? }` for Dom (auth required) |
-| Optional | Include `friendlyName` if device sends it via future hub hello message |
+| `GET /api/devices/unpaired` | List `{ deviceId, connectedAt, lastSeen? }` for authenticated Dom |
+| UI | **Hardware** dialog → **Online now (unpaired)** — select device → Pair to chosen Sub |
 
-UI: **“Devices waiting to pair”** table → select row → Pair to **current Sub**.
+This eliminates MAC typing for online devices while keeping paste-ID workflow for async installs.
 
-This eliminates MAC typing for online devices while keeping email workflow for async installs.
+#### SomNet UI — pairing dialog (Phase 8 — implemented)
 
-#### SomNet UI (Phase 8) — pairing dialog
+**Status (2026-09-06):** Toolbar **Hardware** button opens dedicated dialog:
 
-**Partial implementation (2026-09-05):** Minimal **paste device ID + Pair/Revoke** lives in **Options → Hardware device** for Phase 4 dev; **per-Sub token expiry** display added Phase 7. Phase 8 still owns the **production** pairing experience below.
-
-1. Dom logged in; **Sub selected** in header *(single-Sub flow today)*.
-2. **Pair device** dialog with tabs or sections:
-   - **All Subs (admin)** — table of every Sub for this Dom: device ID, connected/paired state, **token expiry** with **yellow** (≤30 days) / **red** (expired) row highlighting; Pair/Revoke per Sub without switching header Sub *(Phase 8 refinement — requested 2026-09-05)*
-   - **Online now** — pending/unpaired list (preferred when API exists)
-   - **Enter device ID** — paste from email or device screen *(implemented minimally in Options today)*
+1. Dom logged in (header **Sub** used for default pair target on Online now tab).
+2. **Hardware** dialog tabs:
+   - **All Subs** — every Sub: device ID, connection state, token expiry (warn/expired row colors); Pair/Revoke per Sub
+   - **Online now (unpaired)** — devices connected without pairing token; Pair to selected Sub
+   - **Enter device ID** — paste from device status page
    - Optional later: **Scan QR**
-3. Show **friendly name** from email or future device metadata when available.
-4. **Pair** → `POST /api/devices/pair?subTarget={sub}` with `{ deviceId }`.
-5. Show result + `GET /api/devices/status` connection state.
+3. **Pair** → `POST /api/devices/pair?subTarget={sub}` with `{ deviceId }`.
+4. Show result; **All Subs** reflects updated connection/expiry state.
 
-**Expiry UX (Phase 8):** Reuse `deviceTokenExpiry.ts` logic from Options panel; extend to multi-Sub grid with consistent warn/expired colors (yellow/red).
+**Pairing path:** Toolbar **Hardware** (preferred) or Swagger with Bearer auth + device ID from ESP32 status page.
 
-**Until Phase 8 polish:** use **Options → Hardware device** (preferred) or Swagger with Authorize + device ID from ESP32 status page or email.
+**Note:** **Options** dialog (General / Notifications / Account) is separate from hardware pairing — see §4 *SomNet React UI — pairing and settings*.
 
 #### Config UI — registration-focused fields
 
@@ -630,7 +616,7 @@ Added as **Phase 3** (early — before SignalR) — see §10 Implementation Phas
 
 ## 5. Alignment with Existing SomNet API
 
-The backend hub protocol is **implemented**. The ESP32 conforms to these contracts. **Minor API fix (Phase 5):** dispatcher distinguishes `Acknowledged` vs `Success` (see §9). **`resultJson` on shared DTO** — Phase 8.
+The backend hub protocol is **implemented**. The ESP32 conforms to these contracts. **Phase 5:** dispatcher distinguishes `Acknowledged` vs `Success` (see §9). **`resultJson` on shared DTO** — **implemented Phase 8** (REST + SignalR pass-through).
 
 ### Hub URL
 
@@ -697,17 +683,17 @@ JWT is passed on the query string because WebSocket clients on ESP32 cannot reli
 }
 ```
 
-`resultJson` is **built on device** (serial log from Phase 5; Phase 6 includes `actualStrokeMs`). **Not yet on `HardwareCommandAckDto` in SomNet.Shared** — Phase 8 adds wire pass-through for device-as-source-of-truth UI (§9).
+`resultJson` is **built on device** (serial log from Phase 5; Phase 6+ includes `actualStrokeMs`). **`HardwareCommandAckDto.ResultJson`** passes through API to REST and UI — **Phase 8 complete** (§9).
 
 ### Command keys and device execution summary
 
-| Key | Device responsibility | Status (2026-09-05) |
+| Key | Device responsibility | Status (2026-09-06) |
 |-----|----------------------|------------------------|
-| `stroke` | Single relay pulse for **`strokeMs`** from payload, then open | **Done** (Phases 5–6) |
-| `abort` | Cancel active stroke; relay open; dual ack on interrupt | **Firmware done** (Phase 6); E2E → Phase 8 |
-| `burst` | Run full burst sequence locally (N strokes × `strokeMs`, delays between) | Stub ack — Phase 9 |
-| `automatic-start` | Start local automatic engine from config snapshot in payload | Stub ack — Phase 9 |
-| `automatic-stop` | Stop automatic engine; relay open | Stub ack — Phase 9 |
+| `stroke` | Single relay pulse for **`strokeMs`** from payload, then open | **Done** — UI + hardware verified |
+| `abort` | Cancel active stroke/burst; relay open; dual ack on interrupt | **Done** — E2E Phase 8–9 |
+| `burst` | Run full burst sequence locally (N strokes × `strokeMs`, delays between) | **Done** — Phase 9 (`BurstSequenceMode`) |
+| `automatic-start` | Start local automatic engine from config snapshot in payload | Stub ack — Phase 9 Part 2 |
+| `automatic-stop` | Stop automatic engine; relay open | Stub ack — Phase 9 Part 2 |
 
 Detailed behavior: **§6 Device-Side Relay and Timing Execution**.
 
@@ -830,22 +816,21 @@ This separation keeps automatic randomization logic out of manual paths and prev
 
 ### Initial vs target implementation
 
-| Aspect | **Current (Phases 5–6 complete)** | **Target architecture** (later phases) |
-|--------|-----------------------------------|----------------------------------------|
-| **Command keys** | **`stroke`** + **`abort`** (firmware); burst/automatic stub ack | Full `burst`, `automatic-start/stop` (Phase 9) |
-| **Mode classes** | **`SinglePulseMode`** + **`relay_controller`** (GPIO) | `BurstSequenceMode`, `AutomaticSessionMode` |
-| **Scaffolding** | `IExecutionMode`, `execution_context`, `command_handler` in place | Same interfaces — no refactor when adding modes |
-| **Stub behavior** | Unknown keys → ack `"not implemented"` | Replace with real mode classes |
-| **`power_timing`** | Stub file OK (UI sends `strokeMs` for manual stroke) | Required for automatic random pulse/interval |
-| **Validation focus** | Single pulse timing + SignalR coexistence — **verified** | Burst sequences, dual RNG automatic, session summaries |
+| Aspect | **Current (Phases 6–9 burst complete)** | **Remaining (Phase 9 Part 2)** |
+|--------|----------------------------------------|--------------------------------|
+| **Command keys** | **`stroke`**, **`abort`**, **`burst`** — firmware + UI | `automatic-start/stop` |
+| **Mode classes** | **`SinglePulseMode`**, **`BurstSequenceMode`**, **`relay_controller`** | `AutomaticSessionMode` + `power_timing` RNG |
+| **Scaffolding** | `IExecutionMode`, `execution_context`, `command_handler` | Same interfaces — automatic plugs in without refactor |
+| **`power_timing`** | `strokeMsFromPower()` for validation/logging | Random helpers for automatic programs |
+| **Validation focus** | Stroke, burst, abort, dual ack, session from `resultJson` — **verified** | Automatic program catalog, end-session rules, aggregated summaries |
 
-**Rule for initial coding:** Do not fold burst/automatic logic into `SinglePulseMode` or `relay_controller` “temporarily.” Keep §6 class boundaries even when burst/automatic `.cpp` files only contain `// TODO: Phase 9` stubs.
+**Rule for initial coding:** Do not fold burst/automatic logic into `SinglePulseMode` or `relay_controller`. Keep §6 class boundaries — **burst is implemented in `BurstSequenceMode`**; automatic remains stub until Part 2.
 
-**Priority order after single mode works:**
+**Priority order:**
 
-1. ~~`abort` (cancel active pulse)~~ — **done Phase 6** (E2E with UI → Phase 8)
-2. `burst` (`BurstSequenceMode`) — Phase 9
-3. `automatic-start` / `automatic-stop` (`AutomaticSessionMode` + `power_timing`) — Phase 9
+1. ~~`abort` (cancel active pulse)~~ — **done** (Phase 6 firmware; Phase 8 UI E2E)
+2. ~~`burst` (`BurstSequenceMode`)~~ — **done** (Phase 9)
+3. `automatic-start` / `automatic-stop` (`AutomaticSessionMode` + `power_timing`) — **Phase 9 Part 2** (program catalog TBD)
 
 ### Manual single stroke (`commandKey: stroke`) — **implemented (Phases 5–6)**
 
@@ -853,17 +838,17 @@ In manual mode the UI maps power percent to a stroke duration using the Dom+Sub 
 
 **Example:** At 50% power with a 25–400 ms range, the UI sends `strokeMs: 213`. If settings yield 200 ms at 50%, the payload contains **`strokeMs: 200`**.
 
-**Status:** End-to-end on hardware — command/ack (Phase 5), GPIO relay pulse (Phase 6), firmware **`0.6.0-phase6`**. Swagger path verified; SomNet UI buttons still Phase 8.
+**Status:** End-to-end on hardware and SomNet UI — command/ack (Phases 5–8), GPIO relay pulse (Phase 6), firmware **`0.9.0-phase9`**. Manual **Stroke** button sends REST command; session writes after device ack + `resultJson`.
 
 **Device behavior (as implemented):**
 
-1. Parse `strokeMs` from `payloadJson` (required, > 0, max 30 000 ms)
+1. Parse `strokeMs` from `payloadJson` (required, > 0, max per firmware `kMaxStrokeMs` — typically 30 000 ms; UI absolute max configurable in `appsettings` `Hardware:StrokeMs`)
 2. **Close relay** (energize) via `relay_controller`
 3. Wait **`strokeMs`** using non-blocking FSM (`micros()` in `relay_controller.poll()`)
 4. **Open relay** (de-energize)
-5. Send `AckCommand` with `success`, `message`, and **`resultJson` logged on serial** (API wire field → Phase 8)
+5. Send `AckCommand` with `success`, `message`, and **`resultJson`** (includes measured `actualStrokeMs`)
 
-Measured **`actualStrokeMs`** in serial `resultJson` (e.g. 5000 requested → 5005 actual on test unit). Optional fixed offset after oscilloscope validation — deferred ([Phase 6 checklist](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration-deferred)).
+Measured **`actualStrokeMs`** in serial and UI `resultJson` (e.g. 5000 requested → 5005 actual on test unit). **Oscilloscope validation** on **D4** and optional fixed offset — deferred until scope characterization ([Phase 6 checklist *Post sign-off*](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration-deferred)); user testing planned 2026-09.
 
 The device does **not** recalculate power from percent when `strokeMs` is omitted — **reject** with clear message (P5-D3).
 
@@ -876,7 +861,7 @@ The device does **not** recalculate power from percent when `strokeMs` is omitte
 }
 ```
 
-### Manual burst (`commandKey: burst`) — *Phase 9; stub ack today*
+### Manual burst (`commandKey: burst`) — **implemented (Phase 9)**
 
 Burst is **not** multiple server round-trips. The UI sends one message describing the full burst; the device runs the sequence internally.
 
@@ -907,9 +892,9 @@ FOR each stroke 1..burstStrokes:
 THEN AckCommand success
 ```
 
-- **Abort** during burst: cancel sequence, relay open, ack aborted if applicable
-- **Ack timing:** Send `AckCommand` when the **entire burst finishes** (or fails), not after the first pulse — aligns with single ack on current API (see §9)
-- Phase 6: **`relay_controller`** drives GPIO; log `[RELAY]` transitions (see [Phase 6 Checklist](./09-ESP32-Phase-6-Checklist.md))
+- **Abort** during burst: cancel sequence, relay open, **dual ack** (burst fail + abort success) — **E2E verified Phase 9**
+- **Ack timing:** REST waits per P9-D1 formula (strokes × ms + delays + margin, cap 600 s); device sends completion ack when sequence finishes or aborts
+- **`resultJson`:** includes `strokesCompleted`, `interrupted`, etc. — UI session from device ack (Phase 9)
 
 ### Automatic mode (`automatic-start` / `automatic-stop`) — *exploratory; stub ack today*
 
@@ -1092,11 +1077,11 @@ Log every transition for bring-up:
 [AUTO] stop received
 ```
 
-### SomNet UI/API alignment (Phase 8 — device path works via Swagger today)
+### SomNet UI/API alignment (Phases 8–9 — complete for manual commands)
 
-**Today:** Swagger `POST /api/devices/commands` drives **`stroke`** on paired hardware (Phases 5–6 verified). The React UI **does not yet** send real commands — `waitForHardwareAck` is simulated (~450 ms). **`SessionProvider` still records strokes/bursts optimistically** from button clicks. Phase 8 wires UI to the same REST path and defers session writes until device ack + `resultJson`.
+**Current (2026-09-06):** SomNet UI sends real hardware commands via `POST /api/devices/commands`. **`SessionProvider`** writes stroke/burst events **after device ack** using parsed `resultJson`. **`HardwareCommandProvider`** blocks overlapping commands while pending.
 
-**Target flow (device as source of truth):**
+**Flow (device as source of truth):**
 
 ```
 User clicks Stroke
@@ -1123,16 +1108,17 @@ The UI must **not** treat a button click as proof the relay fired. Failed, parti
 | Automatic start | Full automatic settings snapshot JSON |
 | Abort / stop | `{}` or `{ reason }` |
 
-Contract documented in [`PROTOCOL.md`](../SomNet.Device/docs/PROTOCOL.md) (Phase 0). **SomNet UI integration** — Phase 8; **ack dispatcher fix** — done Phase 5 (§9).
+Contract documented in [`PROTOCOL.md`](../SomNet.Device/docs/PROTOCOL.md). **SomNet UI integration** — Phases 8–9 complete for manual stroke/burst/abort; automatic → Part 2.
 
-### Safety limits (firmware)
+### Safety limits (firmware + API)
 
-| Limit | Suggested default |
-|-------|-------------------|
-| Max single `strokeMs` | 30 000 ms |
-| Max `burstStrokes` | 100 |
-| Max `burstDelayMs` | 300 000 ms |
-| Max automatic session | Respect `endSessionValue`; hard cap e.g. 24 h |
+| Limit | Default | Notes |
+|-------|---------|-------|
+| Max single `strokeMs` | 30 000 ms (firmware) | API validates against appsettings `Hardware:StrokeMs:AbsoluteMaximum` |
+| Min/max stroke settings (UI) | From appsettings | Dom+Sub pairing settings; min ≤ max enforced in UI and API |
+| Max `burstStrokes` | 100 | Firmware + API |
+| Max `burstDelayMs` | 300 000 ms | Firmware + API |
+| Max automatic session | Respect `endSessionValue`; hard cap e.g. 24 h | When automatic implemented |
 
 Invalid payload → `AckCommand` with `success: false` and clear `message`.
 
@@ -1291,7 +1277,7 @@ SomNet today supports **one** acknowledgment per command:
 - `HardwareCommandDispatcher` waits up to **10 seconds** for a **single** `AckCommand`
 - First `AckCommand` for a `correlationId` completes the wait and is forwarded to the operator group
 
-There is **no** separate “received” vs “completed” hub method yet. **`HardwareCommandAckDto` today carries only `correlationId`, `success`, and `message`** — insufficient for rich session updates without parsing free text. A structured **`resultJson`** field on the ack DTO is recommended (§9.4).
+There is **no** separate “received” vs “completed” hub method. **`HardwareCommandAckDto`** carries `correlationId`, `success`, `message`, and **`resultJson`** (Phase 8+) for rich session updates.
 
 ### Recommended ack model (implementation phases 5–6 use this)
 
@@ -1301,13 +1287,13 @@ There is **no** separate “received” vs “completed” hub method yet. **`Ha
 
 | Command | Device action | When to ack | Status |
 |---------|---------------|-------------|--------|
-| `stroke` | Single relay pulse for `strokeMs` | After relay opens | **Done** — hardware verified |
-| `abort` | Cancel active pulse; relay open | Dual ack on interrupt (stroke fail + abort success) | **Firmware done**; E2E via UI → Phase 8 |
-| `burst` | Full sequence locally (see §6) | After **all** strokes and delays complete | Phase 9 |
-| `abort` / `automatic-stop` (during burst/auto) | Cancel sequences; relay open | Immediately after cancel | Phase 9 |
-| `automatic-start` | Start local engine (see §6) | After engine accepts config (optional immediate ack); session runs async | Phase 9 |
+| `stroke` | Single relay pulse for `strokeMs` | After relay opens | **Done** — UI + hardware |
+| `abort` | Cancel active pulse/burst; relay open | Dual ack on interrupt (stroke/burst fail + abort success) | **Done** — Phases 8–9 |
+| `burst` | Full sequence locally (see §6) | After **all** strokes complete, or dual ack on abort | **Done** — Phase 9 |
+| `abort` / `automatic-stop` (during auto) | Cancel sequences; relay open | Immediately after cancel | Phase 9 Part 2 |
+| `automatic-start` | Start local engine (see §6) | After engine accepts config (P9-D2); session async on device | Phase 9 Part 2 |
 
-For `stroke`, send **one** `AckCommand` with `success`, human-readable `message`, and machine-readable **`resultJson`** on serial (§9.4). **`resultJson` on REST/SignalR wire → Phase 8.**
+For `stroke` and `burst`, send **one** completing `AckCommand` with `success`, human-readable `message`, and machine-readable **`resultJson`** (§9.4). **`resultJson` on REST/SignalR wire** — **Phase 8 complete.**
 
 Operator/API see: delivered + acknowledged + success after **device-side execution** completes. **Session/history updates use `resultJson`, not the original command payload alone.**
 
@@ -1336,9 +1322,9 @@ SomNet changes would include:
 
 **Do not implement two-phase ack until explicitly approved.**
 
-### Completion payload — `resultJson` (proposed)
+### Completion payload — `resultJson` (implemented)
 
-Extend `HardwareCommandAckDto` with optional **`resultJson`** (stringified JSON, camelCase). The ESP32 populates this on every completing ack; SomNet API passes it through to REST and `CommandAcknowledged`; UI parses it to update session state.
+**`resultJson`** on `HardwareCommandAckDto` (optional stringified JSON, camelCase). ESP32 populates on completing acks; SomNet API passes through to REST and `CommandAcknowledged`; UI parses for session state — **Phases 8–9**.
 
 **Manual stroke — device ack example:**
 
@@ -1379,17 +1365,18 @@ Extend `HardwareCommandAckDto` with optional **`resultJson`** (stringified JSON,
 
 **Automatic mode note:** Individual random strokes during automatic run may be aggregated locally on the device and reported **once** on `automatic-stop`, `abort`, or end-session rule trigger — matching how session summaries should read in history (actual counts/duration from hardware, not UI estimates).
 
-### SomNet changes required for source-of-truth (when approved)
+### SomNet changes for source-of-truth (Phases 8–9 — complete for manual)
 
-| Layer | Change |
-|-------|--------|
-| **Shared DTO** | Add `ResultJson` to `HardwareCommandAckDto` |
-| **API** | Pass `resultJson` through dispatcher response and hub `CommandAcknowledged` |
-| **UI `SessionProvider`** | Defer `recordManualStroke` / burst / automatic summary until ack received |
-| **UI `sessionSummary.ts`** | Build lines from parsed `resultJson` (fallback to message string during transition) |
-| **UI `HardwareCommandProvider`** | Subscribe to SignalR `CommandAcknowledged` or use REST response body |
+| Layer | Change | Status |
+|-------|--------|--------|
+| **Shared DTO** | `ResultJson` on `HardwareCommandAckDto` | ☑ Phase 8 |
+| **API** | Pass `resultJson` through dispatcher response and hub `CommandAcknowledged`; per-command ack timeout (burst formula P9-D1) | ☑ Phases 8–9 |
+| **UI `SessionProvider`** | Defer stroke/burst session writes until device ack | ☑ Phases 8–9 |
+| **UI `sessionSummary.ts`** | Build lines from parsed `resultJson` | ☑ Phase 8+ |
+| **UI `HardwareCommandProvider`** | Pending state; block overlapping manual commands | ☑ Phases 8–9 |
+| **Automatic session** | Start/stop from UI; summary from stop `resultJson` | ☐ Phase 9 Part 2 |
 
-Firmware populates `message` for logs and builds **`resultJson` locally from Phase 5 onward** (serial). SomNet API/UI pass-through of **`resultJson`** on REST and `CommandAcknowledged` → Phase 8.
+Firmware populates `message` for logs and **`resultJson`** on every completing ack (serial + wire since Phase 8).
 
 #### Development serial logging (Phases 5–6)
 
@@ -1422,7 +1409,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 | **8** | **SomNet UI pairing dialog** + command integration | [Phase 8 Checklist](./09-ESP32-Phase-8-Checklist.md) | **Signed off** (2026-09-06) — `0.8.10-phase8`; Hardware dialog + stroke/abort UI |
 | 9 | Burst mode (+ automatic exploratory) | [Phase 9 Checklist](./09-ESP32-Phase-9-Checklist.md) | **Signed off** (2026-09-06) — `0.9.0-phase9`; burst UI |
 
-**Rationale:** Phase **3** (config UI with MAC-based ID and friendly name) runs **before** SignalR so installers can provision network and obtain the pairing ID without Swagger/serial. Phase **8** completes Dom-side Sub association in the React app (full pairing UX + command integration). A **minimal pairing panel in Options** was added during Phase 4 verification — see §4 *SomNet React UI — early pairing*; do not treat Options as the final product layout.
+**Rationale:** Phase **3** (config UI) runs **before** SignalR so installers can provision network and obtain the pairing ID without Swagger/serial. Phase **8** delivers Dom-side pairing in the **Hardware** dialog and manual command integration. Phase **9** adds **burst**. **Options** is tabbed settings (General / Notifications / Account) — separate from Hardware. See §4 *SomNet React UI — pairing and settings*.
 
 **Cross-phase polish:** On-device config pages (`/`, `/config`) are **functionally complete in Phase 3** but **visually minimal** until **Phase 7**, when they should match the SomNet web app theme — see §4 *Config UI — visual styling* and open decision **#17**. Do not skip this when closing production prep.
 
@@ -1510,7 +1497,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 - [x] **`/config` form:** friendly name (optional), Wi-Fi, server URL; device ID **read-only**
 - [x] POST → NVS → reboot; **provisioning Soft-AP** when not provisioned
 - [x] Non-blocking HTTP alongside future SignalR (architecture ready)
-- [ ] **Visual polish (deferred):** match SomNet web app styling — see §4 *Config UI — visual styling*; target Phase 7
+- [x] **Visual polish:** match SomNet web app styling — done Phase 7 (§4 *Config UI — visual styling*)
 
 **Exit criteria:** Installer configures unit from phone; device ID visible without serial; no random ID typing.
 
@@ -1523,9 +1510,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 **Summary:** Negotiate + WebSocket to `/hubs/hardware`; unpaired connect with `deviceId`; handle `PairDevice` → NVS token → paired reconnect; ping/pong; exponential backoff. **At Phase 4 exit:** no `ExecuteCommand` handling, relay, or `wss`. **Added in Phases 5–6:** `ExecuteCommand` / `AckCommand`, relay GPIO, `abort`.
 
-**Exit criteria:** End-to-end pairing using **device ID from Phase 3 UI**; `GET /api/devices/status` shows `isConnected: true`. Verified with Dom **demo** / Sub **Slv66** via SomNet **Options → Hardware device** (and Swagger with Bearer auth).
-
-**Bonus (SomNet UI/API, not ESP32):** Minimal React pairing panel + Swagger JWT Authorize — documented in §4 *SomNet React UI — early pairing*; Phase 8 still owns production UX.
+**Exit criteria:** End-to-end pairing using **device ID from Phase 3 UI**; `GET /api/devices/status` shows `isConnected: true`. Verified with Dom **demo** / Sub **Slv66** via SomNet **Hardware** dialog (and Swagger with Bearer auth).
 
 *Detailed steps, library choices, and verification tests are in the checklist — not duplicated here.*
 
@@ -1558,7 +1543,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 - [x] Validation layer (deviceId, token, dom/sub)
 - [x] `command_handler` → `execution_context` → **`SinglePulseMode`**
 - [x] Other keys (`burst`, `automatic-start`, …) → stub ack `success: false`, message `"not implemented"`
-- [x] Invoke `AckCommand` with `correlationId`, **`message`**, `success` (`resultJson` logged serial only until Phase 8)
+- [x] Invoke `AckCommand` with `correlationId`, **`message`**, `success`, **`resultJson`** (wire pass-through Phase 8)
 - [x] Serial logging for every step
 
 **Exit criteria:** Swagger `POST /api/devices/commands` with `commandKey: stroke` returns success; serial shows command FSM trace. **Met** on `esp32-84CCA85C36B4` / Sub `Slv66`. Relay GPIO → Phase 6.
@@ -1582,7 +1567,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 - [x] Serial logging on **every state transition** (`[RELAY]`)
 - [x] `button_input`: debounced read; serial log on press (unchanged)
 
-**Exit criteria:** Stroke closes relay ~requested ms then opens; SignalR stays connected during pulse; serial shows `[RELAY]` FSM transitions. **Met** on `esp32-84CCA85C36B4` / Sub `Slv66` (5000 ms → 5005 ms `actualStrokeMs` after `micros()` refinement). Abort mid-pulse + busy reject E2E → Phase 8. Oscilloscope validation + optional `strokeMs` offset → deferred ([Phase 6 checklist *Post sign-off*](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration-deferred)).
+**Exit criteria:** Stroke closes relay ~requested ms then opens; SignalR stays connected during pulse; serial shows `[RELAY]` FSM transitions. **Met** on `esp32-84CCA85C36B4` / Sub `Slv66` (5000 ms → 5005 ms `actualStrokeMs` after `micros()` refinement). Abort mid-pulse E2E → **Phase 8 met**. Oscilloscope validation + optional `strokeMs` offset → deferred ([Phase 6 checklist *Post sign-off*](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration-deferred)).
 
 ---
 
@@ -1659,16 +1644,16 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 6. Enter **Wi-Fi** and **SomNet server URL** (PC LAN IP for dev, e.g. `http://192.168.1.10:5031`)
 7. Save and reboot — device connects to Wi-Fi; SignalR connects unpaired with that device ID (Phase 4+)
 
-### SomNet pairing — associate with Sub (Phase 4 dev / Phase 8 UI)
+### SomNet pairing — associate with Sub (Phase 8 UI)
 
-1. Dom logged in; **Sub selected** in header (e.g. `Slv66`)
-2. Copy **Device ID** from ESP32 status page (`/` on device)
-3. **Dev (preferred):** SomNet UI → **Options → Hardware device** → paste ID → **Pair device**
-4. **Dev (alternate):** Swagger → **Authorize** with login token → `POST /api/devices/pair?subTarget=Slv66` with `{ "deviceId": "esp32-..." }`
-5. **Production (Phase 8):** Dedicated SomNet pairing dialog (pending list + paste ID) — not final Options placement
-6. ESP32 receives `PairDevice`, stores token, reconnects paired
-7. Verify `GET /api/devices/status?subTarget=Slv66` → `isPaired: true`, `isConnected: true`
-8. Test `POST /api/devices/commands` with `{ "subTarget": "Slv66", "commandKey": "stroke", "payloadJson": "{\"powerPercent\":60,\"strokeMs\":250}" }`
+1. Dom logged in; **Sub selected** in header when pairing from **Online now** tab (e.g. `Slv66`)
+2. Copy **Device ID** from ESP32 status page (`/` on device) — or pick from **Online now (unpaired)**
+3. **Preferred:** SomNet UI → toolbar **Hardware** → **Enter device ID** (or **Online now** / **All Subs**) → **Pair**
+4. **Alternate:** Swagger → **Authorize** with login token → `POST /api/devices/pair?subTarget=Slv66` with `{ "deviceId": "esp32-..." }`
+5. ESP32 receives `PairDevice`, stores token, reconnects paired
+6. Verify **Hardware → All Subs** or `GET /api/devices/status?subTarget=Slv66` → `isPaired: true`, `isConnected: true`
+7. Test manual **Stroke** from Manual mode UI, or `POST /api/devices/commands` with `{ "subTarget": "Slv66", "commandKey": "stroke", "payloadJson": "{\"powerPercent\":60,\"strokeMs\":250}" }`
+8. Test **Burst** and **Abort** from Manual mode UI (Phase 9)
 
 **Local network note:** ESP32 `server_url` must use the PC’s **LAN IP**, not `localhost`. The SomNet browser UI can use `localhost` on the PC; the ESP32 cannot.
 
@@ -1753,7 +1738,7 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 
 ## 15. Decisions
 
-### Resolved (Phases 0–6)
+### Resolved (Phases 0–9 burst)
 
 | # | Question | Resolution |
 |---|----------|------------|
@@ -1762,9 +1747,12 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 | 3 | Device ID format | **`esp32-{MAC}`** (§4.1) |
 | 4 | Ack timing (stroke) | Ack **after** relay opens (execution complete) |
 | 5 | Two-phase ack | **Deferred** — single ack in use; proposal in §9 |
-| 6 | Burst command (initial) | **Deferred to Phase 9** — stub ack `"not implemented"` |
-| 11 | Command overlap | **Reject** new command while sequence running (P5-D2, P6-D8) |
+| 6 | Burst command | **Implemented Phase 9** — `BurstSequenceMode` + UI Burst button |
+| 11 | Command overlap | **Reject** new command while sequence running (P5-D2, P6-D8); UI blocks overlapping manual commands |
 | 12 | Missing `strokeMs` | **Reject** with clear message (P5-D3) |
+| 17 | Config UI visual styling | **Done Phase 7** — dark slate + indigo PROGMEM CSS (§4) |
+| 18 | SomNet pairing UX | **Done Phase 8** — Hardware toolbar dialog |
+| 19 | UI source-of-truth session | **Done Phases 8–9** — `resultJson` on REST; stroke/burst after ack |
 
 ### Open (before Phase 7+ / production)
 
@@ -1778,7 +1766,6 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 | 14 | Failed command in UI | Show error only vs write "failed attempt" to session history |
 | 15 | Automatic pulse randomization | Random power→ms vs random ms directly in range (or both per config) |
 | 16 | Burst inside automatic | Nested class vs `AutomaticSessionMode` calling `BurstSequenceMode` |
-| 17 | Config UI visual styling | Phase 3 minimal inline CSS now; **Phase 7** align with SomNet React theme (§4) |
 
 ---
 
@@ -1788,10 +1775,10 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 
 **Repository (created — Phase 1):**
 
-1. [x] Link in [Documents/README.md](./README.md) to this plan and phase checklists (0–6)
+1. [x] Link in [Documents/README.md](./README.md) to this plan and phase checklists (0–9)
 4. [x] Add “Related repositories” / firmware pointer in root [README.md](../README.md) (2026-09-05) if not present
 3. [x] Protocol examples in `SomNet.Device/docs/PROTOCOL.md` (Phase 0)
-4. [x] Update [06-SignalR-And-Hardware.md](./06-SignalR-And-Hardware.md) with firmware repo link and Phase 5–6 command path (2026-09-05)
+4. [x] Update [06-SignalR-And-Hardware.md](./06-SignalR-And-Hardware.md) with firmware repo link and command path through Phase 9 (2026-09-06)
 
 ---
 
@@ -1813,13 +1800,17 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 - [x] On-device config web UI requirements and SignalR coexistence documented
 - [x] Implementation phases with exit criteria listed
 
-**Implementation through Phase 6 (2026-09-05):**
+**Implementation through Phase 9 burst (2026-09-06):**
 
-- [x] Phases 0–6 signed off — firmware **`0.6.0-phase6`**
+- [x] Phases 0–9 (burst) signed off — firmware **`0.9.0-phase9`**
 - [x] PlatformIO project `SomNet.Device/` with module tree per §12
-- [x] Pairing + `stroke` E2E via Swagger on hardware (`esp32-84CCA85C36B4` / Sub `Slv66`)
+- [x] Pairing + manual **stroke**, **burst**, **abort** E2E from SomNet UI on hardware (`esp32-84CCA85C36B4` / Sub `Slv66`)
 - [x] Relay GPIO on D4 with `micros()` pulse FSM
-- [x] Open decisions #1–6, #11–12 resolved (§15)
+- [x] **`resultJson`** end-to-end; session from device ack
+- [x] Open decisions #1–6, #11–12, #17–19 resolved (§15)
 - [x] Phase 7 resilience / production prep — **signed off** 2026-09-06 (`0.7.0-phase7`)
-- [ ] Phase 8 UI commands + `resultJson` wire + abort/busy E2E
+- [x] Phase 8 UI pairing dialog + manual stroke/abort — **signed off** 2026-09-06
+- [x] Phase 9 manual burst — **signed off** 2026-09-06
+- [ ] Phase 9 Part 2 — automatic mode (program catalog TBD)
+- [ ] Oscilloscope timing validation + optional `strokeMs` offset ([Phase 6 post sign-off](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration-deferred))
 - [ ] Explicit approval only if pursuing two-phase ack API change

@@ -9,7 +9,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | SomNet web app | [User Guide](./User-Guide.md) |
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 
-**Firmware status (2026-09-06):** Phases **0–9 (burst)** — Wi‑Fi provisioning, SomNet pairing, **manual stroke/abort/burst from the web app**, pairing token expiry. **Automatic** hardware mode remains exploratory (Part 2). Toolbar **Hardware** dialog for pairing.
+**Firmware status (2026-09-06):** Phases **0–9 (burst)** — Wi‑Fi provisioning, SomNet pairing, **manual stroke / abort / burst from the web app**, pairing token expiry. **Automatic** hardware mode remains exploratory (Phase 9 Part 2). Toolbar **Hardware** button for pairing; **Options** for app settings (General / Notifications / Account).
 
 ---
 
@@ -78,11 +78,11 @@ On the device **status page**, copy the **Device ID** (format `esp32-…`).
 
 In SomNet:
 
-1. Log in as **Dom** and select the **Sub** this device will serve.
-2. Open **Options** → **Hardware device**.
-3. Paste the Device ID and tap **Pair device**.
+1. Log in as **Dom** and select the **Sub** this device will serve (used when pairing from **Online now**).
+2. Click **Hardware** in the toolbar.
+3. Use **Enter device ID** (paste the ID) or **Online now (unpaired)** if the device appears there → **Pair**.
 
-The device receives pairing over its live connection, stores credentials, and reconnects. The status page should show paired/connected state when the server and device are both online.
+The device receives pairing over its live connection, stores credentials, and reconnects. **Hardware → All Subs** should show **Connected** when the server and device are both online.
 
 **Note:** The device does not ask for your SomNet login — pairing is always initiated from the SomNet app by an authenticated Dom.
 
@@ -106,20 +106,20 @@ This is **expected**. The unit stays on your network and keeps talking to the se
 No factory reset or Wi‑Fi re-setup is required.
 
 1. Log in as **Dom** and select the **Sub** that uses this device.
-2. Open **Options** → **Hardware device**.
+2. Open toolbar **Hardware** → **All Subs** or **Enter device ID**.
 3. Confirm the **Device ID** (same `esp32-…` as on the device status page).
-4. Tap **Pair device** again.
+4. Tap **Pair** again.
 
 The server issues a **new one-year token** and sends it to the device over its live connection. Within a few seconds the status page should show **paired** and SomNet should show **connected** again.
 
-**Tip for installers:** Note the **pair date** in your install records or maintenance calendar so the Dom can re-pair proactively before expiry — e.g. annually at the same time as other site checks. SomNet **Options → Hardware device** shows the expected expiry date when a device is paired.
+**Tip for installers:** Note the **pair date** in your install records or maintenance calendar so the Dom can re-pair proactively before expiry — e.g. annually at the same time as other site checks. **Hardware → All Subs** shows the expected expiry date when a device is paired.
 
 ### How this differs from other recovery actions
 
 | Situation | Device Wi‑Fi / server settings | Pairing token | Fix |
 |-----------|-------------------------------|---------------|-----|
-| **Token expired (annual)** | Unchanged | Cleared on device | **Pair again** in SomNet UI |
-| **Revoke pairing** (Dom choice) | Unchanged | Revoked on server | **Pair again** in SomNet UI |
+| **Token expired (annual)** | Unchanged | Cleared on device | **Pair again** in SomNet **Hardware** dialog |
+| **Revoke pairing** (Dom choice) | Unchanged | Revoked on server | **Pair again** in SomNet **Hardware** dialog |
 | **10 s button — credential reset** | Cleared | **Kept** if already paired | Re-enter Wi‑Fi + server URL only |
 | **Factory reset** on `/config` | Cleared | Cleared | Full setup + pair from scratch |
 
@@ -179,9 +179,10 @@ If the device is on your network and you can open its web page:
 | Capability | Available? | Notes |
 |------------|------------|--------|
 | Device connects to SomNet server (SignalR) | **Yes** | After Wi‑Fi + server URL configured and device paired |
-| Pairing from SomNet UI | **Yes** | Toolbar **Hardware** dialog — **All Subs**, **Online now (unpaired)**, **Enter device ID**; Options links to same dialog |
+| Pairing from SomNet UI | **Yes** | Toolbar **Hardware** — **All Subs**, **Online now (unpaired)**, **Enter device ID** |
+| App settings (not hardware) | **Yes** | Toolbar **Options** — General, Notifications, Account |
 | Status page shows pairing state | **Yes** | Unpaired / paired / connected indicators |
-| Stroke from SomNet **web app buttons** | **Yes** | Manual mode **Stroke** → device ack + session |
+| Stroke from SomNet **web app** | **Yes** | Manual mode **Stroke** → device ack + session from `resultJson` |
 | **Burst** from SomNet **web app** | **Yes** | Manual mode **Burst** — fixed stroke count + delay; device runs full sequence |
 | **Abort** during stroke or burst | **Yes** | Relay opens; session tracks abort / partial burst from device `resultJson` |
 | Automatic modes | **Not yet** | Exploratory — program catalog TBD (Phase 9 Part 2) |
@@ -200,6 +201,23 @@ If the device is on your network and you can open its web page:
 
 ---
 
+## Relay timing validation (oscilloscope — planned)
+
+Firmware reports **measured** pulse time in `actualStrokeMs` (serial log and SomNet session). Bench testing showed ~+5 ms at long pulses (e.g. 5000 ms requested → 5005 ms actual) — acceptable for phase sign-off.
+
+**Before production airline / valve use**, installers or developers should validate **D4** (relay output) with an oscilloscope:
+
+| Step | Action |
+|------|--------|
+| 1 | Pair device; run Manual **Stroke** at known settings (e.g. 50% power, or fixed ms via developer Swagger) |
+| 2 | Probe **D4** (or relay module input) — confirm active-high energize matches `RELAY_ACTIVE_HIGH` in firmware |
+| 3 | Compare scope pulse width to SomNet **actualStrokeMs** in session/history and USB serial `[RELAY]` log |
+| 4 | If a **systematic offset** is found, document it — optional firmware compensation is deferred until scope data exists ([Phase 6 checklist](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration-deferred)) |
+
+**Principle:** Do not change timing in firmware until scope characterizes software vs relay module vs mechanical lag. `actualStrokeMs` always reports **measured** GPIO time.
+
+---
+
 ## Troubleshooting
 
 | Problem | What to try |
@@ -209,8 +227,9 @@ If the device is on your network and you can open its web page:
 | Setup page will not load | Confirm you are on `SomNet-Setup-XXXX` or the same LAN as the device; try `http://192.168.4.1/` on setup AP |
 | Device ID needed for pairing | Status page at `http://<device-ip>/` after Wi‑Fi works, or USB serial log for installers |
 | Paired but “not connected” in SomNet | Check server URL on device; confirm API is running; same LAN; Windows Firewall on dev PC may block LAN inbound port 5031 |
-| Device was paired; now “not paired” after ~1 year | **Expected** — pairing token expired. Dom: Options → Hardware device → **Pair device** again (same Device ID). See [Pairing token renewal](./Hardware-User-Guide.md#pairing-token-renewal-about-once-a-year) |
-| Stroke does nothing | Confirm pairing + connected status on **All Subs**; relay wiring on **D4** |
+| Device was paired; now “not paired” after ~1 year | **Expected** — pairing token expired. Dom: **Hardware** → **Pair** again (same Device ID). See [Pairing token renewal](./Hardware-User-Guide.md#pairing-token-renewal-about-once-a-year) |
+| Stroke does nothing | Confirm pairing + **Connected** on **Hardware → All Subs**; relay wiring on **D4** |
+| Burst stops early | Check **Abort** was not pressed; review session for `strokesCompleted` vs requested count |
 | **Online now** is empty but device works | **Expected** if already paired — check **All Subs** for **Connected** |
 | Lost pairing / start over completely | On `/config`, use **Factory reset** (when reachable), or contact support |
 
@@ -221,6 +240,7 @@ If the device is on your network and you can open its web page:
 | Feature | Target |
 |---------|--------|
 | Automatic session programs (timing/power variations) | Phase 9 Part 2 / future |
+| Optional relay timing offset after scope validation | After oscilloscope characterization |
 | LED indicators for setup / fault | Under consideration |
 | QR code on status page for Device ID | Future polish |
 
@@ -231,5 +251,6 @@ If the device is on your network and you can open its web page:
 | Date | Change |
 |------|--------|
 | 2026-09-05 | Initial guide: provisioning, config UI, 10 s credential reset |
-| 2026-09-05 | SignalR pairing, relay on D4, Options pairing path; clarified UI stroke buttons pending Phase 8 |
+| 2026-09-05 | SignalR pairing, relay on D4; Options pairing path (Phase 4 dev) |
 | 2026-09-05 | Annual pairing token expiry and re-pair procedure (Phase 7) |
+| 2026-09-06 | Phases 8–9: Hardware toolbar dialog; stroke/burst/abort from UI; Options tabbed (separate from Hardware); oscilloscope validation section |
