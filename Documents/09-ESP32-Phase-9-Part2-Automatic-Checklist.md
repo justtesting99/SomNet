@@ -1,6 +1,6 @@
 # Phase 9 Part 2 — Automatic mode checklist
 
-**Status:** UI rules + §6 complete (2026-09-07). Firmware and Start/Stop wiring **not started**. Assumes **Burst Settings unchecked** (`burstsOn: false`) unless noted.
+**Status:** **UI complete** (§6 signed off 2026-09-07). **Decisions locked** (§4 + §7 prerequisites). **Firmware not started** — begin §7 Phase A. Assumes **`burstsOn: false`** (Part 3).
 
 | Related | Link |
 |---------|------|
@@ -8,8 +8,24 @@
 | Device execution | [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §6 |
 | UI component | `SomNet.UI/src/components/modes/AutomaticControls.tsx` |
 | Shared state | `AutomaticControlState` / `AutomaticControlStateDto` |
+| API round-trip script | `Scripts/verify-settings-roundtrip.ps1` |
 
 **Reference pattern:** Manual **burst** = N strokes × fixed `strokeMs` + fixed gap between strokes. Automatic modes (bursts off) = **indefinite single strokes** until stop/end-session/abort, with power and/or gap chosen per mode below.
+
+---
+
+## Part 2 at a glance
+
+| Item | Value |
+|------|--------|
+| **Goal** | Seven automatic programs on ESP32; UI Start/Stop E2E; session summary from device `resultJson` |
+| **Duration** | ~2–3 weeks (phased — Periodic first, then random, then wave/build-up) |
+| **Hardware scope** | Same DevKit (`esp32-84CCA85C36B4` / `Slv66`); relay **D4**; serial `[RELAY]` / `[AUTO]` logs |
+| **Software scope** | `AutomaticSessionMode` + program factory; `automatic-start`/`stop`; UI wiring; API payload validation |
+| **Explicitly out of scope** | Burst-in-automatic (Part 3); live `automatic-update` (§9); `esp_timer` gap precision |
+| **Blocks** | Operators using **Automatic Start/Stop** from web app (buttons disabled today) |
+
+Update **Status** above and check boxes in **§7** as work completes. When Part 2 is done, update [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §6 and bump firmware version (P9P2-D38).
 
 ---
 
@@ -182,15 +198,17 @@ When **Bursts On** is checked, behavior is **additive** on top of the selected m
 | **Power and Timing Wave** | Same as Power Wave, plus **inverse periodic gap** wave; both axes pre-computed per stroke. |
 | **Periodic / Random\*** | End Session = stop rule only; **`noAutoEnd` allowed.** |
 
-**End Session mapping for wave modes (P9P2-D23 — confirm with original product):**
+**End Session mapping for wave modes (P9P2-D23 — locked Option A):**
 
-| Option | Meaning |
+| Choice | Meaning |
 |--------|---------|
-| **A (proposed)** | End Session **minutes** value = **`T_rise`**; total session wall time = **`2 × endSessionValue`** minutes (one full wave then stop) |
-| **B** | End Session = **total session**; **`T_rise = endSessionValue / 2`** (one wave fits exactly in session) |
-| **C** | End Session = **stroke count**; pre-compute that many `(power, gap)` samples along **repeating** wave phase |
+| ☑ **A** | End Session **minutes** value = **`T_rise`**; **`T_wave = 2 × T_rise`**; wave **repeats** until session end rule fires |
+| ~~B~~ | ~~Total session = End Session value; `T_rise = value / 2`~~ — not chosen |
+| ~~C~~ | ~~Stroke count drives table length only~~ — not chosen for minutes; **strokes** end-session still uses stroke count as N for pre-compute where applicable |
 
-Stroke-based End Session fits **pre-compute N rows** naturally (option C). Minutes-based needs average gap or iterative fill to estimate N.
+When **End Session = strokes**, pre-compute **N** `(power, gap)` rows (build-up) or sample repeating wave phase for N strokes (wave modes). When **End Session = minutes**, derive session wall-clock limit from operator value; **`T_rise`** from minutes field per Option A.
+
+Stroke-based End Session fits **pre-compute N rows** naturally. Minutes-based uses **`T_rise = endSessionValue`** and iterates strokes at fixed or scheduled gap until wall-clock end.
 
 **Execution loop (wave / build-up):**
 
@@ -219,40 +237,64 @@ When switching into wave/build-up while `noAutoEnd` selected → coerce to **`mi
 
 ---
 
-## 4. Decisions (lock before UI / firmware merge)
+## 4. Decisions (locked 2026-09-07 — before firmware coding)
 
 | # | Decision | Options | Choice | Date |
 |---|----------|---------|--------|------|
-| P9P2-D1 | **Enum values** | Add 6 new values to match table above / different naming | ☐ **Proposed:** camelCase strings in JSON (`periodic`, `randomPowerOnly`, …) aligned with `SomNet.Shared.Enums.AutomaticRunMode` | |
-| P9P2-D2 | **Disabled field values** | Keep last user value / force min = max when disabled / reset to default | ☐ **Proposed:** keep stored value; **firmware ignores** disabled min fields and uses fixed max (power or interval) per §3 | |
-| P9P2-D3 | **Change mode while `running`** | Block dropdown / allow but don’t apply until stop / apply live | ☐ **Proposed:** dropdown disabled while `running` | |
-| P9P2-D4 | **`automatic-start` payload** | Always send min fields / omit when disabled / send + `automaticMode` only | ☐ **Proposed:** full snapshot + `automaticMode`; device applies §3 rules | |
-| P9P2-D5 | **Periodic — fixed power level** | Max power only / min power / last slider / operator max | ☐ **Proposed:** **maximum power** when min power disabled | 2026-09-06 |
-| P9P2-D6 | **Periodic / Random Power Only / Power Wave — fixed gap** | `strokeMaxSeconds` only / average of min+max | ☐ **Proposed:** **`strokeMaxSeconds`** when min sec disabled | 2026-09-06 |
-| P9P2-D7 | **Random Timing Only — fixed power** | Max power / min power | ☐ **Proposed:** **maximum power** when min power disabled | 2026-09-06 |
-| P9P2-D8 | **Wave shape** | Sine / triangle / linear ramp segments | ☐ **Proposed:** triangle default on MCU; sine optional | |
-| P9P2-D9 | **Wave period** | Single cycle / repeating / End Session only | ☑ **`T_wave = 2 × T_rise`**; **periodic repeat** until session end; pre-computed schedule (§3) | 2026-09-06 |
-| P9P2-D10 | **Build-Up curve** | Linear / ease-in / half triangle | ☑ **Half-wave only** (ascending ramp); linear unless original product specifies ease | 2026-09-06 |
-| P9P2-D11 | **Build-Up reset** | Once per session / repeat | ☑ **Once per session** — single half-wave table | 2026-09-06 |
-| P9P2-D12 | **Power vs timing coupling (wave + build-up)** | Independent ramps / **inverse** (power ↑ gap ↓) | ☐ **Proposed:** **inverse** for Build-Up and P+T Wave unless original product says otherwise (P9P2-D15) | 2026-09-06 |
-| P9P2-D13 | **Burst Settings panel** | Part 2 / Part 3 / defer | ☑ **Part 3** — burst-in-auto (% of session, own dropdown modes); **out of scope** for Part 2 | 2026-09-06 |
-| P9P2-D14 | **End Session panel** | Unaffected by mode dropdown | ☑ **Partial:** **`noAutoEnd` disabled** for build-up + both wave modes; minutes/strokes required (§3) | 2026-09-06 |
-| P9P2-D15 | **Inverse wave phasing** | 180° out of phase / independent | ☑ **180° inverse** for P+T Wave (same triangle/sine shape, gap inverted) | 2026-09-06 |
+| P9P2-D1 | **Enum values** | camelCase JSON / PascalCase / integer | ☑ **camelCase** (`periodic`, `randomPowerOnly`, …) aligned with `AutomaticRunMode` | 2026-09-07 |
+| P9P2-D2 | **Disabled field values** | Keep stored / force min=max / reset default | ☑ **Keep stored**; firmware **ignores** disabled mins per §3 | 2026-09-07 |
+| P9P2-D3 | **Change mode while `running`** | Block / defer / live update | ☑ **Block** — dropdown disabled while `running` (UI done) | 2026-09-07 |
+| P9P2-D4 | **`automatic-start` payload** | Full snapshot / omit disabled / mode only | ☑ **Full snapshot** + `automaticMode`; device applies §3 rules; **omit `running`** | 2026-09-07 |
+| P9P2-D5 | **Periodic — fixed power** | Max / min / last slider | ☑ **Maximum power** when min power disabled | 2026-09-07 |
+| P9P2-D6 | **Fixed gap (Periodic, Random Power, Power Wave)** | `strokeMaxSeconds` / average min+max | ☑ **`strokeMaxSeconds`** when min sec disabled | 2026-09-07 |
+| P9P2-D7 | **Random Timing Only — fixed power** | Max / min | ☑ **Maximum power** | 2026-09-07 |
+| P9P2-D8 | **Wave shape** | Sine / triangle / linear | ☑ **Triangle** (piecewise linear min↔max) on MCU | 2026-09-07 |
+| P9P2-D9 | **Wave period** | Single cycle / repeating / end only | ☑ **`T_wave = 2 × T_rise`**; repeat until session end | 2026-09-06 |
+| P9P2-D10 | **Build-Up curve** | Linear / ease-in / half triangle | ☑ **Half-wave** ascending ramp (linear segments) | 2026-09-06 |
+| P9P2-D11 | **Build-Up reset** | Once / repeat | ☑ **Once per session** | 2026-09-06 |
+| P9P2-D12 | **Power vs timing coupling** | Independent / inverse | ☑ **Inverse** for Build-Up and P+T Wave | 2026-09-07 |
+| P9P2-D13 | **Burst Settings panel** | Part 2 / Part 3 / defer | ☑ **Part 3** — out of scope Part 2 | 2026-09-06 |
+| P9P2-D14 | **End Session panel** | Unaffected / partial | ☑ **`noAutoEnd` disabled** for wave + build-up | 2026-09-06 |
+| P9P2-D15 | **Inverse wave phasing** | 180° / independent | ☑ **180° inverse** for P+T Wave | 2026-09-06 |
 | P9P2-D16 | **Build-Up duration** | Full session / other | ☑ **End Session envelope = full half-wave** | 2026-09-06 |
-| P9P2-D17 | **Tooltip on disabled min fields** | None / short hint (“Not used in Periodic mode”) | ☑ **Visible helper text** under disabled min power / min gap; mode summary in Controls panel | 2026-09-07 |
-| P9P2-D18 | **Disable timing fields while running** | All config read-only / editable with live update | ☑ **Part 2:** read-only while running (banner + all fields); **future §9** allows edit + `automatic-update` | 2026-09-07 |
-| P9P2-D19 | **Stroke-based `t` formula** | `n/N` / `(n-1)/(N-1)` at last stroke | ☐ **Proposed:** reach `t=1` on **last** of N strokes: `(strokeCount-1)/(N-1)` for N>1 | |
-| P9P2-D20 | **`noAutoEnd` + wave/build-up** | Allow / **disable option in UI** | ☑ **Disable `noAutoEnd`** for `buildUp`, `powerWave`, `powerAndTimingWave` | 2026-09-06 |
-| P9P2-D21 | **Wave repetition** | Single cycle / repeat until session end | ☑ **Periodic repeat** (`T_wave = 2×T_rise`); session stops on End Session rule | 2026-09-06 |
-| P9P2-D22 | **Switch to wave/build-up while `noAutoEnd` selected** | Coerce to `minutes` / block | ☐ **Proposed:** auto-switch to **`minutes`** + keep `endSessionValue` | |
-| P9P2-D23 | **End Session → `T_rise` mapping (wave modes)** | A: value=`T_rise` / B: total session / C: stroke count table | ☐ TBD — see §3 options A/B/C; **stroke count (C)** fits pre-compute naturally | |
-| P9P2-D24 | **Pre-compute location** | Device at start / UI sends table / hybrid | ☐ **Proposed:** **device** builds schedule at `automatic-start` (keeps execution on ESP32) | |
-| P9P2-D25 | **Wave sample shape** | Triangle / sine | ☐ **Proposed:** triangle default; sine optional (P9P2-D8) | |
-| P9P2-D26 | **Planner vs sequencer split** | Monolithic FSM / **planner + sequencer FSM** | ☑ **Planner at start + sequencer in `poll()`** — see §8 (all automatic modes) | 2026-09-06 |
-| P9P2-D27 | **Dedicated OS scheduler for stroke timing** | FreeRTOS timer task / **sequencer FSM + `millis()`** | ☑ **Sequencer FSM** for Part 2; not a separate scheduler task | 2026-09-06 |
-| P9P2-D32 | **Automatic firmware class split** | Monolithic mode / **session shell + program subclasses** | ☑ **`AutomaticSessionMode` + `AutomaticProgramBase` subclasses + factory** (§8) | 2026-09-07 |
-| P9P2-D33 | **Seven `IExecutionMode` classes** | One per program / **one automatic mode only** | ☑ **One** `AutomaticSessionMode` on `IExecutionMode`; programs are **not** top-level modes | 2026-09-07 |
-| P9P2-D34 | **Program lifecycle hooks** | Virtual only / **subclass + session callbacks** | ☑ **Subclasses** for `buildPlan`; **session mode** owns FSM, relay, hub ack via callbacks/context | 2026-09-07 |
+| P9P2-D17 | **Disabled min field hints** | None / tooltip / visible text | ☑ **Visible helper text** + mode summary | 2026-09-07 |
+| P9P2-D18 | **Config while running** | Read-only / live update | ☑ **Read-only** Part 2; §9 later | 2026-09-07 |
+| P9P2-D19 | **Build-up phase `t`** | `i/N` / **`i/(N−1)`** / time-based | ☑ **`t = strokeIndex / (N−1)`** for N>1 (last stroke at max) | 2026-09-07 |
+| P9P2-D20 | **`noAutoEnd` + wave/build-up** | Allow / disable | ☑ **Disable** in UI | 2026-09-06 |
+| P9P2-D21 | **Wave repetition** | Single / repeat | ☑ **Repeat** until End Session rule | 2026-09-06 |
+| P9P2-D22 | **Switch to wave with `noAutoEnd`** | Coerce / block | ☑ **Coerce to `minutes`** + keep value | 2026-09-07 |
+| P9P2-D23 | **End Session → `T_rise` (wave)** | A / B / C | ☑ **Option A** — minutes value = **`T_rise`**; see §3 | 2026-09-07 |
+| P9P2-D24 | **Pre-compute location** | Device / UI table / hybrid | ☑ **Device** at `automatic-start` | 2026-09-07 |
+| P9P2-D25 | **Wave sample (alias D8)** | Triangle / sine | ☑ **Triangle** (same as P9P2-D8) | 2026-09-07 |
+| P9P2-D26 | **Planner vs sequencer** | Monolithic / split | ☑ **Planner at start + sequencer FSM** | 2026-09-06 |
+| P9P2-D27 | **Gap timing mechanism** | RTOS timer / FSM+millis | ☑ **Sequencer FSM + `millis()`** | 2026-09-06 |
+| P9P2-D32 | **Class split** | Monolithic / shell + programs | ☑ **`AutomaticSessionMode` + `AutomaticProgramBase` + factory** | 2026-09-07 |
+| P9P2-D33 | **Seven IExecutionMode classes** | One per program / one automatic | ☑ **One** `AutomaticSessionMode` only | 2026-09-07 |
+| P9P2-D34 | **Program hooks** | Virtual only / subclass + callbacks | ☑ **Subclasses** plan data; session owns FSM + relay + ack | 2026-09-07 |
+| P9P2-D35 | **Firmware build order** | All at once / periodic first / random first | ☑ **Phase A:** shell + **Periodic** smoke test, then random, then wave/build-up | 2026-09-07 |
+| P9P2-D36 | **Random mode planner** | On-the-fly / pre-fill table | ☑ **On-the-fly** — sample power/gap each stroke; no `schedule[]` | 2026-09-07 |
+| P9P2-D37 | **Command keys (UI → hub)** | `automatic:start` / **`automatic-start`** | ☑ **`automatic-start`** / **`automatic-stop`** (hyphen, match P9-D5 + API) — **fix UI** in Phase D | 2026-09-07 |
+| P9P2-D38 | **Firmware version at Part 2 sign-off** | `0.9.1-phase9p2` / `0.10.0-phase9p2` / other | ☐ **Proposed:** `0.9.1-phase9p2` when all §7.2 pass | |
+
+### Confirmed (inherits parent Phase 9 — no new Part 2 decision)
+
+- **P9-D2** — immediate ack on `automatic-start` when config valid + engine armed
+- **P9-D4** — summary `resultJson` on stop/abort/end-rule only (no per-stroke hub events)
+- **P9-D5** — camelCase payload aligned with `AutomaticControlStateDto`
+- **P9-D6** — reject or ignore `burstsOn: true` until Part 3
+- **P9-D1** — ack timeouts: `automatic-start` **5 s**; `automatic-stop` **30 s**
+- **P9-D9** — caps: auto session hard cap **24 h**; stroke ms per existing limits
+
+### Reference — options considered (Part 2 firmware walkthrough 2026-09-07)
+
+| # | Option A (chosen where ☑) | Option B | Option C |
+|---|---------------------------|----------|----------|
+| P9P2-D8 | Triangle | Linear only | Sine |
+| P9P2-D19 | `i/(N−1)` last at max | `i/N` | Time-based `t` |
+| P9P2-D23 | Minutes = `T_rise`; repeat wave | Total session = value | Strokes = table length |
+| P9P2-D35 | Shell + Periodic first | Shell + all random | All 7 before UI |
+| P9P2-D36 | On-the-fly random | Pre-fill max table | Hybrid by end mode |
+| P9P2-D37 | `automatic-start` (fix UI) | Keep `automatic:start` | Accept both in firmware |
 
 ---
 
@@ -577,45 +619,163 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 
 ---
 
-## 7. Firmware + integration checklist (after UI + decisions)
+---
 
-_Not required for UI-only pass._
+## 7. Firmware + integration checklist
 
-### 7.1 Core engine
+**Prerequisites (before Phase A coding)**
 
-- [ ] **`AutomaticSessionMode`** — sequencer FSM, relay, end-session, abort, hub ack (§8 shell)
-- [ ] **`AutomaticProgramBase`** + **`automatic_program_factory`** — `create(automaticMode)`
-- [ ] **Program subclasses** in `modes/automatic/programs/` — Periodic, Random, Wave, BuildUp (§8)
-- [ ] **`AutomaticProgramContext`** or callbacks — pulse complete, plan built, session complete (P9P2-D34)
-- [ ] `automatic_plan.*` — schedule row buffer; parametric sampler helpers in `power_timing`
-- [ ] End-session rules: minutes / strokes / manual stop (device-side count + timers)
-- [ ] `automatic-start` immediate ack (P9-D2); `automatic-stop` + abort + summary `resultJson` (P9-D4)
-- [ ] `command_handler` + `execution_context.startAutomatic()`
+### Completed upstream
 
-### 7.2 Per-mode smoke tests (bursts off)
+- [x] Phase 9 Part 1 **Signed off** — burst E2E ([09-ESP32-Phase-9-Checklist.md](./09-ESP32-Phase-9-Checklist.md))
+- [x] Part 2 **§6 UI complete** — dropdown, disable rules, persistence, API round-trip
+- [x] Part 2 **§4 decisions locked** (2026-09-07)
+- [ ] Review §3 execution semantics + §8 architecture (planner/sequencer)
+- [ ] Review `BurstSequenceMode` — gap FSM pattern to mirror
+- [ ] Review P9-D2/D4/D5 ack + payload rules (parent Phase 9)
 
-- [ ] **Periodic** — fixed max power, fixed max gap, stable serial `[RELAY]` cadence
-- [ ] **Random Power Only** — varying power, fixed gap
-- [ ] **Random Timing Only** — fixed max power, varying gaps
-- [ ] **Random Power and Timing** — both vary
-- [ ] **Power Wave** — periodic power triangle; fixed gap; schedule pre-built
-- [ ] **Power and Timing Wave** — periodic inverse power + gap; schedule pre-built
-- [ ] **Build-Up** — half-wave ramp table; ends at max power + min gap
+### Developer environment
 
-### 7.3 UI + API
+- [ ] SomNet API + UI running (local LAN)
+- [ ] ESP32 paired + connected (`Slv66` or test Sub)
+- [ ] Serial 115200 — `[CMD]` / `[RELAY]` / `[AUTO]` prefix (pick in Phase A)
+- [ ] Swagger or UI for `automatic-start` regression before enabling UI buttons
 
-- [ ] Enable Start/Stop; remove Phase 9 placeholder tooltip
-- [ ] Session summary from stop `resultJson` (aggregated counts / duration)
+### Current state (entering firmware)
+
+| Layer | Today | Part 2 target |
+|-------|-------|---------------|
+| **`AutomaticSessionMode`** | Stub — not wired | Full sequencer FSM + program factory |
+| **`execution_context`** | stroke + burst only | + `startAutomatic()` / `stopAutomatic()` |
+| **`command_handler`** | no automatic routes | `automatic-start`, `automatic-stop`, abort during auto |
+| **`power_timing`** | `strokeMsFromPower()` only | + triangle sampler, inverse gap, build-up ramp |
+| **UI Start/Stop** | Disabled + tooltip | Wired; keys **`automatic-start`** / **`automatic-stop`** |
+| **API validator** | stroke + burst only | + optional `automatic-start` payload validation |
+| **Firmware version** | `0.9.0-phase9` | **`0.9.1-phase9p2`** at Part 2 sign-off (P9P2-D38) |
 
 ---
 
-## 8. Suggested order of work
+### Phase A — Shell + Periodic (P9P2-D35)
 
-1. **Confirm** P9P2-D8, D9, D11, D16, D17, D18 against original product (wave shape, period, build-up reset).
-2. **Lock** D1–D7, D12–D15 (semantics in §3 are sufficient to start UI + firmware design).
-3. **Implement §6** — dropdown + disable matrix (no hardware).
-4. **Implement §7** — `AutomaticSessionMode` shell + `AutomaticProgramBase` subclasses (§8 modular layout).
-5. **Update** [device plan §6](./09-ESP32-Device-Plan.md) program catalog when decisions marked ☑.
+**Goal:** One program working on bench — stable cadence at max power + max gap.
+
+#### A.1 Scaffolding
+
+- [ ] `automatic/automatic_config.*` — parse JSON payload (camelCase fields, `automaticMode` enum string)
+- [ ] `automatic/automatic_plan.*` — `StrokeRow { powerPercent, gapSec, strokeMs }`; plan type enum (fixed / on-the-fly / table)
+- [ ] `automatic/automatic_program_base.*` — virtual `resolveStroke(session, index)` or `buildPlan()`
+- [ ] `automatic/automatic_program_factory.*` — `create(automaticMode)`; Periodic case first
+- [ ] `automatic/programs/periodic_program.*` — max power + max gap; apply D2/D5/D6 ignore rules
+
+#### A.2 Session mode + wiring
+
+- [ ] Expand `automatic_session_mode.*` — states: `Idle`, `StartDelay`, `WaitingGap`, `Pulse`, `Complete`
+- [ ] Sequencer: `millis()` deadlines; relay callback advances index; track `strokesCompleted`, `sessionStartMs`
+- [ ] End session: `minutes`, `strokes`, `noAutoEnd`, manual stop, abort (reuse burst abort pattern)
+- [ ] `execution_context` — member + `beginAutomatic()` / `stopAutomatic()` / extend `abortActive()`
+- [ ] `command_handler` — route `automatic-start` (immediate ack P9-D2), `automatic-stop` (summary P9-D4)
+- [ ] Reject `burstsOn: true` in payload (P9-D6)
+- [ ] Serial log prefix `[AUTO]` for state transitions (optional P9P2-D39)
+
+#### A.3 Periodic smoke (§7.2 #1)
+
+- [ ] Swagger/UI: start Periodic, `strokeMaxSeconds=20`, max power — stable `[RELAY]` every ~20 s + strokeMs
+- [ ] Stop → ack includes `strokesCompleted`, duration, `automaticMode`
+- [ ] Abort mid-session → interrupt summary (match burst dual-ack if applicable)
+
+**Phase A exit:** Periodic runs ≥5 min or 10 strokes without drift crash; stop summary plausible.
+
+---
+
+### Phase B — Random family (P9P2-D36 on-the-fly)
+
+**Goal:** Three random programs; no schedule table.
+
+- [ ] `random_program.*` — flags: power only / timing only / both
+- [ ] **Random Power Only** — uniform `[minPower, maxPower]`; gap = `strokeMaxSeconds`
+- [ ] **Random Timing Only** — power = `maximumPower`; gap uniform `[strokeMinSec, strokeMaxSec]`
+- [ ] **Random P+T** — both uniform
+- [ ] Factory cases for `randomPowerOnly`, `randomTimingOnly`, `randomPowerAndTiming`
+- [ ] Apply disabled-field rules on device (mirror UI §2)
+
+#### B.1 Smoke tests (§7.2 #2–4)
+
+- [ ] Random Power Only — varying `strokeMs` in serial log; fixed gap
+- [ ] Random Timing Only — fixed power; varying gap intervals
+- [ ] Random P+T — both vary
+
+**Phase B exit:** All three random modes start/stop/abort cleanly.
+
+---
+
+### Phase C — Wave + Build-Up (pre-compute on device, P9P2-D24)
+
+**Goal:** Triangle waves + half-wave build-up; inverse gap for P+T and build-up.
+
+- [ ] `power_timing` — `sampleTriangle(t)`, `inverseTriangle(t)`, `strokeMsFromPower()` (existing)
+- [ ] `wave_program.*` — power-only vs P+T inverse (P9P2-D12, D15); `T_rise` from D23-A
+- [ ] `build_up_program.*` — half-wave table; `t = i/(N−1)` (P9P2-D19); inverse gap
+- [ ] Schedule buffer — max rows cap (document RAM budget; e.g. 24 h @ min gap → define P9P2-D40 if needed)
+- [ ] **Power Wave** — repeating triangle power; fixed `strokeMaxSeconds` gap
+- [ ] **Power and Timing Wave** — inverse periodic gap wave
+- [ ] **Build-Up** — single ramp; ends at max power + min gap
+
+#### C.1 Smoke tests (§7.2 #5–7)
+
+- [ ] Power Wave — visible power oscillation in `strokeMs`; fixed gap
+- [ ] P+T Wave — power up when gap shortens (serial timing)
+- [ ] Build-Up — monotonic power increase over session
+
+**Phase C exit:** All seven programs pass bench smoke.
+
+---
+
+### Phase D — UI + API integration (§7.3)
+
+- [ ] Fix UI command keys: `automatic-start` / `automatic-stop` (P9P2-D37) in `hardwareCommand.ts`
+- [ ] `AutomaticControls` — enable Start/Stop; build payload from `settings.automatic` (omit `running`)
+- [ ] Apply `getAutomaticFieldRules` on device OR send full snapshot (device applies §3 — P9P2-D4)
+- [ ] `HardwareCommandPayloadValidator` — validate automatic-start fields + reject `burstsOn`
+- [ ] Parse stop `resultJson` → session summary (`SessionProvider` / `sessionSummary.ts`)
+- [ ] Remove Phase 9 placeholder tooltip on Start/Stop
+- [ ] E2E: UI Periodic start → device runs → UI stop → history entry
+
+**Part 2 sign-off exit:** Dom runs any of seven modes from UI on paired hardware; session history from device summary.
+
+---
+
+### 7.2 Per-mode smoke tests (summary — detail in Phases A–C)
+
+| # | Mode | Phase | Status |
+|---|------|-------|--------|
+| 1 | Periodic | A | ☐ |
+| 2 | Random Power Only | B | ☐ |
+| 3 | Random Timing Only | B | ☐ |
+| 4 | Random Power and Timing | B | ☐ |
+| 5 | Power Wave | C | ☐ |
+| 6 | Power and Timing Wave | C | ☐ |
+| 7 | Build-Up | C | ☐ |
+
+---
+
+### 7.4 Documentation + version (at sign-off)
+
+- [ ] Update [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §6 program catalog
+- [ ] Extend `SomNet.Device/docs/PROTOCOL.md` — automatic-start/stop payload + `resultJson`
+- [ ] Bump firmware to **`0.9.1-phase9p2`** (P9P2-D38)
+- [ ] Mark Part 2 **Status: Signed off** in this file + parent Phase 9 Part 2 blurb
+
+---
+
+## 10. Suggested order of work
+
+1. ~~**Lock §4 decisions**~~ — done 2026-09-07
+2. ~~**Implement §6 UI**~~ — done 2026-09-07
+3. **Phase A** — shell + Periodic (§7 Phase A) — **start here**
+4. **Phase B** — random family (on-the-fly)
+5. **Phase C** — wave + build-up (triangle, D23-A)
+6. **Phase D** — UI/API integration + E2E sign-off
+7. **Update** device plan + PROTOCOL + firmware version
 
 ---
 
@@ -627,3 +787,5 @@ _Not required for UI-only pass._
 | 2026-09-06 | §3 execution semantics, session envelope, §8 planner/sequencer, §9 live update |
 | 2026-09-07 | §9 overlapped replan (P9P2-D28); waveform pre-compute model |
 | 2026-09-07 | §8 modular layout locked — `AutomaticProgramBase` subclasses + factory (P9P2-D32–D34) |
+| 2026-09-07 | §6 UI signed off; §4 decisions locked; §7 expanded to Phases A–D firmware checklist |
+| 2026-09-07 | Walkthrough decisions: D23-A, D8 triangle, D19, D35–D37 |

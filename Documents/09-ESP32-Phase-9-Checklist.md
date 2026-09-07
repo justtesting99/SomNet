@@ -273,40 +273,38 @@ Update **Status** above and check boxes below as work completes. When Phase 9 is
 
 ---
 
-# Part 2 — Automatic mode (exploratory / future)
+# Part 2 — Automatic mode (in progress)
 
-_Not required for Phase 9 sign-off._
+_Not required for Phase 9 (burst) sign-off._
 
-**Checklist (UI rules + decisions + execution semantics):** [09-ESP32-Phase-9-Part2-Automatic-Checklist.md](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) — program catalog, enable/disable matrix, §3 device behavior (bursts off), P9P2-D* decisions.
+**Checklist:** [09-ESP32-Phase-9-Part2-Automatic-Checklist.md](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) — **§6 UI signed off**; **§4 decisions locked**; **§7 Phases A–D** firmware tracking.
 
-**Design intent:** Automatic mode is **not** burst with random gaps. It is a set of **seven program variations** selected by the **Automatic Mode** dropdown. Each defines how **power** and **inter-stroke gap** are chosen over a long-running session (single strokes until stop/end rule). See Part 2 checklist §3 for Periodic → Build-Up semantics.
+**Status (2026-09-07):** UI complete. Firmware **Phase A** (shell + Periodic) not started.
 
-**Relationship to burst:** Manual **burst** (Part 1) is a fixed, operator-specified multi-stroke sequence. Automatic programs may *include* burst-like behavior as one variation, but automatic and burst remain **separate modes** with separate UI entry points.
+**Design intent:** Automatic mode is **not** burst with random gaps. It is **seven program variations** from the Automatic Mode dropdown. See Part 2 checklist §3.
 
-Use plan §6, locked P9-D2/D4/D5/D6, and the Part 2 checklist when implementing.
+**Relationship to burst:** Manual **burst** (Part 1) is fixed N-stroke sequences. Automatic and burst remain **separate modes**.
 
-## G. Firmware — `power_timing` + `AutomaticSessionMode`
+Use plan §6, locked P9-D2/D4/D5/D6 + Part 2 §4 when implementing.
 
-- [ ] Define first **automatic program catalog** (which dropdown values map to which device FSM) — **open design**
-- [ ] Random / varied timing helpers in `power_timing` as required by chosen programs
-- [ ] `AutomaticSessionMode` FSM per selected program variation
-- [ ] Optional burst-like sub-behaviors inside a program (e.g. current `burstsOn` UI — semantics TBD)
-- [ ] `automatic-start` / `automatic-stop` / abort with summary `resultJson` (P9-D2, P9-D4)
+## G. Firmware — track in Part 2 §7 (Phases A–C)
 
-## H. Firmware + API integration (automatic)
+- [ ] **Phase A** — `AutomaticSessionMode` shell + Periodic ([Part 2 §7 Phase A](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#phase-a--shell--periodic-p9p2-d35))
+- [ ] **Phase B** — Random family (on-the-fly)
+- [ ] **Phase C** — Wave + Build-Up (triangle, D23-A)
+- [ ] `automatic-start` / `automatic-stop` / abort + summary `resultJson` (P9-D2, P9-D4)
 
-- [ ] `execution_context.startAutomatic()` / stop routing
-- [ ] `command_handler` routes for `automatic-start`, `automatic-stop`
-- [ ] API timeouts for automatic commands (P9-D1 values already chosen)
+## H. Firmware + API integration
+
+- [ ] See Part 2 §7 Phase A.2 + Phase D
 
 ## I. UI — automatic command path
 
-- [ ] **Part 2 UI rules** — [Part 2 checklist §5](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#5-ui-implementation-checklist) (dropdown catalog + min field disable matrix)
-- [ ] Enable Start/Stop when automatic firmware ready
+- [x] **Part 2 UI** — [§6](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#6-ui-implementation-checklist) complete 2026-09-07
+- [ ] Enable Start/Stop when Phase A bench smoke passes (Part 2 §7 Phase D)
+- [ ] Fix command keys to `automatic-start` / `automatic-stop` (P9P2-D37)
 - [ ] Config snapshot payload (P9-D5); session from stop `resultJson`
-- [ ] Keep Start/Stop disabled until Part 2 firmware begins
 
 ## J. Verification (automatic — when implemented)
 
-- [ ] Start/stop + summary; end-session rule; abort during automatic
-- [ ] Device-side RNG only; UI sync from completion ack
+- [ ] Part 2 §7.2 per-mode smoke + E2E UI sign-off
