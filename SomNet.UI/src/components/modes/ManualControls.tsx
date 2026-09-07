@@ -7,6 +7,7 @@ import { useSystemStatus } from '@/context/SystemStatusProvider';
 import { Panel } from '@/components/ui/Panel';
 import { CommandButton } from '@/components/ui/CommandButton';
 import { NumberField } from '@/components/ui/NumberField';
+import { StrokeMsInput } from '@/components/modes/StrokeMsInput';
 import { StrokePowerSlider } from '@/components/modes/StrokePowerSlider';
 import { useLiveSession } from '@/context/SessionProvider';
 import { useHardwareCommand } from '@/context/HardwareCommandProvider';
@@ -115,20 +116,7 @@ export function ManualControls() {
       return;
     }
 
-    if (key === 'minimumStrokeMs') {
-      const nextStroke = clampMinimumStrokeMs(Number(value), state.maximumStrokeMs, strokeLimits);
-      updateManual({
-        ...state,
-        ...nextStroke,
-      });
-      return;
-    }
-
-    if (key === 'maximumStrokeMs') {
-      updateManual({
-        ...state,
-        maximumStrokeMs: clampMaximumStrokeMs(Number(value), state.minimumStrokeMs, strokeLimits),
-      });
+    if (key === 'minimumStrokeMs' || key === 'maximumStrokeMs') {
       return;
     }
 
@@ -246,23 +234,38 @@ export function ManualControls() {
       <div className="grid gap-4 md:grid-cols-2">
         <Panel title="Power Settings" className="min-w-0 overflow-hidden">
           <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
-            <NumberField
+            <StrokeMsInput
               label="Minimum Stroke (ms)"
-              inline
               value={state.minimumStrokeMs}
               min={absoluteMinimum}
               max={absoluteMaximum}
-              className="w-20"
-              onChange={(event) => update('minimumStrokeMs', Number(event.target.value))}
+              onCommit={(nextMin) => {
+                const nextStroke = clampMinimumStrokeMs(
+                  nextMin,
+                  state.maximumStrokeMs,
+                  strokeLimits,
+                );
+                updateManual({
+                  ...state,
+                  ...nextStroke,
+                });
+              }}
             />
-            <NumberField
+            <StrokeMsInput
               label="Maximum Stroke (ms)"
-              inline
               value={state.maximumStrokeMs}
               min={state.minimumStrokeMs}
               max={absoluteMaximum}
-              className="w-20"
-              onChange={(event) => update('maximumStrokeMs', Number(event.target.value))}
+              onCommit={(nextMax) => {
+                updateManual({
+                  ...state,
+                  maximumStrokeMs: clampMaximumStrokeMs(
+                    nextMax,
+                    state.minimumStrokeMs,
+                    strokeLimits,
+                  ),
+                });
+              }}
             />
           </div>
 

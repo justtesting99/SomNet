@@ -3,11 +3,13 @@ import type { InputHTMLAttributes } from 'react';
 interface NumberFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   label?: string;
   inline?: boolean;
+  type?: 'number' | 'text';
 }
 
 export function NumberField({
   label,
   inline = false,
+  type = 'number',
   id,
   className = '',
   ...props
@@ -22,7 +24,7 @@ export function NumberField({
         </label>
         <input
           id={inputId}
-          type="number"
+          type={type}
           className={[
             'w-16 rounded-lg border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-center text-sm text-white',
             'focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:cursor-not-allowed disabled:opacity-50',
@@ -45,7 +47,7 @@ export function NumberField({
       ) : null}
       <input
         id={inputId}
-        type="number"
+        type={type}
         className={[
           'w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-white',
           'focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:cursor-not-allowed disabled:opacity-50',
