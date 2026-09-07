@@ -128,12 +128,24 @@ Automatic mode runs a session based on your configured parameters.
 
 ### Power Settings
 
-- **Minimum / Maximum Power (%)** — Range for random power selection
-- **Minimum / Maximum Stroke (ms)** — Duration range for strokes
+- **Minimum / Maximum Power (%)** — The **power envelope for the entire automatic session**. Main-program strokes (random, wave, etc.) and burst strokes (when **Bursts On** is available) both resolve inside this range.
+- **Minimum / Maximum Stroke (ms)** — Duration range for strokes (maps power % to relay open time)
 
-### Timing & Burst
+### Timing Between Strokes
 
-Configure how automatic bursts behave (stroke count, delay, style).
+- **Minimum / Maximum (sec)** — Gap range between **main program** strokes (program-dependent — some modes fix min or max)
+
+### Burst Settings (Phase 10 — not yet available on device)
+
+When **Bursts On** is enabled (future release), burst clusters are inserted at even intervals during the session:
+
+- **Percent (0–100)** — How many burst **events** spread across the session
+- **Burst Style** — Fixed or random power/delay inside each burst
+- **Burst Stroke Power (0–100)** — **Relative to Power Settings above** (0 = session min, 100 = session max). Defaults **0–100** for full-strength bursts; lower values allow **lighter “break” strokes** between main strokes
+- **Delay between burst strokes** — Gap **inside** each burst cluster (separate from main-program gaps)
+- **Number of strokes in each burst** — Min/max strokes per burst event
+
+See [Hardware User Guide — Bursts during automatic (planned)](./Hardware-User-Guide.md#bursts-during-automatic-planned) and [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
 
 ### End Session Rules
 
@@ -142,7 +154,7 @@ Choose how the automatic session ends:
 | Mode | Behavior |
 |------|----------|
 | **Minutes** | End after a set number of minutes |
-| **Strokes** | End after a total stroke count |
+| **Strokes** | End after a number of **main program** strokes (when bursts are on, strokes inside burst clusters do not count — Phase 10) |
 | **No auto end** | Run until you press Stop |
 
 ### Actions
@@ -150,7 +162,8 @@ Choose how the automatic session ends:
 | Button | What it does |
 |--------|--------------|
 | **Start** | Begins an automatic session |
-| **Stop** | Ends the running session |
+| **Stop** | Ends the running session cooperatively (finishes current stroke, or entire current burst when bursts are on) |
+| **Abort** | Immediately opens the relay and ends the session (shown only while a session is running) |
 
 Unlike manual mode, the session starts immediately when you press Start.
 

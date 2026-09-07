@@ -1,6 +1,6 @@
 # Phase 10 — Burst-in-automatic (`burstsOn`)
 
-**Status:** **Planning** — §4 decisions locking; **minutes burst spacing agreed** (subject to original-author verification). No firmware/UI coding until remaining §4 items locked.
+**Status:** **§4 locked** — ready for implementation (2026-09-07). No firmware/UI coding started.
 
 | Related | Link |
 |---------|------|
@@ -12,7 +12,7 @@
 
 **Goal:** When **Bursts On** is checked, the ESP32 runs **bursts inside an automatic session** — additive on top of the selected automatic program (Periodic, Random, Wave, etc.). Operator enables burst settings in the UI; device accepts `burstsOn: true` on `automatic-start`.
 
-**Explicitly out of scope (Phase 10):** Live **`automatic-update`** mid-session ([Part 2 §9](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#9-future--live-settings-during-automatic-playback-not-part-2)); OTA; new burst styles beyond **`fixedPowerDelay`**.
+**Explicitly out of scope (Phase 10):** Live **`automatic-update`** mid-session ([Part 2 §9](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#9-future--live-settings-during-automatic-playback-not-part-2)); OTA.
 
 ---
 
@@ -25,7 +25,7 @@
 | **Hardware scope** | Same DevKit (`esp32-84CCA85C36B4` / `Slv66`); relay **D4** |
 | **Software scope** | `AutomaticSessionMode` burst sub-FSM; payload validation; enable UI Burst Settings; tests + docs |
 | **Blocks** | Operators using **Bursts On** during automatic (panel hard-disabled since Part 2) |
-| **Target firmware** | **`0.10.0-phase10`** (proposed — lock in §4) |
+| **Target firmware** | **`0.10.0-phase10`** (P10-D10 ☑) |
 
 Update **Status** above and check boxes in **§7** as work completes. When Phase 10 is done, update [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §10 and bump firmware version.
 
@@ -36,7 +36,7 @@ Update **Status** above and check boxes in **§7** as work completes. When Phase
 - [x] Phase 9 Part 2 **signed off** — automatic Start/Stop/Abort, seven programs, hub auto-end/abort
 - [x] Phase 9 manual **burst** signed off — `BurstSequenceMode`, abort during burst, dual ack pattern
 - [x] Burst Settings UI fields exist and **round-trip in settings JSON** (controls disabled until Phase 10)
-- [ ] **§4 decisions locked** (this document) — **required before firmware/UI coding**
+- [x] **§4 decisions locked** (this document) — **required before firmware/UI coding**
 - [ ] Review `BurstSequenceMode` FSM — gap/pulse/abort pattern to reuse or embed
 - [ ] Review `AutomaticSessionMode` — `WaitingGap` / `Pulse` / `StartDelay` states
 
@@ -455,12 +455,12 @@ Burst schedule is computed **once at start** from minutes + percent; **not** rec
 | P10-D4 | **Program gap after burst** | Always program gap / zero gap / max(burst, program) | ☑ **Always program `gapSec`** — milestone row’s gap after burst; minutes mode: fresh full gap (§3.7, §3.8.4) | 2026-09-07 |
 | P10-D5 | **Burst power/delay source** | See **§2.1** burst style table / blend with program power | ☑ **Burst Settings only** for intra-burst power/delay; burst power 0–100 **relative to main `minimumPower`–`maximumPower`** (§2.2); program row unused inside burst | 2026-09-07 |
 | P10-D6 | **Session summary** | Stroke count only / **main + burst counts** | ☑ **Main strokes + burst event count**; optional detail from `burstDetails` | 2026-09-07 |
-| P10-D7 | **Architecture** | Embed burst FSM in `AutomaticSessionMode` / extract shared `BurstRunner` / delegate to `BurstSequenceMode` | ☐ **Proposed:** embed sub-FSM in `AutomaticSessionMode` (keep one `IExecutionMode` active) | |
-| P10-D8 | **`burstsOn: false` payload** | Accept omitted / require explicit false | ☐ **Proposed:** accept omitted as false (Part 2 compatible) | |
-| P10-D9 | **API validation** | Reject invalid burst ranges / clamp | ☐ TBD — mirror manual burst caps | |
-| P10-D10 | **Firmware version** | `0.10.0-phase10` / other | ☐ **Proposed:** `0.10.0-phase10` | |
-| P10-D11 | **UI — burst panel while running** | Read-only (Part 2) / editable (needs §9 live update) | ☐ **Proposed:** read-only while `running` (same as Part 2) | |
-| P10-D12 | **Random burst parameters** | `esp_random()` uniform per burst / per stroke | ☐ **Proposed:** new draw each intra-burst stroke and each intra-burst delay (when style randomizes that axis) | |
+| P10-D7 | **Architecture** | Embed burst FSM in `AutomaticSessionMode` / extract shared `BurstRunner` / delegate to `BurstSequenceMode` | ☑ **Embed sub-FSM** in `AutomaticSessionMode` — one `IExecutionMode` active; reuse relay/timing patterns from `BurstSequenceMode`, not `execution_context.startBurst()` (§5.2) | 2026-09-07 |
+| P10-D8 | **`burstsOn: false` payload** | Accept omitted / require explicit false | ☑ **Accept omitted as false** — Part 2 compatible; saved settings may omit key | 2026-09-07 |
+| P10-D9 | **API validation** | Reject invalid burst ranges / clamp | ☑ **Reject** invalid ranges (mirror manual burst caps — §4.1); validate burst sub-fields only when `burstsOn: true` | 2026-09-07 |
+| P10-D10 | **Firmware version** | `0.10.0-phase10` / other | ☑ **`0.10.0-phase10`** at Phase 10 sign-off | 2026-09-07 |
+| P10-D11 | **UI — burst panel while running** | Read-only (Part 2) / editable (needs §9 live update) | ☑ **Read-only while `running`** — same as rest of automatic panel (Part 2); live edit deferred to §9 | 2026-09-07 |
+| P10-D12 | **Random burst parameters** | One draw per burst / per stroke | ☑ **Fresh draw per intra-burst stroke** (power) and **per intra-burst delay** (when style randomizes that axis); stroke count drawn once per burst event | 2026-09-07 |
 | P10-D13 | **Burst Style enum** | Four values per §2.1 | ☑ **`fixedPowerDelay`, `randomPowerOnly`, `randomDelayOnly`, `randomPowerAndDelay`** | 2026-09-07 |
 | P10-D14 | **Burst min-field UI rules** | Per §2.1 table / always show mins | ☑ Disable mins per style; device uses **max** when min disabled | 2026-09-07 |
 | P10-D15 | **Stroke count vs style** | Fixed at max for fixedPowerDelay / always range | ☑ Always **min/max range** (all styles); unchanged by Burst Style | 2026-09-07 |
@@ -475,6 +475,24 @@ Burst schedule is computed **once at start** from minutes + percent; **not** rec
 | P10-D26 | **`burstDetails` overflow** | Drop array / truncate flag | ☑ Emit Tier 1+2 + `"burstDetailsTruncated": true` if buffer full | 2026-09-07 |
 
 **Inherited (unchanged):** P9-D2 immediate `automatic-start` ack; P9-D4 summary on stop/abort/end only; P9-D1 ack timeouts; abort hub `automatic-session-complete`.
+
+### 4.1 Burst field validation (P10-D9 ☑)
+
+When **`burstsOn: true`**, firmware and API **reject** out-of-range payloads (no clamping). When **`burstsOn: false`** or omitted, burst sub-fields are **ignored** — no burst validation required.
+
+| Field | Range / rule | Source |
+|-------|----------------|--------|
+| `burstPercent` | 0–100 | UI |
+| `burstStyle` | One of four §2.1 enum strings | Shared enum |
+| `burstStrokePowerMin` / `Max` | 0–100 each; min ≤ max | UI |
+| `burstDelayMin` / `Max` | 0–**300** seconds each; min ≤ max | Manual burst cap (`kMaxBurstDelayMs` = 300 000 ms) |
+| `burstStrokesMin` / `Max` | **1–100** each; min ≤ max | Manual burst cap (`kMaxBurstStrokes`) |
+
+**Firmware:** same caps in `automatic_config.cpp` (reuse `kMaxBurstStrokes`, `kMaxBurstDelayMs` from `config.h`).
+
+**API:** extend `HardwareCommandPayloadValidator` for automatic-start when `burstsOn: true`; reject with clear message (same pattern as manual `burst`).
+
+**UI:** normalize min ≤ max on save (Part 2 pattern); enforce limits in `AutomaticControls` when panel is enabled.
 
 ---
 
@@ -512,13 +530,20 @@ Reuse **relay** APIs and timing patterns from `BurstSequenceMode` (copy or share
 
 ### 5.4 `resultJson` (automatic stop / complete)
 
-No new fields required for Phase 10 minimum — **`strokesCompleted`** includes burst pulses. Optional future: `burstsCompleted` count (only if P10-D6 extended).
+When **`burstsOn: true`**, stop/complete `resultJson` follows **§3.3.1** (P10-D20 ☑):
+
+- **`mainStrokesCompleted`** — main program singles only (End Session **Strokes** limit)
+- **`burstEventsCompleted`** — scheduled burst slots finished
+- **`strokesCompleted`** — alias of **`mainStrokesCompleted`** (Part 2 compatibility)
+- Optional: **`intraBurstStrokesCompleted`**, **`burstPercent`**, **`burstStyle`**, **`burstDetails[]`** (max 16)
+
+Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refactors counting and extends the JSON shape when bursts are on.
 
 ---
 
 ## 6. Suggested implementation order
 
-1. **Lock §4 decisions** — review this doc; mark choices ☑
+1. **Lock §4 decisions** — review this doc; mark choices ☑ — **done 2026-09-07**
 2. **Phase A — Config + reject removal** — parse/validate burst fields; `burstsOn: true` accepted; still no burst FSM (or stub log)
 3. **Phase B — Burst sub-FSM on Periodic** — `burstPercent=100` smoke (always burst); serial `[AUTO] burst …`; then real percent
 4. **Phase C — All seven programs + abort/stop** — burst rolls with random/wave/build-up; stop/abort during burst
@@ -536,7 +561,7 @@ No new fields required for Phase 10 minimum — **`strokesCompleted`** includes 
 - [ ] Periodic + `burstPercent=0` — identical to Part 2 (singles only)
 - [ ] Abort mid-burst — relay open; `[AUTO] aborted`; hub/session `(aborted)` with partial stroke count
 - [ ] Stop mid-burst — cooperative stop per P10-D3
-- [ ] End-session **strokes** limit — burst pulses increment counter correctly
+- [ ] End-session **strokes** limit — counts **main** strokes only; intra-burst pulses do **not** increment limit (P10-D2)
 
 ### 7.2 UI E2E
 
@@ -557,7 +582,7 @@ No new fields required for Phase 10 minimum — **`strokesCompleted`** includes 
 |------|----------------|
 | **Part 2 §9 `automatic-update`** | Independent — live replan does not require bursts; bursts complicate replan (burst sub-state must be handled on update) |
 | **OTA (Phase 7 partitions)** | None — same binary size concern; monitor flash if burst code duplicates `BurstSequenceMode` |
-| **Session history richness** | Optional burst-event line in summary — defer unless P10-D6 extended |
+| **Session history richness** | **Main + burst event counts** in summary (P10-D6 ☑); optional `burstDetails` in `resultJson` |
 
 ---
 
@@ -565,5 +590,7 @@ No new fields required for Phase 10 minimum — **`strokesCompleted`** includes 
 
 | Date | Change |
 |------|--------|
+| 2026-09-07 | **§4 complete** — P10-D7–D12 locked (architecture, validation, version, UI, RNG) |
+| 2026-09-07 | P10-D4/D5 locked — program gap after burst; burst power relative to main Power Settings (§2.2) |
 | 2026-09-07 | §3.3 — main strokes vs burst events; `resultJson` / history fields |
 | 2026-09-07 | P10-D3/21/20 locked — stop/abort during burst; stroke milestones; `resultJson` tiers |

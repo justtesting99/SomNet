@@ -1436,7 +1436,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 | 7 | Resilience / production prep | [Phase 7 Checklist](./09-ESP32-Phase-7-Checklist.md) | **Signed off** (2026-09-06) — `0.7.0-phase7` |
 | **8** | **SomNet UI pairing dialog** + command integration | [Phase 8 Checklist](./09-ESP32-Phase-8-Checklist.md) | **Signed off** (2026-09-06) — `0.8.10-phase8`; Hardware dialog + stroke/abort UI |
 | 9 | Burst mode (+ automatic Part 2) | [Phase 9 Checklist](./09-ESP32-Phase-9-Checklist.md) · [Part 2](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) | **Signed off** (2026-09-07) — `0.9.1-phase9p2` |
-| **10** | **Burst-in-automatic (`burstsOn`)** | [Phase 10 Checklist](./09-ESP32-Phase-10-Checklist.md) | **Planning** |
+| **10** | **Burst-in-automatic (`burstsOn`)** | [Phase 10 Checklist](./09-ESP32-Phase-10-Checklist.md) | **§4 locked** — ready to implement |
 
 **Rationale:** Phase **3** (config UI) runs **before** SignalR so installers can provision network and obtain the pairing ID without Swagger/serial. Phase **8** delivers Dom-side pairing in the **Hardware** dialog and manual command integration. Phase **9** adds **burst**. **Options** is tabbed settings (General / Notifications / Account) — separate from Hardware. See §4 *SomNet React UI — pairing and settings*.
 
@@ -1664,11 +1664,22 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 ### Phase 10 — Burst-in-automatic (`burstsOn`)
 
 **Checklist:** [09-ESP32-Phase-10-Checklist.md](./09-ESP32-Phase-10-Checklist.md)  
-**Status:** **Planning** — design discussion; lock §4 decisions before coding.
+**Status:** **§4 locked** — ready for implementation (2026-09-07).
 
-**Goal:** Enable **Bursts On** during automatic sessions — burst clusters interleaved with the seven automatic programs. Reuses manual burst timing patterns; embedded sub-FSM in `AutomaticSessionMode`.
+**Goal:** Enable **Bursts On** during automatic sessions — burst clusters interleaved with the seven automatic programs. Embedded burst sub-FSM in `AutomaticSessionMode` (P10-D7); reuse manual burst timing patterns, not `execution_context.startBurst()`.
 
-**Target firmware:** **`0.10.0-phase10`** (proposed).
+**Implementation defaults (P10-D7–D12):**
+
+| # | Decision |
+|---|----------|
+| P10-D7 | Embed burst sub-FSM in `AutomaticSessionMode` |
+| P10-D8 | `burstsOn` omitted → false |
+| P10-D9 | Reject invalid burst ranges when `burstsOn: true` (§4.1 caps) |
+| P10-D10 | Firmware **`0.10.0-phase10`** at sign-off |
+| P10-D11 | Burst panel read-only while session running |
+| P10-D12 | Fresh RNG per intra-burst stroke/delay when style randomizes |
+
+**Target firmware:** **`0.10.0-phase10`** (P10-D10 ☑).
 
 ---
 

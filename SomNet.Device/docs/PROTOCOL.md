@@ -318,6 +318,25 @@ Optional `{ "reason": "operator" }` — device reports measured `endReason` in s
 
 **Ack:** Completing ack after session stops at safe point (gap or post-pulse). REST timeout **30 s** (P9-D1).
 
+### 6.7 automatic-start burst fields (Phase 10 — planned, not implemented)
+
+When **`burstsOn: true`** is supported, the start payload includes burst settings (full snapshot, camelCase). Device rejects `burstsOn: true` today.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `burstsOn` | bool | Master enable |
+| `burstPercent` | int | 0–100 — burst **event count** spread evenly across session envelope |
+| `burstStyle` | string | `fixedPowerDelay`, `randomPowerOnly`, `randomDelayOnly`, `randomPowerAndDelay` |
+| `burstStrokePowerMin` / `burstStrokePowerMax` | int | 0–100 **relative to** `minimumPower`–`maximumPower` (session envelope) |
+| `burstDelayMin` / `burstDelayMax` | int | Seconds between strokes **inside** a burst |
+| `burstStrokesMin` / `burstStrokesMax` | int | Strokes per burst event (1–100 each; min ≤ max when `burstsOn: true`) |
+
+**Validation (P10-D9):** When `burstsOn: true`, firmware and API **reject** out-of-range values — same caps as manual burst (`burstStrokes` 1–100, delay 0–300 s). See Phase 10 checklist §4.1.
+
+**Power mapping:** `effectivePower = lerp(minimumPower, maximumPower, burstRelative / 100)` → `strokeMsFromPower(..., minimumStrokeMs, maximumStrokeMs)`. Intra-burst power/delay use Burst Settings only — not the active program row. After each burst, program `gapSec` applies before the next main stroke.
+
+Detail: [Phase 10 checklist](../../Documents/09-ESP32-Phase-10-Checklist.md).
+
 ---
 
 ## 7. AckCommand (device → server)
@@ -392,6 +411,30 @@ When present, `resultJson` is a **string containing JSON** (not a nested object)
 | `endSessionMode` | Wire int: `0` = noAutoEnd, `1` = minutes, `2` = strokes |
 | `endReason` | `manualStop`, `endSession`, `abort`, or `error` |
 | `durationMs` | Elapsed since first pulse (after start delay) |
+| `strokesCompleted` | Part 2: main program strokes. Phase 10 with bursts: **alias of `mainStrokesCompleted`** |
+
+**Phase 10 (when `burstsOn: true` — planned)** — additional fields on stop/complete:
+
+```json
+{
+  "commandKey": "automatic-stop",
+  "automaticMode": "periodic",
+  "burstsOn": true,
+  "mainStrokesCompleted": 80,
+  "burstEventsCompleted": 8,
+  "strokesCompleted": 80,
+  "intraBurstStrokesCompleted": 52,
+  "burstPercent": 10,
+  "burstStyle": "randomPowerOnly",
+  "durationMs": 1500000,
+  "endSessionMode": 1,
+  "endSessionValue": 30,
+  "interrupted": false,
+  "endReason": "manualStop"
+}
+```
+
+Optional `burstDetails[]` (max 16 entries) per Phase 10 checklist §3.3.1.
 
 ### REST result (operator)
 
@@ -467,3 +510,4 @@ If ack arrives within the per-command timeout:
 |------|--------|
 | 2026-09-05 | Phase 0 capture complete; `sub_target` JWT claim documented |
 | 2026-09-07 | Phase 9 Part 2 — `automatic-start`/`automatic-stop` payload + stop `resultJson`; burst payload; per-command ack timeouts |
+| 2026-09-07 | Phase 10 planned — §6.7 burst fields on `automatic-start`; extended automatic stop `resultJson` shape; §4.1 validation caps |

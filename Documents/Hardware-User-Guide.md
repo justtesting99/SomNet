@@ -212,7 +212,7 @@ If the device is on your network and you can open its web page:
 - Operator selects **Automatic** in SomNet, configures the program, presses **Start**.
 - SomNet sends **one configuration snapshot** to the device; the **ESP32 runs the full session locally** (gaps between strokes, power changes, end rules) until **Stop**, **Abort**, or **End Session After**.
 - Unlike **manual burst** (fixed number of strokes you choose each time), automatic mode runs **ongoing single strokes** according to the selected **program** — with optional randomness or waves between min/max power and timing settings.
-- **Bursts during automatic** (Bursts On checkbox) — planned [Phase 10](./09-ESP32-Phase-10-Checklist.md); not yet available on device.
+- **Bursts during automatic** (**Bursts On**) — **not yet available** on device; design locked in [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md). See [Bursts during automatic (planned)](#bursts-during-automatic-planned) below.
 
 ### Seven automatic programs (Automatic Mode dropdown)
 
@@ -263,6 +263,25 @@ For **wave** programs, the device uses your End Session value to calculate how l
 Automatic mode controls **relay open time**, not tank pressure. On a charged compressor with no pump during the session, **line pressure slowly drops**. Adjust **power** or **maximum stroke** if impact softens — do not expect every stroke to feel identical when pressure is changing.
 
 Reported **`actualStrokeMs`** in session history reflects what the device measured on the relay; small variation (a few ms) between strokes is normal.
+
+### Bursts during automatic (planned)
+
+**Status:** Phase 10 — **planning complete for core semantics**; firmware/UI not implemented. **Bursts On** is disabled in SomNet today; device rejects `burstsOn: true`.
+
+When available, **Bursts On** adds **scheduled burst clusters** inside the same automatic session — on top of whichever program you selected (Periodic, Random, Wave, etc.):
+
+| Concept | Behavior |
+|---------|----------|
+| **Power Settings (min/max)** | Define the **power envelope for the whole session** — all main strokes and all burst strokes resolve inside this band |
+| **Burst Stroke Power (0–100)** | **Relative to Power Settings** — 0 = session minimum power, 100 = session maximum. Usually left at **0–100** for full-strength bursts; a **lower range** (e.g. 0–30) gives **lighter strokes** as a brief break between heavier main strokes |
+| **Percent** | How many **burst events** occur, **evenly spread** across the session (not random each step) — e.g. 10% over 100 main strokes → 10 burst events |
+| **End Session Strokes** | Counts **main program strokes only** — strokes inside a burst do **not** count toward the limit |
+| **Stop** | Finishes the current main stroke **or** the **entire current burst**, then ends |
+| **Abort** | Opens the relay **immediately**; cancels rest of burst and session |
+
+After each burst, the program waits its normal **gap between main strokes** before continuing (same cadence logic as Part 2).
+
+Developer detail: [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
 
 ### Not yet available
 
@@ -369,3 +388,4 @@ From an operator or Dom perspective:
 | 2026-09-06 | Bench notes: single/burst poll jitter (~±5 ms); air-line pressure vs operator power adjustment |
 | 2026-09-06 | Link to Phase 7 §G2 / device plan — deferred timing options (`esp_timer`, poll, dual-core; OTA-safe) |
 | 2026-09-07 | Automatic mode overview — **signed off**; Start/Stop/Abort; auto-end via end-session rules |
+| 2026-09-07 | Phase 10 burst-in-automatic — planned operator semantics (power envelope, scheduling, stop/abort) |

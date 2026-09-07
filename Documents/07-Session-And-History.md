@@ -1,6 +1,6 @@
 # Session & History
 
-SomNet tracks live sessions during operation and persists them for historical review. Manual sessions produce rich aggregated summaries; automatic sessions record duration-based summaries.
+SomNet tracks live sessions during operation and persists them for historical review. Manual sessions produce rich aggregated summaries; automatic sessions record summaries from device **`resultJson`** (stroke counts, duration, and — when bursts are on — main stroke and burst event counts).
 
 ## Session Lifecycle
 
@@ -100,11 +100,25 @@ No strokes or bursts.
 
 Built by `buildAutomaticSessionSummary()` from device `resultJson` (Stop, Abort, or end-session rule):
 
+**Part 2 (bursts off):**
+
 ```
 Periodic — 8 strokes over 38 sec (end session rule).
 Periodic — 4 strokes over 20 sec (aborted).
 Power Wave — 12 strokes over 5 min (stopped manually).
 ```
+
+**Phase 10 (when `burstsOn: true` — planned):** summary includes **main stroke count** and **burst event count** (P10-D6):
+
+```
+Periodic — 80 main strokes, 8 bursts over 25 min (stopped manually).
+Periodic — 45 main strokes, 4 bursts over 12 min (aborted).
+```
+
+- **`mainStrokesCompleted`** — main program singles only (End Session **Strokes** limit)
+- **`burstEventsCompleted`** — scheduled burst slots finished
+- **`strokesCompleted`** — alias of main count for Part 2 compatibility
+- Intra-burst relay pulses are optional detail in `burstDetails[]` (device `resultJson`)
 
 When the hub delivers `automatic-session-complete` with `resultJson`, stroke count and duration come from the device. If hub delivery fails, the UI falls back to a generic reason (e.g. `Automatic session aborted.`).
 

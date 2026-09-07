@@ -1,3 +1,4 @@
+
 # Phase 9 Part 2 — Automatic mode checklist
 
 **Status:** **Signed off** (2026-09-07). Includes device-initiated session complete via SignalR (`automatic-session-complete`).
@@ -189,7 +190,7 @@ For **Power and Timing Wave**, gap wave is **inverse** to power (180° out of ph
 
 ### Burst Settings (`burstsOn`) — deferred
 
-When **Bursts On** is checked, behavior is **additive** on top of the selected mode (P9-D6 deferred). Part 2 sign-off assumes **`burstsOn: false`**. See **[Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md)** for burst-in-automatic design and implementation.
+When **Bursts On** is checked, behavior is **additive** on top of the selected mode (P9-D6 deferred). Part 2 sign-off assumes **`burstsOn: false`**. See **[Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md)** — core burst-in-automatic semantics locked (scheduling, power envelope, gaps, stop/abort, `resultJson`); firmware/UI pending.
 
 ### Session envelope + End Session (wave / build-up)
 
