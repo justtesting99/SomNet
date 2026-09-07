@@ -1,6 +1,6 @@
 # Phase 9 Part 2 — Automatic mode checklist
 
-**Status:** **UI complete** (§6 signed off 2026-09-07). **Decisions locked** (§4 + §7 prerequisites). **Firmware not started** — begin §7 Phase A. Assumes **`burstsOn: false`** (Part 3).
+**Status:** **UI complete** (§6 signed off 2026-09-07). **Firmware Phase A signed off** on bench — Periodic E2E via Swagger (`esp32-84CCA85C36B4` / `Slv66`, 2026-09-07): start ack, 10×20 s cadence, `endSession` at stroke 10. **`automatic-stop`** / **abort** smoke optional before Phase B. Assumes **`burstsOn: false`** (Part 3).
 
 | Related | Link |
 |---------|------|
@@ -274,7 +274,7 @@ When switching into wave/build-up while `noAutoEnd` selected → coerce to **`mi
 | P9P2-D35 | **Firmware build order** | All at once / periodic first / random first | ☑ **Phase A:** shell + **Periodic** smoke test, then random, then wave/build-up | 2026-09-07 |
 | P9P2-D36 | **Random mode planner** | On-the-fly / pre-fill table | ☑ **On-the-fly** — sample power/gap each stroke; no `schedule[]` | 2026-09-07 |
 | P9P2-D37 | **Command keys (UI → hub)** | `automatic:start` / **`automatic-start`** | ☑ **`automatic-start`** / **`automatic-stop`** (hyphen, match P9-D5 + API) — **fix UI** in Phase D | 2026-09-07 |
-| P9P2-D38 | **Firmware version at Part 2 sign-off** | `0.9.1-phase9p2` / `0.10.0-phase9p2` / other | ☐ **Proposed:** `0.9.1-phase9p2` when all §7.2 pass | |
+| P9P2-D38 | **Firmware version at Part 2 sign-off** | `0.9.1-phase9p2` / `0.10.0-phase9p2` / other | ☑ **`0.9.1-phase9p2`** when all §7.2 pass | 2026-09-07 |
 
 ### Confirmed (inherits parent Phase 9 — no new Part 2 decision)
 
@@ -645,13 +645,13 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 
 | Layer | Today | Part 2 target |
 |-------|-------|---------------|
-| **`AutomaticSessionMode`** | Stub — not wired | Full sequencer FSM + program factory |
-| **`execution_context`** | stroke + burst only | + `startAutomatic()` / `stopAutomatic()` |
-| **`command_handler`** | no automatic routes | `automatic-start`, `automatic-stop`, abort during auto |
+| **`AutomaticSessionMode`** | Shell + Periodic FSM wired | Full sequencer + all 7 programs |
+| **`execution_context`** | + `startAutomatic()` / `stopAutomatic()` | unchanged |
+| **`command_handler`** | `automatic-start` / `automatic-stop` (+ legacy `:` keys) | unchanged |
 | **`power_timing`** | `strokeMsFromPower()` only | + triangle sampler, inverse gap, build-up ramp |
 | **UI Start/Stop** | Disabled + tooltip | Wired; keys **`automatic-start`** / **`automatic-stop`** |
 | **API validator** | stroke + burst only | + optional `automatic-start` payload validation |
-| **Firmware version** | `0.9.0-phase9` | **`0.9.1-phase9p2`** at Part 2 sign-off (P9P2-D38) |
+| **Firmware version** | **`0.9.1-phase9p2`** (P9P2-D38 locked in `platformio.ini`) | unchanged at Part 2 sign-off |
 
 ---
 
@@ -661,29 +661,33 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 
 #### A.1 Scaffolding
 
-- [ ] `automatic/automatic_config.*` — parse JSON payload (camelCase fields, `automaticMode` enum string)
-- [ ] `automatic/automatic_plan.*` — `StrokeRow { powerPercent, gapSec, strokeMs }`; plan type enum (fixed / on-the-fly / table)
-- [ ] `automatic/automatic_program_base.*` — virtual `resolveStroke(session, index)` or `buildPlan()`
-- [ ] `automatic/automatic_program_factory.*` — `create(automaticMode)`; Periodic case first
-- [ ] `automatic/programs/periodic_program.*` — max power + max gap; apply D2/D5/D6 ignore rules
+- [x] `automatic/automatic_config.*` — parse JSON payload (camelCase fields, `automaticMode` enum string)
+- [ ] `automatic/automatic_plan.*` — deferred to **Phase C** (wave/build-up pre-compute); Periodic uses on-the-fly `getStrokeParameters`
+- [x] `automatic/automatic_program_base.h` — virtual `getStrokeParameters(session, index, config, …)`
+- [x] `automatic/automatic_program_factory.*` — `create(automaticMode)`; Periodic case first; others reject "not implemented yet"
+- [x] `automatic/programs/periodic_program.*` — max power + max gap; apply D2/D5/D6 ignore rules
 
 #### A.2 Session mode + wiring
 
-- [ ] Expand `automatic_session_mode.*` — states: `Idle`, `StartDelay`, `WaitingGap`, `Pulse`, `Complete`
-- [ ] Sequencer: `millis()` deadlines; relay callback advances index; track `strokesCompleted`, `sessionStartMs`
-- [ ] End session: `minutes`, `strokes`, `noAutoEnd`, manual stop, abort (reuse burst abort pattern)
-- [ ] `execution_context` — member + `beginAutomatic()` / `stopAutomatic()` / extend `abortActive()`
-- [ ] `command_handler` — route `automatic-start` (immediate ack P9-D2), `automatic-stop` (summary P9-D4)
-- [ ] Reject `burstsOn: true` in payload (P9-D6)
-- [ ] Serial log prefix `[AUTO]` for state transitions (optional P9P2-D39)
+- [x] Expand `automatic_session_mode.*` — states: `Idle`, `StartDelay`, `WaitingGap`, `Pulse` (Complete via `finishSession`)
+- [x] Sequencer: `millis()` deadlines; relay callback advances index; track `strokesCompleted`, `sessionStartMs`
+- [x] End session: `minutes`, `strokes`, `noAutoEnd`, manual stop, abort (reuse burst abort pattern)
+- [x] `execution_context` — member + `startAutomatic()` / `stopAutomatic()` / extend `abortActive()`
+- [x] `command_handler` — route `automatic-start` (immediate ack P9-D2), `automatic-stop` (summary P9-D4)
+- [x] Reject `burstsOn: true` in payload (P9-D6)
+- [x] Serial log prefix `[AUTO]` for state transitions (optional P9P2-D39)
+- [x] `ExecuteCommandPayload.payloadJson[768]` for full automatic snapshot
+- [x] Defer `ExecuteCommand` to main loop (stack overflow fix — hub frame + automatic JSON parse)
+- [x] `CONFIG_ARDUINO_LOOP_STACK_SIZE=12288` in `platformio.ini`
+- [x] **`pio run -e dev`** compiles (2026-09-07)
 
 #### A.3 Periodic smoke (§7.2 #1)
 
-- [ ] Swagger/UI: start Periodic, `strokeMaxSeconds=20`, max power — stable `[RELAY]` every ~20 s + strokeMs
-- [ ] Stop → ack includes `strokesCompleted`, duration, `automaticMode`
+- [x] Swagger: start Periodic, `strokeMaxSeconds=20`, max power — stable `[RELAY]` every ~20 s + ~400 ms strokeMs (2026-09-07, 10 strokes, `endSession`)
+- [ ] Stop → ack includes `strokesCompleted`, duration, `automaticMode` (`automatic-stop` manual)
 - [ ] Abort mid-session → interrupt summary (match burst dual-ack if applicable)
 
-**Phase A exit:** Periodic runs ≥5 min or 10 strokes without drift crash; stop summary plausible.
+**Phase A exit:** Periodic runs ≥5 min or 10 strokes without drift crash; stop summary plausible. **Met** for start + cadence + stroke end (2026-09-07). Manual stop/abort deferred optional.
 
 ---
 
@@ -762,7 +766,7 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 
 - [ ] Update [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §6 program catalog
 - [ ] Extend `SomNet.Device/docs/PROTOCOL.md` — automatic-start/stop payload + `resultJson`
-- [ ] Bump firmware to **`0.9.1-phase9p2`** (P9P2-D38)
+- [x] Bump firmware to **`0.9.1-phase9p2`** (P9P2-D38) — locked in `SomNet.Device/platformio.ini` 2026-09-07
 - [ ] Mark Part 2 **Status: Signed off** in this file + parent Phase 9 Part 2 blurb
 
 ---
@@ -771,7 +775,7 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 
 1. ~~**Lock §4 decisions**~~ — done 2026-09-07
 2. ~~**Implement §6 UI**~~ — done 2026-09-07
-3. **Phase A** — shell + Periodic (§7 Phase A) — **start here**
+3. ~~**Phase A** — shell + Periodic (§7 Phase A)~~ — **bench signed off** 2026-09-07; optional stop/abort smoke
 4. **Phase B** — random family (on-the-fly)
 5. **Phase C** — wave + build-up (triangle, D23-A)
 6. **Phase D** — UI/API integration + E2E sign-off
@@ -789,3 +793,4 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 | 2026-09-07 | §8 modular layout locked — `AutomaticProgramBase` subclasses + factory (P9P2-D32–D34) |
 | 2026-09-07 | §6 UI signed off; §4 decisions locked; §7 expanded to Phases A–D firmware checklist |
 | 2026-09-07 | Walkthrough decisions: D23-A, D8 triangle, D19, D35–D37 |
+| 2026-09-07 | Phase A bench smoke passed (Periodic 10×20 s); stack overflow fix (command queue) |

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "modes/automatic_session_mode.h"
 #include "modes/burst_sequence_mode.h"
 #include "modes/single_pulse_mode.h"
 
@@ -24,8 +25,16 @@ public:
         void* callbackContext,
         BurstCompleteCallback onComplete);
 
+    bool startAutomatic(const char* payloadJson);
+
+    bool stopAutomatic(
+        const char* correlationId,
+        void* callbackContext,
+        AutomaticCompleteCallback onComplete);
+
 private:
     SinglePulseMode singlePulseMode_;
     BurstSequenceMode burstSequenceMode_;
+    AutomaticSessionMode automaticSessionMode_;
     IExecutionMode* activeMode_ = nullptr;
 };

@@ -6,6 +6,7 @@ void ExecutionContext::begin(RelayController* relay) {
     activeMode_ = nullptr;
     singlePulseMode_.setRelay(relay);
     burstSequenceMode_.setRelay(relay);
+    automaticSessionMode_.setRelay(relay);
 }
 
 void ExecutionContext::poll() {
@@ -60,4 +61,28 @@ bool ExecutionContext::startBurst(
 
     activeMode_ = &burstSequenceMode_;
     return true;
+}
+
+bool ExecutionContext::startAutomatic(const char* payloadJson) {
+    if (isActive()) {
+        return false;
+    }
+
+    if (!automaticSessionMode_.beginSession(payloadJson)) {
+        return false;
+    }
+
+    activeMode_ = &automaticSessionMode_;
+    return true;
+}
+
+bool ExecutionContext::stopAutomatic(
+    const char* correlationId,
+    void* callbackContext,
+    AutomaticCompleteCallback onComplete) {
+    if (activeMode_ != &automaticSessionMode_ || !automaticSessionMode_.isActive()) {
+        return false;
+    }
+
+    return automaticSessionMode_.requestStop(correlationId, callbackContext, onComplete);
 }

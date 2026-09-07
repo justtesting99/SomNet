@@ -2,6 +2,7 @@
 
 #include "device_identity.h"
 #include "execution_context.h"
+#include "modes/automatic/automatic_config.h"
 #include "nvs_store.h"
 #include "signalr_client.h"
 
@@ -35,7 +36,7 @@ bool secureStringEqual(const char* a, const char* b) {
 
 void commandHandlerOnExecuteCommand(const ExecuteCommandPayload& command) {
     if (gCommandHandlerInstance != nullptr) {
-        gCommandHandlerInstance->handleExecuteCommand(command);
+        gCommandHandlerInstance->enqueueExecuteCommand(command);
     }
 }
 
@@ -53,7 +54,28 @@ void CommandHandler::begin(
     Serial.println(F("[CMD] command_handler ready (Phase 6)"));
 }
 
+void CommandHandler::enqueueExecuteCommand(const ExecuteCommandPayload& command) {
+    if (!initialized_) {
+        return;
+    }
+
+    if (pendingCommandReady_) {
+        Serial.println(F("[CMD] reject: command queue busy"));
+        sendAck(command.correlationId, false, "device busy", nullptr);
+        return;
+    }
+
+    pendingCommand_ = command;
+    pendingCommandReady_ = true;
+}
+
 void CommandHandler::poll() {
+    if (!initialized_ || !pendingCommandReady_) {
+        return;
+    }
+
+    pendingCommandReady_ = false;
+    handleExecuteCommand(pendingCommand_);
 }
 
 bool CommandHandler::validateCommand(
@@ -155,6 +177,18 @@ void CommandHandler::onStrokeComplete(
     static_cast<CommandHandler*>(context)->sendAck(correlationId, success, message, resultJson);
 }
 
+void CommandHandler::onAutomaticComplete(
+    void* context,
+    const char* correlationId,
+    bool success,
+    const char* message,
+    const char* resultJson) {
+    if (context == nullptr) {
+        return;
+    }
+    static_cast<CommandHandler*>(context)->sendAck(correlationId, success, message, resultJson);
+}
+
 void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) {
     if (!initialized_) {
         return;
@@ -203,6 +237,33 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
                 this,
                 &CommandHandler::onStrokeComplete)) {
             sendAck(command.correlationId, false, "invalid burst payload", nullptr);
+        }
+
+        return;
+    }
+
+    if (isAutomaticStartKey(command.commandKey)) {
+        if (executionContext_->isActive()) {
+            Serial.println(F("[CMD] reject: device busy"));
+            sendAck(command.correlationId, false, "device busy", nullptr);
+            return;
+        }
+
+        if (!executionContext_->startAutomatic(command.payloadJson)) {
+            sendAck(command.correlationId, false, "invalid automatic-start payload", nullptr);
+            return;
+        }
+
+        sendAck(command.correlationId, true, "automatic session started", nullptr);
+        return;
+    }
+
+    if (isAutomaticStopKey(command.commandKey)) {
+        if (!executionContext_->stopAutomatic(
+                command.correlationId,
+                this,
+                &CommandHandler::onAutomaticComplete)) {
+            sendAck(command.correlationId, false, "no automatic session running", nullptr);
         }
 
         return;
