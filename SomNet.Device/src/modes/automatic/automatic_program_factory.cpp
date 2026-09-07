@@ -2,6 +2,7 @@
 
 #include "modes/automatic/automatic_program_base.h"
 #include "modes/automatic/programs/periodic_program.h"
+#include "modes/automatic/programs/random_program.h"
 
 #include <Arduino.h>
 
@@ -13,6 +14,10 @@ AutomaticProgramBase* createAutomaticProgram(const AutomaticConfig& config) {
     switch (config.mode) {
         case AutomaticRunMode::Periodic:
             return new PeriodicProgram();
+        case AutomaticRunMode::RandomPowerOnly:
+        case AutomaticRunMode::RandomTimingOnly:
+        case AutomaticRunMode::RandomPowerAndTiming:
+            return new RandomProgram(config.mode);
         default:
             Serial.println(F("[AUTO] reject: program not implemented yet"));
             return nullptr;

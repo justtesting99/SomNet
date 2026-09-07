@@ -1,6 +1,6 @@
 # Phase 9 Part 2 — Automatic mode checklist
 
-**Status:** **UI complete** (§6 signed off 2026-09-07). **Firmware Phase A signed off** on bench — Periodic E2E via Swagger (`esp32-84CCA85C36B4` / `Slv66`, 2026-09-07): start ack, 10×20 s cadence, `endSession` at stroke 10. **`automatic-stop`** / **abort** smoke optional before Phase B. Assumes **`burstsOn: false`** (Part 3).
+**Status:** **UI complete** (§6). **Phase A + B bench signed off** (2026-09-07). **Phase C** (wave + build-up) next. Abort/stop UI tests → Phase D.
 
 | Related | Link |
 |---------|------|
@@ -695,20 +695,20 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 
 **Goal:** Three random programs; no schedule table.
 
-- [ ] `random_program.*` — flags: power only / timing only / both
-- [ ] **Random Power Only** — uniform `[minPower, maxPower]`; gap = `strokeMaxSeconds`
-- [ ] **Random Timing Only** — power = `maximumPower`; gap uniform `[strokeMinSec, strokeMaxSec]`
-- [ ] **Random P+T** — both uniform
-- [ ] Factory cases for `randomPowerOnly`, `randomTimingOnly`, `randomPowerAndTiming`
-- [ ] Apply disabled-field rules on device (mirror UI §2)
+- [x] `random_program.*` — single class; mode selects power only / timing only / both
+- [x] **Random Power Only** — uniform `[minPower, maxPower]`; gap = `strokeMaxSeconds`
+- [x] **Random Timing Only** — power = `maximumPower`; gap uniform `[strokeMinSec, strokeMaxSec]`
+- [x] **Random P+T** — both uniform (`esp_random()` on-the-fly)
+- [x] Factory cases for `randomPowerOnly`, `randomTimingOnly`, `randomPowerAndTiming`
+- [x] Gap range normalized on parse (mirror power range); fixed/random fields per §3 mode rules
 
 #### B.1 Smoke tests (§7.2 #2–4)
 
-- [ ] Random Power Only — varying `strokeMs` in serial log; fixed gap
-- [ ] Random Timing Only — fixed power; varying gap intervals
-- [ ] Random P+T — both vary
+- [x] Random Power Only — varying `strokeMs` in serial log; fixed gap (2026-09-07: 44–99%, gap 20 s)
+- [x] Random Timing Only — fixed power; varying gap intervals (2026-09-07: 100%, gap 8–19 s)
+- [x] Random P+T — both vary (2026-09-07: power 27–79%, gap 14–25 s)
 
-**Phase B exit:** All three random modes start/stop/abort cleanly.
+**Phase B exit:** All three random modes start/stop cleanly. **Met** 2026-09-07 (stroke `endSession`; manual stop/abort → Phase D).
 
 ---
 
@@ -752,10 +752,10 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 
 | # | Mode | Phase | Status |
 |---|------|-------|--------|
-| 1 | Periodic | A | ☐ |
-| 2 | Random Power Only | B | ☐ |
-| 3 | Random Timing Only | B | ☐ |
-| 4 | Random Power and Timing | B | ☐ |
+| 1 | Periodic | A | ☑ |
+| 2 | Random Power Only | B | ☑ |
+| 3 | Random Timing Only | B | ☑ |
+| 4 | Random Power and Timing | B | ☑ |
 | 5 | Power Wave | C | ☐ |
 | 6 | Power and Timing Wave | C | ☐ |
 | 7 | Build-Up | C | ☐ |
@@ -776,9 +776,9 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 1. ~~**Lock §4 decisions**~~ — done 2026-09-07
 2. ~~**Implement §6 UI**~~ — done 2026-09-07
 3. ~~**Phase A** — shell + Periodic (§7 Phase A)~~ — **bench signed off** 2026-09-07; optional stop/abort smoke
-4. **Phase B** — random family (on-the-fly)
-5. **Phase C** — wave + build-up (triangle, D23-A)
-6. **Phase D** — UI/API integration + E2E sign-off
+4. ~~**Phase B** — random family~~ — **bench signed off** 2026-09-07
+5. **Phase C** — wave + build-up (triangle, D23-A) — **start here**
+6. **Phase D** — UI/API integration + E2E sign-off (incl. abort smoke)
 7. **Update** device plan + PROTOCOL + firmware version
 
 ---
@@ -793,4 +793,4 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 | 2026-09-07 | §8 modular layout locked — `AutomaticProgramBase` subclasses + factory (P9P2-D32–D34) |
 | 2026-09-07 | §6 UI signed off; §4 decisions locked; §7 expanded to Phases A–D firmware checklist |
 | 2026-09-07 | Walkthrough decisions: D23-A, D8 triangle, D19, D35–D37 |
-| 2026-09-07 | Phase A bench smoke passed (Periodic 10×20 s); stack overflow fix (command queue) |
+| 2026-09-07 | Phase B bench smoke passed (all three random modes) |

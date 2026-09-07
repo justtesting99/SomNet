@@ -64,6 +64,15 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
         case AutomaticRunMode::Periodic:
             strncpy(automaticMode_, "periodic", sizeof(automaticMode_) - 1);
             break;
+        case AutomaticRunMode::RandomPowerOnly:
+            strncpy(automaticMode_, "randomPowerOnly", sizeof(automaticMode_) - 1);
+            break;
+        case AutomaticRunMode::RandomTimingOnly:
+            strncpy(automaticMode_, "randomTimingOnly", sizeof(automaticMode_) - 1);
+            break;
+        case AutomaticRunMode::RandomPowerAndTiming:
+            strncpy(automaticMode_, "randomPowerAndTiming", sizeof(automaticMode_) - 1);
+            break;
         default:
             strncpy(automaticMode_, "unknown", sizeof(automaticMode_) - 1);
             break;

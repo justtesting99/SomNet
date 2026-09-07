@@ -141,6 +141,12 @@ bool parseAutomaticConfig(const char* payloadJson, AutomaticConfig* outConfig) {
         outConfig->endSessionValue = 0;
     }
 
+    if (outConfig->strokeMinSeconds > outConfig->strokeMaxSeconds) {
+        const int tmp = outConfig->strokeMinSeconds;
+        outConfig->strokeMinSeconds = outConfig->strokeMaxSeconds;
+        outConfig->strokeMaxSeconds = tmp;
+    }
+
     if (outConfig->burstsOn) {
         Serial.println(F("[AUTO] reject: burstsOn not supported (Part 3)"));
         return false;
