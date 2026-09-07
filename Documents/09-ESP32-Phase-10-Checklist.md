@@ -546,7 +546,7 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 1. **Lock §4 decisions** — review this doc; mark choices ☑ — **done 2026-09-07**
 2. **Phase A — Config + reject removal** — parse/validate burst fields; `burstsOn: true` accepted; still no burst FSM (or stub log) — **done 2026-09-07**
 3. **Phase B — Burst sub-FSM on Periodic** — `burstPercent=100` smoke (always burst); serial `[AUTO] burst …`; then real percent — **implemented 2026-09-07** (Periodic + endSession strokes)
-4. **Phase C — All seven programs + abort/stop** — burst rolls with random/wave/build-up; stop/abort during burst
+4. **Phase C — All seven programs + minutes/noAutoEnd** — burst on all programs; wall-clock deadlines; noAutoEnd stride — **implemented 2026-09-07** (abort/stop mid-burst UI smoke deferred)
 5. **Phase D — API + UI** — enable panel; validator; E2E Periodic with bursts on
 6. **Phase E — Docs + version** — `0.10.0-phase10`, sign-off
 
@@ -569,13 +569,25 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 - [x] P10-D25 — final milestone burst runs, then `endSession`
 - [x] P10-D2 — `mainStrokesCompleted` / `strokesCompleted` = mains only; `intraBurstStrokesCompleted` separate
 
+### 7.0 Phase C — all programs + minutes/noAutoEnd (2026-09-07)
+
+- [x] Stroke milestones — all seven programs + endSession strokes (not Periodic-only)
+- [x] Minutes — wall-clock `burstDeadlineMs[k]`; trigger in `WaitingGap`; one burst per gap pass (P10-D22)
+- [x] noAutoEnd — cadence stride `round(100/burstPercent)` (P10-D19)
+- [x] P10-D4 — fresh program `gapSec` from milestone row after burst (`getStrokeParameters`)
+- [x] P10-D23 — minutes burst deadline checked before end-session in `WaitingGap` poll
+- [ ] Random/Wave/Build-Up + strokes — hardware smoke
+- [ ] Minutes + burstPercent — hardware smoke (e.g. short session for serial)
+- [ ] noAutoEnd + burst stride — hardware smoke
+- [ ] Abort/stop mid-burst — deferred (UI path later; firmware abort/stop logic unchanged from Phase B)
+
 ### 7.1 Firmware smoke (Swagger / serial)
 
 - [x] `automatic-start` with `burstsOn: true` — ack success (no reject) — verified 2026-09-07 serial
 - [x] Periodic + `burstPercent=100` — serial shows burst clusters + program gaps — verified 2026-09-07
 - [ ] Periodic + `burstPercent=0` — identical to Part 2 (singles only)
-- [ ] Abort mid-burst — relay open; `[AUTO] aborted`; hub/session `(aborted)` with partial stroke count
-- [ ] Stop mid-burst — cooperative stop per P10-D3
+- [ ] Abort mid-burst — deferred (UI path later)
+- [ ] Stop mid-burst — deferred (UI path later)
 - [x] End-session **strokes** limit — counts **main** strokes only; intra-burst pulses do **not** increment limit (P10-D2) — verified 2026-09-07
 
 ### 7.2 UI E2E

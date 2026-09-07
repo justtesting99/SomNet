@@ -119,10 +119,25 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
 
     if (burstsOn_) {
         if (burstPlan_.active) {
-            Serial.print(F("[AUTO] burst plan events="));
-            Serial.println(burstPlan_.burstEventCount);
+            switch (burstPlan_.kind) {
+                case BurstScheduleKind::StrokeMilestones:
+                    Serial.print(F("[AUTO] burst plan strokes events="));
+                    Serial.println(burstPlan_.burstEventCount);
+                    break;
+                case BurstScheduleKind::WallClockDeadlines:
+                    Serial.print(F("[AUTO] burst plan minutes events="));
+                    Serial.println(burstPlan_.burstEventCount);
+                    break;
+                case BurstScheduleKind::CadenceStride:
+                    Serial.print(F("[AUTO] burst plan noAutoEnd stride="));
+                    Serial.println(burstPlan_.cadenceStride);
+                    break;
+                default:
+                    Serial.println(F("[AUTO] burst plan active"));
+                    break;
+            }
         } else {
-            Serial.println(F("[AUTO] burstsOn=true (no stroke-milestone plan for this mode/end rule yet)"));
+            Serial.println(F("[AUTO] burstsOn=true (no burst schedule for this end rule)"));
         }
     }
 
@@ -216,6 +231,20 @@ void AutomaticSessionMode::poll() {
         return;
     }
 
+    // P10-D23: minutes burst deadline before end-session check on this pass.
+    if (burstsOn_ &&
+        shouldTriggerBurstInWaitingGap(burstPlan_, sessionStartMs_, millis())) {
+        if (!beginBurstEvent()) {
+            finishSession(false, "automatic burst failed to start", "error", true);
+        }
+        return;
+    }
+
+    if (shouldEndSession()) {
+        finishSession(true, "automatic session complete", "endSession", false);
+        return;
+    }
+
     if (millis() < nextGapDeadlineMs_) {
         return;
     }
@@ -274,7 +303,16 @@ bool AutomaticSessionMode::beginBurstEvent() {
         return false;
     }
 
-    postBurstGapSec_ = gapSec_ < 0 ? 0 : gapSec_;
+    if (program_ != nullptr) {
+        int dummyPower = 0;
+        program_->getStrokeParameters(strokesCompleted_, config, dummyPower, postBurstGapSec_);
+    } else {
+        postBurstGapSec_ = gapSec_;
+    }
+    if (postBurstGapSec_ < 0) {
+        postBurstGapSec_ = 0;
+    }
+
     burstStrokesTarget_ = drawBurstStrokeCount(config);
     burstStrokesCompletedInEvent_ = 0;
 
@@ -363,7 +401,8 @@ void AutomaticSessionMode::onRelayPulseComplete(void* context, unsigned long /*a
     Serial.print(F("[AUTO] stroke complete count="));
     Serial.println(mode->strokesCompleted_);
 
-    if (mode->burstsOn_ && shouldTriggerBurstEvent(mode->burstPlan_, mode->strokesCompleted_)) {
+    if (mode->burstsOn_ &&
+        shouldTriggerBurstAfterMainStroke(mode->burstPlan_, mode->strokesCompleted_)) {
         if (!mode->beginBurstEvent()) {
             mode->finishSession(false, "automatic burst failed to start", "error", true);
         }
