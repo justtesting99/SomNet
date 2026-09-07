@@ -22,13 +22,32 @@ export const MOBILE_VIDEO_EXPAND_OPTIONS: {
   { value: 'monitor2', label: 'Feed 2' },
 ];
 
-export const DEFAULT_APP_OPTIONS: AppOptions = {
+export const DEFAULT_NOTIFICATIONS_APP_OPTIONS: Pick<
+  AppOptions,
+  'enableSoundAlerts' | 'showSessionTimestamps'
+> = {
   enableSoundAlerts: true,
+  showSessionTimestamps: true,
+};
+
+export const DEFAULT_GENERAL_APP_OPTIONS: Pick<
+  AppOptions,
+  | 'confirmBeforeCommands'
+  | 'autoExpandVideoOnMobile'
+  | 'mobileVideoExpandDefault'
+  | 'reconnectIntervalSeconds'
+  | 'operatorDisplayName'
+  | 'defaultNotesPrefix'
+> = {
   confirmBeforeCommands: false,
   autoExpandVideoOnMobile: true,
   mobileVideoExpandDefault: 'both',
-  showSessionTimestamps: true,
+  reconnectIntervalSeconds: 10,
   operatorDisplayName: '',
   defaultNotesPrefix: 'Session',
-  reconnectIntervalSeconds: 10,
+};
+
+export const DEFAULT_APP_OPTIONS: AppOptions = {
+  ...DEFAULT_NOTIFICATIONS_APP_OPTIONS,
+  ...DEFAULT_GENERAL_APP_OPTIONS,
 };

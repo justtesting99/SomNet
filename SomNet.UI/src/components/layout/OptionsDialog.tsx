@@ -1,43 +1,33 @@
 import { useEffect, useState } from 'react';
-import { changePassword } from '@/api/auth';
-import { ApiError } from '@/api/client';
-import { useAuth } from '@/context/AuthProvider';
 import { useOptions } from '@/context/OptionsProvider';
-import { DEFAULT_APP_OPTIONS, MOBILE_VIDEO_EXPAND_OPTIONS, type AppOptions } from '@/types/options';
-import { MIN_PASSWORD_LENGTH } from '@/types/auth';
+import { type AppOptions } from '@/types/options';
+import {
+  getDefaultOptionsForTab,
+  getResetDefaultsLabel,
+  isOptionsTabWithSaveFooter,
+  OPTIONS_DIALOG_TABS,
+  readLastOptionsDialogTab,
+  writeLastOptionsDialogTab,
+  type OptionsDialogTab,
+} from '@/config/optionsDialog';
 import { Button } from '@/components/ui/Button';
-import { Checkbox } from '@/components/ui/Checkbox';
-import { Input } from '@/components/ui/Input';
-import { NumberField } from '@/components/ui/NumberField';
-import { SelectField } from '@/components/ui/RadioGroup';
-import type { MobileVideoExpandDefault } from '@/types/options';
-import { useHardwareDialog } from '@/context/HardwareProvider';
+import { OptionsAccountPanel } from '@/components/layout/options/OptionsAccountPanel';
+import { OptionsGeneralPanel } from '@/components/layout/options/OptionsGeneralPanel';
+import { OptionsNotificationsPanel } from '@/components/layout/options/OptionsNotificationsPanel';
 
 export function OptionsDialog() {
-  const { user, updateSession } = useAuth();
   const { isDialogOpen, closeDialog, options, setOptions } = useOptions();
-  const { openDialog: openHardwareDialog } = useHardwareDialog();
+  const [activeTab, setActiveTab] = useState<OptionsDialogTab>(() => readLastOptionsDialogTab());
   const [pendingOptions, setPendingOptions] = useState<AppOptions>(options);
   const [saveError, setSaveError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [passwordMessage, setPasswordMessage] = useState('');
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   useEffect(() => {
     if (isDialogOpen) {
+      setActiveTab(readLastOptionsDialogTab());
       setPendingOptions(options);
       setSaveError('');
       setIsSaving(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmNewPassword('');
-      setPasswordError('');
-      setPasswordMessage('');
-      setIsChangingPassword(false);
     }
   }, [isDialogOpen, options]);
 
@@ -60,6 +50,11 @@ export function OptionsDialog() {
     return null;
   }
 
+  function selectTab(tab: OptionsDialogTab) {
+    setActiveTab(tab);
+    writeLastOptionsDialogTab(tab);
+  }
+
   function updateOption<K extends keyof AppOptions>(key: K, value: AppOptions[K]) {
     setPendingOptions((current) => ({ ...current, [key]: value }));
   }
@@ -79,61 +74,17 @@ export function OptionsDialog() {
   }
 
   function handleReset() {
-    setPendingOptions(DEFAULT_APP_OPTIONS);
+    if (!isOptionsTabWithSaveFooter(activeTab)) {
+      return;
+    }
+
+    setPendingOptions((current) => ({
+      ...current,
+      ...getDefaultOptionsForTab(activeTab),
+    }));
   }
 
-  async function handleChangePassword() {
-    setPasswordError('');
-    setPasswordMessage('');
-
-    if (!currentPassword.trim()) {
-      setPasswordError('Current password is required.');
-      return;
-    }
-
-    if (newPassword.length < MIN_PASSWORD_LENGTH) {
-      setPasswordError(`New password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
-      return;
-    }
-
-    if (newPassword !== confirmNewPassword) {
-      setPasswordError('New passwords do not match.');
-      return;
-    }
-
-    if (currentPassword === newPassword) {
-      setPasswordError('New password must be different from the current password.');
-      return;
-    }
-
-    if (!user) {
-      setPasswordError('You must be signed in to change your password.');
-      return;
-    }
-
-    setIsChangingPassword(true);
-
-    try {
-      const token = await changePassword({
-        currentPassword,
-        newPassword,
-      });
-
-      updateSession({ user, token });
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmNewPassword('');
-      setPasswordMessage('Password updated successfully.');
-    } catch (error) {
-      const message =
-        error instanceof ApiError && error.message
-          ? error.message
-          : 'Unable to change password. Check that the API is running.';
-      setPasswordError(message);
-    } finally {
-      setIsChangingPassword(false);
-    }
-  }
+  const showSaveFooter = isOptionsTabWithSaveFooter(activeTab);
 
   return (
     <div
@@ -153,150 +104,65 @@ export function OptionsDialog() {
             Options
           </h2>
           <p className="mt-1 text-sm text-slate-400">
-            General application settings. More options will be added later.
+            Application settings and account management.
           </p>
         </header>
 
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-4">
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-200">Notifications</h3>
-            <Checkbox
-              label="Enable sound alerts"
-              checked={pendingOptions.enableSoundAlerts}
-              onChange={(event) => updateOption('enableSoundAlerts', event.target.checked)}
-            />
-            <Checkbox
-              label="Show session timestamps in history"
-              checked={pendingOptions.showSessionTimestamps}
-              onChange={(event) => updateOption('showSessionTimestamps', event.target.checked)}
-            />
-          </section>
-
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-200">Operation</h3>
-            <Checkbox
-              label="Confirm before stroke or burst commands"
-              checked={pendingOptions.confirmBeforeCommands}
-              onChange={(event) => updateOption('confirmBeforeCommands', event.target.checked)}
-            />
-            <Checkbox
-              label="Auto-expand video feeds on mobile when commands run"
-              checked={pendingOptions.autoExpandVideoOnMobile}
-              onChange={(event) =>
-                updateOption('autoExpandVideoOnMobile', event.target.checked)
-              }
-            />
-            <SelectField
-              label="Default mobile video feed on command"
-              value={pendingOptions.mobileVideoExpandDefault}
-              disabled={!pendingOptions.autoExpandVideoOnMobile}
-              options={MOBILE_VIDEO_EXPAND_OPTIONS}
-              onChange={(event) =>
-                updateOption(
-                  'mobileVideoExpandDefault',
-                  event.target.value as MobileVideoExpandDefault,
-                )
-              }
-            />
-            <NumberField
-              label="System status reconnect interval (seconds)"
-              value={pendingOptions.reconnectIntervalSeconds}
-              min={5}
-              max={120}
-              onChange={(event) =>
-                updateOption('reconnectIntervalSeconds', Number(event.target.value))
-              }
-            />
-          </section>
-
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-200">Display</h3>
-            <Input
-              label="Operator display name override"
-              value={pendingOptions.operatorDisplayName}
-              placeholder="Leave blank to use login name"
-              onChange={(event) => updateOption('operatorDisplayName', event.target.value)}
-            />
-            <Input
-              label="Default session notes prefix"
-              value={pendingOptions.defaultNotesPrefix}
-              onChange={(event) => updateOption('defaultNotesPrefix', event.target.value)}
-            />
-          </section>
-
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-200">Hardware</h3>
-            <p className="text-xs text-slate-500">
-              Pair ESP32 devices, review all Subs, and manage token expiry from the dedicated
-              Hardware dialog.
-            </p>
+        <div
+          className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-800 px-5 py-3"
+          role="tablist"
+          aria-label="Options sections"
+        >
+          {OPTIONS_DIALOG_TABS.map((tab) => (
             <Button
-              variant="secondary"
-              onClick={() => {
-                closeDialog();
-                openHardwareDialog();
-              }}
+              key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              variant={activeTab === tab.id ? 'primary' : 'ghost'}
+              size="sm"
+              className="shrink-0"
+              onClick={() => selectTab(tab.id)}
             >
-              Open Hardware…
+              {tab.label}
             </Button>
-          </section>
+          ))}
+        </div>
 
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-200">Account</h3>
-            <p className="text-xs text-slate-500">
-              Signed in as <span className="text-slate-300">{user?.username}</span>
-            </p>
-            <Input
-              label="Current password"
-              type="password"
-              autoComplete="current-password"
-              value={currentPassword}
-              onChange={(event) => setCurrentPassword(event.target.value)}
-            />
-            <Input
-              label="New password"
-              type="password"
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-              placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
-            />
-            <Input
-              label="Confirm new password"
-              type="password"
-              autoComplete="new-password"
-              value={confirmNewPassword}
-              onChange={(event) => setConfirmNewPassword(event.target.value)}
-            />
-            {passwordError ? <p className="text-sm text-red-400">{passwordError}</p> : null}
-            {passwordMessage ? <p className="text-sm text-emerald-400">{passwordMessage}</p> : null}
-            <Button
-              variant="secondary"
-              onClick={handleChangePassword}
-              disabled={isChangingPassword || isSaving}
-            >
-              {isChangingPassword ? 'Updating password…' : 'Change password'}
-            </Button>
-          </section>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {activeTab === 'account' ? <OptionsAccountPanel active /> : null}
+          {activeTab === 'general' ? (
+            <OptionsGeneralPanel pendingOptions={pendingOptions} onUpdate={updateOption} />
+          ) : null}
+          {activeTab === 'notifications' ? (
+            <OptionsNotificationsPanel pendingOptions={pendingOptions} onUpdate={updateOption} />
+          ) : null}
         </div>
 
         <footer className="shrink-0 border-t border-slate-800 px-5 py-4">
-          {saveError ? (
+          {showSaveFooter && saveError ? (
             <p className="mb-3 text-sm text-red-400">{saveError}</p>
           ) : null}
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-            <Button variant="ghost" onClick={handleReset} disabled={isSaving}>
-              Reset defaults
-            </Button>
-            <div className="flex flex-col-reverse gap-2 sm:flex-row">
-              <Button variant="ghost" onClick={closeDialog} disabled={isSaving}>
-                Cancel
+          {showSaveFooter ? (
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+              <Button variant="ghost" onClick={handleReset} disabled={isSaving}>
+                {getResetDefaultsLabel(activeTab)}
               </Button>
-              <Button onClick={handleSave} disabled={isSaving}>
-                {isSaving ? 'Saving…' : 'Save'}
+              <div className="flex flex-col-reverse gap-2 sm:flex-row">
+                <Button variant="ghost" onClick={closeDialog} disabled={isSaving}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} disabled={isSaving}>
+                  {isSaving ? 'Saving…' : 'Save'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex justify-end">
+              <Button variant="secondary" onClick={closeDialog}>
+                Close
               </Button>
             </div>
-          </div>
+          )}
         </footer>
       </div>
     </div>
