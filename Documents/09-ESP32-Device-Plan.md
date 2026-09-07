@@ -8,15 +8,15 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 **Timing architecture:** Firmware is **non-blocking** — explicit **state machines** drive relay pulses, bursts, and automatic schedules using `millis()` / **`micros()`** (relay pulse, Phase 6+) polling so SignalR and Wi-Fi stay responsive while timing stays accurate.
 
-**Initial development scope:** Phases **5–6** delivered **`stroke` (single pulse) + `abort`**; Phase **9** added **`burst`**. **`automatic-start/stop`** remains Part 2 (exploratory). Architecture uses `IExecutionMode`, `execution_context`, and separate mode classes — see §6 and §10.
+**Initial development scope:** Phases **5–6** delivered **`stroke` (single pulse) + `abort`**; Phase **9** added **`burst`**; Phase **9 Part 2** added **`automatic-start/stop`** (seven programs). Architecture uses `IExecutionMode`, `execution_context`, and separate mode classes — see §6 and §10.
 
 **Critical path after scaffold:** **Device registration** — associating a physical unit with a **Sub** on the SomNet server so SignalR commands reach the right device. The on-device config web UI (MAC-based ID, optional friendly name) plus the SomNet **Hardware** dialog address this. See **§4.1**.
 
 **End-user / installer documentation:** [Hardware User Guide](./Hardware-User-Guide.md) — provisioning, Wi‑Fi recovery (10 s button hold), Device ID, relay operation.
 
-**Implementation progress (2026-09-06):** Phases **0–9 (burst) signed off**. Current firmware **`0.9.0-phase9`** — paired SignalR; manual **stroke**, **burst**, and **abort** from SomNet UI; **`resultJson`** end-to-end; **`BurstSequenceMode`** FSM. **Automatic** hardware mode remains exploratory (Phase 9 Part 2). See §10.
+**Implementation progress (2026-09-07):** Phases **0–9 Part 2 signed off**. Current firmware **`0.9.1-phase9p2`** — paired SignalR; manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop from SomNet UI; **`resultJson`** end-to-end. See §10.
 
-**Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 9 (burst) signed off (2026-09-06).** SomNet API/UI integration for manual commands complete (Phase 8–9).
+**Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 9 Part 2 (automatic) signed off (2026-09-07).** SomNet API/UI integration complete for manual and automatic commands (Phases 8–9 Part 2).
 
 **Related docs:** [Hardware User Guide](./Hardware-User-Guide.md), [SignalR & Hardware](./06-SignalR-And-Hardware.md), [Authentication & Security](./05-Authentication-And-Security.md), [API Reference](./02-API-Reference.md), [SomNet.Device/README](../SomNet.Device/README.md), [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md)  
 **Phase checklists (0–9 burst done):** [0](./09-ESP32-Phase-0-Checklist.md) · [1](./09-ESP32-Phase-1-Checklist.md) · [2](./09-ESP32-Phase-2-Checklist.md) · [3](./09-ESP32-Phase-3-Checklist.md) · [4](./09-ESP32-Phase-4-Checklist.md) · [5](./09-ESP32-Phase-5-Checklist.md) · [6](./09-ESP32-Phase-6-Checklist.md) · [7](./09-ESP32-Phase-7-Checklist.md) · [8](./09-ESP32-Phase-8-Checklist.md) · [9](./09-ESP32-Phase-9-Checklist.md)
@@ -45,7 +45,7 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 - Offline command queue
 - ~~SomNet UI pairing dialog~~ — **Done (Phase 8, 2026-09-06):** toolbar **Hardware** dialog — All Subs, Online now (unpaired), Enter device ID
 - Changes to SomNet backend or frontend (unless a protocol gap is approved — **historical exceptions:** Phase 4 minimal pairing UI, Phase 5 ack dispatcher fix, Phases 8–9 `resultJson` + commands)
-- **Fully implemented automatic mode** — **`AutomaticSessionMode` stub**; manual **stroke**, **abort**, and **burst** proven (Phases 6–9); automatic remains Phase 9 Part 2 (see §6 *Initial vs target implementation*)
+- **Burst-in-automatic (`burstsOn`)** — deferred to Part 3 (see [Phase 9 Part 2 checklist](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md))
 
 ### Hardware (confirmed)
 
@@ -375,7 +375,7 @@ No changes to SomNet are **required** for the device config UI alone. **SomNet U
 | **Hardware pairing** | Toolbar **Hardware** button → dedicated dialog | **All Subs**, **Online now (unpaired)**, **Enter device ID**; token expiry on All Subs grid |
 | **App settings** | Toolbar **Options** button → tabbed dialog | **General** (operation + display), **Notifications**, **Account** (password) |
 | **Manual commands** | Manual mode dashboard | **Stroke**, **Burst**, **Abort** via REST; session from device `resultJson` (Phases 8–9) |
-| **Automatic mode** | Automatic mode dashboard | UI scaffolding only; Start/Stop disabled until Phase 9 Part 2 |
+| **Automatic mode** | Automatic mode dashboard | **Start/Stop** via REST; session summary from stop **`resultJson`** (Phase 9 Part 2) |
 
 **History:** Phase 4 shipped minimal pairing inside **Options**. Phase 8 moved pairing to the **Hardware** dialog with pending list and multi-Sub grid. Options was later split into tabs; **Hardware stays a separate dialog** (operator preference, 2026-09-06).
 
@@ -692,8 +692,8 @@ JWT is passed on the query string because WebSocket clients on ESP32 cannot reli
 | `stroke` | Single relay pulse for **`strokeMs`** from payload, then open | **Done** — UI + hardware verified |
 | `abort` | Cancel active stroke/burst; relay open; dual ack on interrupt | **Done** — E2E Phase 8–9 |
 | `burst` | Run full burst sequence locally (N strokes × `strokeMs`, delays between) | **Done** — Phase 9 (`BurstSequenceMode`) |
-| `automatic-start` | Start local automatic engine from config snapshot in payload | Stub ack — Phase 9 Part 2 |
-| `automatic-stop` | Stop automatic engine; relay open | Stub ack — Phase 9 Part 2 |
+| `automatic-start` | Start local automatic engine from config snapshot in payload | **Done** — Phase 9 Part 2 (immediate ack P9-D2) |
+| `automatic-stop` | Stop automatic engine; relay open; session summary in `resultJson` | **Done** — Phase 9 Part 2 |
 
 Detailed behavior: **§6 Device-Side Relay and Timing Execution**.
 
@@ -809,28 +809,26 @@ src/
 | **`relay_controller`** | Drive `PIN_RELAY`, timed pulse FSM, immediate off on abort | Parse JSON, random timing, session rules |
 | **`SinglePulseMode`** | One pulse from fixed `strokeMs` in payload | Schedule bursts or random automatic strokes |
 | **`BurstSequenceMode`** | Fixed count, fixed `strokeMs`, fixed inter-stroke delay from payload | Randomize timing |
-| **`AutomaticSessionMode`** | Random **inter-pulse interval** and random **pulse length** (via power/ms ranges); optional random bursts; end-session rules | Touch GPIO directly |
+| **`AutomaticSessionMode`** | Seven automatic programs via `AutomaticProgramBase` factory; stroke-first FSM; end-session rules; stop **`resultJson`** | Touch GPIO directly |
 | **`execution_context`** | Ensures one active mode; forwards `poll()`/`abort()`; completion → ack + `resultJson` | SignalR protocol |
 
 This separation keeps automatic randomization logic out of manual paths and prevents `command_handler` from becoming a monolithic switch with intertwined timing code.
 
 ### Initial vs target implementation
 
-| Aspect | **Current (Phases 6–9 burst complete)** | **Remaining (Phase 9 Part 2)** |
-|--------|----------------------------------------|--------------------------------|
-| **Command keys** | **`stroke`**, **`abort`**, **`burst`** — firmware + UI | `automatic-start/stop` |
-| **Mode classes** | **`SinglePulseMode`**, **`BurstSequenceMode`**, **`relay_controller`** | `AutomaticSessionMode` + `power_timing` RNG |
-| **Scaffolding** | `IExecutionMode`, `execution_context`, `command_handler` | Same interfaces — automatic plugs in without refactor |
-| **`power_timing`** | `strokeMsFromPower()` for validation/logging | Random helpers for automatic programs |
-| **Validation focus** | Stroke, burst, abort, dual ack, session from `resultJson` — **verified** | Automatic program catalog, end-session rules, aggregated summaries |
+| Aspect | **Status (2026-09-07)** |
+|--------|-------------------------|
+| **Command keys** | **`stroke`**, **`abort`**, **`burst`**, **`automatic-start`**, **`automatic-stop`** — firmware + UI |
+| **Mode classes** | **`SinglePulseMode`**, **`BurstSequenceMode`**, **`AutomaticSessionMode`** + program factory |
+| **Scaffolding** | `IExecutionMode`, `execution_context`, `command_handler` |
+| **`power_timing`** | `strokeMsFromPower()`, triangle sampler, wave/build-up plan builders |
+| **Validation focus** | Stroke, burst, automatic-start payload, dual ack, session from `resultJson` — **verified** |
 
-**Rule for initial coding:** Do not fold burst/automatic logic into `SinglePulseMode` or `relay_controller`. Keep §6 class boundaries — **burst is implemented in `BurstSequenceMode`**; automatic remains stub until Part 2.
-
-**Priority order:**
+**Priority order (complete):**
 
 1. ~~`abort` (cancel active pulse)~~ — **done** (Phase 6 firmware; Phase 8 UI E2E)
 2. ~~`burst` (`BurstSequenceMode`)~~ — **done** (Phase 9)
-3. `automatic-start` / `automatic-stop` (`AutomaticSessionMode` + `power_timing`) — **Phase 9 Part 2** (program catalog TBD)
+3. ~~`automatic-start` / `automatic-stop` (`AutomaticSessionMode` + program catalog)~~ — **done** (Phase 9 Part 2, firmware **`0.9.1-phase9p2`**)
 
 ### Manual single stroke (`commandKey: stroke`) — **implemented (Phases 5–6)**
 
@@ -896,70 +894,73 @@ THEN AckCommand success
 - **Ack timing:** REST waits per P9-D1 formula (strokes × ms + delays + margin, cap 600 s); device sends completion ack when sequence finishes or aborts
 - **`resultJson`:** includes `strokesCompleted`, `interrupted`, etc. — UI session from device ack (Phase 9)
 
-### Automatic mode (`automatic-start` / `automatic-stop`) — *exploratory; stub ack today*
+### Automatic mode (`automatic-start` / `automatic-stop`) — **implemented (Phase 9 Part 2)**
 
-> **Design intent (2026-09-06):** Automatic mode is a **family of program variations** in timing and power, chosen by the operator through Automatic tab controls and dropdowns (`automaticMode`, ranges, end-session options, etc.). **Specific programs are not yet defined.** The API sends one config snapshot; the device runs the selected program locally until stop/abort/end rule. This is **distinct from manual burst** (Phase 9) — a fixed N-stroke sequence with known parameters. See [Phase 9 Checklist Part 2](./09-ESP32-Phase-9-Checklist.md).
+> **Signed off 2026-09-07.** Automatic mode is **seven program variations** from the Automatic Mode dropdown. The UI sends one config snapshot at start; the ESP32 runs the selected program locally until stop, abort, or end-session rule. Distinct from manual **burst** (fixed N-stroke sequence). See [Phase 9 Part 2 checklist](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md).
 
-The **first proposed program** below (`randomPowerAndTiming`) is a **placeholder** for documentation — not locked for implementation:
+**Status:** End-to-end on hardware and SomNet UI — firmware **`0.9.1-phase9p2`**. Automatic **Start/Stop** buttons send REST commands; session history from stop **`resultJson`**.
 
-Automatic mode requires **two independent random processes** on the device, both critical to perceived “power” at the valve:
+#### Program catalog (device-side)
 
-1. **Random time between pulses** — gap before the next valve actuation (`strokeMinSeconds` … `strokeMaxSeconds` from payload).
-2. **Random length of each pulse** — duration the valve stays energized, mapped from random power or random `strokeMs` within configured min/max (correlates to output strength).
+| # | UI label | `automaticMode` | Power each stroke | Gap before next stroke | Planner |
+|---|----------|-----------------|-------------------|------------------------|---------|
+| 1 | Periodic | `periodic` | Fixed — **maximum power** | Fixed — **`strokeMaxSeconds`** | Parametric (max only) |
+| 2 | Random Power Only | `randomPowerOnly` | Uniform random **[minPower, maxPower]** | Fixed — **`strokeMaxSeconds`** | On-the-fly RNG |
+| 3 | Random Timing Only | `randomTimingOnly` | Fixed — **maximum power** | Uniform random **[strokeMinSeconds, strokeMaxSeconds]** | On-the-fly RNG |
+| 4 | Random Power and Timing | `randomPowerAndTiming` | Uniform random power | Uniform random gap | On-the-fly RNG |
+| 5 | Power Wave | `powerWave` | Pre-computed triangle wave min↔max | Fixed — **`strokeMaxSeconds`** | Pre-compute at start |
+| 6 | Power and Timing Wave | `powerAndTimingWave` | Pre-computed power wave | Pre-computed inverse gap wave | Pre-compute at start |
+| 7 | Build-Up | `buildUp` | Pre-computed ramp min → max | Pre-computed inverse ramp max → min gap | Pre-compute at start |
 
-The UI/API sends a **one-time config snapshot** (`AutomaticControlStateDto`) at start in **Part 2**; the ESP32 **generates all automatic stroke timings locally** until stop, abort, or end-session rule.
+Wave/build-up modes require **End Session** minutes or strokes (`noAutoEnd` rejected). Schedule capped at **2048 rows** (`kMaxAutomaticScheduleRows`).
 
-**Future (not Part 2):** Original product allowed **settings changes during playback** with on-the-fly pattern recalculation. That will need a mid-session device command (proposed **`automatic-update`**) and replan from **remaining** strokes/minutes — see [Phase 9 Part 2 checklist §9](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#9-future--live-settings-during-automatic-playback-not-part-2).
+**Stroke-first (P9P2-D41):** first pulse fires immediately after start ack (or after **`delayBeforeStartSeconds`**). Inter-stroke gap applies **between** strokes only — same pattern as manual burst.
 
-**Firmware structure (Part 2):** One **`AutomaticSessionMode`** on `IExecutionMode` (FSM, hub, session); per-program **`AutomaticProgramBase`** subclasses + factory — see [Part 2 checklist §8](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#modular-class-layout-locked--p9p2-d32d34).
+**Future (not Part 2):** Live settings during playback via proposed **`automatic-update`** — see [Part 2 checklist §9](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#9-future--live-settings-during-automatic-playback-not-part-2). **Burst-in-automatic (`burstsOn`)** — Part 3.
 
-**Proposed `payloadJson` (automatic start):** mirrors shared DTO fields, camelCase:
+**Firmware structure:** One **`AutomaticSessionMode`** (sequencer FSM); per-program **`AutomaticProgramBase`** subclasses + factory — see [Part 2 checklist §8](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#8-architecture--planner--stroke-sequencer-automatic-timing).
+
+**`payloadJson` (automatic start):** full automatic settings snapshot, camelCase; **omit `running`**:
 
 ```json
 {
-  "automaticMode": "randomPowerAndTiming",
+  "automaticMode": "periodic",
   "minimumStrokeMs": 25,
   "maximumStrokeMs": 400,
   "minimumPower": 0,
-  "maximumPower": 100,
+  "maximumPower": 80,
   "strokeMinSeconds": 5,
-  "strokeMaxSeconds": 20,
+  "strokeMaxSeconds": 5,
   "delayBeforeStartSeconds": 0,
-  "endSessionMode": "minutes",
-  "endSessionValue": 30,
-  "burstsOn": true,
-  "burstPercent": 10,
-  "burstStyle": "fixedPowerDelay",
-  "burstStrokePowerMin": 0,
-  "burstStrokePowerMax": 100,
-  "burstDelayMin": 1,
-  "burstDelayMax": 5,
-  "burstStrokesMin": 5,
-  "burstStrokesMax": 10
+  "endSessionMode": "strokes",
+  "endSessionValue": 8,
+  "burstsOn": false
 }
 ```
 
+| Field | Notes |
+|-------|-------|
+| `automaticMode` | **Required** — one of seven enum strings above |
+| `burstsOn` | Must be **`false`** until Part 3 — device and API reject `true` |
+| Disabled UI mins | Send full snapshot; device ignores per §3 rules (uses max power/gap) |
+
 **Device behavior (`AutomaticSessionMode`):**
 
-| Random variable | Source fields | Device action each cycle |
-|-----------------|---------------|---------------------------|
-| **Wait until next pulse** | `strokeMinSeconds`, `strokeMaxSeconds` | `randomIntervalMs()` → non-blocking wait state |
-| **Pulse length (power)** | `minimumPower`, `maximumPower`, `minimumStrokeMs`, `maximumStrokeMs` | Pick random power → `strokeMsFromPower()` **or** pick random ms in range |
-| **Optional burst** | `burstsOn`, `burstPercent`, burst min/max fields | Delegate to nested burst sub-sequence (same `BurstSequenceMode` pattern with generated params) |
-| **End session** | `endSessionMode`, `endSessionValue` | Stop engine; emit summary in stop ack `resultJson` |
-| **Start delay** | `delayBeforeStartSeconds` | Initial wait before first random cycle |
+| Event | Ack timing | `resultJson` |
+|-------|------------|--------------|
+| **`automatic-start`** | **Immediate** when config valid + engine armed (P9-D2) | None |
+| **`automatic-stop`** | After session cancelled at safe point (gap or post-pulse) | Session summary (below) |
+| **`abort`** (during auto) | Abort ack immediately; automatic session ends | Unsolicited **`automatic-session-complete`** ack with summary `resultJson` |
 
-**Automatic cycle (conceptual):**
+**Automatic cycle (stroke-first):**
 
 ```
-wait random interval ──► random strokeMs (power-correlated) ──► relay pulse ──► repeat
-                              │
-                              └── (optional) burst sub-sequence with its own random params
+optional delayBeforeStart → pulse → wait gapSec → pulse → … until stop / end rule / abort
 ```
 
-Each completed pulse should be **logged** (serial + aggregated for stop ack): actual `strokeMs`, optional `powerPercent`, cumulative stroke count, elapsed time.
+Each completed pulse is logged (serial); counts/duration aggregated for stop ack.
 
-**`automatic-stop` / `abort`:** `execution_context.abort()` → cancel `AutomaticSessionMode`, relay open, ack with **device-measured** session summary (not UI estimates).
+**`automatic-stop` payload:** `{}` (optional `{ "reason" }` — device uses measured end reason in `resultJson`).
 
 The server does **not** send per-stroke commands during automatic mode — only start/stop (and abort).
 
@@ -1098,7 +1099,7 @@ Log every transition for bring-up:
 
 ### SomNet UI/API alignment (Phases 8–9 — complete for manual commands)
 
-**Current (2026-09-06):** SomNet UI sends real hardware commands via `POST /api/devices/commands`. **`SessionProvider`** writes stroke/burst events **after device ack** using parsed `resultJson`. **`HardwareCommandProvider`** blocks overlapping commands while pending.
+**Current (2026-09-07):** SomNet UI sends real hardware commands via `POST /api/devices/commands`. **`SessionProvider`** writes stroke/burst/automatic events **after device ack** using parsed `resultJson`. **`HardwareCommandProvider`** blocks overlapping commands while pending.
 
 **Flow (device as source of truth):**
 
@@ -1127,7 +1128,7 @@ The UI must **not** treat a button click as proof the relay fired. Failed, parti
 | Automatic start | Full automatic settings snapshot JSON |
 | Abort / stop | `{}` or `{ reason }` |
 
-Contract documented in [`PROTOCOL.md`](../SomNet.Device/docs/PROTOCOL.md). **SomNet UI integration** — Phases 8–9 complete for manual stroke/burst/abort; automatic → Part 2.
+Contract documented in [`PROTOCOL.md`](../SomNet.Device/docs/PROTOCOL.md). **SomNet UI integration** — Phases 8–9 Part 2 complete (manual + automatic).
 
 ### Safety limits (firmware + API)
 
@@ -1137,7 +1138,7 @@ Contract documented in [`PROTOCOL.md`](../SomNet.Device/docs/PROTOCOL.md). **Som
 | Min/max stroke settings (UI) | From appsettings | Dom+Sub pairing settings; min ≤ max enforced in UI and API |
 | Max `burstStrokes` | 100 | Firmware + API |
 | Max `burstDelayMs` | 300 000 ms | Firmware + API |
-| Max automatic session | Respect `endSessionValue`; hard cap e.g. 24 h | When automatic implemented |
+| Max automatic session | Respect `endSessionValue`; hard cap 24 h | Firmware enforced |
 
 Invalid payload → `AckCommand` with `success: false` and clear `message`.
 
@@ -1309,8 +1310,8 @@ There is **no** separate “received” vs “completed” hub method. **`Hardwa
 | `stroke` | Single relay pulse for `strokeMs` | After relay opens | **Done** — UI + hardware |
 | `abort` | Cancel active pulse/burst; relay open | Dual ack on interrupt (stroke/burst fail + abort success) | **Done** — Phases 8–9 |
 | `burst` | Full sequence locally (see §6) | After **all** strokes complete, or dual ack on abort | **Done** — Phase 9 |
-| `abort` / `automatic-stop` (during auto) | Cancel sequences; relay open | Immediately after cancel | Phase 9 Part 2 |
-| `automatic-start` | Start local engine (see §6) | After engine accepts config (P9-D2); session async on device | Phase 9 Part 2 |
+| `abort` / `automatic-stop` (during auto) | Cancel sequences; relay open | Immediately after cancel | ☑ Phase 9 Part 2 |
+| `automatic-start` | Start local engine (see §6) | After engine accepts config (P9-D2); session async on device | ☑ Phase 9 Part 2 |
 
 For `stroke` and `burst`, send **one** completing `AckCommand` with `success`, human-readable `message`, and machine-readable **`resultJson`** (§9.4). **`resultJson` on REST/SignalR wire** — **Phase 8 complete.**
 
@@ -1378,9 +1379,17 @@ SomNet changes would include:
 
 ```json
 {
-  "resultJson": "{\"commandKey\":\"automatic-stop\",\"elapsedMs\":720000,\"totalStrokes\":42,\"burstsExecuted\":3,\"endReason\":\"stop\"}"
+  "resultJson": "{\"commandKey\":\"automatic-stop\",\"automaticMode\":\"periodic\",\"powerPercent\":80,\"strokeMs\":325,\"gapSec\":5,\"strokesCompleted\":3,\"durationMs\":12599,\"endSessionMode\":2,\"endSessionValue\":8,\"interrupted\":false,\"endReason\":\"manualStop\"}"
 }
 ```
+
+| Field | Meaning |
+|-------|---------|
+| `automaticMode` | Program that ran (camelCase enum string) |
+| `strokesCompleted` | Total strokes delivered |
+| `durationMs` | Elapsed ms since first pulse (after start delay) |
+| `endSessionMode` | Wire int: `0` = noAutoEnd, `1` = minutes, `2` = strokes |
+| `endReason` | `manualStop`, `endSession`, `abort`, or `error` |
 
 **Automatic mode note:** Individual random strokes during automatic run may be aggregated locally on the device and reported **once** on `automatic-stop`, `abort`, or end-session rule trigger — matching how session summaries should read in history (actual counts/duration from hardware, not UI estimates).
 
@@ -1393,7 +1402,7 @@ SomNet changes would include:
 | **UI `SessionProvider`** | Defer stroke/burst session writes until device ack | ☑ Phases 8–9 |
 | **UI `sessionSummary.ts`** | Build lines from parsed `resultJson` | ☑ Phase 8+ |
 | **UI `HardwareCommandProvider`** | Pending state; block overlapping manual commands | ☑ Phases 8–9 |
-| **Automatic session** | Start/stop from UI; summary from stop `resultJson` | ☐ Phase 9 Part 2 |
+| **Automatic session** | Start/stop from UI; summary from stop `resultJson` | ☑ Phase 9 Part 2 |
 
 Firmware populates `message` for logs and **`resultJson`** on every completing ack (serial + wire since Phase 8).
 
@@ -1624,12 +1633,12 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 ---
 
-### Phase 9 — Burst mode (signed off); automatic exploratory
+### Phase 9 — Burst mode (signed off); automatic (Part 2 signed off)
 
-**Checklist:** [09-ESP32-Phase-9-Checklist.md](./09-ESP32-Phase-9-Checklist.md)  
-**Status:** **Signed off** (2026-09-06) — firmware `0.9.0-phase9`; manual **burst** + abort-during-burst E2E from UI
+**Checklist:** [09-ESP32-Phase-9-Checklist.md](./09-ESP32-Phase-9-Checklist.md) · [Part 2](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md)  
+**Status:** **Burst signed off** (2026-09-06) — firmware `0.9.0-phase9`. **Automatic Part 2 signed off** (2026-09-07) — firmware **`0.9.1-phase9p2`**.
 
-**Phase 9 sign-off (complete):**
+**Phase 9 sign-off (burst — complete):**
 
 - [x] **`BurstSequenceMode`** — deterministic multi-stroke FSM
 - [x] **`burst`** + **`abort`** during burst
@@ -1637,15 +1646,16 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 - [x] UI **Burst** button enabled; session from burst `resultJson`
 - [x] Firmware **`0.9.0-phase9`**
 
-**Exploratory / future (Part 2):**
+**Phase 9 Part 2 sign-off (automatic — complete 2026-09-07):**
 
-- [ ] **`AutomaticSessionMode`** — **program catalog TBD**: variations of timing/power selected via Automatic UI dropdowns and controls (distinct from manual burst)
-- [ ] `power_timing` helpers as required by chosen programs; `automatic-start/stop`, automatic UI wiring
-- [ ] Decisions P9-D2/D4/D5/D6 reserved until first program(s) are defined
+- [x] **`AutomaticSessionMode`** + seven-program factory catalog
+- [x] `power_timing` wave/build-up planners; on-the-fly RNG for random family
+- [x] `automatic-start/stop` + UI wiring; session from stop `resultJson`
+- [x] Firmware **`0.9.1-phase9p2`**
 
-**Exit criteria:** **`burst`** E2E from UI per §6. **Met.**
+**Exit criteria:** **`burst`** E2E from UI per §6. **Met.** Automatic Periodic E2E from UI + all seven programs bench-verified. **Met.**
 
-*Optional follow-up: F.3 busy reject smoke test; API doc timeout note.*
+*Optional follow-up: F.3 busy reject smoke test; abort-during-automatic UI path.*
 
 ---
 
@@ -1819,17 +1829,18 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 - [x] On-device config web UI requirements and SignalR coexistence documented
 - [x] Implementation phases with exit criteria listed
 
-**Implementation through Phase 9 burst (2026-09-06):**
+**Implementation through Phase 9 Part 2 (2026-09-07):**
 
-- [x] Phases 0–9 (burst) signed off — firmware **`0.9.0-phase9`**
+- [x] Phases 0–9 Part 2 signed off — firmware **`0.9.1-phase9p2`**
 - [x] PlatformIO project `SomNet.Device/` with module tree per §12
 - [x] Pairing + manual **stroke**, **burst**, **abort** E2E from SomNet UI on hardware (`esp32-84CCA85C36B4` / Sub `Slv66`)
+- [x] Automatic **Start/Stop** E2E from SomNet UI; session from device stop `resultJson`
 - [x] Relay GPIO on D4 with `micros()` pulse FSM
 - [x] **`resultJson`** end-to-end; session from device ack
 - [x] Open decisions #1–6, #11–12, #17–19 resolved (§15)
 - [x] Phase 7 resilience / production prep — **signed off** 2026-09-06 (`0.7.0-phase7`)
 - [x] Phase 8 UI pairing dialog + manual stroke/abort — **signed off** 2026-09-06
 - [x] Phase 9 manual burst — **signed off** 2026-09-06
-- [ ] Phase 9 Part 2 — automatic mode (program catalog TBD)
+- [x] Phase 9 Part 2 automatic mode — **signed off** 2026-09-07
 - [x] Oscilloscope timing validation on D4 — initial complete 2026-09-06; no incoming `strokeMs` offset ([Phase 6 post sign-off](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration))
 - [ ] Explicit approval only if pursuing two-phase ack API change

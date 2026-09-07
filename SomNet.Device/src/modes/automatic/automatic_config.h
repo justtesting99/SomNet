@@ -50,3 +50,6 @@ int effectiveGapSecondsForMode(const AutomaticConfig& config);
 
 bool isAutomaticStartKey(const char* commandKey);
 bool isAutomaticStopKey(const char* commandKey);
+
+/** Hub correlationId when automatic session ends without automatic-stop (P9-D4 end-rule / abort). */
+constexpr const char* kAutomaticSessionCompleteCorrelationId = "automatic-session-complete";

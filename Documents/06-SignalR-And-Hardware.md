@@ -194,21 +194,21 @@ Example — device rejected missing `strokeMs`:
 
 ### Ack Timeout
 
-`HardwareCommandDispatcher` waits up to **10 seconds** for `AckCommand`. Long relay pulses (e.g. 5 s) still complete within this window; very long bursts/automatic sessions may need two-phase ack (future — [Device Plan §9](./09-ESP32-Device-Plan.md)).
+`HardwareCommandDispatcher` uses **per-command ack timeouts** (P9-D1): stroke/abort **15 s**; burst formula (cap 600 s); `automatic-start` **5 s**; `automatic-stop` **30 s**.
 
 ---
 
 ## Command Keys
 
-Aligned with UI constants (`types/hardwareCommand.ts`). **Firmware status** as of `0.6.0-phase6`:
+Aligned with UI constants (`types/hardwareCommand.ts`). **Firmware status** as of **`0.9.1-phase9p2`**:
 
 | Key | Trigger | Typical Payload | Firmware |
 |-----|---------|-----------------|----------|
 | `stroke` | Manual stroke button | `{ powerPercent, strokeMs }` | **Implemented** — relay pulse on D4 |
-| `abort` | Manual abort | `{}` | **Implemented** — cancels active stroke; dual ack on interrupt |
-| `burst` | Manual burst button | `{ powerPercent, strokeMs, burstStrokes, burstDelayMs }` | Stub ack `"not implemented"` (Phase 9) |
-| `automatic-start` | Automatic start | Automatic config snapshot | Stub ack (Phase 9) |
-| `automatic-stop` | Automatic stop | `{ reason }` | Stub ack (Phase 9) |
+| `abort` | Manual abort | `{}` | **Implemented** — cancels active stroke/burst/automatic |
+| `burst` | Manual burst button | `{ powerPercent, strokeMs, burstStrokes, burstDelayMs }` | **Implemented** — `BurstSequenceMode` |
+| `automatic-start` | Automatic start | Full automatic config snapshot (omit `running`) | **Implemented** — immediate ack (P9-D2) |
+| `automatic-stop` | Automatic stop | `{}` | **Implemented** — session summary in `resultJson` |
 
 **Stroke rules (firmware):** `strokeMs` required, > 0, max 30 000 ms. Overlapping commands while a pulse is active → reject with `success: false` (busy).
 
@@ -330,7 +330,7 @@ wifi_manager → signalr_client → relay_controller → execution_context → c
 1. `POST /api/devices/commands` from Manual mode Stroke/Abort buttons
 2. Hardware toolbar dialog — all Subs admin, online unpaired list, paste device ID
 3. `GET /api/devices/unpaired`; `resultJson` on shared DTOs and REST response
-4. Session writes after device ack; burst/automatic UI disabled until Phase 9
+4. Session writes after device ack; manual + automatic commands from UI (Phases 8–9 Part 2)
 5. Dev LAN: API reachability ping + firmware reconnect hardening (`0.8.10-phase8`)
 
 See [Phase 8 Checklist](./09-ESP32-Phase-8-Checklist.md).

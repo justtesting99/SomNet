@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AUTOMATIC_RUN_MODE_OPTIONS,
   type AutomaticControlState,
@@ -8,6 +8,8 @@ import {
 import { useLiveSession } from '@/context/SessionProvider';
 import { useOptions } from '@/context/OptionsProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
+import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSystemStatus } from '@/context/SystemStatusProvider';
 import { Panel } from '@/components/ui/Panel';
 import { CommandButton } from '@/components/ui/CommandButton';
 import { StrokePowerSlider } from '@/components/modes/StrokePowerSlider';
@@ -29,8 +31,11 @@ import {
   normalizeStrokeMsPair,
   resolveStrokeMsBounds,
 } from '@/utils/strokeMsLimits';
-
-const HARDWARE_START_STOP_TOOLTIP = 'Automatic Start/Stop on device — coming in Phase 9 Part 2.';
+import { useHardwareCommand } from '@/context/HardwareCommandProvider';
+import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCommand';
+import { buildAutomaticStartPayload } from '@/utils/automaticStartPayload';
+import { parseAutomaticResultJson } from '@/utils/automaticResultJson';
+import { ApiError } from '@/api/client';
 
 const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
   { value: 'minutes', label: 'Minutes' },
@@ -42,8 +47,12 @@ export function AutomaticControls() {
   const { settings, updateAutomatic, isLoading, strokeLimits } = useOptions();
   const state = settings.automatic;
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
+  const { selectedSub } = useSubTarget();
   const { expandOnAction } = useVideoDisplay();
   const { beginAutomaticSession, endAutomaticSession } = useLiveSession();
+  const { isCommandPending } = useHardwareCommand();
+  const { status: systemStatus } = useSystemStatus();
+  const [commandError, setCommandError] = useState('');
 
   const fieldRules = useMemo(
     () => getAutomaticFieldRules(state.automaticMode),
@@ -56,6 +65,22 @@ export function AutomaticControls() {
   );
 
   const configLocked = state.running;
+  const hardwareReady = systemStatus.isReady;
+  const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);
+  const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop);
+  const hardwareDisabledReason = hardwareReady
+    ? undefined
+    : systemStatus.detail || systemStatus.summary;
+
+  useEffect(() => {
+    setCommandError('');
+  }, [selectedSub]);
+
+  useEffect(() => {
+    if (systemStatus.isReady) {
+      setCommandError('');
+    }
+  }, [systemStatus.isReady]);
 
   function update<K extends keyof AutomaticControlState>(
     key: K,
@@ -101,15 +126,52 @@ export function AutomaticControls() {
     updateAutomatic(normalizedAutomatic);
   }, [isLoading, state, strokeLimits, updateAutomatic]);
 
-  function handleStart() {
-    update('running', true);
-    expandOnAction();
-    void beginAutomaticSession();
+  function formatCommandError(error: unknown): string {
+    if (error instanceof HardwareCommandError) {
+      return error.message;
+    }
+
+    if (error instanceof ApiError && error.message) {
+      return error.message;
+    }
+
+    return 'Hardware command failed. Check that the API and device are connected.';
   }
 
-  function handleStop() {
-    update('running', false);
-    void endAutomaticSession('stopped manually');
+  async function handleStart() {
+    setCommandError('');
+    expandOnAction();
+
+    const payloadJson = buildAutomaticStartPayload(state);
+
+    try {
+      await sendHardwareCommand(
+        selectedSub,
+        HARDWARE_COMMAND_KEYS.automaticStart,
+        payloadJson,
+      );
+      update('running', true);
+      await beginAutomaticSession();
+    } catch (error) {
+      setCommandError(formatCommandError(error));
+    }
+  }
+
+  async function handleStop() {
+    setCommandError('');
+
+    try {
+      const response = await sendHardwareCommand(
+        selectedSub,
+        HARDWARE_COMMAND_KEYS.automaticStop,
+        '{}',
+      );
+      const parsed = parseAutomaticResultJson(response.resultJson);
+      update('running', false);
+      await endAutomaticSession('stopped manually', parsed);
+    } catch (error) {
+      setCommandError(formatCommandError(error));
+    }
   }
 
   const endSessionValueDisabled = configLocked || state.endSessionMode === 'noAutoEnd';
@@ -354,6 +416,18 @@ export function AutomaticControls() {
 
         <Panel title="Controls">
           <div className="flex h-full flex-col justify-center gap-3">
+            {!hardwareReady && !commandError && !startPending && !stopPending ? (
+              <p className="text-sm text-amber-400/90" role="status">
+                {hardwareDisabledReason}
+              </p>
+            ) : null}
+
+            {commandError ? (
+              <p className="text-sm text-red-400" role="alert">
+                {commandError}
+              </p>
+            ) : null}
+
             <SelectField
               label="Automatic Mode"
               value={state.automaticMode}
@@ -368,8 +442,8 @@ export function AutomaticControls() {
               commandKey={HARDWARE_COMMAND_KEYS.automaticStart}
               size="lg"
               fullWidth
-              disabled
-              title={HARDWARE_START_STOP_TOOLTIP}
+              disabled={!hardwareReady || configLocked || stopPending}
+              title={hardwareDisabledReason}
               onCommand={handleStart}
               className="py-4 text-base"
             >
@@ -380,14 +454,13 @@ export function AutomaticControls() {
               size="lg"
               fullWidth
               variant="secondary"
-              disabled
-              title={HARDWARE_START_STOP_TOOLTIP}
+              disabled={!hardwareReady || !configLocked || startPending}
+              title={hardwareDisabledReason}
               onCommand={handleStop}
               className="py-4 text-base"
             >
               Stop
             </CommandButton>
-            <p className="text-xs text-slate-500">{HARDWARE_START_STOP_TOOLTIP}</p>
           </div>
         </Panel>
       </div>

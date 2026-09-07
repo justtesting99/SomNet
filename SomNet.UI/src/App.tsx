@@ -16,6 +16,7 @@ import { HardwareCommandProvider } from '@/context/HardwareCommandProvider';
 import { ModeSelector } from '@/components/modes/ModeSelector';
 import { ManualControls } from '@/components/modes/ManualControls';
 import { AutomaticControls } from '@/components/modes/AutomaticControls';
+import { AutomaticSessionHubListener } from '@/components/hardware/AutomaticSessionHubListener';
 
 export function App() {
   const { isAuthenticated, isRestoring } = useAuth();
@@ -40,6 +41,7 @@ export function App() {
           <HardwareProvider>
             <OptionsProvider>
               <NotifyProvider>
+                <AutomaticSessionHubListener />
                 <HistoryProvider>
                   <SystemStatusProvider enabled>
                     <AppShell wide={mode !== null}>

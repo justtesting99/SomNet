@@ -1,6 +1,6 @@
 # Phase 9 Part 2 — Automatic mode checklist
 
-**Status:** **UI complete** (§6). **All 7 firmware programs bench signed off** (2026-09-07). **Phase D** — UI/API wiring + E2E sign-off next.
+**Status:** **Signed off** (2026-09-07). Includes device-initiated session complete via SignalR (`automatic-session-complete`).
 
 | Related | Link |
 |---------|------|
@@ -656,8 +656,8 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 | **`execution_context`** | + `startAutomatic()` / `stopAutomatic()` | unchanged |
 | **`command_handler`** | `automatic-start` / `automatic-stop` (+ legacy `:` keys) | unchanged |
 | **`power_timing`** | `strokeMsFromPower()` only | + triangle sampler, inverse gap, build-up ramp |
-| **UI Start/Stop** | Disabled + tooltip | Wired; keys **`automatic-start`** / **`automatic-stop`** |
-| **API validator** | stroke + burst only | + optional `automatic-start` payload validation |
+| **UI Start/Stop** | ☑ Wired; keys **`automatic-start`** / **`automatic-stop`** | unchanged |
+| **API validator** | ☑ stroke + burst + **`automatic-start`** | unchanged |
 | **Firmware version** | **`0.9.1-phase9p2`** (P9P2-D38 locked in `platformio.ini`) | unchanged at Part 2 sign-off |
 
 ---
@@ -745,15 +745,22 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 
 ### Phase D — UI + API integration (§7.3)
 
-- [ ] Fix UI command keys: `automatic-start` / `automatic-stop` (P9P2-D37) in `hardwareCommand.ts`
-- [ ] `AutomaticControls` — enable Start/Stop; build payload from `settings.automatic` (omit `running`)
-- [ ] Apply `getAutomaticFieldRules` on device OR send full snapshot (device applies §3 — P9P2-D4)
-- [ ] `HardwareCommandPayloadValidator` — validate automatic-start fields + reject `burstsOn`
-- [ ] Parse stop `resultJson` → session summary (`SessionProvider` / `sessionSummary.ts`)
-- [ ] Remove Phase 9 placeholder tooltip on Start/Stop
-- [ ] E2E: UI Periodic start → device runs → UI stop → history entry
+- [x] Fix UI command keys: `automatic-start` / `automatic-stop` (P9P2-D37) in `hardwareCommand.ts`
+- [x] `AutomaticControls` — enable Start/Stop; build payload from `settings.automatic` (omit `running`)
+- [x] Apply `getAutomaticFieldRules` on device OR send full snapshot (device applies §3 — P9P2-D4)
+- [x] `HardwareCommandPayloadValidator` — validate automatic-start fields + reject `burstsOn`
+- [x] Parse stop `resultJson` → session summary (`SessionProvider` / `sessionSummary.ts`)
+- [x] Remove Phase 9 placeholder tooltip on Start/Stop
+- [x] E2E: UI Periodic start → device runs → UI stop → history entry — **2026-09-07** (3 strokes / 12599 ms / `manualStop`)
 
-**Part 2 sign-off exit:** Dom runs any of seven modes from UI on paired hardware; session history from device summary.
+### Phase E — Auto-end UI sync (P9-D4 completion)
+
+- [x] Firmware: `finishSession` pushes `resultJson` with `correlationId=automatic-session-complete` when not `automatic-stop`
+- [x] UI: SignalR `CommandAcknowledged` listener (`AutomaticSessionHubListener`)
+- [x] UI: `@microsoft/signalr` operator hub connection
+- [x] E2E: Periodic **8 strokes** end rule — UI unlocks without manual Stop — **2026-09-07** (37672 ms / `endSession`)
+
+**Part 2 sign-off exit:** Dom runs any of seven modes from UI on paired hardware; session history from device summary. **Met** for Periodic via UI (2026-09-07); remaining six modes verified via Swagger in Phases A–C.
 
 ---
 
@@ -773,10 +780,10 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 
 ### 7.4 Documentation + version (at sign-off)
 
-- [ ] Update [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §6 program catalog
-- [ ] Extend `SomNet.Device/docs/PROTOCOL.md` — automatic-start/stop payload + `resultJson`
+- [x] Update [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §6 program catalog
+- [x] Extend `SomNet.Device/docs/PROTOCOL.md` — automatic-start/stop payload + `resultJson`
 - [x] Bump firmware to **`0.9.1-phase9p2`** (P9P2-D38) — locked in `SomNet.Device/platformio.ini` 2026-09-07
-- [ ] Mark Part 2 **Status: Signed off** in this file + parent Phase 9 Part 2 blurb
+- [x] Mark Part 2 **Status: Signed off** in this file + parent Phase 9 Part 2 blurb
 
 ---
 
@@ -787,8 +794,8 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 3. ~~**Phase A** — shell + Periodic (§7 Phase A)~~ — **bench signed off** 2026-09-07; optional stop/abort smoke
 4. ~~**Phase B** — random family~~ — **bench signed off** 2026-09-07
 5. ~~**Phase C** — wave + build-up~~ — **bench signed off** 2026-09-07
-6. **Phase D** — UI/API integration + E2E sign-off — **start here**
-7. **Update** device plan + PROTOCOL + firmware version
+6. ~~**Phase D** — UI/API integration + E2E sign-off~~ — **signed off** 2026-09-07
+7. ~~**Update** device plan + PROTOCOL + firmware version~~ — **done** 2026-09-07
 
 ---
 
@@ -803,3 +810,6 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 | 2026-09-07 | §6 UI signed off; §4 decisions locked; §7 expanded to Phases A–D firmware checklist |
 | 2026-09-07 | Walkthrough decisions: D23-A, D8 triangle, D19, D35–D37 |
 | 2026-09-07 | Phase C bench smoke passed — all 7 programs verified on device |
+| 2026-09-07 | Phase D E2E signed off — UI Periodic start/stop; session history from device `resultJson` |
+| 2026-09-07 | Phase E signed off — auto-end via `automatic-session-complete` + SignalR UI sync |
+| 2026-09-07 | **Part 2 signed off** — docs (Device Plan §6, PROTOCOL.md) |

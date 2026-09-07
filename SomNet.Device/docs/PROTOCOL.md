@@ -3,7 +3,7 @@
 Captured and verified in **Phase 0** (2026-09-05) against SomNet API `http://localhost:5031`.
 
 **Audience:** ESP32 firmware (`SomNet.Device`) implementing a minimal SignalR JSON client.  
-**Scope:** Initial command `stroke` only; burst/automatic documented for future phases.
+**Scope:** Commands `stroke`, `burst`, `abort`, `automatic-start`, and `automatic-stop` (Phases 5–9 Part 2).
 
 **Source references:**
 
@@ -12,7 +12,7 @@ Captured and verified in **Phase 0** (2026-09-05) against SomNet API `http://loc
 | `SomNet.Shared/DTO/Devices/DeviceDtos.cs` | Message DTO shapes |
 | `SomNet.Shared/Models/DeviceConstants.cs` | Hub method names, JWT claim types |
 | `SomNet.API/Hubs/HardwareHub.cs` | Connection rules |
-| `SomNet.API/Services/HardwareCommandDispatcher.cs` | Ack timeout (10 s) |
+| `SomNet.API/Services/HardwareCommandDispatcher.cs` | Per-command ack timeout (P9-D1) |
 
 **Capture tooling:** `SomNet.Device/tools/phase0-capture.mjs` (re-runnable against local API).
 
@@ -236,8 +236,8 @@ Plus **`0x1E`**.
 
 1. `deviceId` matches local device.
 2. `accessToken` matches NVS-stored token (string compare).
-3. `commandKey` is supported (`stroke` in Phase 1).
-4. Parse `payloadJson` — for `stroke`, require `strokeMs` (see §8).
+3. `commandKey` is supported (`stroke`, `burst`, `abort`, `automatic-start`, `automatic-stop`).
+4. Parse `payloadJson` — see §6.3–§6.5.
 
 ### 6.3 stroke payload (initial scope)
 
@@ -252,6 +252,71 @@ Plus **`0x1E`**.
 |-------|------|----------|-------|
 | `powerPercent` | int | Recommended | 0–100; firmware may map to PWM later |
 | `strokeMs` | int | **Yes** | Relay active duration; reject command if missing |
+
+### 6.4 burst payload (Phase 9)
+
+```json
+{
+  "powerPercent": 50,
+  "strokeMs": 200,
+  "burstStrokes": 5,
+  "burstDelayMs": 5000
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `strokeMs` | int | **Yes** | Duration of each relay close |
+| `burstStrokes` | int | **Yes** | 1–100 |
+| `burstDelayMs` | int | **Yes** | Idle time between pulses (0–300000) |
+| `powerPercent` | int | Recommended | 0–100 |
+
+Device runs the full sequence locally; one completing ack with `resultJson` when done or aborted.
+
+### 6.5 automatic-start payload (Phase 9 Part 2)
+
+```json
+{
+  "automaticMode": "periodic",
+  "minimumStrokeMs": 25,
+  "maximumStrokeMs": 400,
+  "minimumPower": 0,
+  "maximumPower": 80,
+  "strokeMinSeconds": 5,
+  "strokeMaxSeconds": 5,
+  "delayBeforeStartSeconds": 0,
+  "endSessionMode": "strokes",
+  "endSessionValue": 8,
+  "burstsOn": false
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `automaticMode` | string | **Yes** | One of: `periodic`, `randomPowerOnly`, `randomTimingOnly`, `randomPowerAndTiming`, `powerWave`, `powerAndTimingWave`, `buildUp` |
+| `minimumStrokeMs` / `maximumStrokeMs` | int | Recommended | Device defaults 25/400; API validates against max stroke ms |
+| `minimumPower` / `maximumPower` | int | Recommended | 0–100 |
+| `strokeMinSeconds` / `strokeMaxSeconds` | int | Recommended | Gap range (seconds) |
+| `delayBeforeStartSeconds` | int | Optional | Wait before first pulse |
+| `endSessionMode` | string | Optional | `minutes`, `strokes`, or `noAutoEnd` — wave/build-up require minutes or strokes |
+| `endSessionValue` | int | Optional | End after N minutes or strokes |
+| `burstsOn` | bool | Optional | Must be **`false`** until Part 3 — rejected if `true` |
+
+**UI rule:** Send full automatic settings snapshot; **omit `running`**. Device applies mode-specific ignore rules for disabled minimum fields.
+
+**Ack:** **Immediate** `success: true` when config valid and engine armed (P9-D2). No `resultJson` on start.
+
+**Unsolicited session complete:** When the session ends via **end-session rule** or **abort** (without `automatic-stop`), the device sends `AckCommand` with `correlationId` **`automatic-session-complete`** and stop `resultJson`. The API forwards this to operators via `CommandAcknowledged`; the UI uses it to clear `running` and finalize session history.
+
+### 6.6 automatic-stop payload
+
+```json
+{}
+```
+
+Optional `{ "reason": "operator" }` — device reports measured `endReason` in stop `resultJson`.
+
+**Ack:** Completing ack after session stops at safe point (gap or post-pulse). REST timeout **30 s** (P9-D1).
 
 ---
 
@@ -278,7 +343,9 @@ Plus **`0x1E`**.
 
 Matches `HardwareCommandAckDto`: `correlationId`, `success`, `message`, optional **`resultJson`** (string containing JSON).
 
-When present, `resultJson` is a **string containing JSON** (not a nested object). Inner shape for stroke:
+When present, `resultJson` is a **string containing JSON** (not a nested object).
+
+**Stroke** inner shape:
 
 ```json
 {
@@ -291,9 +358,44 @@ When present, `resultJson` is a **string containing JSON** (not a nested object)
 }
 ```
 
+**Burst** completion (excerpt):
+
+```json
+{
+  "commandKey": "burst",
+  "requestedStrokes": 5,
+  "strokesCompleted": 5,
+  "interrupted": false
+}
+```
+
+**Automatic stop** — session summary (authoritative for UI history):
+
+```json
+{
+  "commandKey": "automatic-stop",
+  "automaticMode": "periodic",
+  "powerPercent": 80,
+  "strokeMs": 325,
+  "gapSec": 5,
+  "strokesCompleted": 3,
+  "durationMs": 12599,
+  "endSessionMode": 2,
+  "endSessionValue": 8,
+  "interrupted": false,
+  "endReason": "manualStop"
+}
+```
+
+| Field | Notes |
+|-------|-------|
+| `endSessionMode` | Wire int: `0` = noAutoEnd, `1` = minutes, `2` = strokes |
+| `endReason` | `manualStop`, `endSession`, `abort`, or `error` |
+| `durationMs` | Elapsed since first pulse (after start delay) |
+
 ### REST result (operator)
 
-If ack arrives within **10 seconds**:
+If ack arrives within the per-command timeout:
 
 ```json
 {
@@ -326,7 +428,7 @@ If ack arrives within **10 seconds**:
 | Invalid/expired device JWT | Same as invalid connect |
 | Device not connected when command sent | REST `delivered: false`, message *"The paired device is not connected."* |
 | No pairing registration | REST `delivered: false`, message *"No paired device token exists..."* |
-| Ack not received in 10 s | REST `delivered: true`, `acknowledged: false` |
+| Ack not received in time | REST `delivered: true`, `acknowledged: false` — timeout per command (stroke/abort **15 s**; burst formula; `automatic-start` **5 s**; `automatic-stop` **30 s**) |
 
 ---
 
@@ -364,3 +466,4 @@ If ack arrives within **10 seconds**:
 | Date | Change |
 |------|--------|
 | 2026-09-05 | Phase 0 capture complete; `sub_target` JWT claim documented |
+| 2026-09-07 | Phase 9 Part 2 — `automatic-start`/`automatic-stop` payload + stop `resultJson`; burst payload; per-command ack timeouts |

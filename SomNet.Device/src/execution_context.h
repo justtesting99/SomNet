@@ -27,6 +27,8 @@ public:
 
     bool startAutomatic(const char* payloadJson);
 
+    void setAutomaticSessionNotifier(void* callbackContext, AutomaticCompleteCallback onNotify);
+
     bool stopAutomatic(
         const char* correlationId,
         void* callbackContext,
@@ -37,4 +39,6 @@ private:
     BurstSequenceMode burstSequenceMode_;
     AutomaticSessionMode automaticSessionMode_;
     IExecutionMode* activeMode_ = nullptr;
+    void* automaticSessionNotifyContext_ = nullptr;
+    AutomaticCompleteCallback automaticSessionNotify_ = nullptr;
 };

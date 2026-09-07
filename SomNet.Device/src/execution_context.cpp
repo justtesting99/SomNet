@@ -68,12 +68,23 @@ bool ExecutionContext::startAutomatic(const char* payloadJson) {
         return false;
     }
 
+    automaticSessionMode_.setSessionNotifier(
+        automaticSessionNotifyContext_,
+        automaticSessionNotify_);
+
     if (!automaticSessionMode_.beginSession(payloadJson)) {
         return false;
     }
 
     activeMode_ = &automaticSessionMode_;
     return true;
+}
+
+void ExecutionContext::setAutomaticSessionNotifier(
+    void* callbackContext,
+    AutomaticCompleteCallback onNotify) {
+    automaticSessionNotifyContext_ = callbackContext;
+    automaticSessionNotify_ = onNotify;
 }
 
 bool ExecutionContext::stopAutomatic(

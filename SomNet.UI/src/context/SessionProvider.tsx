@@ -18,6 +18,7 @@ import {
   type ManualActionEvent,
   type ManualSessionEndReason,
 } from '@/utils/sessionSummary';
+import type { AutomaticResultJson } from '@/utils/automaticResultJson';
 
 interface ActiveSessionState {
   id: string;
@@ -40,7 +41,10 @@ interface SessionContextValue {
     strokesCompleted?: number,
   ) => Promise<void>;
   endManualSession: (reason: ManualSessionEndReason) => Promise<void>;
-  endAutomaticSession: (reason: string) => Promise<void>;
+  endAutomaticSession: (
+    reason: string,
+    deviceResult?: AutomaticResultJson | null,
+  ) => Promise<void>;
   endActiveSessionIfNeeded: (reason: ManualSessionEndReason | string) => Promise<void>;
 }
 
@@ -223,13 +227,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const endAutomaticSession = useCallback(
-    async (reason: string) => {
+    async (reason: string, deviceResult?: AutomaticResultJson | null) => {
       const current = activeSessionRef.current;
       if (!current || current.mode !== 'automatic') {
         return;
       }
 
-      const summary = buildAutomaticSessionSummary(current.startedAt, reason);
+      const summary = buildAutomaticSessionSummary(deviceResult ?? null, reason);
       await finalizeSession(summary);
     },
     [finalizeSession],

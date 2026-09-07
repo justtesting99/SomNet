@@ -9,7 +9,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | SomNet web app | [User Guide](./User-Guide.md) |
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 
-**Firmware status (2026-09-07):** Phases **0–9 (burst)** — manual **stroke / abort / burst** from the web app. **Automatic** program catalog defined (Part 2) — UI implementation next; device Start/Stop not wired yet.
+**Firmware status (2026-09-07):** Phases **0–9 Part 2** — manual **stroke / abort / burst** and **automatic Start/Stop** from the web app. Firmware **`0.9.1-phase9p2`**. Burst-in-automatic (Bursts On) remains Part 3.
 
 ---
 
@@ -185,7 +185,7 @@ If the device is on your network and you can open its web page:
 | Stroke from SomNet **web app** | **Yes** | Manual mode **Stroke** → device ack + session from `resultJson` |
 | **Burst** from SomNet **web app** | **Yes** | Manual mode **Burst** — fixed stroke count + delay; device runs full sequence |
 | **Abort** during stroke or burst | **Yes** | Relay opens; session tracks abort / partial burst from device `resultJson` |
-| Automatic modes | **Not yet** | UI + program catalog defined — see [Automatic mode (planned)](#automatic-mode-planned--phase-9-part-2); Start/Stop not on device yet |
+| Automatic modes | **Yes** | Automatic tab **Start/Stop** — seven programs; session summary from device on Stop |
 
 **Server URL reminder:** Use the SomNet API **LAN address** on the device (e.g. `http://192.168.1.47:5031`). The SomNet browser on the same PC can use `localhost`; the ESP32 cannot.
 
@@ -201,11 +201,11 @@ If the device is on your network and you can open its web page:
 
 ---
 
-## Automatic mode (planned — Phase 9 Part 2)
+## Automatic mode
 
-**Status (2026-09-07):** Program catalog and UI rules are **defined**; **Start / Stop are not wired to hardware yet**. Manual **Stroke**, **Burst**, and **Abort** work today. This section describes what Automatic mode **will** do so Dom/operators and installers know what the Automatic tab controls mean.
+**Status (2026-09-07):** **Available** — select **Automatic** in SomNet, configure a program, press **Start**. Session history uses device-measured stroke count and duration when you **Stop** or when an end-session rule fires.
 
-**Developer detail:** [Phase 9 Part 2 — Automatic checklist](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md)
+**Developer detail:** [Phase 9 Part 2 — Automatic checklist](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) (signed off)
 
 ### What automatic mode is
 
@@ -260,21 +260,12 @@ Automatic mode controls **relay open time**, not tank pressure. On a charged com
 
 Reported **`actualStrokeMs`** in session history reflects what the device measured on the relay; small variation (a few ms) between strokes is normal.
 
-### Not in the first automatic release
+### Not yet available
 
 | Feature | When |
 |---------|------|
-| **Start / Stop** on device | Part 2 firmware |
 | **Bursts On** during automatic | Part 3 |
 | **Change settings while running** (live replan) | Future — original product supported this; needs mid-session device updates |
-
-### Part 2 implementation order (for reference)
-
-1. Automatic tab UI — seven programs + grey-out rules  
-2. Device firmware — run programs locally after Start  
-3. Session summaries from device when Stop or end rule fires  
-
----
 
 ## Relay timing validation (oscilloscope)
 
@@ -354,7 +345,7 @@ From an operator or Dom perspective:
 
 | Feature | Target |
 |---------|--------|
-| Automatic session programs (timing/power variations) | [Automatic mode (planned)](#automatic-mode-planned--phase-9-part-2) — Part 2 UI first, then firmware |
+| Automatic session programs (timing/power variations) | [Automatic mode](#automatic-mode) — **available** (Phase 9 Part 2) |
 | Automatic bursts during session | Part 3 |
 | Live settings change during automatic playback | Future |
 | Air-line pressure timing vs GPIO pulse | Optional installer follow-up — operators tune power / max stroke for felt impact |
@@ -373,4 +364,4 @@ From an operator or Dom perspective:
 | 2026-09-06 | Initial oscilloscope validation on D4 — `actualStrokeMs` matches relay input (25→25.8 ms, 201→207 ms serial) |
 | 2026-09-06 | Bench notes: single/burst poll jitter (~±5 ms); air-line pressure vs operator power adjustment |
 | 2026-09-06 | Link to Phase 7 §G2 / device plan — deferred timing options (`esp_timer`, poll, dual-core; OTA-safe) |
-| 2026-09-07 | Automatic mode overview (seven programs, UI rules, End Session) — Part 2 planned |
+| 2026-09-07 | Automatic mode overview — **signed off**; Start/Stop on device |

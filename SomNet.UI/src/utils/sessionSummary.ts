@@ -106,14 +106,89 @@ export function buildManualSessionSummary(stats: ManualSessionStats): string {
   return `${parts.join(', ')}.`;
 }
 
-export function buildAutomaticSessionSummary(
-  startedAt: string,
-  endReason: string,
-): string {
-  const elapsedMinutes = Math.max(
-    1,
-    Math.round((Date.now() - Date.parse(startedAt)) / 60_000),
-  );
+const AUTOMATIC_MODE_LABELS: Record<string, string> = {
+  periodic: 'Periodic',
+  randomPowerOnly: 'Random Power Only',
+  randomTimingOnly: 'Random Timing Only',
+  randomPowerAndTiming: 'Random Power and Timing',
+  powerWave: 'Power Wave',
+  powerAndTimingWave: 'Power and Timing Wave',
+  buildUp: 'Build-Up',
+};
 
-  return `Automatic session ran ${elapsedMinutes} minute${elapsedMinutes === 1 ? '' : 's'}, ${endReason}.`;
+function formatAutomaticModeLabel(automaticMode?: string): string {
+  if (!automaticMode) {
+    return 'Automatic';
+  }
+
+  return AUTOMATIC_MODE_LABELS[automaticMode] ?? automaticMode;
+}
+
+function formatAutomaticDuration(durationMs?: number): string | null {
+  if (durationMs === undefined || !Number.isFinite(durationMs) || durationMs < 0) {
+    return null;
+  }
+
+  if (durationMs < 60_000) {
+    const seconds = Math.max(1, Math.round(durationMs / 1000));
+    return `${seconds} sec`;
+  }
+
+  const minutes = Math.max(1, Math.round(durationMs / 60_000));
+  return `${minutes} min`;
+}
+
+function formatAutomaticEndReason(endReason?: string, interrupted?: boolean): string {
+  if (interrupted && endReason === 'abort') {
+    return 'aborted';
+  }
+
+  switch (endReason) {
+    case 'manualStop':
+      return 'stopped manually';
+    case 'endSession':
+      return 'end session rule';
+    case 'abort':
+      return 'aborted';
+    case 'error':
+      return 'device error';
+    default:
+      return endReason && endReason.length > 0 ? endReason : 'ended';
+  }
+}
+
+export interface AutomaticSessionSummaryInput {
+  automaticMode?: string;
+  strokesCompleted?: number;
+  durationMs?: number;
+  endReason?: string;
+  interrupted?: boolean;
+}
+
+export function buildAutomaticSessionSummary(
+  deviceResult: AutomaticSessionSummaryInput | null,
+  fallbackReason?: string,
+): string {
+  if (!deviceResult) {
+    const reason = fallbackReason && fallbackReason.length > 0 ? fallbackReason : 'ended';
+    return `Automatic session ${reason}.`;
+  }
+
+  const modeLabel = formatAutomaticModeLabel(deviceResult.automaticMode);
+  const strokeCount = deviceResult.strokesCompleted;
+  const durationLabel = formatAutomaticDuration(deviceResult.durationMs);
+  const endLabel = formatAutomaticEndReason(deviceResult.endReason, deviceResult.interrupted);
+
+  const detailParts: string[] = [];
+
+  if (strokeCount !== undefined && strokeCount >= 0) {
+    detailParts.push(`${strokeCount} stroke${strokeCount === 1 ? '' : 's'}`);
+  }
+
+  if (durationLabel) {
+    detailParts.push(`over ${durationLabel}`);
+  }
+
+  const detail = detailParts.length > 0 ? ` — ${detailParts.join(' ')}` : '';
+  return `${modeLabel}${detail} (${endLabel}).`;
 }

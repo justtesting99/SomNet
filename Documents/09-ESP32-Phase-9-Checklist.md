@@ -2,13 +2,13 @@
 
 **Burst mode (primary)** — implement **`BurstSequenceMode`** on the ESP32: a **deterministic multi-stroke sequence** (fixed count, fixed `strokeMs`, fixed inter-stroke delay) — the natural extension of single stroke. Wire **`burst`** through `command_handler` / `execution_context`; enable the SomNet UI **Burst** button; commit session history from device **`resultJson`**.
 
-**Automatic mode (exploratory / future)** — original concept still evolving. Keep UI **Automatic** controls disabled; retain plan §6 ideas, locked decisions P9-D2/D4/D6, and checklist **Part 2** for when the design is ready (likely Phase 9.x, not Phase 9 sign-off).
+**Automatic mode (Part 2 — signed off 2026-09-07):** Seven programs on ESP32; UI Start/Stop; session from stop `resultJson`. See [Part 2 checklist](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md).
 
 **Parent plan:** [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §6, §9, §10 Phase 9  
-**Protocol reference:** [`SomNet.Device/docs/PROTOCOL.md`](../SomNet.Device/docs/PROTOCOL.md) — extend for burst (automatic when implemented)  
+**Protocol reference:** [`SomNet.Device/docs/PROTOCOL.md`](../SomNet.Device/docs/PROTOCOL.md) — stroke, burst, automatic  
 **Prior phase:** [09-ESP32-Phase-8-Checklist.md](./09-ESP32-Phase-8-Checklist.md) (**Signed off** 2026-09-06)  
-**Status:** **Signed off** — 2026-09-06 (`esp32-84CCA85C36B4` / Slv66, firmware `0.9.0-phase9`)  
-**Target output:** Dom runs **manual burst** from SomNet UI on paired hardware — **met**
+**Status:** **Burst signed off** 2026-09-06 (`0.9.0-phase9`); **Automatic Part 2 signed off** 2026-09-07 (`0.9.1-phase9p2`)  
+**Target output:** Dom runs **manual burst** and **automatic Start/Stop** from SomNet UI on paired hardware — **met**
 
 ---
 
@@ -273,13 +273,13 @@ Update **Status** above and check boxes below as work completes. When Phase 9 is
 
 ---
 
-# Part 2 — Automatic mode (in progress)
+# Part 2 — Automatic mode (signed off)
 
 _Not required for Phase 9 (burst) sign-off._
 
-**Checklist:** [09-ESP32-Phase-9-Part2-Automatic-Checklist.md](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) — **§6 UI signed off**; **§4 decisions locked**; **§7 Phases A–D** firmware tracking.
+**Checklist:** [09-ESP32-Phase-9-Part2-Automatic-Checklist.md](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) — **signed off 2026-09-07**.
 
-**Status (2026-09-07):** UI complete. **All 7 firmware programs bench signed off.** Phase D (UI Start/Stop + E2E) next.
+**Status (2026-09-07):** UI complete. All **7 firmware programs** bench signed off. Phase D E2E (UI Periodic start/stop + session from `resultJson`). Firmware **`0.9.1-phase9p2`**.
 
 **Design intent:** Automatic mode is **not** burst with random gaps. It is **seven program variations** from the Automatic Mode dropdown. See Part 2 checklist §3.
 
@@ -287,24 +287,25 @@ _Not required for Phase 9 (burst) sign-off._
 
 Use plan §6, locked P9-D2/D4/D5/D6 + Part 2 §4 when implementing.
 
-## G. Firmware — track in Part 2 §7 (Phases A–C)
+## G. Firmware — track in Part 2 §7 (Phases A–D)
 
 - [x] **Phase A** — shell + Periodic bench signed off 2026-09-07 ([Part 2 §7 Phase A](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#phase-a--shell--periodic-p9p2-d35))
 - [x] **Phase B** — Random family bench signed off 2026-09-07
 - [x] **Phase C** — Wave + Build-Up bench signed off 2026-09-07
-- [ ] `automatic-start` / `automatic-stop` / abort + summary `resultJson` (P9-D2, P9-D4)
+- [x] **Phase D** — UI/API integration + E2E signed off 2026-09-07
+- [x] `automatic-start` / `automatic-stop` / summary `resultJson` (P9-D2, P9-D4)
 
 ## H. Firmware + API integration
 
-- [ ] See Part 2 §7 Phase A.2 + Phase D
+- [x] Part 2 §7 Phases A–D complete
 
 ## I. UI — automatic command path
 
 - [x] **Part 2 UI** — [§6](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#6-ui-implementation-checklist) complete 2026-09-07
-- [ ] Enable Start/Stop when Phase A bench smoke passes (Part 2 §7 Phase D)
-- [ ] Fix command keys to `automatic-start` / `automatic-stop` (P9P2-D37)
-- [ ] Config snapshot payload (P9-D5); session from stop `resultJson`
+- [x] Start/Stop wired (Part 2 §7 Phase D)
+- [x] Command keys `automatic-start` / `automatic-stop` (P9P2-D37)
+- [x] Config snapshot payload (P9-D5); session from stop `resultJson`
 
-## J. Verification (automatic — when implemented)
+## J. Verification (automatic)
 
-- [ ] Part 2 §7.2 per-mode smoke + E2E UI sign-off
+- [x] Part 2 §7.2 per-mode smoke (Swagger) + E2E UI sign-off (Periodic)

@@ -23,6 +23,8 @@ public:
         void* callbackContext,
         AutomaticCompleteCallback onComplete);
 
+    void setSessionNotifier(void* callbackContext, AutomaticCompleteCallback onNotify);
+
     void start(const char* payloadJson) override;
     void poll() override;
     void abort() override;
@@ -60,4 +62,6 @@ private:
     char resultJson_[512] = {};
     void* callbackContext_ = nullptr;
     AutomaticCompleteCallback onComplete_ = nullptr;
+    void* sessionNotifyContext_ = nullptr;
+    AutomaticCompleteCallback sessionNotify_ = nullptr;
 };

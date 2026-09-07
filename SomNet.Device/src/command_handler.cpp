@@ -51,6 +51,9 @@ void CommandHandler::begin(
     signalR_ = signalRClient;
     gCommandHandlerInstance = this;
     initialized_ = true;
+    if (executionContext_ != nullptr) {
+        executionContext_->setAutomaticSessionNotifier(this, &CommandHandler::onAutomaticComplete);
+    }
     Serial.println(F("[CMD] command_handler ready (Phase 6)"));
 }
 

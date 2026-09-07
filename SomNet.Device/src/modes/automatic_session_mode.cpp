@@ -124,6 +124,13 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
     return true;
 }
 
+void AutomaticSessionMode::setSessionNotifier(
+    void* callbackContext,
+    AutomaticCompleteCallback onNotify) {
+    sessionNotifyContext_ = callbackContext;
+    sessionNotify_ = onNotify;
+}
+
 bool AutomaticSessionMode::requestStop(
     const char* correlationId,
     void* callbackContext,
@@ -324,11 +331,23 @@ void AutomaticSessionMode::finishSession(
 
     if (stopRequested_ && onComplete_ != nullptr && stopCorrelationId_[0] != '\0') {
         onComplete_(callbackContext_, stopCorrelationId_, success, message, resultJson_);
+    } else if (
+        sessionNotify_ != nullptr &&
+        sessionNotifyContext_ != nullptr &&
+        resultJson_[0] != '\0') {
+        sessionNotify_(
+            sessionNotifyContext_,
+            kAutomaticSessionCompleteCorrelationId,
+            success,
+            message,
+            resultJson_);
     }
 
     stopRequested_ = false;
     onComplete_ = nullptr;
     callbackContext_ = nullptr;
+    sessionNotifyContext_ = nullptr;
+    sessionNotify_ = nullptr;
     stopCorrelationId_[0] = '\0';
     strokesCompleted_ = 0;
     sessionStartMs_ = 0;
