@@ -300,7 +300,7 @@ Device runs the full sequence locally; one completing ack with `resultJson` when
 | `delayBeforeStartSeconds` | int | Optional | Wait before first pulse |
 | `endSessionMode` | string | Optional | `minutes`, `strokes`, or `noAutoEnd` — wave/build-up require minutes or strokes |
 | `endSessionValue` | int | Optional | End after N minutes or strokes |
-| `burstsOn` | bool | Optional | Must be **`false`** until **Phase 10** — rejected if `true` ([Phase 10 checklist](../../Documents/09-ESP32-Phase-10-Checklist.md)) |
+| `burstsOn` | bool | Optional | Default **`false`**. When **`true`**, burst sub-fields validated (§6.7). **Phase 10A:** config accepted; burst FSM runs in Phase 10B+ |
 
 **UI rule:** Send full automatic settings snapshot; **omit `running`**. Device applies mode-specific ignore rules for disabled minimum fields.
 
@@ -318,9 +318,9 @@ Optional `{ "reason": "operator" }` — device reports measured `endReason` in s
 
 **Ack:** Completing ack after session stops at safe point (gap or post-pulse). REST timeout **30 s** (P9-D1).
 
-### 6.7 automatic-start burst fields (Phase 10 — planned, not implemented)
+### 6.7 automatic-start burst fields (Phase 10)
 
-When **`burstsOn: true`** is supported, the start payload includes burst settings (full snapshot, camelCase). Device rejects `burstsOn: true` today.
+When **`burstsOn: true`**, the start payload includes burst settings (full snapshot, camelCase). **Phase 10A:** device accepts and validates config; session runs Part 2 singles until burst FSM (Phase 10B).
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -510,4 +510,5 @@ If ack arrives within the per-command timeout:
 |------|--------|
 | 2026-09-05 | Phase 0 capture complete; `sub_target` JWT claim documented |
 | 2026-09-07 | Phase 9 Part 2 — `automatic-start`/`automatic-stop` payload + stop `resultJson`; burst payload; per-command ack timeouts |
+| 2026-09-07 | Phase 10A — `burstsOn` accept + burst field validation (firmware + API) |
 | 2026-09-07 | Phase 10 planned — §6.7 burst fields on `automatic-start`; extended automatic stop `resultJson` shape; §4.1 validation caps |

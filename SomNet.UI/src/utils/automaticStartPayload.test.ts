@@ -10,4 +10,21 @@ describe('buildAutomaticStartPayload', () => {
     expect(payload.automaticMode).toBe('randomPowerAndTiming');
     expect(payload.burstsOn).toBe(false);
   });
+
+  it('includes burst settings when burstsOn is true (Phase 10)', () => {
+    const payload = JSON.parse(
+      buildAutomaticStartPayload({
+        ...defaultAutomaticState,
+        burstsOn: true,
+        burstPercent: 25,
+        burstStyle: 'randomPowerOnly',
+      }),
+    );
+
+    expect(payload.burstsOn).toBe(true);
+    expect(payload.burstPercent).toBe(25);
+    expect(payload.burstStyle).toBe('randomPowerOnly');
+    expect(payload.burstStrokePowerMin).toBe(defaultAutomaticState.burstStrokePowerMin);
+    expect(payload.burstStrokesMax).toBe(defaultAutomaticState.burstStrokesMax);
+  });
 });

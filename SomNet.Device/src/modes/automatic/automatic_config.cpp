@@ -1,8 +1,75 @@
 #include "modes/automatic/automatic_config.h"
 
+#include "config.h"
+
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <string.h>
+
+namespace {
+
+constexpr int kMaxBurstDelaySec = static_cast<int>(kMaxBurstDelayMs / 1000UL);
+
+bool validateIntRange(const char* label, int value, int minValue, int maxValue) {
+    if (value < minValue || value > maxValue) {
+        Serial.print(F("[AUTO] reject: "));
+        Serial.print(label);
+        Serial.print(F(" out of range ("));
+        Serial.print(minValue);
+        Serial.print(F("-"));
+        Serial.print(maxValue);
+        Serial.println(F(")"));
+        return false;
+    }
+    return true;
+}
+
+bool validateMinMaxPair(const char* label, int minValue, int maxValue) {
+    if (minValue > maxValue) {
+        Serial.print(F("[AUTO] reject: "));
+        Serial.print(label);
+        Serial.println(F(" min greater than max"));
+        return false;
+    }
+    return true;
+}
+
+bool validateBurstSettings(AutomaticConfig* config) {
+    if (config == nullptr || !config->burstsOn) {
+        return true;
+    }
+
+    if (!validateIntRange("burstPercent", config->burstPercent, 0, 100)) {
+        return false;
+    }
+
+    if (config->burstStyle == BurstStyle::Unknown) {
+        Serial.println(F("[AUTO] reject: unknown burstStyle"));
+        return false;
+    }
+
+    if (!validateIntRange("burstStrokePowerMin", config->burstStrokePowerMin, 0, 100) ||
+        !validateIntRange("burstStrokePowerMax", config->burstStrokePowerMax, 0, 100) ||
+        !validateMinMaxPair("burstStrokePower", config->burstStrokePowerMin, config->burstStrokePowerMax)) {
+        return false;
+    }
+
+    if (!validateIntRange("burstDelayMin", config->burstDelayMin, 0, kMaxBurstDelaySec) ||
+        !validateIntRange("burstDelayMax", config->burstDelayMax, 0, kMaxBurstDelaySec) ||
+        !validateMinMaxPair("burstDelay", config->burstDelayMin, config->burstDelayMax)) {
+        return false;
+    }
+
+    if (!validateIntRange("burstStrokesMin", config->burstStrokesMin, 1, kMaxBurstStrokes) ||
+        !validateIntRange("burstStrokesMax", config->burstStrokesMax, 1, kMaxBurstStrokes) ||
+        !validateMinMaxPair("burstStrokes", config->burstStrokesMin, config->burstStrokesMax)) {
+        return false;
+    }
+
+    return true;
+}
+
+} // namespace
 
 AutomaticRunMode parseAutomaticRunMode(const char* value) {
     if (value == nullptr || value[0] == '\0') {
@@ -52,6 +119,27 @@ EndSessionMode parseEndSessionMode(const char* value) {
     return EndSessionMode::Unknown;
 }
 
+BurstStyle parseBurstStyle(const char* value) {
+    if (value == nullptr || value[0] == '\0') {
+        return BurstStyle::FixedPowerDelay;
+    }
+
+    if (strcmp(value, "fixedPowerDelay") == 0) {
+        return BurstStyle::FixedPowerDelay;
+    }
+    if (strcmp(value, "randomPowerOnly") == 0) {
+        return BurstStyle::RandomPowerOnly;
+    }
+    if (strcmp(value, "randomDelayOnly") == 0) {
+        return BurstStyle::RandomDelayOnly;
+    }
+    if (strcmp(value, "randomPowerAndDelay") == 0) {
+        return BurstStyle::RandomPowerAndDelay;
+    }
+
+    return BurstStyle::Unknown;
+}
+
 int clampPowerPercent(int value) {
     if (value < 0) {
         return 0;
@@ -84,8 +172,8 @@ bool parseAutomaticConfig(const char* payloadJson, AutomaticConfig* outConfig) {
 
     *outConfig = AutomaticConfig{};
 
-    // Keep small — parsed on main loop; payload string may be up to 768 chars.
-    StaticJsonDocument<384> doc;
+    // Payload may include burst fields (Phase 10); keep headroom under 768-char wire limit.
+    StaticJsonDocument<512> doc;
     const DeserializationError err = deserializeJson(doc, payloadJson != nullptr ? payloadJson : "{}");
     if (err) {
         Serial.print(F("[AUTO] payload JSON error: "));
@@ -113,6 +201,19 @@ bool parseAutomaticConfig(const char* payloadJson, AutomaticConfig* outConfig) {
     outConfig->delayBeforeStartSeconds = doc["delayBeforeStartSeconds"] | 0;
     outConfig->endSessionValue = doc["endSessionValue"] | 0;
     outConfig->burstsOn = doc["burstsOn"] | false;
+
+    outConfig->burstPercent = doc["burstPercent"] | 10;
+    if (doc["burstStyle"].is<const char*>()) {
+        outConfig->burstStyle = parseBurstStyle(doc["burstStyle"].as<const char*>());
+    } else {
+        outConfig->burstStyle = BurstStyle::FixedPowerDelay;
+    }
+    outConfig->burstStrokePowerMin = doc["burstStrokePowerMin"] | 0;
+    outConfig->burstStrokePowerMax = doc["burstStrokePowerMax"] | 100;
+    outConfig->burstDelayMin = doc["burstDelayMin"] | 1;
+    outConfig->burstDelayMax = doc["burstDelayMax"] | 5;
+    outConfig->burstStrokesMin = doc["burstStrokesMin"] | 5;
+    outConfig->burstStrokesMax = doc["burstStrokesMax"] | 10;
 
     if (doc["endSessionMode"].is<const char*>()) {
         outConfig->endSessionMode = parseEndSessionMode(doc["endSessionMode"].as<const char*>());
@@ -147,8 +248,7 @@ bool parseAutomaticConfig(const char* payloadJson, AutomaticConfig* outConfig) {
         outConfig->strokeMaxSeconds = tmp;
     }
 
-    if (outConfig->burstsOn) {
-        Serial.println(F("[AUTO] reject: burstsOn not supported (Phase 10)"));
+    if (!validateBurstSettings(outConfig)) {
         return false;
     }
 

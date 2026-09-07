@@ -2,7 +2,11 @@ export type OperationMode = 'manual' | 'automatic';
 
 export type EndSessionMode = 'minutes' | 'strokes' | 'noAutoEnd';
 
-export type BurstStyle = 'fixedPowerDelay';
+export type BurstStyle =
+  | 'fixedPowerDelay'
+  | 'randomPowerOnly'
+  | 'randomDelayOnly'
+  | 'randomPowerAndDelay';
 
 export type AutomaticRunMode =
   | 'periodic'

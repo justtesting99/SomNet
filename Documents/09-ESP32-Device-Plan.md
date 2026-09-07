@@ -941,7 +941,7 @@ Wave/build-up modes require **End Session** minutes or strokes (`noAutoEnd` reje
 | Field | Notes |
 |-------|-------|
 | `automaticMode` | **Required** — one of seven enum strings above |
-| `burstsOn` | Must be **`false`** until **Phase 10** — device and API reject `true` ([Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md)) |
+| `burstsOn` | Optional — default **`false`**. When **`true`**, burst fields validated per [Phase 10 §4.1](./09-ESP32-Phase-10-Checklist.md) (**Phase 10A** accepted; burst FSM Phase 10B+) |
 | Disabled UI mins | Send full snapshot; device ignores per §3 rules (uses max power/gap) |
 
 **Device behavior (`AutomaticSessionMode`):**

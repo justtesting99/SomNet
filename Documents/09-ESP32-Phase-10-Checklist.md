@@ -8,7 +8,7 @@
 | Prior sign-off | [Phase 9 Part 2 checklist](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) — seven programs, Start/Stop/Abort |
 | Manual burst reference | [Phase 9 checklist](./09-ESP32-Phase-9-Checklist.md) — `BurstSequenceMode` |
 | UI burst panel | `SomNet.UI/src/components/modes/AutomaticControls.tsx` — **Burst Settings** (disabled today) |
-| Device rejection today | `automatic_config.cpp` — `[AUTO] reject: burstsOn not supported` |
+| Device rejection today | ~~`automatic_config.cpp`~~ — **Phase 10A:** `burstsOn: true` accepted + validated; burst FSM pending |
 
 **Goal:** When **Bursts On** is checked, the ESP32 runs **bursts inside an automatic session** — additive on top of the selected automatic program (Periodic, Random, Wave, etc.). Operator enables burst settings in the UI; device accepts `burstsOn: true` on `automatic-start`.
 
@@ -544,7 +544,7 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 ## 6. Suggested implementation order
 
 1. **Lock §4 decisions** — review this doc; mark choices ☑ — **done 2026-09-07**
-2. **Phase A — Config + reject removal** — parse/validate burst fields; `burstsOn: true` accepted; still no burst FSM (or stub log)
+2. **Phase A — Config + reject removal** — parse/validate burst fields; `burstsOn: true` accepted; still no burst FSM (or stub log) — **done 2026-09-07**
 3. **Phase B — Burst sub-FSM on Periodic** — `burstPercent=100` smoke (always burst); serial `[AUTO] burst …`; then real percent
 4. **Phase C — All seven programs + abort/stop** — burst rolls with random/wave/build-up; stop/abort during burst
 5. **Phase D — API + UI** — enable panel; validator; E2E Periodic with bursts on
@@ -554,9 +554,17 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 
 ## 7. Verification checklist
 
+### 7.0 Phase A — config (2026-09-07)
+
+- [x] `automatic_config` — parse burst fields; validate when `burstsOn: true` (§4.1)
+- [x] Remove `burstsOn` reject; stub serial log on start
+- [x] `HardwareCommandPayloadValidator` — allow `burstsOn: true`; validate burst ranges
+- [x] `BurstStyle` enum — four values in Shared + firmware parse
+- [x] Firmware **`0.10.0-phase10`** (Phase A bump)
+
 ### 7.1 Firmware smoke (Swagger / serial)
 
-- [ ] `automatic-start` with `burstsOn: true` — ack success (no Part 3 reject)
+- [x] `automatic-start` with `burstsOn: true` — ack success (no reject) — verified 2026-09-07 serial
 - [ ] Periodic + `burstPercent=100` — serial shows burst clusters + program gaps
 - [ ] Periodic + `burstPercent=0` — identical to Part 2 (singles only)
 - [ ] Abort mid-burst — relay open; `[AUTO] aborted`; hub/session `(aborted)` with partial stroke count

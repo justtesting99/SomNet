@@ -20,6 +20,14 @@ enum class EndSessionMode {
     NoAutoEnd,
 };
 
+enum class BurstStyle {
+    Unknown,
+    FixedPowerDelay,
+    RandomPowerOnly,
+    RandomDelayOnly,
+    RandomPowerAndDelay,
+};
+
 struct AutomaticConfig {
     AutomaticRunMode mode = AutomaticRunMode::Unknown;
     int minimumStrokeMs = 25;
@@ -32,11 +40,20 @@ struct AutomaticConfig {
     int endSessionValue = 0;
     EndSessionMode endSessionMode = EndSessionMode::NoAutoEnd;
     bool burstsOn = false;
+    int burstPercent = 0;
+    BurstStyle burstStyle = BurstStyle::FixedPowerDelay;
+    int burstStrokePowerMin = 0;
+    int burstStrokePowerMax = 100;
+    int burstDelayMin = 0;
+    int burstDelayMax = 0;
+    int burstStrokesMin = 1;
+    int burstStrokesMax = 1;
     bool valid = false;
 };
 
 AutomaticRunMode parseAutomaticRunMode(const char* value);
 EndSessionMode parseEndSessionMode(const char* value);
+BurstStyle parseBurstStyle(const char* value);
 
 /** Parse automatic-start payload (camelCase, P9P2-D4). */
 bool parseAutomaticConfig(const char* payloadJson, AutomaticConfig* outConfig);

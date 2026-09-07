@@ -32,6 +32,16 @@ internal static class HardwareCommandPayloadValidator
         "noAutoEnd",
     };
 
+    private static readonly HashSet<string> BurstStyles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "fixedPowerDelay",
+        "randomPowerOnly",
+        "randomDelayOnly",
+        "randomPowerAndDelay",
+    };
+
+    private const int MaxBurstDelaySec = 300;
+
     public static bool TryValidate(
         string commandKey,
         string payloadJson,
@@ -186,8 +196,10 @@ internal static class HardwareCommandPayloadValidator
             if (root.TryGetProperty("burstsOn", out var burstsOnElement) &&
                 burstsOnElement.ValueKind == JsonValueKind.True)
             {
-                errorMessage = "burstsOn is not supported until Phase 10 (burst-in-automatic).";
-                return false;
+                if (!TryValidateAutomaticBurstSettings(root, out errorMessage))
+                {
+                    return false;
+                }
             }
 
             if (root.TryGetProperty("minimumStrokeMs", out var minStrokeElement) &&
@@ -272,5 +284,119 @@ internal static class HardwareCommandPayloadValidator
             errorMessage = "Automatic-start payloadJson is not valid JSON.";
             return false;
         }
+    }
+
+    private static bool TryValidateAutomaticBurstSettings(JsonElement root, out string errorMessage)
+    {
+        errorMessage = string.Empty;
+
+        var burstPercent = root.TryGetProperty("burstPercent", out var percentElement)
+            ? percentElement.GetInt32()
+            : 10;
+
+        if (burstPercent < 0 || burstPercent > 100)
+        {
+            errorMessage = "burstPercent must be between 0 and 100.";
+            return false;
+        }
+
+        if (root.TryGetProperty("burstStyle", out var styleElement) &&
+            styleElement.ValueKind == JsonValueKind.String)
+        {
+            var burstStyle = styleElement.GetString();
+            if (string.IsNullOrWhiteSpace(burstStyle) || !BurstStyles.Contains(burstStyle))
+            {
+                errorMessage =
+                    "burstStyle must be fixedPowerDelay, randomPowerOnly, randomDelayOnly, or randomPowerAndDelay.";
+                return false;
+            }
+        }
+
+        if (!TryValidatePercentMinMax(
+                root,
+                "burstStrokePowerMin",
+                "burstStrokePowerMax",
+                0,
+                100,
+                out errorMessage))
+        {
+            return false;
+        }
+
+        if (!TryValidateIntMinMax(
+                root,
+                "burstDelayMin",
+                "burstDelayMax",
+                0,
+                MaxBurstDelaySec,
+                out errorMessage))
+        {
+            return false;
+        }
+
+        if (!TryValidateIntMinMax(
+                root,
+                "burstStrokesMin",
+                "burstStrokesMax",
+                1,
+                MaxBurstStrokes,
+                out errorMessage))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryValidatePercentMinMax(
+        JsonElement root,
+        string minProperty,
+        string maxProperty,
+        int minLimit,
+        int maxLimit,
+        out string errorMessage)
+    {
+        return TryValidateIntMinMax(root, minProperty, maxProperty, minLimit, maxLimit, out errorMessage);
+    }
+
+    private static bool TryValidateIntMinMax(
+        JsonElement root,
+        string minProperty,
+        string maxProperty,
+        int minLimit,
+        int maxLimit,
+        out string errorMessage)
+    {
+        errorMessage = string.Empty;
+
+        if (root.TryGetProperty(minProperty, out var minElement))
+        {
+            var minValue = minElement.GetInt32();
+            if (minValue < minLimit || minValue > maxLimit)
+            {
+                errorMessage = $"{minProperty} must be between {minLimit} and {maxLimit}.";
+                return false;
+            }
+        }
+
+        if (root.TryGetProperty(maxProperty, out var maxElement))
+        {
+            var maxValue = maxElement.GetInt32();
+            if (maxValue < minLimit || maxValue > maxLimit)
+            {
+                errorMessage = $"{maxProperty} must be between {minLimit} and {maxLimit}.";
+                return false;
+            }
+        }
+
+        if (root.TryGetProperty(minProperty, out minElement) &&
+            root.TryGetProperty(maxProperty, out maxElement) &&
+            minElement.GetInt32() > maxElement.GetInt32())
+        {
+            errorMessage = $"{minProperty} must be less than or equal to {maxProperty}.";
+            return false;
+        }
+
+        return true;
     }
 }

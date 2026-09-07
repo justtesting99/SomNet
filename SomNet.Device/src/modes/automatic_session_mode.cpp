@@ -108,6 +108,10 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
     Serial.print(config.delayBeforeStartSeconds);
     Serial.println(F(" (stroke-first)"));
 
+    if (config.burstsOn) {
+        Serial.println(F("[AUTO] burstsOn=true - config accepted; burst FSM pending (Phase 10B)"));
+    }
+
     if (config.delayBeforeStartSeconds > 0) {
         state_ = State::StartDelay;
     } else {
