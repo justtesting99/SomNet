@@ -9,7 +9,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | SomNet web app | [User Guide](./User-Guide.md) |
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 
-**Firmware status (2026-09-07):** Phases **0–9 Part 2** — manual **stroke / abort / burst** and **automatic Start/Stop** from the web app. Firmware **`0.9.1-phase9p2`**. Burst-in-automatic (Bursts On) remains Part 3.
+**Firmware status (2026-09-07):** Phases **0–9 Part 2** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app. Firmware **`0.9.1-phase9p2`**. Burst-in-automatic (Bursts On) remains Part 3.
 
 ---
 
@@ -254,6 +254,8 @@ When a minimum control is disabled, the device uses the **maximum** setting for 
 
 **Stop** ends the session cleanly and records stroke count and duration from the device. **Abort** immediately opens the relay and ends the session with an **(aborted)** summary — use it when you need to cut off mid-stroke. Auto-end (minutes/strokes rule) finishes without pressing Stop.
 
+In the SomNet UI **Controls** panel: **Start** when idle; **Stop** is always shown (disabled until a session runs); **Abort** appears only while a session is running.
+
 For **wave** programs, the device uses your End Session value to calculate how long one full power “breath” takes (peak-to-peak timing is derived from that — see developer checklist). For **Build-Up**, End Session is the length of the single ramp.
 
 ### What operators should expect at the tool
@@ -366,4 +368,4 @@ From an operator or Dom perspective:
 | 2026-09-06 | Initial oscilloscope validation on D4 — `actualStrokeMs` matches relay input (25→25.8 ms, 201→207 ms serial) |
 | 2026-09-06 | Bench notes: single/burst poll jitter (~±5 ms); air-line pressure vs operator power adjustment |
 | 2026-09-06 | Link to Phase 7 §G2 / device plan — deferred timing options (`esp_timer`, poll, dual-core; OTA-safe) |
-| 2026-09-07 | Automatic mode overview — **signed off**; Start/Stop on device |
+| 2026-09-07 | Automatic mode overview — **signed off**; Start/Stop/Abort; auto-end via end-session rules |

@@ -2,13 +2,13 @@
 
 **Burst mode (primary)** — implement **`BurstSequenceMode`** on the ESP32: a **deterministic multi-stroke sequence** (fixed count, fixed `strokeMs`, fixed inter-stroke delay) — the natural extension of single stroke. Wire **`burst`** through `command_handler` / `execution_context`; enable the SomNet UI **Burst** button; commit session history from device **`resultJson`**.
 
-**Automatic mode (Part 2 — signed off 2026-09-07):** Seven programs on ESP32; UI Start/Stop; session from stop `resultJson`. See [Part 2 checklist](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md).
+**Automatic mode (Part 2 — signed off 2026-09-07):** Seven programs on ESP32; UI Start/Stop/Abort; auto-end via SignalR hub; session from device `resultJson`. See [Part 2 checklist](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md).
 
 **Parent plan:** [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §6, §9, §10 Phase 9  
 **Protocol reference:** [`SomNet.Device/docs/PROTOCOL.md`](../SomNet.Device/docs/PROTOCOL.md) — stroke, burst, automatic  
 **Prior phase:** [09-ESP32-Phase-8-Checklist.md](./09-ESP32-Phase-8-Checklist.md) (**Signed off** 2026-09-06)  
 **Status:** **Burst signed off** 2026-09-06 (`0.9.0-phase9`); **Automatic Part 2 signed off** 2026-09-07 (`0.9.1-phase9p2`)  
-**Target output:** Dom runs **manual burst** and **automatic Start/Stop** from SomNet UI on paired hardware — **met**
+**Target output:** Dom runs **manual burst** and **automatic Start/Stop/Abort** from SomNet UI on paired hardware — **met**
 
 ---
 
@@ -60,7 +60,7 @@ Update **Status** above and check boxes below as work completes. When Phase 9 is
 | **`execution_context`** | `startSinglePulse()` only | **Sign-off:** `startBurst()`; one active mode at a time |
 | **API ack timeout** | Fixed **10 s** | **Sign-off:** burst formula + caps (P9-D1) |
 | **UI Manual Burst** | Disabled + no-op handler | **Sign-off:** `POST burst` + `resultJson` session |
-| **UI Automatic Start/Stop** | Local session only (simulated) | **Future:** stay disabled; P9-D2/D4/D6 reserved |
+| **UI Automatic Start/Stop/Abort** | Local session only (simulated) | ☑ **Part 2 complete** — REST + hub sync (2026-09-07) |
 | **UI `SessionProvider`** | Burst still optimistic on click | **Sign-off:** burst after device ack |
 | **Firmware version** | `0.8.10-phase8` | **`0.9.0-phase9`** at burst sign-off |
 
@@ -267,7 +267,7 @@ Update **Status** above and check boxes below as work completes. When Phase 9 is
 
 ## Next phase
 
-→ **Part 2** below when automatic concept is finalized, or [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §15 (OTA, deployment)
+→ **Part 3** — burst-in-automatic (`burstsOn`) in [Part 2 checklist § Part 3](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#part-3--burst-in-automatic-deferred-unrelated-to-sequencer-design), or [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §15 (OTA, deployment)
 
 **Suggested order of work (burst sign-off):** (1) API timeout + burst validation → (2) `BurstSequenceMode` + `command_handler` → (3) Swagger burst → (4) UI burst + session → (5) verification + docs + **`0.9.0-phase9`**
 
@@ -279,7 +279,7 @@ _Not required for Phase 9 (burst) sign-off._
 
 **Checklist:** [09-ESP32-Phase-9-Part2-Automatic-Checklist.md](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) — **signed off 2026-09-07**.
 
-**Status (2026-09-07):** UI complete. All **7 firmware programs** bench signed off. Phase D E2E (UI Periodic start/stop + session from `resultJson`). Firmware **`0.9.1-phase9p2`**.
+**Status (2026-09-07):** UI complete. All **7 firmware programs** bench signed off. Phases D–F complete (start/stop/abort, auto-end hub sync, abort E2E `sess-032`). Firmware **`0.9.1-phase9p2`**.
 
 **Design intent:** Automatic mode is **not** burst with random gaps. It is **seven program variations** from the Automatic Mode dropdown. See Part 2 checklist §3.
 
@@ -287,25 +287,29 @@ _Not required for Phase 9 (burst) sign-off._
 
 Use plan §6, locked P9-D2/D4/D5/D6 + Part 2 §4 when implementing.
 
-## G. Firmware — track in Part 2 §7 (Phases A–D)
+## G. Firmware — track in Part 2 §7 (Phases A–F)
 
 - [x] **Phase A** — shell + Periodic bench signed off 2026-09-07 ([Part 2 §7 Phase A](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#phase-a--shell--periodic-p9p2-d35))
 - [x] **Phase B** — Random family bench signed off 2026-09-07
 - [x] **Phase C** — Wave + Build-Up bench signed off 2026-09-07
 - [x] **Phase D** — UI/API integration + E2E signed off 2026-09-07
+- [x] **Phase E** — auto-end UI sync (hub `automatic-session-complete`) signed off 2026-09-07
+- [x] **Phase F** — abort during automatic UI — E2E signed off 2026-09-07 (`sess-032`)
 - [x] `automatic-start` / `automatic-stop` / summary `resultJson` (P9-D2, P9-D4)
 
 ## H. Firmware + API integration
 
-- [x] Part 2 §7 Phases A–D complete
+- [x] Part 2 §7 Phases A–F complete (Phase F E2E abort pending)
 
 ## I. UI — automatic command path
 
 - [x] **Part 2 UI** — [§6](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#6-ui-implementation-checklist) complete 2026-09-07
-- [x] Start/Stop wired (Part 2 §7 Phase D)
+- [x] Start/Stop/Abort wired (Part 2 §7 Phases D, F)
+- [x] `AutomaticSessionHubListener` — device-initiated end/abort (Phase E)
 - [x] Command keys `automatic-start` / `automatic-stop` (P9P2-D37)
-- [x] Config snapshot payload (P9-D5); session from stop `resultJson`
+- [x] Config snapshot payload (P9-D5); session from device `resultJson` (stop, abort, end rule)
 
 ## J. Verification (automatic)
 
-- [x] Part 2 §7.2 per-mode smoke (Swagger) + E2E UI sign-off (Periodic)
+- [x] Part 2 §7.2 per-mode smoke (Swagger) + E2E UI sign-off (Periodic start/stop, auto-end)
+- [x] Phase F E2E — abort mid-session → history `(aborted)` — **2026-09-07** (`sess-032`)

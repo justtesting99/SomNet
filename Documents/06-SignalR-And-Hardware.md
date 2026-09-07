@@ -37,7 +37,7 @@ When a client connects, `OnConnectedAsync` classifies the connection:
 | Connection | How identified | Group joined | Capabilities |
 |------------|----------------|--------------|--------------|
 | **Paired device** | JWT with `role=device` | `paired:{dom}:{sub}` | Receive commands, send acks |
-| **Operator** | JWT with operator audience | `operator:{dom}` | Receive `CommandAcknowledged` (future live UI) |
+| **Operator** | JWT with operator audience | `operator:{dom}` | Receive `CommandAcknowledged` (automatic end/abort sync) |
 | **Unpaired device** | Query `?deviceId=...` (no auth) | `unpaired:{deviceId}` | Receive pairing token only |
 | **Invalid** | None of the above | — | Connection aborted |
 

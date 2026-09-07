@@ -234,7 +234,7 @@ On page refresh during an active manual session, the in-progress session may exi
 | `recordManualStroke(powerPercent)` | Append stroke, start/update session |
 | `recordManualBurst(...)` | Append burst, start/update session |
 | `endManualSession(reason)` | End with aggregated summary |
-| `startAutomaticSession()` | POST new automatic session |
+| `beginAutomaticSession()` | POST new automatic session |
 | `endAutomaticSession(reason, deviceResult?)` | End with device-measured summary |
 | `endActiveSessionIfNeeded(reason)` | Guard for navigation events |
 

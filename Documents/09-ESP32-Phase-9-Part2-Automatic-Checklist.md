@@ -18,12 +18,12 @@
 
 | Item | Value |
 |------|--------|
-| **Goal** | Seven automatic programs on ESP32; UI Start/Stop E2E; session summary from device `resultJson` |
+| **Goal** | Seven automatic programs on ESP32; UI Start/Stop/Abort; auto-end + abort via hub; session summary from device `resultJson` |
 | **Duration** | ~2–3 weeks (phased — Periodic first, then random, then wave/build-up) |
 | **Hardware scope** | Same DevKit (`esp32-84CCA85C36B4` / `Slv66`); relay **D4**; serial `[RELAY]` / `[AUTO]` logs |
-| **Software scope** | `AutomaticSessionMode` + program factory; `automatic-start`/`stop`; UI wiring; API payload validation |
+| **Software scope** | `AutomaticSessionMode` + program factory; `automatic-start`/`stop`; UI wiring; SignalR auto-end/abort sync; API payload validation |
 | **Explicitly out of scope** | Burst-in-automatic (Part 3); live `automatic-update` (§9); `esp_timer` gap precision |
-| **Blocks** | Operators using **Automatic Start/Stop** from web app (buttons disabled today) |
+| **Blocks** | ~~Operators using **Automatic Start/Stop** from web app~~ — **unblocked** (Phase D, 2026-09-07) |
 
 Update **Status** above and check boxes in **§7** as work completes. When Part 2 is done, update [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §6 and bump firmware version (P9P2-D38).
 
@@ -656,7 +656,7 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 | **`execution_context`** | + `startAutomatic()` / `stopAutomatic()` | unchanged |
 | **`command_handler`** | `automatic-start` / `automatic-stop` (+ legacy `:` keys) | unchanged |
 | **`power_timing`** | `strokeMsFromPower()` only | + triangle sampler, inverse gap, build-up ramp |
-| **UI Start/Stop** | ☑ Wired; keys **`automatic-start`** / **`automatic-stop`** | unchanged |
+| **UI Start/Stop/Abort** | ☑ Wired; keys **`automatic-start`** / **`automatic-stop`**; **`abort`**; hub auto-end | unchanged |
 | **API validator** | ☑ stroke + burst + **`automatic-start`** | unchanged |
 | **Firmware version** | **`0.9.1-phase9p2`** (P9P2-D38 locked in `platformio.ini`) | unchanged at Part 2 sign-off |
 
@@ -762,9 +762,9 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 
 ### Phase F — Abort during automatic (UI)
 
-- [x] `AutomaticControls` — **Abort** button enabled while session running
+- [x] `AutomaticControls` — **Abort** button while session running (hidden when idle; Stop always visible)
 - [x] Sends `abort` command; session finalized via hub `automatic-session-complete` (with REST fallback)
-- [ ] E2E: Start Periodic → **Abort** mid-session → UI unlocks + history `(aborted)`
+- [x] E2E: Start Periodic → **Abort** mid-session → UI unlocks + history `(aborted)` — **2026-09-07** (`sess-032`: 1 stroke / 2 sec / `abort`)
 
 **Part 2 sign-off exit:** Dom runs any of seven modes from UI on paired hardware; session history from device summary. **Met** for Periodic via UI (2026-09-07); remaining six modes verified via Swagger in Phases A–C.
 
@@ -802,7 +802,7 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 5. ~~**Phase C** — wave + build-up~~ — **bench signed off** 2026-09-07
 6. ~~**Phase D** — UI/API integration + E2E sign-off~~ — **signed off** 2026-09-07
 7. ~~**Phase E** — auto-end UI sync (hub listener)~~ — **signed off** 2026-09-07
-8. **Phase F** — abort during automatic UI — code complete; E2E sign-off pending
+8. ~~**Phase F** — abort during automatic UI~~ — **signed off** 2026-09-07 (`sess-032`)
 9. ~~**Update** device plan + PROTOCOL + firmware version~~ — **done** 2026-09-07
 
 ---
@@ -821,3 +821,4 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 | 2026-09-07 | Phase D E2E signed off — UI Periodic start/stop; session history from device `resultJson` |
 | 2026-09-07 | Phase E signed off — auto-end via `automatic-session-complete` + SignalR UI sync |
 | 2026-09-07 | Phase F — abort during automatic UI (`AutomaticControls` Abort + hub finalize helper) |
+| 2026-09-07 | Phase F E2E signed off — Periodic abort (`sess-032`: 1 stroke / 2 sec / `abort`) |

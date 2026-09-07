@@ -14,7 +14,7 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 **End-user / installer documentation:** [Hardware User Guide](./Hardware-User-Guide.md) — provisioning, Wi‑Fi recovery (10 s button hold), Device ID, relay operation.
 
-**Implementation progress (2026-09-07):** Phases **0–9 Part 2 signed off**. Current firmware **`0.9.1-phase9p2`** — paired SignalR; manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop from SomNet UI; **`resultJson`** end-to-end. See §10.
+**Implementation progress (2026-09-07):** Phases **0–9 Part 2 signed off**. Current firmware **`0.9.1-phase9p2`** — paired SignalR; manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort from SomNet UI; hub sync for auto-end/abort; **`resultJson`** end-to-end. See §10.
 
 **Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 9 Part 2 (automatic) signed off (2026-09-07).** SomNet API/UI integration complete for manual and automatic commands (Phases 8–9 Part 2).
 
@@ -375,7 +375,7 @@ No changes to SomNet are **required** for the device config UI alone. **SomNet U
 | **Hardware pairing** | Toolbar **Hardware** button → dedicated dialog | **All Subs**, **Online now (unpaired)**, **Enter device ID**; token expiry on All Subs grid |
 | **App settings** | Toolbar **Options** button → tabbed dialog | **General** (operation + display), **Notifications**, **Account** (password) |
 | **Manual commands** | Manual mode dashboard | **Stroke**, **Burst**, **Abort** via REST; session from device `resultJson` (Phases 8–9) |
-| **Automatic mode** | Automatic mode dashboard | **Start/Stop** via REST; session summary from stop **`resultJson`** (Phase 9 Part 2) |
+| **Automatic mode** | Automatic mode dashboard | **Start/Stop/Abort** via REST; auto-end/abort via hub `automatic-session-complete`; session from device **`resultJson`** (Phase 9 Part 2) |
 
 **History:** Phase 4 shipped minimal pairing inside **Options**. Phase 8 moved pairing to the **Hardware** dialog with pending list and multi-Sub grid. Options was later split into tabs; **Hardware stays a separate dialog** (operator preference, 2026-09-06).
 
@@ -898,7 +898,7 @@ THEN AckCommand success
 
 > **Signed off 2026-09-07.** Automatic mode is **seven program variations** from the Automatic Mode dropdown. The UI sends one config snapshot at start; the ESP32 runs the selected program locally until stop, abort, or end-session rule. Distinct from manual **burst** (fixed N-stroke sequence). See [Phase 9 Part 2 checklist](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md).
 
-**Status:** End-to-end on hardware and SomNet UI — firmware **`0.9.1-phase9p2`**. Automatic **Start/Stop** buttons send REST commands; session history from stop **`resultJson`**.
+**Status:** End-to-end on hardware and SomNet UI — firmware **`0.9.1-phase9p2`**. Automatic **Start/Stop/Abort** from UI; device-initiated end/abort via SignalR hub; session history from device **`resultJson`** (stop ack, or `automatic-session-complete`).
 
 #### Program catalog (device-side)
 
@@ -1402,7 +1402,7 @@ SomNet changes would include:
 | **UI `SessionProvider`** | Defer stroke/burst session writes until device ack | ☑ Phases 8–9 |
 | **UI `sessionSummary.ts`** | Build lines from parsed `resultJson` | ☑ Phase 8+ |
 | **UI `HardwareCommandProvider`** | Pending state; block overlapping manual commands | ☑ Phases 8–9 |
-| **Automatic session** | Start/stop from UI; summary from stop `resultJson` | ☑ Phase 9 Part 2 |
+| **Automatic session** | Start/stop/abort from UI; auto-end via hub; summary from device `resultJson` | ☑ Phase 9 Part 2 |
 
 Firmware populates `message` for logs and **`resultJson`** on every completing ack (serial + wire since Phase 8).
 
@@ -1650,12 +1650,13 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 - [x] **`AutomaticSessionMode`** + seven-program factory catalog
 - [x] `power_timing` wave/build-up planners; on-the-fly RNG for random family
-- [x] `automatic-start/stop` + UI wiring; session from stop `resultJson`
+- [x] `automatic-start/stop` + UI wiring; **Abort** during automatic; hub sync for auto-end/abort
+- [x] Session from device `resultJson` (stop, abort, end-session rule)
 - [x] Firmware **`0.9.1-phase9p2`**
 
 **Exit criteria:** **`burst`** E2E from UI per §6. **Met.** Automatic Periodic E2E from UI + all seven programs bench-verified. **Met.**
 
-*Optional follow-up: F.3 busy reject smoke test; abort-during-automatic UI path.*
+*Optional follow-up: F.3 busy reject smoke test.*
 
 ---
 
@@ -1834,7 +1835,7 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 - [x] Phases 0–9 Part 2 signed off — firmware **`0.9.1-phase9p2`**
 - [x] PlatformIO project `SomNet.Device/` with module tree per §12
 - [x] Pairing + manual **stroke**, **burst**, **abort** E2E from SomNet UI on hardware (`esp32-84CCA85C36B4` / Sub `Slv66`)
-- [x] Automatic **Start/Stop** E2E from SomNet UI; session from device stop `resultJson`
+- [x] Automatic **Start/Stop/Abort** E2E from SomNet UI; auto-end via hub; session from device `resultJson`
 - [x] Relay GPIO on D4 with `micros()` pulse FSM
 - [x] **`resultJson`** end-to-end; session from device ack
 - [x] Open decisions #1–6, #11–12, #17–19 resolved (§15)

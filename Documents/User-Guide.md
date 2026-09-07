@@ -253,7 +253,7 @@ For technical issues, server logs, or hardware pairing, refer to the [Developmen
 Sign in → Select Sub → Choose Mode → Operate → Review History
                 ↓              ↓
            Add/Remove     Manual: Stroke/Burst/Abort
-             Subs        Automatic: Start/Stop
+             Subs        Automatic: Start/Stop/Abort
                 ↓
            Options (settings)
            Notify (schedule)
