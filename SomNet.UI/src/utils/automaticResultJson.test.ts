@@ -46,6 +46,18 @@ describe('buildAutomaticSessionSummary', () => {
     expect(summary).toBe('Periodic — 8 strokes over 2 min (stopped manually).');
   });
 
+  it('builds summary for aborted automatic session', () => {
+    const summary = buildAutomaticSessionSummary({
+      automaticMode: 'periodic',
+      strokesCompleted: 4,
+      durationMs: 20_000,
+      endReason: 'abort',
+      interrupted: true,
+    });
+
+    expect(summary).toBe('Periodic — 4 strokes over 20 sec (aborted).');
+  });
+
   it('falls back when device result is missing', () => {
     expect(buildAutomaticSessionSummary(null, 'stopped manually')).toBe(
       'Automatic session stopped manually.',

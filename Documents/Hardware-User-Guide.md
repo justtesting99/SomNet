@@ -185,7 +185,7 @@ If the device is on your network and you can open its web page:
 | Stroke from SomNet **web app** | **Yes** | Manual mode **Stroke** → device ack + session from `resultJson` |
 | **Burst** from SomNet **web app** | **Yes** | Manual mode **Burst** — fixed stroke count + delay; device runs full sequence |
 | **Abort** during stroke or burst | **Yes** | Relay opens; session tracks abort / partial burst from device `resultJson` |
-| Automatic modes | **Yes** | Automatic tab **Start/Stop** — seven programs; session summary from device on Stop |
+| Automatic modes | **Yes** | Automatic tab **Start/Stop/Abort** — seven programs; session summary from device on Stop, Abort, or end rule |
 
 **Server URL reminder:** Use the SomNet API **LAN address** on the device (e.g. `http://192.168.1.47:5031`). The SomNet browser on the same PC can use `localhost`; the ESP32 cannot.
 
@@ -203,7 +203,7 @@ If the device is on your network and you can open its web page:
 
 ## Automatic mode
 
-**Status (2026-09-07):** **Available** — select **Automatic** in SomNet, configure a program, press **Start**. Session history uses device-measured stroke count and duration when you **Stop** or when an end-session rule fires.
+**Status (2026-09-07):** **Available** — select **Automatic** in SomNet, configure a program, press **Start**. Session history uses device-measured stroke count and duration when you **Stop**, **Abort**, or when an end-session rule fires.
 
 **Developer detail:** [Phase 9 Part 2 — Automatic checklist](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) (signed off)
 
@@ -251,6 +251,8 @@ When a minimum control is disabled, the device uses the **maximum** setting for 
 | **Minutes** | Stop after N minutes |
 | **Strokes** | Stop after N strokes |
 | **No AutoEnd** | Run until operator presses **Stop** (not available for **Build-Up** or **wave** programs — they need a defined length to shape the ramp or wave) |
+
+**Stop** ends the session cleanly and records stroke count and duration from the device. **Abort** immediately opens the relay and ends the session with an **(aborted)** summary — use it when you need to cut off mid-stroke. Auto-end (minutes/strokes rule) finishes without pressing Stop.
 
 For **wave** programs, the device uses your End Session value to calculate how long one full power “breath” takes (peak-to-peak timing is derived from that — see developer checklist). For **Build-Up**, End Session is the length of the single ramp.
 

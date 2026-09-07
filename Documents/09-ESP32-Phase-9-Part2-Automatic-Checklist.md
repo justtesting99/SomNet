@@ -691,10 +691,10 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 #### A.3 Periodic smoke (§7.2 #1)
 
 - [x] Swagger: start Periodic, `strokeMaxSeconds=20`, max power — stable `[RELAY]` every ~20 s + ~400 ms strokeMs (2026-09-07, 10 strokes, `endSession`)
-- [ ] Stop → ack includes `strokesCompleted`, duration, `automaticMode` (`automatic-stop` manual)
-- [ ] Abort mid-session → interrupt summary (match burst dual-ack if applicable)
+- [x] Stop → ack includes `strokesCompleted`, duration, `automaticMode` (`automatic-stop` manual) — Phase D E2E 2026-09-07
+- [x] Abort mid-session → interrupt summary via `automatic-session-complete` — firmware Phase A; UI Phase F
 
-**Phase A exit:** Periodic runs ≥5 min or 10 strokes without drift crash; stop summary plausible. **Met** for start + cadence + stroke end (2026-09-07). Manual stop/abort deferred optional.
+**Phase A exit:** Periodic runs ≥5 min or 10 strokes without drift crash; stop summary plausible. **Met** for start + cadence + stroke end (2026-09-07). Manual stop via UI (Phase D); abort via UI (Phase F).
 
 ---
 
@@ -760,6 +760,12 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 - [x] UI: `@microsoft/signalr` operator hub connection
 - [x] E2E: Periodic **8 strokes** end rule — UI unlocks without manual Stop — **2026-09-07** (37672 ms / `endSession`)
 
+### Phase F — Abort during automatic (UI)
+
+- [x] `AutomaticControls` — **Abort** button enabled while session running
+- [x] Sends `abort` command; session finalized via hub `automatic-session-complete` (with REST fallback)
+- [ ] E2E: Start Periodic → **Abort** mid-session → UI unlocks + history `(aborted)`
+
 **Part 2 sign-off exit:** Dom runs any of seven modes from UI on paired hardware; session history from device summary. **Met** for Periodic via UI (2026-09-07); remaining six modes verified via Swagger in Phases A–C.
 
 ---
@@ -795,7 +801,9 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 4. ~~**Phase B** — random family~~ — **bench signed off** 2026-09-07
 5. ~~**Phase C** — wave + build-up~~ — **bench signed off** 2026-09-07
 6. ~~**Phase D** — UI/API integration + E2E sign-off~~ — **signed off** 2026-09-07
-7. ~~**Update** device plan + PROTOCOL + firmware version~~ — **done** 2026-09-07
+7. ~~**Phase E** — auto-end UI sync (hub listener)~~ — **signed off** 2026-09-07
+8. **Phase F** — abort during automatic UI — code complete; E2E sign-off pending
+9. ~~**Update** device plan + PROTOCOL + firmware version~~ — **done** 2026-09-07
 
 ---
 
@@ -812,4 +820,4 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 | 2026-09-07 | Phase C bench smoke passed — all 7 programs verified on device |
 | 2026-09-07 | Phase D E2E signed off — UI Periodic start/stop; session history from device `resultJson` |
 | 2026-09-07 | Phase E signed off — auto-end via `automatic-session-complete` + SignalR UI sync |
-| 2026-09-07 | **Part 2 signed off** — docs (Device Plan §6, PROTOCOL.md) |
+| 2026-09-07 | Phase F — abort during automatic UI (`AutomaticControls` Abort + hub finalize helper) |

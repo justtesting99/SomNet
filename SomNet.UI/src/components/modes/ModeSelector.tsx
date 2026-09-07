@@ -31,7 +31,7 @@ const modeOptions: ModeOption[] = [
       'Minimum and maximum power sliders (0–400)',
       'Stroke interval range, start delay, and end-session rules',
       'Optional burst mode with power, delay, and stroke count ranges',
-      'Start and Stop controls for automated sessions',
+      'Start, Stop, and Abort controls for automated sessions',
       'Dual 16:9 video monitors with expand on start (mobile)',
     ],
   },

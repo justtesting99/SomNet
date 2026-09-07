@@ -15,6 +15,7 @@ import {
   isAutomaticStopResultJson,
   parseAutomaticResultJson,
 } from '@/utils/automaticResultJson';
+import { applyAutomaticDeviceComplete } from '@/utils/automaticSessionFinalize';
 
 function shouldHandleAutomaticSessionComplete(ack: HardwareCommandAck): boolean {
   if (ack.correlationId !== AUTOMATIC_SESSION_COMPLETE_CORRELATION_ID) {
@@ -60,8 +61,12 @@ export function AutomaticSessionHubListener() {
         return;
       }
 
-      updateAutomaticRef.current({ ...automatic, running: false });
-      void endAutomaticSessionRef.current('', parsed);
+      applyAutomaticDeviceComplete(
+        automatic,
+        parsed,
+        updateAutomaticRef.current,
+        endAutomaticSessionRef.current,
+      );
     });
 
     let cancelled = false;

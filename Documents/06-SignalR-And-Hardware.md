@@ -65,7 +65,7 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 |--------|---------|--------|---------|
 | `AckCommand` | `HardwareCommandAckDto` | Paired device | Confirm command execution |
 
-**DTO note:** `HardwareCommandAckDto` includes `correlationId`, `success`, `message`, and optional **`resultJson`** (string containing JSON). REST `POST /api/devices/commands` forwards `resultJson` to the UI; `CommandAcknowledged` hub events include it for future multi-tab use.
+**DTO note:** `HardwareCommandAckDto` includes `correlationId`, `success`, `message`, and optional **`resultJson`** (string containing JSON). REST `POST /api/devices/commands` forwards `resultJson` to the UI; `CommandAcknowledged` hub events include it for operator UI sync (automatic end-rule and abort use `correlationId=automatic-session-complete`).
 
 ---
 

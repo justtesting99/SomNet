@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AUTOMATIC_RUN_MODE_OPTIONS,
   type AutomaticControlState,
@@ -33,8 +33,10 @@ import {
 } from '@/utils/strokeMsLimits';
 import { useHardwareCommand } from '@/context/HardwareCommandProvider';
 import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCommand';
+import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
 import { buildAutomaticStartPayload } from '@/utils/automaticStartPayload';
 import { parseAutomaticResultJson } from '@/utils/automaticResultJson';
+import { waitForAutomaticHubFinalize } from '@/utils/automaticSessionFinalize';
 import { ApiError } from '@/api/client';
 
 const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
@@ -53,6 +55,8 @@ export function AutomaticControls() {
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
   const [commandError, setCommandError] = useState('');
+  const runningRef = useRef(state.running);
+  runningRef.current = state.running;
 
   const fieldRules = useMemo(
     () => getAutomaticFieldRules(state.automaticMode),
@@ -68,6 +72,7 @@ export function AutomaticControls() {
   const hardwareReady = systemStatus.isReady;
   const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);
   const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop);
+  const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
   const hardwareDisabledReason = hardwareReady
     ? undefined
     : systemStatus.detail || systemStatus.summary;
@@ -174,6 +179,44 @@ export function AutomaticControls() {
     }
   }
 
+  async function handleAbort() {
+    setCommandError('');
+    const wasRunning = state.running;
+
+    try {
+      const response = await sendHardwareCommandRaw(selectedSub, 'abort', '{}');
+
+      if (!response.delivered) {
+        setCommandError(response.message ?? 'Abort could not be delivered.');
+        return;
+      }
+
+      if (!response.acknowledged) {
+        setCommandError(response.message ?? 'Device did not acknowledge abort in time.');
+        return;
+      }
+
+      if (!response.success) {
+        setCommandError(response.message ?? 'Nothing to abort.');
+        return;
+      }
+
+      if (!wasRunning) {
+        return;
+      }
+
+      await waitForAutomaticHubFinalize(
+        () => runningRef.current,
+        async () => {
+          update('running', false);
+          await endAutomaticSession('aborted');
+        },
+      );
+    } catch (error) {
+      setCommandError(formatCommandError(error));
+    }
+  }
+
   const endSessionValueDisabled = configLocked || state.endSessionMode === 'noAutoEnd';
 
   const endSessionOptions = useMemo(
@@ -203,7 +246,7 @@ export function AutomaticControls() {
 
       {configLocked ? (
         <p className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200">
-          Session running — settings are read-only until you stop.
+          Session running — settings are read-only until you stop or abort.
         </p>
       ) : null}
 
@@ -416,7 +459,7 @@ export function AutomaticControls() {
 
         <Panel title="Controls">
           <div className="flex h-full flex-col justify-center gap-3">
-            {!hardwareReady && !commandError && !startPending && !stopPending ? (
+            {!hardwareReady && !commandError && !startPending && !stopPending && !abortPending ? (
               <p className="text-sm text-amber-400/90" role="status">
                 {hardwareDisabledReason}
               </p>
@@ -454,13 +497,27 @@ export function AutomaticControls() {
               size="lg"
               fullWidth
               variant="secondary"
-              disabled={!hardwareReady || !configLocked || startPending}
+              disabled={!hardwareReady || !configLocked || startPending || abortPending}
               title={hardwareDisabledReason}
               onCommand={handleStop}
               className="py-4 text-base"
             >
               Stop
             </CommandButton>
+            {configLocked ? (
+              <CommandButton
+                commandKey={HARDWARE_COMMAND_KEYS.manualAbort}
+                size="lg"
+                fullWidth
+                variant="secondary"
+                disabled={!hardwareReady || startPending || stopPending}
+                title={hardwareDisabledReason}
+                onCommand={handleAbort}
+                className="py-4 text-base"
+              >
+                Abort
+              </CommandButton>
+            ) : null}
           </div>
         </Panel>
       </div>

@@ -33,7 +33,9 @@ The UI rebuilds the summary from the local event log after each action.
 | Manual | Switch mode | End before mode change | `mode-switch` |
 | Manual | Sign out | End before logout | `sign-out` |
 | Manual | Change sub | End before sub switch | `sub-change` |
-| Automatic | Stop button | `POST /api/sessions/{id}/end` | `stop` |
+| Automatic | Stop button | `POST /api/sessions/{id}/end` | Device `resultJson` → `(stopped manually)` |
+| Automatic | Abort button | `POST /api/sessions/{id}/end` | Device `resultJson` via hub → `(aborted)` |
+| Automatic | End-session rule (device) | `POST /api/sessions/{id}/end` | Hub `automatic-session-complete` → `(end session rule)` |
 | Automatic | Switch mode / sign-out / sub-change | Same as manual | respective reason |
 
 `SessionProvider.endActiveSessionIfNeeded()` is called from AppShell before destructive navigation actions.
@@ -96,15 +98,15 @@ No strokes or bursts.
 
 ## Automatic Session Summaries
 
-Built by `buildAutomaticSessionSummary()`:
+Built by `buildAutomaticSessionSummary()` from device `resultJson` (Stop, Abort, or end-session rule):
 
 ```
-Automatic session ran 12 minutes, stop.
+Periodic — 8 strokes over 38 sec (end session rule).
+Periodic — 4 strokes over 20 sec (aborted).
+Power Wave — 12 strokes over 5 min (stopped manually).
 ```
 
-Duration is computed from `startedAt` to end time, minimum 1 minute.
-
-The automatic stroke engine (hardware timing loop) is not yet implemented server-side — the UI manages session bookkeeping only.
+When the hub delivers `automatic-session-complete` with `resultJson`, stroke count and duration come from the device. If hub delivery fails, the UI falls back to a generic reason (e.g. `Automatic session aborted.`).
 
 ---
 
@@ -233,7 +235,7 @@ On page refresh during an active manual session, the in-progress session may exi
 | `recordManualBurst(...)` | Append burst, start/update session |
 | `endManualSession(reason)` | End with aggregated summary |
 | `startAutomaticSession()` | POST new automatic session |
-| `endAutomaticSession(reason)` | End with duration summary |
+| `endAutomaticSession(reason, deviceResult?)` | End with device-measured summary |
 | `endActiveSessionIfNeeded(reason)` | Guard for navigation events |
 
 All methods are async and handle API errors internally (logged, not always surfaced to UI).
