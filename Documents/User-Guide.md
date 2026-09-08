@@ -133,7 +133,7 @@ Automatic mode runs a session based on your configured parameters.
 
 ### Timing Between Strokes
 
-- **Minimum / Maximum (sec)** — Gap range between **main program** strokes (program-dependent — some modes fix min or max)
+- **Minimum / Maximum (sec)** — Gap range between **main program** strokes (**UI minimum 1 second** each; program-dependent — some modes fix min or max)
 
 ### Burst Settings
 
@@ -141,8 +141,8 @@ When **Bursts On** is checked, burst clusters are inserted at even intervals dur
 
 - **Percent (0–100)** — How many burst **events** spread across the session (e.g. 10% over 8 strokes → 1 burst event)
 - **Burst Style** — Fixed or random power/delay inside each burst
-- **Burst Stroke Power (0–100)** — **Relative to Power Settings above** (0 = session min, 100 = session max). Defaults **0–100** for full-strength bursts; lower values allow **lighter “break” strokes** between main strokes
-- **Delay between burst strokes** — Gap **inside** each burst cluster (separate from main-program gaps)
+- **Burst Stroke Power (relative 0–100 scale)** — **Relative to Power Settings above** (scale 0 = session min, 100 = session max). UI **Min** field ≥ **1**; **Max** may use 0–100. Defaults **1–100** for full-strength bursts; lower max (e.g. **40**) allows **lighter “break” strokes** between main strokes
+- **Delay between burst strokes** — Gap **inside** each burst cluster; UI **Min** ≥ **1** sec (max may be 0 for back-to-back intra-burst strokes on device)
 - **Number of strokes in each burst** — Min/max strokes per burst event
 
 Burst Settings are editable when idle; read-only while a session is running.
@@ -164,10 +164,12 @@ Choose how the automatic session ends:
 | Button | What it does |
 |--------|--------------|
 | **Start** | Begins an automatic session |
-| **Stop** | Ends the running session cooperatively (finishes current stroke, or entire current burst when bursts are on) |
+| **Stop** | Ends the running session cooperatively (finishes current stroke, or entire current burst when bursts are on). **Abort stays available** if you need to cut off immediately. |
 | **Abort** | Immediately opens the relay and ends the session (shown only while a session is running) |
 
 Unlike manual mode, the session starts immediately when you press Start.
+
+A **visual session timeline or graph** (preview before start or replay in history) is planned for a future release — not available yet.
 
 ---
 

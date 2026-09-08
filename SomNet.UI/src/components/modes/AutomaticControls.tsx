@@ -23,6 +23,7 @@ import { computeStrokeMs } from '@/utils/stroke';
 import {
   applyAutomaticModeChange,
   getAutomaticFieldRules,
+  MIN_STROKE_GAP_SECONDS,
   normalizeAutomaticControlState,
 } from '@/utils/automaticFieldRules';
 import { getAutomaticModeInfo } from '@/utils/automaticModeInfo';
@@ -30,6 +31,8 @@ import {
   getBurstFieldRules,
   MAX_BURST_DELAY_SEC,
   MAX_BURST_STROKES,
+  MIN_BURST_DELAY_SEC,
+  MIN_BURST_STROKE_POWER,
 } from '@/utils/burstFieldRules';
 import {
   clampMaximumStrokeMs,
@@ -161,7 +164,9 @@ export function AutomaticControls() {
       normalizedAutomatic.burstDelayMin === state.burstDelayMin &&
       normalizedAutomatic.burstDelayMax === state.burstDelayMax &&
       normalizedAutomatic.burstStrokesMin === state.burstStrokesMin &&
-      normalizedAutomatic.burstStrokesMax === state.burstStrokesMax;
+      normalizedAutomatic.burstStrokesMax === state.burstStrokesMax &&
+      normalizedAutomatic.strokeMinSeconds === state.strokeMinSeconds &&
+      normalizedAutomatic.strokeMaxSeconds === state.strokeMaxSeconds;
 
     if (strokeUnchanged && automaticUnchanged) {
       return;
@@ -421,7 +426,7 @@ export function AutomaticControls() {
                     label="Minimum (sec)"
                     alignLabelHeight
                     value={state.strokeMinSeconds}
-                    min={0}
+                    min={MIN_STROKE_GAP_SECONDS}
                     disabled={configLocked || fieldRules.disableStrokeMinSeconds}
                     title={
                       fieldRules.disableStrokeMinSeconds
@@ -438,7 +443,7 @@ export function AutomaticControls() {
                   label="Maximum (sec)"
                   alignLabelHeight
                   value={state.strokeMaxSeconds}
-                  min={0}
+                  min={MIN_STROKE_GAP_SECONDS}
                   disabled={configLocked}
                   onChange={(event) => update('strokeMaxSeconds', Number(event.target.value))}
                 />
@@ -521,6 +526,7 @@ export function AutomaticControls() {
                 min={state.burstStrokePowerMin}
                 max={state.burstStrokePowerMax}
                 minLimit={0}
+                minValueMin={MIN_BURST_STROKE_POWER}
                 maxLimit={100}
                 minDisabled={burstSettingsLocked || burstFieldRules.disableBurstStrokePowerMin}
                 maxDisabled={burstSettingsLocked}
@@ -538,6 +544,7 @@ export function AutomaticControls() {
                 min={state.burstDelayMin}
                 max={state.burstDelayMax}
                 minLimit={0}
+                minValueMin={MIN_BURST_DELAY_SEC}
                 maxLimit={MAX_BURST_DELAY_SEC}
                 minDisabled={burstSettingsLocked || burstFieldRules.disableBurstDelayMin}
                 maxDisabled={burstSettingsLocked}

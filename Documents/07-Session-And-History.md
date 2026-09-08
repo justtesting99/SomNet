@@ -33,8 +33,8 @@ The UI rebuilds the summary from the local event log after each action.
 | Manual | Switch mode | End before mode change | `mode-switch` |
 | Manual | Sign out | End before logout | `sign-out` |
 | Manual | Change sub | End before sub switch | `sub-change` |
-| Automatic | Stop button | `POST /api/sessions/{id}/end` | Device `resultJson` → `(stopped manually)` |
-| Automatic | Abort button | `POST /api/sessions/{id}/end` | Device `resultJson` via hub → `(aborted)` |
+| Automatic | Stop button | `POST /api/sessions/{id}/end` | Hub `automatic-session-complete` (or REST) → device `resultJson` → `(stopped manually)` |
+| Automatic | Abort button | `POST /api/sessions/{id}/end` | Hub `automatic-session-complete` → `(aborted)` |
 | Automatic | End-session rule (device) | `POST /api/sessions/{id}/end` | Hub `automatic-session-complete` → `(end session rule)` |
 | Automatic | Switch mode / sign-out / sub-change | Same as manual | respective reason |
 
@@ -261,6 +261,7 @@ All methods are async and handle API errors internally (logged, not always surfa
 
 - Resume in-progress session after page reload
 - Server-side automatic stroke engine with live progress updates
+- **Session timeline / graph** — visual representation of a planned or completed automatic session (main strokes, bursts, gaps, relative power). Placement TBD: Automatic mode page, session history detail, or both. See [Phase 10 checklist §8](./09-ESP32-Phase-10-Checklist.md#8-relationship-to-other-future-work).
 - Session export (CSV/PDF)
 - Retention policies and archival
 - Real-time session sync via SignalR for multi-operator scenarios

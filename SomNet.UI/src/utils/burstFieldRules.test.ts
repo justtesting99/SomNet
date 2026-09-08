@@ -38,11 +38,24 @@ describe('normalizeAutomaticBurstFields', () => {
     });
 
     expect(normalized.burstPercent).toBe(100);
-    expect(normalized.burstStrokePowerMin).toBe(40);
-    expect(normalized.burstStrokePowerMax).toBe(40);
-    expect(normalized.burstDelayMin).toBe(2);
-    expect(normalized.burstDelayMax).toBe(2);
+    expect(normalized.burstStrokePowerMin).toBe(80);
+    expect(normalized.burstStrokePowerMax).toBe(80);
+    expect(normalized.burstDelayMin).toBe(300);
+    expect(normalized.burstDelayMax).toBe(300);
     expect(normalized.burstStrokesMin).toBe(3);
     expect(normalized.burstStrokesMax).toBe(3);
+  });
+
+  it('clamps burst min power and min delay to at least 1', () => {
+    const normalized = normalizeAutomaticBurstFields({
+      ...defaultAutomaticState,
+      burstStrokePowerMin: 0,
+      burstStrokePowerMax: 50,
+      burstDelayMin: 0,
+      burstDelayMax: 5,
+    });
+
+    expect(normalized.burstStrokePowerMin).toBe(1);
+    expect(normalized.burstDelayMin).toBe(1);
   });
 });

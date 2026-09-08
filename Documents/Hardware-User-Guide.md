@@ -244,6 +244,8 @@ Only **Minimum power** and **Minimum (sec) time between strokes** change with th
 
 When a minimum control is disabled, the device uses the **maximum** setting for that dimension (fixed power or fixed gap).
 
+**Timing Settings — Time Between Strokes:** **Minimum (sec)** and **Maximum (sec)** each enforce a **UI minimum of 1 second** (main-program gap between strokes). Some programs grey out the minimum field; stored values persist but the device uses the maximum when that field is disabled.
+
 ### End Session After
 
 | Setting | Use |
@@ -252,7 +254,7 @@ When a minimum control is disabled, the device uses the **maximum** setting for 
 | **Strokes** | Stop after N strokes |
 | **No AutoEnd** | Run until operator presses **Stop** (not available for **Build-Up** or **wave** programs — they need a defined length to shape the ramp or wave) |
 
-**Stop** ends the session cleanly and records stroke count and duration from the device. **Abort** immediately opens the relay and ends the session with an **(aborted)** summary — use it when you need to cut off mid-stroke. Auto-end (minutes/strokes rule) finishes without pressing Stop.
+**Stop** ends the session cooperatively and records stroke count and duration from the device. During a **burst cluster**, Stop finishes the **entire current burst** before ending — pulses may continue briefly after you press Stop. **Abort** immediately opens the relay and ends the session with an **(aborted)** summary; it stays available even while a cooperative Stop is in progress. Auto-end (minutes/strokes rule) finishes without pressing Stop.
 
 In the SomNet UI **Controls** panel: **Start** when idle; **Stop** is always shown (disabled until a session runs); **Abort** appears only while a session is running.
 
@@ -273,10 +275,10 @@ When **Bursts On** is checked, **scheduled burst clusters** run inside the same 
 | Concept | Behavior |
 |---------|----------|
 | **Power Settings (min/max)** | Define the **power envelope for the whole session** — all main strokes and all burst strokes resolve inside this band |
-| **Burst Stroke Power (0–100)** | **Relative to Power Settings** — 0 = session minimum power, 100 = session maximum. Usually left at **0–100** for full-strength bursts; a **lower range** (e.g. 0–30) gives **lighter strokes** as a brief break between heavier main strokes |
+| **Burst Stroke Power (relative 0–100)** | **Relative to Power Settings** — scale 0 = session minimum power, 100 = session maximum. UI **Min** ≥ **1**; typical range **1–100** for full-strength bursts; a lower **max** (e.g. **40**) gives **lighter strokes** as a brief break between heavier main strokes |
 | **Percent** | How many **burst events** occur, **evenly spread** across the session (not random each step) — e.g. 10% over 100 main strokes → 10 burst events |
 | **End Session Strokes** | Counts **main program strokes only** — strokes inside a burst do **not** count toward the limit |
-| **Stop** | Finishes the current main stroke **or** the **entire current burst**, then ends |
+| **Stop** | Finishes the current main stroke **or** the **entire current burst**, then ends; **Abort** remains available to cut off immediately |
 | **Abort** | Opens the relay **immediately**; cancels rest of burst and session |
 
 After each burst, the program waits its normal **gap between main strokes** before continuing (same cadence logic as Part 2).
@@ -288,6 +290,7 @@ Developer detail: [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
 | Feature | When |
 |---------|------|
 | **Change settings while running** (live replan) | Future — original product supported this; needs mid-session device updates |
+| **Session timeline / graph** | Future — visual plan or replay of automatic session (main strokes, bursts, gaps); Automatic page and/or session history — TBD |
 
 ## Relay timing validation (oscilloscope)
 
@@ -387,5 +390,4 @@ From an operator or Dom perspective:
 | 2026-09-06 | Bench notes: single/burst poll jitter (~±5 ms); air-line pressure vs operator power adjustment |
 | 2026-09-06 | Link to Phase 7 §G2 / device plan — deferred timing options (`esp_timer`, poll, dual-core; OTA-safe) |
 | 2026-09-07 | Automatic mode overview — **signed off**; Start/Stop/Abort; auto-end via end-session rules |
-| 2026-09-07 | Phase 10 burst-in-automatic — **available**; Bursts On, scheduling, stop/abort semantics |
-| 2026-09-07 | Phase 10 burst-in-automatic — planned operator semantics (power envelope, scheduling, stop/abort) |
+| 2026-09-07 | Phase 10 burst-in-automatic — **available**; Bursts On, scheduling, stop/abort semantics (cooperative Stop + instant Abort) |

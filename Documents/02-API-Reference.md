@@ -261,6 +261,8 @@ Hardware pairing and command dispatch (backend complete).
 
 On **abort during an active stroke**, the device sends two acks (stroke `success: false` with `interrupted: true` in `resultJson`, then abort `success: true`). Each REST command receives one response for its own `correlationId`.
 
+**Automatic stop (Phase 10):** `automatic-stop` returns an **immediate** accept ack (no `resultJson`). Session summary arrives via operator hub `CommandAcknowledged` with `correlationId=automatic-session-complete`. See [SignalR & Hardware](./06-SignalR-And-Hardware.md) for per-command ack timeouts.
+
 Command keys used by the UI (defined in `hardwareCommand.ts`):
 
 | Key | UI Action |
@@ -271,7 +273,7 @@ Command keys used by the UI (defined in `hardwareCommand.ts`):
 | `automatic-start` | Automatic session start |
 | `automatic-stop` | Automatic session stop |
 
-The dispatcher waits up to **10 seconds** for a device `AckCommand` callback.
+The dispatcher uses **per-command ack timeouts** (stroke/abort 15 s, burst formula, `automatic-start`/`automatic-stop` 5 s). See [SignalR & Hardware](./06-SignalR-And-Hardware.md).
 
 ---
 

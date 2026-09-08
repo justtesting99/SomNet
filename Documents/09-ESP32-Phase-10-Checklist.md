@@ -63,9 +63,9 @@ This is **not** manual burst mode. Manual burst is a one-shot command with fixed
 | **Bursts On** | checkbox | Master enable; when false, device behaves as Part 2 (single strokes only) |
 | **Percent (0–100)** | `burstPercent` | How many **burst events** occur, **evenly spread** across the program envelope — see **§3.6** (not random per step) |
 | **Burst Style** | `burstStyle` | Selects which burst dimensions are **fixed at maximum** vs **random in range** — see **§2.1** |
-| **Burst Stroke Power min/max** | 0–100 % | **Relative to main Power Settings** (`minimumPower`–`maximumPower`); see **§2.2** — not independent full-scale 0–100 |
-| **Delay Between Burst Strokes** | min/max sec | Inter-stroke gap **inside** a burst (mirror manual burst `burstDelayMs`) |
-| **Number of Strokes in Each Burst** | min/max | How many pulses per burst event |
+| **Burst Stroke Power min/max** | Min **1–100**, max **0–100** % | **Relative to main Power Settings** — min UI field ≥ 1; max may use scale **0** (= session min power); see **§2.2** |
+| **Delay Between Burst Strokes** | Min **≥ 1** sec, max **0–300** sec | Inter-stroke gap **inside** a burst (mirror manual burst `burstDelayMs`) |
+| **Number of Strokes in Each Burst** | min **1**–100, max **1**–100 | How many pulses per burst event |
 
 **Part 2 behavior (pre–Phase 10):** Burst Settings panel was hard-disabled; API/device rejected `burstsOn: true`.
 
@@ -145,7 +145,7 @@ strokeMs = strokeMsFromPower(effectivePowerPercent, minimumStrokeMs, maximumStro
 
 **What this is not:** burst power does **not** blend with the **current program row** (wave valley, random draw, etc.). Program `(power, gap)` apply to **main** strokes only; burst relative power maps only through **`minimumPower` / `maximumPower`**. Changing main Power Settings min/max changes the absolute stroke strength of the same burst slider values.
 
-**Operator intent:** **Power Settings** define the **min/max envelope for the whole automatic session** — every main stroke and every burst stroke ultimately resolves inside that band. Burst Stroke Power min/max are **usually left at 0 and 100** (use the full session envelope — typical for high-intensity burst clusters). Operators can also set a **lower burst range** (e.g. fixed at 0, or random **0–40**) so burst slots deliver **lighter strokes** — a brief break or softer interlude between heavier main-program strokes, without leaving automatic mode. Fixed vs random burst power (§2.1) controls whether those lighter (or stronger) intra-burst strokes are identical or varied.
+**Operator intent:** **Power Settings** define the **min/max envelope for the whole automatic session** — every main stroke and every burst stroke ultimately resolves inside that band. Burst Stroke Power min/max are **usually left at 1 and 100** in the UI (min field ≥ 1; scale 100 = session max — typical for high-intensity burst clusters). Operators can also set a **lower burst range** (e.g. min **1**, max **40** on the relative scale) so burst slots deliver **lighter strokes** — a brief break or softer interlude between heavier main-program strokes, without leaving automatic mode. Fixed vs random burst power (§2.1) controls whether those lighter (or stronger) intra-burst strokes are identical or varied.
 
 **Examples (main Power Settings 40–80%):**
 
@@ -265,7 +265,7 @@ Periodic — 80 main strokes, 8 bursts over 25 min (stopped manually).
 }
 ```
 
-Part 2 sessions (`burstsOn: false`) omit burst fields. Same payload on stop ack and `automatic-session-complete` hub events.
+Part 2 sessions (`burstsOn: false`) omit burst fields. Same tier-1 summary on hub `automatic-session-complete` (and optional completing ack on stop `correlationId`).
 
 ### 3.4 Abort and stop during burst — ☑ agreed 2026-09-07
 
@@ -474,7 +474,7 @@ Burst schedule is computed **once at start** from minutes + percent; **not** rec
 | P10-D25 | **Final stroke milestone burst** | Skip / run then end | ☑ Run burst at last milestone, then end if mains complete | 2026-09-07 |
 | P10-D26 | **`burstDetails` overflow** | Drop array / truncate flag | ☑ Emit Tier 1+2 + `"burstDetailsTruncated": true` if buffer full | 2026-09-07 |
 
-**Inherited (unchanged):** P9-D2 immediate `automatic-start` ack; P9-D4 summary on stop/abort/end only; P9-D1 ack timeouts; abort hub `automatic-session-complete`.
+**Inherited (unchanged unless noted):** P9-D2 immediate `automatic-start` ack; P9-D4 summary on stop/abort/end only; abort/end-rule hub `automatic-session-complete`. **P10-D3:** `automatic-stop` immediate REST accept (**5 s** timeout); session summary via hub when cooperative stop completes; Abort cuts immediately during stop-wait.
 
 ### 4.1 Burst field validation (P10-D9 ☑)
 
@@ -484,15 +484,16 @@ When **`burstsOn: true`**, firmware and API **reject** out-of-range payloads (no
 |-------|----------------|--------|
 | `burstPercent` | 0–100 | UI |
 | `burstStyle` | One of four §2.1 enum strings | Shared enum |
-| `burstStrokePowerMin` / `Max` | 0–100 each; min ≤ max | UI |
-| `burstDelayMin` / `Max` | 0–**300** seconds each; min ≤ max | Manual burst cap (`kMaxBurstDelayMs` = 300 000 ms) |
+| `burstStrokePowerMin` | **1–100** (UI min field) | UI — relative scale; see §2.2 |
+| `burstStrokePowerMax` | **0–100**; min ≤ max | UI — **0** on scale = session min power |
+| `burstDelayMin` | **1–300** seconds (UI min field) | UI |
+| `burstDelayMax` | **0–300** seconds; min ≤ max | Manual burst cap (`kMaxBurstDelayMs` = 300 000 ms); **0** = no gap between intra-burst strokes |
 | `burstStrokesMin` / `Max` | **1–100** each; min ≤ max | Manual burst cap (`kMaxBurstStrokes`) |
+| `strokeMinSeconds` / `strokeMaxSeconds` | **1–** max each (main program gap); min ≤ max | UI — Part 2 timing (not burst) |
 
-**Firmware:** same caps in `automatic_config.cpp` (reuse `kMaxBurstStrokes`, `kMaxBurstDelayMs` from `config.h`).
+**Firmware/API note:** Device may still accept **0** on some fields via direct payload until API validation is tightened; **SomNet UI normalizes and enforces the minimums above** on save and load.
 
-**API:** extend `HardwareCommandPayloadValidator` for automatic-start when `burstsOn: true`; reject with clear message (same pattern as manual `burst`).
-
-**UI:** normalize min ≤ max on save (Part 2 pattern); enforce limits in `AutomaticControls` when panel is enabled.
+**UI:** normalize min ≤ max on save (Part 2 pattern); enforce limits in `AutomaticControls` (`automaticFieldRules.ts`, `burstFieldRules.ts`).
 
 ---
 
@@ -546,9 +547,9 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 1. **Lock §4 decisions** — review this doc; mark choices ☑ — **done 2026-09-07**
 2. **Phase A — Config + reject removal** — parse/validate burst fields; `burstsOn: true` accepted; still no burst FSM (or stub log) — **done 2026-09-07**
 3. **Phase B — Burst sub-FSM on Periodic** — `burstPercent=100` smoke (always burst); serial `[AUTO] burst …`; then real percent — **implemented 2026-09-07** (Periodic + endSession strokes)
-4. **Phase C — All seven programs + minutes/noAutoEnd** — burst on all programs; wall-clock deadlines; noAutoEnd stride — **implemented 2026-09-07** (abort/stop mid-burst UI smoke deferred)
-5. **Phase D — API + UI** — enable panel; validator; E2E Periodic with bursts on — **verified 2026-09-07** (UI Start → serial + hub `automatic-session-complete`)
-6. **Phase E — Docs + version + sign-off** — **hardware E1–E5 verified 2026-09-07**; abort/stop mid-burst UI deferred
+4. **Phase C — All seven programs + minutes/noAutoEnd** — **implemented 2026-09-07**
+5. **Phase D — API + UI** — **verified 2026-09-07**
+6. **Phase E + P10-D3 UI** — **E1–E7 verified 2026-09-07** (mid-burst Stop/Abort, immediate stop ack)
 
 ---
 
@@ -724,6 +725,7 @@ Same config as **E6**.
 | **Part 2 §9 `automatic-update`** | Independent — live replan does not require bursts; bursts complicate replan (burst sub-state must be handled on update) |
 | **OTA (Phase 7 partitions)** | None — same binary size concern; monitor flash if burst code duplicates `BurstSequenceMode` |
 | **Session history richness** | **Main + burst event counts** in summary (P10-D6 ☑); optional `burstDetails` in `resultJson` |
+| **Session timeline / graph (UI)** | **Future — not scoped.** Visual representation of a full automatic session (main strokes, burst clusters, gaps, power envelope) — placement TBD: Automatic page live preview, session history detail, or both. See [Device plan §10 future](./09-ESP32-Device-Plan.md#phase-10--burst-in-automatic-burtson). |
 
 ---
 
@@ -731,6 +733,8 @@ Same config as **E6**.
 
 | Date | Change |
 |------|--------|
+| 2026-09-07 | UI minimums — main stroke gaps, burst min delay, burst min power ≥ 1 (§4.1); session graph noted as future work (§8) |
+| 2026-09-07 | P10-D3 — immediate stop ack; Abort enabled during cooperative stop; E6/E7 re-verified |
 | 2026-09-07 | **Phase 10 sign-off** — E6/E7 mid-burst Abort/Stop verified on hardware |
 | 2026-09-07 | P10-D3 UI — Stop/Abort mid-burst; hub notify on manual stop; E6/E7 smoke recipes |
 | 2026-09-07 | **Phase E sign-off** — E1–E5 hardware serial verified (Random, minutes, noAutoEnd, regression) |

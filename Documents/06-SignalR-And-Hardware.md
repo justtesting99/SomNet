@@ -65,7 +65,7 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 |--------|---------|--------|---------|
 | `AckCommand` | `HardwareCommandAckDto` | Paired device | Confirm command execution |
 
-**DTO note:** `HardwareCommandAckDto` includes `correlationId`, `success`, `message`, and optional **`resultJson`** (string containing JSON). REST `POST /api/devices/commands` forwards `resultJson` to the UI; `CommandAcknowledged` hub events include it for operator UI sync (automatic end-rule and abort use `correlationId=automatic-session-complete`).
+**DTO note:** `HardwareCommandAckDto` includes `correlationId`, `success`, `message`, and optional **`resultJson`** (string containing JSON). REST `POST /api/devices/commands` forwards `resultJson` to the UI; `CommandAcknowledged` hub events include it for operator UI sync (`correlationId=automatic-session-complete` for auto-end, abort, and cooperative manual stop).
 
 ---
 
@@ -200,7 +200,7 @@ Example — device rejected missing `strokeMs`:
 
 ## Command Keys
 
-Aligned with UI constants (`types/hardwareCommand.ts`). **Firmware status** as of **`0.9.1-phase9p2`**:
+Aligned with UI constants (`types/hardwareCommand.ts`). **Firmware status** as of **`0.10.0-phase10`**:
 
 | Key | Trigger | Typical Payload | Firmware |
 |-----|---------|-----------------|----------|
@@ -321,7 +321,7 @@ wifi_manager → signalr_client → relay_controller → execution_context → c
 | **Device status API** | ✅ Used by Hardware dialog + system status |
 | **System status with subTarget** | ✅ `SystemStatusProvider` passes selected Sub |
 | UI calls `/api/devices/commands` for stroke/abort | ✅ REST + device ack; session after ack |
-| UI SignalR client for live acks | ❌ Not implemented (REST-only ack path) |
+| UI operator hub for automatic session end | ✅ `AutomaticSessionHubListener` — `automatic-session-complete` (end-rule, abort, cooperative stop) |
 | Dedicated pairing dialog + pending list | ✅ Phase 8 |
 | Session/history from device `resultJson` | ✅ `actualStrokeMs` on stroke; abort count on abort ack |
 

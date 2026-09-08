@@ -2,6 +2,8 @@ import type { AutomaticControlState, BurstStyle } from '@/types/modes';
 
 export const MAX_BURST_STROKES = 100;
 export const MAX_BURST_DELAY_SEC = 300;
+export const MIN_BURST_DELAY_SEC = 1;
+export const MIN_BURST_STROKE_POWER = 1;
 
 export interface BurstFieldRules {
   disableBurstStrokePowerMin: boolean;
@@ -50,13 +52,18 @@ function normalizeMinMax(
 export function normalizeAutomaticBurstFields(
   state: AutomaticControlState,
 ): AutomaticControlState {
-  const power = normalizeMinMax(
-    state.burstStrokePowerMin,
-    state.burstStrokePowerMax,
-    0,
-    100,
-  );
-  const delay = normalizeMinMax(state.burstDelayMin, state.burstDelayMax, 0, MAX_BURST_DELAY_SEC);
+  let burstStrokePowerMin = clampInt(state.burstStrokePowerMin, MIN_BURST_STROKE_POWER, 100);
+  let burstStrokePowerMax = clampInt(state.burstStrokePowerMax, 0, 100);
+  if (burstStrokePowerMin > burstStrokePowerMax) {
+    burstStrokePowerMax = burstStrokePowerMin;
+  }
+
+  let burstDelayMin = clampInt(state.burstDelayMin, MIN_BURST_DELAY_SEC, MAX_BURST_DELAY_SEC);
+  let burstDelayMax = clampInt(state.burstDelayMax, 0, MAX_BURST_DELAY_SEC);
+  if (burstDelayMin > burstDelayMax) {
+    burstDelayMax = burstDelayMin;
+  }
+
   const strokes = normalizeMinMax(
     state.burstStrokesMin,
     state.burstStrokesMax,
@@ -67,10 +74,10 @@ export function normalizeAutomaticBurstFields(
   return {
     ...state,
     burstPercent: clampInt(state.burstPercent, 0, 100),
-    burstStrokePowerMin: power.min,
-    burstStrokePowerMax: power.max,
-    burstDelayMin: delay.min,
-    burstDelayMax: delay.max,
+    burstStrokePowerMin,
+    burstStrokePowerMax,
+    burstDelayMin,
+    burstDelayMax,
     burstStrokesMin: strokes.min,
     burstStrokesMax: strokes.max,
   };

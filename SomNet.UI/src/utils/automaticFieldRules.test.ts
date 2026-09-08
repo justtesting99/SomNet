@@ -5,6 +5,8 @@ import {
   applyAutomaticModeChange,
   coerceEndSessionMode,
   getAutomaticFieldRules,
+  MIN_STROKE_GAP_SECONDS,
+  normalizeAutomaticControlState,
 } from '@/utils/automaticFieldRules';
 
 const EXPECTED_FIELD_RULES: Record<
@@ -101,5 +103,29 @@ describe('applyAutomaticModeChange', () => {
     const buildUp = applyAutomaticModeChange(state, 'buildUp');
     expect(buildUp.minimumPower).toBe(15);
     expect(buildUp.endSessionMode).toBe('minutes');
+  });
+});
+
+describe('normalizeAutomaticControlState', () => {
+  it('clamps stroke gap seconds to at least 1', () => {
+    const normalized = normalizeAutomaticControlState({
+      ...defaultAutomaticState,
+      strokeMinSeconds: 0,
+      strokeMaxSeconds: 0,
+    });
+
+    expect(normalized.strokeMinSeconds).toBe(MIN_STROKE_GAP_SECONDS);
+    expect(normalized.strokeMaxSeconds).toBe(MIN_STROKE_GAP_SECONDS);
+  });
+
+  it('fixes min greater than max after clamping', () => {
+    const normalized = normalizeAutomaticControlState({
+      ...defaultAutomaticState,
+      strokeMinSeconds: 5,
+      strokeMaxSeconds: 0,
+    });
+
+    expect(normalized.strokeMinSeconds).toBe(MIN_STROKE_GAP_SECONDS);
+    expect(normalized.strokeMaxSeconds).toBe(MIN_STROKE_GAP_SECONDS);
   });
 });

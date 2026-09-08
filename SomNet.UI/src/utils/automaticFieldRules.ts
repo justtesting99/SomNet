@@ -1,6 +1,9 @@
 import type { AutomaticControlState, AutomaticRunMode, EndSessionMode } from '@/types/modes';
 import { normalizeAutomaticBurstFields } from '@/utils/burstFieldRules';
 
+/** Main-program gap between strokes (not burst intra-stroke delay). */
+export const MIN_STROKE_GAP_SECONDS = 1;
+
 export interface AutomaticFieldRules {
   disableMinimumPower: boolean;
   disableStrokeMinSeconds: boolean;
@@ -58,5 +61,24 @@ export function applyAutomaticModeChange(
 export function normalizeAutomaticControlState(
   state: AutomaticControlState,
 ): AutomaticControlState {
-  return normalizeAutomaticBurstFields(applyAutomaticModeChange(state, state.automaticMode));
+  const withMode = applyAutomaticModeChange(state, state.automaticMode);
+
+  let strokeMinSeconds = Math.max(
+    MIN_STROKE_GAP_SECONDS,
+    Math.round(withMode.strokeMinSeconds),
+  );
+  let strokeMaxSeconds = Math.max(
+    MIN_STROKE_GAP_SECONDS,
+    Math.round(withMode.strokeMaxSeconds),
+  );
+
+  if (strokeMinSeconds > strokeMaxSeconds) {
+    strokeMinSeconds = strokeMaxSeconds;
+  }
+
+  return normalizeAutomaticBurstFields({
+    ...withMode,
+    strokeMinSeconds,
+    strokeMaxSeconds,
+  });
 }

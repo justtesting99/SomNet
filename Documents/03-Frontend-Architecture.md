@@ -117,15 +117,20 @@ Active sessions are ended automatically on mode switch, sign-out, or sub change.
 
 **Panels:**
 - **Power Settings** — Min/max power % sliders, min/max stroke ms
-- **Timing & Burst** — Burst style, strokes, delay
-- **End Session** — Mode (minutes/strokes/no auto end), values
-- **Actions** — Start, Stop
+- **Timing Settings** — Stroke gaps, delay before start, end session rules
+- **Burst Settings** — Bursts On, percent, style, burst power/delay/stroke ranges (Phase 10)
+- **Controls** — Program selector, Start, Stop, Abort
+
+**Field minimums (UI):** Main-program gap **`strokeMinSeconds`** / **`strokeMaxSeconds`** — min **1** sec each (`automaticFieldRules.ts`). Burst **`burstDelayMin`** and **`burstStrokePowerMin`** — min **1** (`burstFieldRules.ts`). Max fields may use **0** where product rules allow (burst delay max; burst power max on relative 0–100 scale). Normalized on load/save.
 
 **Session behavior:**
-- Session starts immediately on Start
-- Stop ends session with duration-based summary
+- Session starts immediately on Start (REST `automatic-start` + live session record)
+- Stop sends cooperative stop; session summary from device via hub `automatic-session-complete`
+- Abort cuts immediately; same hub path for history
 
-**Commands:** Keys `automatic-start`, `automatic-stop`.
+**Commands:** Keys `automatic-start`, `automatic-stop`, `abort` (manual abort key during automatic session).
+
+**Hub:** `AutomaticSessionHubListener` syncs end-rule, abort, and cooperative stop without blocking the UI on long bursts.
 
 ## UI Component Library
 
@@ -245,3 +250,7 @@ Video expand behavior is controlled by `appOptions.videoExpandMode` (`None`, `Mo
 2. `SystemStatusProvider` does not pass `subTarget` query param
 3. No device pairing UI — pairing is API-only today
 4. `options.ts` API module is orphaned from pre-refactor MockDataStore era
+
+## Future Enhancements
+
+- **Session timeline / graph** — visual plan or replay of an automatic session (main strokes, burst clusters, gaps, power envelope). Placement TBD: Automatic page (pre-start preview or live), session history detail, or both. See [Phase 10 checklist §8](./09-ESP32-Phase-10-Checklist.md#8-relationship-to-other-future-work).

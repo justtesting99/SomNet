@@ -70,7 +70,7 @@ Update **Status** above and check boxes below as work completes. When Phase 9 is
 
 | # | Decision | Options | Choice | Date |
 |---|----------|---------|--------|------|
-| P9-D1 | **REST ack timeout for long commands** | Fixed 10 s / per-command formula / config per `commandKey` | ☑ **Per-command formula + caps** — `stroke`/`abort` **15 s**; `burst`: `burstStrokes×strokeMs + (burstStrokes−1)×burstDelayMs + 5 s` margin, **cap 600 s**; `automatic-start` **5 s**; `automatic-stop` **30 s** | 2026-09-06 |
+| P9-D1 | **REST ack timeout for long commands** | Fixed 10 s / per-command formula / config per `commandKey` | ☑ **Per-command formula + caps** — `stroke`/`abort` **15 s**; `burst`: formula, **cap 600 s**; `automatic-start` **5 s**; `automatic-stop` **30 s** at Part 2 sign-off — **superseded by Phase 10:** immediate stop accept **5 s**; summary via hub | 2026-09-06 |
 | P9-D2 | **`automatic-start` ack timing** | Immediate ack when engine accepts / wait for first stroke | ☑ **Immediate ack** when config validated and engine running (session async on device) | 2026-09-06 |
 | P9-D3 | **Burst abort ack model** | Dual ack (like stroke interrupt) / single burst fail ack only | ☑ **Dual ack** — burst REST returns `interrupted` + `strokesCompleted`; abort REST returns `success: true` | 2026-09-06 |
 | P9-D4 | **Automatic stroke aggregation** | Summary only on stop/abort/end rule / per-stroke hub events | ☑ **Summary on stop/abort/end-rule only** (plan §9.4) | 2026-09-06 |
@@ -322,4 +322,4 @@ Use plan §6, locked P9-D2/D4/D5/D6 + Part 2 §4 when implementing.
 
 **Delivered:** `burstsOn: true` on `automatic-start`; burst sub-FSM in `AutomaticSessionMode`; UI Burst Settings panel; firmware **`0.10.0-phase10`**.
 
-**Deferred:** E6/E7 hardware smoke for mid-burst Stop/Abort (Phase 10); optional `burstDetails` tier 3.
+**Deferred:** optional `burstDetails` tier 3 in `resultJson`.

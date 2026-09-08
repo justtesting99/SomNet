@@ -77,6 +77,10 @@ interface MinMaxRowProps {
   maxDisabled?: boolean;
   minLimit?: number;
   maxLimit?: number;
+  /** Lower bound for the Min input (defaults to `minLimit`). */
+  minValueMin?: number;
+  /** Lower bound for the Max input (defaults to `minLimit`). */
+  maxValueMin?: number;
 }
 
 export function MinMaxRow({
@@ -90,9 +94,13 @@ export function MinMaxRow({
   maxDisabled = false,
   minLimit = 0,
   maxLimit = 9999,
+  minValueMin,
+  maxValueMin,
 }: MinMaxRowProps) {
   const minFieldDisabled = disabled || minDisabled;
   const maxFieldDisabled = disabled || maxDisabled;
+  const minInputMin = minValueMin ?? minLimit;
+  const maxInputMin = maxValueMin ?? minLimit;
 
   return (
     <div className={disabled ? 'opacity-50' : ''}>
@@ -102,7 +110,7 @@ export function MinMaxRow({
           label="Min"
           inline
           value={min}
-          min={minLimit}
+          min={minInputMin}
           max={maxLimit}
           disabled={minFieldDisabled}
           onChange={(event) => onMinChange(Number(event.target.value))}
@@ -111,7 +119,7 @@ export function MinMaxRow({
           label="Max"
           inline
           value={max}
-          min={minLimit}
+          min={maxInputMin}
           max={maxLimit}
           disabled={maxFieldDisabled}
           onChange={(event) => onMaxChange(Number(event.target.value))}

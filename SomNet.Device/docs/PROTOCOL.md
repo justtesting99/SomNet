@@ -296,7 +296,7 @@ Device runs the full sequence locally; one completing ack with `resultJson` when
 | `automaticMode` | string | **Yes** | One of: `periodic`, `randomPowerOnly`, `randomTimingOnly`, `randomPowerAndTiming`, `powerWave`, `powerAndTimingWave`, `buildUp` |
 | `minimumStrokeMs` / `maximumStrokeMs` | int | Recommended | Device defaults 25/400; API validates against max stroke ms |
 | `minimumPower` / `maximumPower` | int | Recommended | 0–100 |
-| `strokeMinSeconds` / `strokeMaxSeconds` | int | Recommended | Gap range (seconds) |
+| `strokeMinSeconds` / `strokeMaxSeconds` | int | Recommended | Main-program gap range (**seconds**); UI enforces **≥ 1** each |
 | `delayBeforeStartSeconds` | int | Optional | Wait before first pulse |
 | `endSessionMode` | string | Optional | `minutes`, `strokes`, or `noAutoEnd` — wave/build-up require minutes or strokes |
 | `endSessionValue` | int | Optional | End after N minutes or strokes |
@@ -306,7 +306,7 @@ Device runs the full sequence locally; one completing ack with `resultJson` when
 
 **Ack:** **Immediate** `success: true` when config valid and engine armed (P9-D2). No `resultJson` on start.
 
-**Unsolicited session complete:** When the session ends via **end-session rule**, **abort**, or **manual stop** (`automatic-stop`), the device sends `AckCommand` with `correlationId` **`automatic-session-complete`** and stop `resultJson`. Manual stop also sends a completing ack on the REST **`automatic-stop`** `correlationId`. The API forwards hub events to operators via `CommandAcknowledged`; the UI uses them to clear `running` and finalize session history (including cooperative stop during an in-progress burst — P10-D3).
+**Unsolicited session complete:** When the session ends via **end-session rule**, **abort**, or **cooperative manual stop** (`automatic-stop`), the device sends `AckCommand` with `correlationId` **`automatic-session-complete`** and stop `resultJson`. **`automatic-stop`** also sends an **immediate** REST ack when stop is accepted (no `resultJson`); the UI finalizes history from the hub event. The API forwards hub events to operators via `CommandAcknowledged`.
 
 ### 6.6 automatic-stop payload
 
@@ -327,11 +327,13 @@ When **`burstsOn: true`**, the start payload includes burst settings (full snaps
 | `burstsOn` | bool | Master enable |
 | `burstPercent` | int | 0–100 — burst **event count** spread evenly across session envelope |
 | `burstStyle` | string | `fixedPowerDelay`, `randomPowerOnly`, `randomDelayOnly`, `randomPowerAndDelay` |
-| `burstStrokePowerMin` / `burstStrokePowerMax` | int | 0–100 **relative to** `minimumPower`–`maximumPower` (session envelope) |
-| `burstDelayMin` / `burstDelayMax` | int | Seconds between strokes **inside** a burst |
+| `burstStrokePowerMin` | int | **1–100** relative to `minimumPower`–`maximumPower` (UI min field) |
+| `burstStrokePowerMax` | int | **0–100** relative to session envelope (**0** = session min power) |
+| `burstDelayMin` | int | **1–300** seconds between strokes **inside** a burst (UI min field) |
+| `burstDelayMax` | int | **0–300** seconds; **0** = no gap between intra-burst strokes |
 | `burstStrokesMin` / `burstStrokesMax` | int | Strokes per burst event (1–100 each; min ≤ max when `burstsOn: true`) |
 
-**Validation (P10-D9):** When `burstsOn: true`, firmware and API **reject** out-of-range values — same caps as manual burst (`burstStrokes` 1–100, delay 0–300 s). See Phase 10 checklist §4.1.
+**Validation (P10-D9):** When `burstsOn: true`, firmware and API **reject** out-of-range values — same caps as manual burst (`burstStrokes` 1–100, delay 0–300 s). **SomNet UI** additionally enforces **min ≥ 1** on `strokeMinSeconds`, `strokeMaxSeconds`, `burstDelayMin`, and `burstStrokePowerMin`. See Phase 10 checklist §4.1.
 
 **Power mapping:** `effectivePower = lerp(minimumPower, maximumPower, burstRelative / 100)` → `strokeMsFromPower(..., minimumStrokeMs, maximumStrokeMs)`. Intra-burst power/delay use Burst Settings only — not the active program row. After each burst, program `gapSec` applies before the next main stroke.
 
@@ -509,6 +511,7 @@ If ack arrives within the per-command timeout:
 | Date | Change |
 |------|--------|
 | 2026-09-05 | Phase 0 capture complete; `sub_target` JWT claim documented |
+| 2026-09-07 | P10-D3 — immediate `automatic-stop` accept; hub summary on cooperative stop; Abort during stop-wait |
 | 2026-09-07 | Phase 9 Part 2 — `automatic-start`/`automatic-stop` payload + stop `resultJson`; burst payload; per-command ack timeouts |
 | 2026-09-07 | Phase 10B+ — burst sub-FSM; extended automatic stop `resultJson` (tier 1 verified UI E2E) |
 | 2026-09-07 | Phase 10A — `burstsOn` accept + burst field validation (firmware + API) |

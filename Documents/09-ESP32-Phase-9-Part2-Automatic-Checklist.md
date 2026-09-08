@@ -53,6 +53,8 @@ The **Automatic Mode** dropdown selects a **program variation**. Only **Power Se
 
 When a control is **disabled**, it is greyed out and not editable. **Maximum** power and **maximum** inter-stroke seconds remain enabled in all modes unless another rule applies (e.g. session running).
 
+**UI minimum values (2026-09-07):** SomNet UI enforces **≥ 1 second** on **`strokeMinSeconds`** and **`strokeMaxSeconds`** (main-program gap between strokes). Normalization in `automaticFieldRules.ts` (`MIN_STROKE_GAP_SECONDS = 1`). Burst min fields (**`burstDelayMin`**, **`burstStrokePowerMin`**) use min **1** when Bursts On — see [Phase 10 §4.1](./09-ESP32-Phase-10-Checklist.md#41-burst-field-validation-p10-d9-). Max fields may still use **0** where documented (e.g. burst delay max = no intra-burst gap; burst power max scale **0** = session min power).
+
 ---
 
 ## 2. Simplified rule (implementation)
@@ -289,7 +291,7 @@ When switching into wave/build-up while `noAutoEnd` selected → coerce to **`mi
 - **P9-D4** — summary `resultJson` on stop/abort/end-rule only (no per-stroke hub events)
 - **P9-D5** — camelCase payload aligned with `AutomaticControlStateDto`
 - **P9-D6** — reject or ignore `burstsOn: true` until **Phase 10**
-- **P9-D1** — ack timeouts: `automatic-start` **5 s**; `automatic-stop` **30 s**
+- **P9-D1** — ack timeouts: `automatic-start` **5 s**; `automatic-stop` **30 s** at Part 2 sign-off — **Phase 10:** immediate accept **5 s**, summary via hub (P10-D3)
 - **P9-D9** — caps: auto session hard cap **24 h**; stroke ms per existing limits
 
 ### Reference — options considered (Part 2 firmware walkthrough 2026-09-07)
@@ -609,6 +611,7 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 | **burstsOn** | **Burst Settings** panel | **Phase 10:** Bursts On and sub-fields editable when idle; read-only while session running; values round-trip in settings JSON |
 | **Stroke limits** | **Power Settings:** edit **Minimum Stroke (ms)** / **Maximum Stroke (ms)** outside device limits | Clamps to API stroke limits on commit/load |
 | | Set maximum stroke below minimum | Minimum adjusts so min ≤ max |
+| **Gap minimums** | **Timing Settings:** set **Minimum (sec)** or **Maximum (sec)** to **0** | UI clamps to **1** on commit/load |
 
 **Note (historical):** Pre–Phase 10, burst sub-fields were hard-disabled in UI. Phase 10 enabled the panel; saved `burstsOn` and burst ranges round-trip in JSON.
 
@@ -758,7 +761,7 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 
 ### Phase E — Auto-end UI sync (P9-D4 completion)
 
-- [x] Firmware: `finishSession` pushes `resultJson` with `correlationId=automatic-session-complete` when not `automatic-stop`
+- [x] Firmware: `finishSession` pushes `resultJson` with `correlationId=automatic-session-complete` for end-rule and abort — **Phase 10:** manual stop also notifies hub (P10-D3)
 - [x] UI: SignalR `CommandAcknowledged` listener (`AutomaticSessionHubListener`)
 - [x] UI: `@microsoft/signalr` operator hub connection
 - [x] E2E: Periodic **8 strokes** end rule — UI unlocks without manual Stop — **2026-09-07** (37672 ms / `endSession`)
@@ -815,6 +818,7 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 
 | Date | Change |
 |------|--------|
+| 2026-09-07 | UI minimums — `strokeMinSeconds`/`strokeMaxSeconds`, burst min delay/power ≥ 1 (§1); gap-min regression (§6.3.2) |
 | 2026-09-06 | Initial checklist from original product automatic mode dropdown rules |
 | 2026-09-06 | §3 execution semantics, session envelope, §8 planner/sequencer, §9 live update |
 | 2026-09-07 | §9 overlapped replan (P9P2-D28); waveform pre-compute model |
