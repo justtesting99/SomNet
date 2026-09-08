@@ -551,8 +551,10 @@ void AutomaticSessionMode::finishSession(
 
     if (stopRequested_ && onComplete_ != nullptr && stopCorrelationId_[0] != '\0') {
         onComplete_(callbackContext_, stopCorrelationId_, success, message, resultJson_);
-    } else if (
-        sessionNotify_ != nullptr &&
+    }
+
+    // Hub notify for end-rule, abort, and manual stop (P10-D3 mid-burst UI finalize).
+    if (sessionNotify_ != nullptr &&
         sessionNotifyContext_ != nullptr &&
         resultJson_[0] != '\0') {
         sessionNotify_(

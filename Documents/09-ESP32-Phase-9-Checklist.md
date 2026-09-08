@@ -322,4 +322,4 @@ Use plan §6, locked P9-D2/D4/D5/D6 + Part 2 §4 when implementing.
 
 **Delivered:** `burstsOn: true` on `automatic-start`; burst sub-FSM in `AutomaticSessionMode`; UI Burst Settings panel; firmware **`0.10.0-phase10`**.
 
-**Deferred:** Abort/stop mid-burst UI smoke; optional `burstDetails` tier 3.
+**Deferred:** E6/E7 hardware smoke for mid-burst Stop/Abort (Phase 10); optional `burstDetails` tier 3.

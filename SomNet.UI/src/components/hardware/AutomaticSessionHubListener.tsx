@@ -26,8 +26,8 @@ function shouldHandleAutomaticSessionComplete(ack: HardwareCommandAck): boolean 
 }
 
 /**
- * Listens for device-initiated automatic session completion (end-rule / abort)
- * via SignalR CommandAcknowledged (P9-D4).
+ * Listens for device-initiated automatic session completion (end-rule, abort, manual stop)
+ * via SignalR CommandAcknowledged (P9-D4 / P10-D3).
  */
 export function AutomaticSessionHubListener() {
   const { isAuthenticated } = useAuth();

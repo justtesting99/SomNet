@@ -42,7 +42,7 @@ import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCo
 import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
 import { buildAutomaticStartPayload } from '@/utils/automaticStartPayload';
 import { parseAutomaticResultJson } from '@/utils/automaticResultJson';
-import { waitForAutomaticHubFinalize } from '@/utils/automaticSessionFinalize';
+import { waitForAutomaticHubFinalize, computeAutomaticStopGraceMs } from '@/utils/automaticSessionFinalize';
 import { ApiError } from '@/api/client';
 
 const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
@@ -61,6 +61,7 @@ export function AutomaticControls() {
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
   const [commandError, setCommandError] = useState('');
+  const [cooperativeStopInProgress, setCooperativeStopInProgress] = useState(false);
   const runningRef = useRef(state.running);
   runningRef.current = state.running;
 
@@ -89,6 +90,12 @@ export function AutomaticControls() {
   const hardwareDisabledReason = hardwareReady
     ? undefined
     : systemStatus.detail || systemStatus.summary;
+
+  useEffect(() => {
+    if (!automaticSessionActive && !state.running) {
+      setCooperativeStopInProgress(false);
+    }
+  }, [automaticSessionActive, state.running]);
 
   useEffect(() => {
     setCommandError('');
@@ -196,16 +203,59 @@ export function AutomaticControls() {
 
   async function handleStop() {
     setCommandError('');
+    const wasRunning = automaticSessionActive || state.running;
 
     try {
-      const response = await sendHardwareCommand(
+      const response = await sendHardwareCommandRaw(
         selectedSub,
         HARDWARE_COMMAND_KEYS.automaticStop,
         '{}',
       );
+
+      if (!response.delivered) {
+        setCommandError(response.message ?? 'Stop could not be delivered.');
+        return;
+      }
+
+      if (!response.acknowledged) {
+        setCommandError(response.message ?? 'Device did not acknowledge stop in time.');
+        return;
+      }
+
+      if (!response.success) {
+        setCommandError(response.message ?? 'Nothing to stop.');
+        return;
+      }
+
       const parsed = parseAutomaticResultJson(response.resultJson);
-      update('running', false);
-      await endAutomaticSession('stopped manually', parsed);
+
+      // Legacy path: completing ack carried summary on the same REST response.
+      if (parsed) {
+        update('running', false);
+        await endAutomaticSession('stopped manually', parsed);
+        return;
+      }
+
+      if (!wasRunning) {
+        return;
+      }
+
+      // Stop accepted — hub delivers summary when current stroke/burst finishes (P10-D3).
+      setCooperativeStopInProgress(true);
+      void (async () => {
+        try {
+          await waitForAutomaticHubFinalize(
+            () => runningRef.current,
+            async () => {
+              update('running', false);
+              await endAutomaticSession('stopped manually');
+            },
+            computeAutomaticStopGraceMs(state),
+          );
+        } finally {
+          setCooperativeStopInProgress(false);
+        }
+      })();
     } catch (error) {
       setCommandError(formatCommandError(error));
     }
@@ -279,6 +329,11 @@ export function AutomaticControls() {
       {configLocked ? (
         <p className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200">
           Session running — settings are read-only until you stop or abort.
+          {cooperativeStopInProgress ? (
+            <> Stop requested — finishing current stroke or burst. Abort cuts off immediately.</>
+          ) : state.burstsOn ? (
+            <> Stop finishes the current burst; Abort cuts off immediately.</>
+          ) : null}
         </p>
       ) : null}
 
@@ -548,7 +603,13 @@ export function AutomaticControls() {
               size="lg"
               fullWidth
               variant="secondary"
-              disabled={!hardwareReady || !configLocked || startPending || abortPending}
+              disabled={
+                !hardwareReady ||
+                !configLocked ||
+                startPending ||
+                abortPending ||
+                cooperativeStopInProgress
+              }
               title={hardwareDisabledReason}
               onCommand={handleStop}
               className="py-4 text-base"
@@ -561,7 +622,7 @@ export function AutomaticControls() {
                 size="lg"
                 fullWidth
                 variant="secondary"
-                disabled={!hardwareReady || startPending || stopPending}
+                disabled={!hardwareReady || startPending || abortPending}
                 title={hardwareDisabledReason}
                 onCommand={handleAbort}
                 className="py-4 text-base"

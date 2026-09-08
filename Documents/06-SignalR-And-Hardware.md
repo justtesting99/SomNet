@@ -194,7 +194,7 @@ Example — device rejected missing `strokeMs`:
 
 ### Ack Timeout
 
-`HardwareCommandDispatcher` uses **per-command ack timeouts** (P9-D1): stroke/abort **15 s**; burst formula (cap 600 s); `automatic-start` **5 s**; `automatic-stop` **30 s**.
+`HardwareCommandDispatcher` uses **per-command ack timeouts** (P9-D1, P10-D3): stroke/abort **15 s**; burst formula (cap 600 s); `automatic-start` **5 s**; `automatic-stop` **5 s** (immediate accept; summary via hub).
 
 ---
 

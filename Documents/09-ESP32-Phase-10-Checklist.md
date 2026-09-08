@@ -1,6 +1,6 @@
 # Phase 10 — Burst-in-automatic (`burstsOn`)
 
-**Status:** **Phase E hardware sign-off complete** (2026-09-07) — firmware **`0.10.0-phase10`**; UI burst panel; E1–E5 serial verified. Deferred: abort/stop mid-burst UI; optional `burstDetails` tier 3.
+**Status:** **Phase 10 signed off** (2026-09-07) — firmware **`0.10.0-phase10`**; E1–E7 hardware verified including mid-burst Stop/Abort (P10-D3). Deferred: optional `burstDetails` tier 3.
 
 | Related | Link |
 |---------|------|
@@ -579,15 +579,15 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 - [x] Random/Wave/Build-Up + strokes — **E1 verified 2026-09-07** (`randomPowerAndTiming`, 50%, 8 strokes → 4 burst events)
 - [x] Minutes + burstPercent — **E2 verified 2026-09-07** (2 min, 100% → bursts ~1 & 2 min; `burstEventsCompleted=2`)
 - [x] noAutoEnd + burst stride — **E3 verified 2026-09-07** (stride=10; burst at main 10; Stop at main 13)
-- [ ] Abort/stop mid-burst — deferred (UI path later; firmware abort/stop logic unchanged from Phase B)
+- [x] Abort/stop mid-burst — UI + firmware hub path (P10-D3); **E6/E7 recipes §7.4**
 
 ### 7.1 Firmware smoke (Swagger / serial)
 
 - [x] `automatic-start` with `burstsOn: true` — ack success (no reject) — verified 2026-09-07 serial
 - [x] Periodic + `burstPercent=10`, endSession 8 strokes — 8 mains, 1 burst at milestone 8, 7 intra-burst strokes; hub `resultJson` tier 1 — **verified 2026-09-07 UI E2E**
 - [x] Periodic + `burstPercent=0` — **E5 verified 2026-09-07** — mains only; `burstEventsCompleted=0`
-- [ ] Abort mid-burst — deferred (UI path later)
-- [ ] Stop mid-burst — deferred (UI path later)
+- [x] Abort mid-burst — **E6 verified 2026-09-07** — Abort at burst 3/8; `intraBurstStrokesCompleted=3`, `burstEventsCompleted=0`, `interrupted=true`
+- [x] Stop mid-burst — **E7 verified 2026-09-07** — Stop at burst 3/8; pulses 4–8 complete; `burstEventsCompleted=1`, `manualStop`
 - [x] End-session **strokes** limit — counts **main** strokes only; intra-burst pulses do **not** increment limit (P10-D2) — verified 2026-09-07
 
 ### 7.0 Phase D — UI burst panel (2026-09-07)
@@ -602,7 +602,8 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 
 - [x] Burst Settings enabled when idle; read-only while running — **verified 2026-09-07**
 - [x] Start with Bursts On → session runs → auto-end — serial + `resultJson` tier 1 — **verified 2026-09-07**
-- [ ] Abort during burst-in-automatic — UI unlocks (reuse Phase F hub path)
+- [x] Abort during burst-in-automatic — **E6 verified 2026-09-07** (UI hub finalize + abort ack)
+- [x] Stop during burst-in-automatic — **E7 verified 2026-09-07** (cooperative finish-burst-then-stop)
 
 ### 7.3 Regression
 
@@ -684,6 +685,36 @@ Use **Automatic** UI or `POST /api/devices/commands` with `commandKey: "automati
 
 **Verified 2026-09-07:** No burst events; `burstEventsCompleted=0`, `mainStrokesCompleted=4`.
 
+#### E6 — Abort mid-burst (UI + P10-D3)
+
+| Field | Value |
+|-------|-------|
+| `automaticMode` | `periodic` |
+| `burstsOn` | `true` |
+| `burstPercent` | `100` |
+| `endSessionMode` | `noAutoEnd` |
+| `burstStrokesMin` / `Max` | `8` / `8` |
+| `burstDelayMax` | `5` |
+| `strokeMaxSeconds` | `5` |
+
+**Steps:** Start from UI. Wait for `[AUTO] burst start` and `[AUTO] burst pulse 2/8` or `3/8`. Press **Abort**.
+
+**Pass if:** `[RELAY] OFF` immediately (pulse cut); `[AUTO] aborted`; no further burst pulses; hub/REST `resultJson` with `endReason=abort`, `interrupted=true`, `burstEventsCompleted=0`, partial `intraBurstStrokesCompleted` (1–3); UI unlocks and history shows `(aborted)`.
+
+**Verified 2026-09-07:** Abort at burst **3/8**; `mainStrokesCompleted=1`, `intraBurstStrokesCompleted=3`, `burstEventsCompleted=0`; dual hub + abort ack.
+
+#### E7 — Stop mid-burst (UI + P10-D3)
+
+Same config as **E6**.
+
+**Steps:** Start from UI. During `[AUTO] burst pulse 2/8` or `3/8`, press **Stop**.
+
+**Pass if:** Remaining intra-burst pulses complete (`… 8/8`); `[AUTO] burst event complete total=1`; then `[AUTO] complete reason=manualStop`; `resultJson` with `endReason=manualStop`, `interrupted=false`, `burstEventsCompleted=1`; UI unlocks and history shows `(stopped manually)`.
+
+**Note:** Pulses **continuing after Stop** is **expected** — Stop is cooperative (§3.4); only **Abort** cuts off immediately.
+
+**Verified 2026-09-07:** Stop at burst **3/8**; pulses 4–8 ran; `burstEventsCompleted=1`, `intraBurstStrokesCompleted=8`, `manualStop`; REST + hub ack.
+
 ---
 
 ## 8. Relationship to other future work
@@ -700,6 +731,8 @@ Use **Automatic** UI or `POST /api/devices/commands` with `commandKey: "automati
 
 | Date | Change |
 |------|--------|
+| 2026-09-07 | **Phase 10 sign-off** — E6/E7 mid-burst Abort/Stop verified on hardware |
+| 2026-09-07 | P10-D3 UI — Stop/Abort mid-burst; hub notify on manual stop; E6/E7 smoke recipes |
 | 2026-09-07 | **Phase E sign-off** — E1–E5 hardware serial verified (Random, minutes, noAutoEnd, regression) |
 | 2026-09-07 | Phase E — §7.4 hardware smoke recipes; automated regression payload tests |
 | 2026-09-07 | Phase D UI E2E verified — Periodic 10% / 8 strokes from UI; hub `resultJson` tier 1 |

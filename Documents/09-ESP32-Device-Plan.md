@@ -1670,7 +1670,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 **Verified (2026-09-07):** Periodic UI E2E (10%/8 strokes); E1 Random 50%/8 strokes; E2 minutes 2 min/100%; E3 noAutoEnd stride 10; E4/E5 regression.
 
-**Deferred:** Abort/stop mid-burst UI smoke; optional `burstDetails` tier 3 in `resultJson`.
+**Deferred:** optional `burstDetails` tier 3 in `resultJson`.
 
 ---
 

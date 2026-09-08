@@ -267,8 +267,11 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
                 this,
                 &CommandHandler::onAutomaticComplete)) {
             sendAck(command.correlationId, false, "no automatic session running", nullptr);
+            return;
         }
 
+        // Immediate ack (P9-D2 pattern); session summary via hub when stop completes (P10-D3).
+        sendAck(command.correlationId, true, "automatic stop requested", nullptr);
         return;
     }
 

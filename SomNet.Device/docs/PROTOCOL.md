@@ -306,7 +306,7 @@ Device runs the full sequence locally; one completing ack with `resultJson` when
 
 **Ack:** **Immediate** `success: true` when config valid and engine armed (P9-D2). No `resultJson` on start.
 
-**Unsolicited session complete:** When the session ends via **end-session rule** or **abort** (without `automatic-stop`), the device sends `AckCommand` with `correlationId` **`automatic-session-complete`** and stop `resultJson`. The API forwards this to operators via `CommandAcknowledged`; the UI uses it to clear `running` and finalize session history.
+**Unsolicited session complete:** When the session ends via **end-session rule**, **abort**, or **manual stop** (`automatic-stop`), the device sends `AckCommand` with `correlationId` **`automatic-session-complete`** and stop `resultJson`. Manual stop also sends a completing ack on the REST **`automatic-stop`** `correlationId`. The API forwards hub events to operators via `CommandAcknowledged`; the UI uses them to clear `running` and finalize session history (including cooperative stop during an in-progress burst — P10-D3).
 
 ### 6.6 automatic-stop payload
 
@@ -316,7 +316,7 @@ Device runs the full sequence locally; one completing ack with `resultJson` when
 
 Optional `{ "reason": "operator" }` — device reports measured `endReason` in stop `resultJson`.
 
-**Ack:** Completing ack after session stops at safe point (gap or post-pulse). REST timeout **30 s** (P9-D1).
+**Ack:** **Immediate** `success: true` when stop is accepted (P9-D2 pattern). Session **`resultJson`** arrives via hub `automatic-session-complete` when the current stroke or burst finishes (P10-D3). REST timeout **5 s**.
 
 ### 6.7 automatic-start burst fields (Phase 10)
 
@@ -471,7 +471,7 @@ If ack arrives within the per-command timeout:
 | Invalid/expired device JWT | Same as invalid connect |
 | Device not connected when command sent | REST `delivered: false`, message *"The paired device is not connected."* |
 | No pairing registration | REST `delivered: false`, message *"No paired device token exists..."* |
-| Ack not received in time | REST `delivered: true`, `acknowledged: false` — timeout per command (stroke/abort **15 s**; burst formula; `automatic-start` **5 s**; `automatic-stop` **30 s**) |
+| Ack not received in time | REST `delivered: true`, `acknowledged: false` — timeout per command (stroke/abort **15 s**; burst formula; `automatic-start` **5 s**; `automatic-stop` **5 s** immediate accept) |
 
 ---
 

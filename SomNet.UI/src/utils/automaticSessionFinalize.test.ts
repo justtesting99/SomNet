@@ -1,9 +1,36 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   applyAutomaticDeviceComplete,
+  computeAutomaticStopGraceMs,
   waitForAutomaticHubFinalize,
 } from '@/utils/automaticSessionFinalize';
 import { defaultAutomaticState } from '@/types/modes';
+
+describe('computeAutomaticStopGraceMs', () => {
+  it('uses burst worst-case when bursts are on', () => {
+    const grace = computeAutomaticStopGraceMs({
+      ...defaultAutomaticState,
+      burstsOn: true,
+      maximumStrokeMs: 325,
+      burstStrokesMax: 7,
+      burstDelayMax: 5,
+    });
+
+    // 7×325ms + 6×5s gaps + margin
+    expect(grace).toBe(7 * 325 + 6 * 5000 + 5000);
+  });
+
+  it('uses main stroke gap when bursts are off', () => {
+    const grace = computeAutomaticStopGraceMs({
+      ...defaultAutomaticState,
+      burstsOn: false,
+      maximumStrokeMs: 325,
+      strokeMaxSeconds: 5,
+    });
+
+    expect(grace).toBe(15_000);
+  });
+});
 
 describe('waitForAutomaticHubFinalize', () => {
   it('returns immediately when running clears before grace elapses', async () => {
