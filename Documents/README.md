@@ -16,7 +16,7 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Development Guide](./08-Development-Guide.md) | Developers | Local setup, ports, build pipeline, and common tasks |
 | [User Guide](./User-Guide.md) | Operators | How to use the web application day to day |
 | [Hardware User Guide](./Hardware-User-Guide.md) | Installers / owners | ESP32 setup, Wi‑Fi provisioning, pairing, relay status (updated 2026-09-05) |
-| [ESP32 Device Plan](./09-ESP32-Device-Plan.md) | Developers | **Source of truth** — firmware plan (Phases 0–10 signed off; **`0.10.0-phase10`**) |
+| [ESP32 Device Plan](./09-ESP32-Device-Plan.md) | Developers | **Source of truth** — firmware plan (Phases 0–10 signed off; Phase 11 planning) |
 | [ESP32 Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | Developers | Protocol capture — **Complete** (2026-09-05) |
 | [ESP32 Phase 1 Checklist](./09-ESP32-Phase-1-Checklist.md) | Developers | PlatformIO scaffold — **Complete** (2026-09-05) |
 | [ESP32 Phase 2 Checklist](./09-ESP32-Phase-2-Checklist.md) | Developers | NVS + MAC device identity — **Complete** (2026-09-05) |
@@ -28,3 +28,5 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [ESP32 Phase 8 Checklist](./09-ESP32-Phase-8-Checklist.md) | Developers | UI commands + pairing polish — **Signed off** (2026-09-06) |
 | [ESP32 Phase 9 Checklist](./09-ESP32-Phase-9-Checklist.md) | Developers | Burst mode — **Signed off** (2026-09-06); automatic Part 2 exploratory |
 | [ESP32 Phase 9 Part 2 — Automatic](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) | Developers | Automatic mode UI rules, decisions (P9P2-D*), implementation checklist |
+| [ESP32 Phase 10 Checklist](./09-ESP32-Phase-10-Checklist.md) | Developers | Burst-in-automatic — **Signed off** (2026-09-07) |
+| [ESP32 Phase 11 Checklist](./09-ESP32-Phase-11-Checklist.md) | Developers | Live automatic settings (`automatic-update`) — **Planning** |

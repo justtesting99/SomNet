@@ -4,6 +4,7 @@ export const HARDWARE_COMMAND_KEYS = {
   manualAbort: 'manual:abort',
   automaticStart: 'automatic-start',
   automaticStop: 'automatic-stop',
+  automaticUpdate: 'automatic-update',
 } as const;
 
 export type HardwareCommandKey =

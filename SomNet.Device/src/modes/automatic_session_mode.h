@@ -24,6 +24,9 @@ public:
         void* callbackContext,
         AutomaticCompleteCallback onComplete);
 
+    /** Phase 11A: validate + log; replan deferred to Phase B. */
+    bool queueSessionUpdate(const char* payloadJson);
+
     void setSessionNotifier(void* callbackContext, AutomaticCompleteCallback onNotify);
 
     void start(const char* payloadJson) override;

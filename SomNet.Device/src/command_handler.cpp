@@ -275,6 +275,21 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
         return;
     }
 
+    if (isAutomaticUpdateKey(command.commandKey)) {
+        if (!executionContext_->isAutomaticSessionActive()) {
+            sendAck(command.correlationId, false, "no automatic session running", nullptr);
+            return;
+        }
+
+        if (!executionContext_->updateAutomatic(command.payloadJson)) {
+            sendAck(command.correlationId, false, "invalid automatic-update payload", nullptr);
+            return;
+        }
+
+        sendAck(command.correlationId, true, "automatic update queued", nullptr);
+        return;
+    }
+
     if (strcmp(command.commandKey, "stroke") != 0) {
         Serial.print(F("[CMD] unsupported commandKey: "));
         Serial.println(command.commandKey);

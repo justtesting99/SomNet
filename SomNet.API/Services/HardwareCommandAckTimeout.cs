@@ -6,8 +6,9 @@ internal static class HardwareCommandAckTimeout
 {
     private static readonly TimeSpan StrokeAbortTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan AutomaticStartTimeout = TimeSpan.FromSeconds(5);
-    // Immediate ack when stop is accepted; summary arrives via hub (P10-D3).
+    // Immediate ack when stop/update is accepted; stop summary arrives via hub (P10-D3).
     private static readonly TimeSpan AutomaticStopTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan AutomaticUpdateTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan BurstMargin = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan BurstMaxTimeout = TimeSpan.FromSeconds(600);
 
@@ -26,6 +27,11 @@ internal static class HardwareCommandAckTimeout
         if (string.Equals(commandKey, "automatic-stop", StringComparison.OrdinalIgnoreCase))
         {
             return AutomaticStopTimeout;
+        }
+
+        if (string.Equals(commandKey, "automatic-update", StringComparison.OrdinalIgnoreCase))
+        {
+            return AutomaticUpdateTimeout;
         }
 
         return StrokeAbortTimeout;

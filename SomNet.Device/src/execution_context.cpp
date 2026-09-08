@@ -97,3 +97,15 @@ bool ExecutionContext::stopAutomatic(
 
     return automaticSessionMode_.requestStop(correlationId, callbackContext, onComplete);
 }
+
+bool ExecutionContext::isAutomaticSessionActive() const {
+    return activeMode_ == &automaticSessionMode_ && automaticSessionMode_.isActive();
+}
+
+bool ExecutionContext::updateAutomatic(const char* payloadJson) {
+    if (!isAutomaticSessionActive()) {
+        return false;
+    }
+
+    return automaticSessionMode_.queueSessionUpdate(payloadJson);
+}

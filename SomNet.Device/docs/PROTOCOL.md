@@ -318,6 +318,19 @@ Optional `{ "reason": "operator" }` — device reports measured `endReason` in s
 
 **Ack:** **Immediate** `success: true` when stop is accepted (P9-D2 pattern). Session **`resultJson`** arrives via hub `automatic-session-complete` when the current stroke or burst finishes (P10-D3). REST timeout **5 s**.
 
+### 6.8 automatic-update payload (Phase 11A)
+
+When an **automatic session is already running**, the operator (or UI) may send **`automatic-update`** with the same snapshot shape as **`automatic-start`** (§6.5–6.7). **Phase 11A:** device validates, logs, and acks — **replan not applied yet** (Phase B+).
+
+| Property | Value |
+|----------|--------|
+| **When** | Active `AutomaticSessionMode` only |
+| **Payload** | Full automatic settings snapshot; **omit `running`** |
+| **Ack** | Immediate `success: true`, message `"automatic update queued"` (P11-D10) |
+| **Reject** | No active automatic session; invalid payload (same validation as start) |
+
+**Phase 11A serial:** `[AUTO] update received (Phase 11A — replan deferred) …`
+
 ### 6.7 automatic-start burst fields (Phase 10)
 
 When **`burstsOn: true`**, the start payload includes burst settings (full snapshot, camelCase). Device validates config and runs burst sub-FSM interleaved with the selected automatic program (Phase 10B+).

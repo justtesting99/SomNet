@@ -272,8 +272,9 @@ Command keys used by the UI (defined in `hardwareCommand.ts`):
 | `abort` | Manual abort / end |
 | `automatic-start` | Automatic session start |
 | `automatic-stop` | Automatic session stop |
+| `automatic-update` | Live automatic settings (Phase 11 — device replan Phase B+) |
 
-The dispatcher uses **per-command ack timeouts** (stroke/abort 15 s, burst formula, `automatic-start`/`automatic-stop` 5 s). See [SignalR & Hardware](./06-SignalR-And-Hardware.md).
+The dispatcher uses **per-command ack timeouts** (stroke/abort 15 s, burst formula, `automatic-start`/`automatic-stop`/`automatic-update` 5 s). See [SignalR & Hardware](./06-SignalR-And-Hardware.md).
 
 ---
 

@@ -34,6 +34,11 @@ public:
         void* callbackContext,
         AutomaticCompleteCallback onComplete);
 
+    bool isAutomaticSessionActive() const;
+
+    /** Phase 11A: accept update payload when automatic session is running (no replan yet). */
+    bool updateAutomatic(const char* payloadJson);
+
 private:
     SinglePulseMode singlePulseMode_;
     BurstSequenceMode burstSequenceMode_;

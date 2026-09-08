@@ -289,7 +289,7 @@ Developer detail: [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
 
 | Feature | When |
 |---------|------|
-| **Change settings while running** (live replan) | Future — original product supported this; needs mid-session device updates |
+| **Change settings while running** (live replan) | [Phase 11](./09-ESP32-Phase-11-Checklist.md) — `automatic-update` mid-session |
 | **Session timeline / graph** | Future — visual plan or replay of automatic session (main strokes, bursts, gaps); Automatic page and/or session history — TBD |
 
 ## Relay timing validation (oscilloscope)

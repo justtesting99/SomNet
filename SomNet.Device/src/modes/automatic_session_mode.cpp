@@ -186,6 +186,24 @@ bool AutomaticSessionMode::requestStop(
     return true;
 }
 
+bool AutomaticSessionMode::queueSessionUpdate(const char* payloadJson) {
+    if (!active_) {
+        return false;
+    }
+
+    AutomaticConfig config{};
+    if (!parseAutomaticConfig(payloadJson, &config)) {
+        Serial.println(F("[AUTO] update rejected — invalid payload"));
+        return false;
+    }
+
+    Serial.print(F("[AUTO] update received (Phase 11A — replan deferred) mainStrokes="));
+    Serial.print(strokesCompleted_);
+    Serial.print(F(" burstsOn="));
+    Serial.println(config.burstsOn ? F("true") : F("false"));
+    return true;
+}
+
 void AutomaticSessionMode::poll() {
     if (!active_) {
         return;

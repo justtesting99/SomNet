@@ -916,7 +916,7 @@ Wave/build-up modes require **End Session** minutes or strokes (`noAutoEnd` reje
 
 **Stroke-first (P9P2-D41):** first pulse fires immediately after start ack (or after **`delayBeforeStartSeconds`**). Inter-stroke gap applies **between** strokes only — same pattern as manual burst.
 
-**Future (not Part 2):** Live settings during playback via proposed **`automatic-update`** — see [Part 2 checklist §9](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#9-future--live-settings-during-automatic-playback-not-part-2). **Burst-in-automatic (`burstsOn`)** — **implemented** [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md) (firmware `0.10.0-phase10`).
+**Future (not Part 2):** Live settings during playback via **`automatic-update`** — [Phase 11 checklist](./09-ESP32-Phase-11-Checklist.md). **Burst-in-automatic (`burstsOn`)** — **implemented** [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md) (firmware `0.10.0-phase10`).
 
 **Firmware structure:** One **`AutomaticSessionMode`** (sequencer FSM); per-program **`AutomaticProgramBase`** subclasses + factory — see [Part 2 checklist §8](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#8-architecture--planner--stroke-sequencer-automatic-timing).
 
@@ -1438,6 +1438,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 | **8** | **SomNet UI pairing dialog** + command integration | [Phase 8 Checklist](./09-ESP32-Phase-8-Checklist.md) | **Signed off** (2026-09-06) — `0.8.10-phase8`; Hardware dialog + stroke/abort UI |
 | 9 | Burst mode (+ automatic Part 2) | [Phase 9 Checklist](./09-ESP32-Phase-9-Checklist.md) · [Part 2](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) | **Signed off** (2026-09-07) — `0.9.1-phase9p2` |
 | **10** | **Burst-in-automatic (`burstsOn`)** | [Phase 10 Checklist](./09-ESP32-Phase-10-Checklist.md) | **Signed off** (2026-09-07) — `0.10.0-phase10`; E1–E7 verified |
+| **11** | **Live automatic settings (`automatic-update`)** | [Phase 11 Checklist](./09-ESP32-Phase-11-Checklist.md) | **Planning** — not started |
 
 **Rationale:** Phase **3** (config UI) runs **before** SignalR so installers can provision network and obtain the pairing ID without Swagger/serial. Phase **8** delivers Dom-side pairing in the **Hardware** dialog and manual command integration. Phase **9** adds **burst**. **Options** is tabbed settings (General / Notifications / Account) — separate from Hardware. See §4 *SomNet React UI — pairing and settings*.
 
@@ -1672,6 +1673,8 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 **Verified (2026-09-07):** Periodic UI E2E (10%/8 strokes); E1 Random 50%/8 strokes; E2 minutes 2 min/100%; E3 noAutoEnd stride 10; E4/E5 regression; E6/E7 mid-burst Abort/Stop.
 
 **Deferred:** optional `burstDetails` tier 3 in `resultJson`.
+
+**Next phase:** [Phase 11 — live automatic settings (`automatic-update`)](./09-ESP32-Phase-11-Checklist.md).
 
 **Future (post–Phase 10):** **Session timeline visualization** — graph or timeline of a planned or completed automatic session (main strokes, burst events, gaps, relative power). Placement TBD: Automatic mode page (pre-start preview or live), session history detail, or both. Not in scope for Phase 10 sign-off.
 

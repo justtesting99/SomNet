@@ -445,6 +445,8 @@ Part 2 sequencer stays **single-stroke steps** only. Phase 10 adds an optional b
 
 ## 9. Future — live settings during automatic playback (not Part 2)
 
+> **Implementation moved to [Phase 11 checklist](./09-ESP32-Phase-11-Checklist.md).** The notes below are retained as historical context; lock decisions in Phase 11 §4 before coding.
+
 **Source (2026-09-06):** Original product supports *“Settings can be adjustable during automatic playback, allowing on-the-fly pattern changes.”* **Nice-to-have later** — capture now so Part 2 design does not block it.
 
 ### Intended behavior (future)

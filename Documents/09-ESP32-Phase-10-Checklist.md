@@ -12,7 +12,7 @@
 
 **Goal:** When **Bursts On** is checked, the ESP32 runs **bursts inside an automatic session** — additive on top of the selected automatic program (Periodic, Random, Wave, etc.). Operator enables burst settings in the UI; device accepts `burstsOn: true` on `automatic-start`.
 
-**Explicitly out of scope (Phase 10):** Live **`automatic-update`** mid-session ([Part 2 §9](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#9-future--live-settings-during-automatic-playback-not-part-2)); OTA.
+**Explicitly out of scope (Phase 10):** Live **`automatic-update`** mid-session → [Phase 11 checklist](./09-ESP32-Phase-11-Checklist.md); OTA.
 
 ---
 
@@ -722,7 +722,7 @@ Same config as **E6**.
 
 | Item | Relationship |
 |------|----------------|
-| **Part 2 §9 `automatic-update`** | Independent — live replan does not require bursts; bursts complicate replan (burst sub-state must be handled on update) |
+| **Part 2 §9 `automatic-update`** | **Phase 11** — [checklist](./09-ESP32-Phase-11-Checklist.md); live replan independent of graph; bursts complicate replan (burst sub-state + slot recompute) |
 | **OTA (Phase 7 partitions)** | None — same binary size concern; monitor flash if burst code duplicates `BurstSequenceMode` |
 | **Session history richness** | **Main + burst event counts** in summary (P10-D6 ☑); optional `burstDetails` in `resultJson` |
 | **Session timeline / graph (UI)** | **Future — not scoped.** Visual representation of a full automatic session (main strokes, burst clusters, gaps, power envelope) — placement TBD: Automatic page live preview, session history detail, or both. See [Device plan §10 future](./09-ESP32-Device-Plan.md#phase-10--burst-in-automatic-burtson). |

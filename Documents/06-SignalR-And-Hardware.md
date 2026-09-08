@@ -194,7 +194,7 @@ Example — device rejected missing `strokeMs`:
 
 ### Ack Timeout
 
-`HardwareCommandDispatcher` uses **per-command ack timeouts** (P9-D1, P10-D3): stroke/abort **15 s**; burst formula (cap 600 s); `automatic-start` **5 s**; `automatic-stop` **5 s** (immediate accept; summary via hub).
+`HardwareCommandDispatcher` uses **per-command ack timeouts** (P9-D1, P10-D3, P11-D10): stroke/abort **15 s**; burst formula (cap 600 s); `automatic-start` / `automatic-stop` / `automatic-update` **5 s** (start/stop/update immediate accept; stop summary via hub).
 
 ---
 
@@ -208,9 +208,10 @@ Aligned with UI constants (`types/hardwareCommand.ts`). **Firmware status** as o
 | `abort` | Manual abort | `{}` | **Implemented** — cancels active stroke/burst/automatic |
 | `burst` | Manual burst button | `{ powerPercent, strokeMs, burstStrokes, burstDelayMs }` | **Implemented** — `BurstSequenceMode` |
 | `automatic-start` | Automatic start | Full automatic config snapshot (omit `running`) | **Implemented** — immediate ack (P9-D2) |
-| `automatic-stop` | Automatic stop | `{}` | **Implemented** — session summary in `resultJson` |
+| `automatic-stop` | Automatic stop | `{}` | **Implemented** — immediate accept; summary via hub |
+| `automatic-update` | Live automatic settings | Same snapshot as `automatic-start` | **Phase 11A** — validate + log + ack; replan Phase B+ |
 
-**Stroke rules (firmware):** `strokeMs` required, > 0, max 30 000 ms. Overlapping commands while a pulse is active → reject with `success: false` (busy).
+**Stroke rules (firmware):** `strokeMs` required, > 0, max 30 000 ms. Overlapping commands while a pulse is active → reject with `success: false` (busy). **`automatic-update`** is allowed during an active automatic session (not treated as busy).
 
 ---
 

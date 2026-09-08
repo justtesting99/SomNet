@@ -295,3 +295,8 @@ bool isAutomaticStopKey(const char* commandKey) {
     return commandKey != nullptr &&
         (strcmp(commandKey, "automatic-stop") == 0 || strcmp(commandKey, "automatic:stop") == 0);
 }
+
+bool isAutomaticUpdateKey(const char* commandKey) {
+    return commandKey != nullptr &&
+        (strcmp(commandKey, "automatic-update") == 0 || strcmp(commandKey, "automatic:update") == 0);
+}

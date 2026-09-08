@@ -60,7 +60,8 @@ internal static class HardwareCommandPayloadValidator
             return TryValidateBurstPayload(payloadJson, maxStrokeMs, out errorMessage);
         }
 
-        if (string.Equals(commandKey, "automatic-start", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(commandKey, "automatic-start", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(commandKey, "automatic-update", StringComparison.OrdinalIgnoreCase))
         {
             return TryValidateAutomaticStartPayload(payloadJson, maxStrokeMs, out errorMessage);
         }
