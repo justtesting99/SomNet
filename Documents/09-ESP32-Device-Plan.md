@@ -1436,7 +1436,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 | 7 | Resilience / production prep | [Phase 7 Checklist](./09-ESP32-Phase-7-Checklist.md) | **Signed off** (2026-09-06) — `0.7.0-phase7` |
 | **8** | **SomNet UI pairing dialog** + command integration | [Phase 8 Checklist](./09-ESP32-Phase-8-Checklist.md) | **Signed off** (2026-09-06) — `0.8.10-phase8`; Hardware dialog + stroke/abort UI |
 | 9 | Burst mode (+ automatic Part 2) | [Phase 9 Checklist](./09-ESP32-Phase-9-Checklist.md) · [Part 2](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) | **Signed off** (2026-09-07) — `0.9.1-phase9p2` |
-| **10** | **Burst-in-automatic (`burstsOn`)** | [Phase 10 Checklist](./09-ESP32-Phase-10-Checklist.md) | **Phases A–D complete** — first UI E2E verified 2026-09-07; Phase E sign-off pending |
+| **10** | **Burst-in-automatic (`burstsOn`)** | [Phase 10 Checklist](./09-ESP32-Phase-10-Checklist.md) | **Signed off** — firmware `0.10.0-phase10`; E1–E5 verified 2026-09-07 |
 
 **Rationale:** Phase **3** (config UI) runs **before** SignalR so installers can provision network and obtain the pairing ID without Swagger/serial. Phase **8** delivers Dom-side pairing in the **Hardware** dialog and manual command integration. Phase **9** adds **burst**. **Options** is tabbed settings (General / Notifications / Account) — separate from Hardware. See §4 *SomNet React UI — pairing and settings*.
 
@@ -1664,13 +1664,13 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 ### Phase 10 — Burst-in-automatic (`burstsOn`)
 
 **Checklist:** [09-ESP32-Phase-10-Checklist.md](./09-ESP32-Phase-10-Checklist.md)  
-**Status:** **Phases A–D complete** — firmware **`0.10.0-phase10`**; UI burst panel enabled; first UI E2E verified 2026-09-07. Phase E sign-off in progress.
+**Status:** **Signed off** — firmware **`0.10.0-phase10`**; UI burst panel enabled; E1–E5 hardware verified 2026-09-07.
 
 **Goal:** Enable **Bursts On** during automatic sessions — burst clusters interleaved with the seven automatic programs. Embedded burst sub-FSM in `AutomaticSessionMode` (P10-D7); reuse manual burst timing patterns, not `execution_context.startBurst()`.
 
-**Verified (2026-09-07):** Periodic + 10% + 8 strokes from UI — 8 mains, 1 burst at milestone 8, 7 intra-burst strokes; hub `resultJson` tier 1.
+**Verified (2026-09-07):** Periodic UI E2E (10%/8 strokes); E1 Random 50%/8 strokes; E2 minutes 2 min/100%; E3 noAutoEnd stride 10; E4/E5 regression.
 
-**Remaining for sign-off:** Phase C hardware smokes (Random/Wave, minutes, noAutoEnd); regression (`burstsOn: false`, `burstPercent: 0`); abort/stop mid-burst UI (deferred); optional `burstDetails` tier 3.
+**Deferred:** Abort/stop mid-burst UI smoke; optional `burstDetails` tier 3 in `resultJson`.
 
 ---
 

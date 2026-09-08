@@ -137,7 +137,7 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
                     break;
             }
         } else {
-            Serial.println(F("[AUTO] burstsOn=true (no burst schedule — check percent/end rule)"));
+            Serial.println(F("[AUTO] burstsOn=true (no burst schedule - check percent/end rule)"));
         }
     }
 

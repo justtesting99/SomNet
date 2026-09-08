@@ -1,6 +1,6 @@
 # Phase 10 — Burst-in-automatic (`burstsOn`)
 
-**Status:** **Phases A–D implemented** — firmware **`0.10.0-phase10`**; UI burst panel enabled. **First UI E2E verified** 2026-09-07 (Periodic, 10%, 8 strokes). Phase E sign-off in progress.
+**Status:** **Phase E hardware sign-off complete** (2026-09-07) — firmware **`0.10.0-phase10`**; UI burst panel; E1–E5 serial verified. Deferred: abort/stop mid-burst UI; optional `burstDetails` tier 3.
 
 | Related | Link |
 |---------|------|
@@ -548,7 +548,7 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 3. **Phase B — Burst sub-FSM on Periodic** — `burstPercent=100` smoke (always burst); serial `[AUTO] burst …`; then real percent — **implemented 2026-09-07** (Periodic + endSession strokes)
 4. **Phase C — All seven programs + minutes/noAutoEnd** — burst on all programs; wall-clock deadlines; noAutoEnd stride — **implemented 2026-09-07** (abort/stop mid-burst UI smoke deferred)
 5. **Phase D — API + UI** — enable panel; validator; E2E Periodic with bursts on — **verified 2026-09-07** (UI Start → serial + hub `automatic-session-complete`)
-6. **Phase E — Docs + version + sign-off** — update operator/dev docs; remaining regression smoke; optional `burstDetails` tier 3
+6. **Phase E — Docs + version + sign-off** — **hardware E1–E5 verified 2026-09-07**; abort/stop mid-burst UI deferred
 
 ---
 
@@ -576,16 +576,16 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 - [x] noAutoEnd — cadence stride `round(100/burstPercent)` (P10-D19)
 - [x] P10-D4 — fresh program `gapSec` from milestone row after burst (`getStrokeParameters`)
 - [x] P10-D23 — minutes burst deadline checked before end-session in `WaitingGap` poll
-- [ ] Random/Wave/Build-Up + strokes — hardware smoke — see §7.4 E1
-- [ ] Minutes + burstPercent — hardware smoke — see §7.4 E2
-- [ ] noAutoEnd + burst stride — hardware smoke — see §7.4 E3
+- [x] Random/Wave/Build-Up + strokes — **E1 verified 2026-09-07** (`randomPowerAndTiming`, 50%, 8 strokes → 4 burst events)
+- [x] Minutes + burstPercent — **E2 verified 2026-09-07** (2 min, 100% → bursts ~1 & 2 min; `burstEventsCompleted=2`)
+- [x] noAutoEnd + burst stride — **E3 verified 2026-09-07** (stride=10; burst at main 10; Stop at main 13)
 - [ ] Abort/stop mid-burst — deferred (UI path later; firmware abort/stop logic unchanged from Phase B)
 
 ### 7.1 Firmware smoke (Swagger / serial)
 
 - [x] `automatic-start` with `burstsOn: true` — ack success (no reject) — verified 2026-09-07 serial
 - [x] Periodic + `burstPercent=10`, endSession 8 strokes — 8 mains, 1 burst at milestone 8, 7 intra-burst strokes; hub `resultJson` tier 1 — **verified 2026-09-07 UI E2E**
-- [ ] Periodic + `burstPercent=0` — identical to Part 2 (singles only) — see §7.4 E5
+- [x] Periodic + `burstPercent=0` — **E5 verified 2026-09-07** — mains only; `burstEventsCompleted=0`
 - [ ] Abort mid-burst — deferred (UI path later)
 - [ ] Stop mid-burst — deferred (UI path later)
 - [x] End-session **strokes** limit — counts **main** strokes only; intra-burst pulses do **not** increment limit (P10-D2) — verified 2026-09-07
@@ -608,9 +608,9 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 
 - [x] Payload/UI — `burstsOn: false` accepted; burst fields not required (`automaticStartPayload.test.ts`) — **2026-09-07**
 - [x] Payload/UI — `burstsOn: true`, `burstPercent: 0` serializes (no schedule on device) — **2026-09-07**
-- [ ] `burstsOn: false` — hardware: no `[AUTO] burst` lines; Part 2 singles only (any mode)
-- [ ] `burstsOn: true`, `burstPercent: 0` — hardware: no burst events; mains only
-- [ ] Manual burst/stroke/automatic without bursts — unchanged
+- [x] `burstsOn: false` — **E4 verified 2026-09-07** — Part 2 `resultJson`; no burst lines
+- [x] `burstsOn: true`, `burstPercent: 0` — **E5 verified 2026-09-07** — no burst events; tier-1 burst fields zero
+- [ ] Manual burst/stroke/automatic without bursts — unchanged (implicit via E4; no dedicated smoke)
 
 ### 7.4 Phase E — hardware smoke recipes (serial)
 
@@ -628,6 +628,8 @@ Use **Automatic** UI or `POST /api/devices/commands` with `commandKey: "automati
 
 **Pass if:** `burst plan strokes events=4`; mains at 1,3,5,7 singles; bursts after mains **2, 4, 6, 8**; `mainStrokesCompleted=8`, `burstEventsCompleted=4`.
 
+**Verified 2026-09-07:** `randomPowerAndTiming`; mains 8, bursts 4, intra-burst 27; random power/gaps between mains.
+
 #### E2 — Minutes + wall-clock bursts (Phase C)
 
 | Field | Value |
@@ -641,6 +643,8 @@ Use **Automatic** UI or `POST /api/devices/commands` with `commandKey: "automati
 
 **Pass if:** `burst plan minutes events=2`; bursts due ~**1 min** and ~**2 min** elapsed (`[AUTO] burst start` in `WaitingGap`, not mid-pulse); session ends at 2 min; `burstEventsCompleted=2`.
 
+**Verified 2026-09-07:** Bursts at ~60 s and ~120 s; `mainStrokesCompleted=17`, `burstEventsCompleted=2`; session end after 2nd burst (P10-D23).
+
 #### E3 — noAutoEnd + cadence stride (Phase C)
 
 | Field | Value |
@@ -651,6 +655,8 @@ Use **Automatic** UI or `POST /api/devices/commands` with `commandKey: "automati
 | `endSessionMode` | `noAutoEnd` |
 
 **Pass if:** `burst plan noAutoEnd stride=10`; burst after main **10**, **20**, …; press **Stop** after ~15 mains; `burstEventsCompleted=1`, mains ≥ 10.
+
+**Verified 2026-09-07:** Burst at main 10; **Stop** at main 13; `burstEventsCompleted=1`, `mainStrokesCompleted=13`.
 
 #### E4 — Regression: bursts off
 
@@ -663,6 +669,8 @@ Use **Automatic** UI or `POST /api/devices/commands` with `commandKey: "automati
 
 **Pass if:** No `burst plan` / `[AUTO] burst` lines; `strokesCompleted=4`; `resultJson` has no burst fields (Part 2 shape).
 
+**Verified 2026-09-07:** Four mains; Part 2 `resultJson` only.
+
 #### E5 — Regression: bursts on, percent zero
 
 | Field | Value |
@@ -673,6 +681,8 @@ Use **Automatic** UI or `POST /api/devices/commands` with `commandKey: "automati
 | `endSessionValue` | `4` |
 
 **Pass if:** Serial shows `burstsOn=true (no burst schedule…)` or no burst plan; four mains only; same as E4 behavior.
+
+**Verified 2026-09-07:** No burst events; `burstEventsCompleted=0`, `mainStrokesCompleted=4`.
 
 ---
 
@@ -690,6 +700,7 @@ Use **Automatic** UI or `POST /api/devices/commands` with `commandKey: "automati
 
 | Date | Change |
 |------|--------|
+| 2026-09-07 | **Phase E sign-off** — E1–E5 hardware serial verified (Random, minutes, noAutoEnd, regression) |
 | 2026-09-07 | Phase E — §7.4 hardware smoke recipes; automated regression payload tests |
 | 2026-09-07 | Phase D UI E2E verified — Periodic 10% / 8 strokes from UI; hub `resultJson` tier 1 |
 | 2026-09-07 | Phases C–D implemented — all programs + minutes/noAutoEnd scheduling; UI burst panel enabled |
