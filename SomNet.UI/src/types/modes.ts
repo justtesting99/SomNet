@@ -27,6 +27,13 @@ export const AUTOMATIC_RUN_MODE_OPTIONS: { value: AutomaticRunMode; label: strin
   { value: 'buildUp', label: 'Build-Up' },
 ];
 
+export const BURST_STYLE_OPTIONS: { value: BurstStyle; label: string }[] = [
+  { value: 'fixedPowerDelay', label: 'Fixed Power/Delay' },
+  { value: 'randomPowerOnly', label: 'Random Power Only' },
+  { value: 'randomDelayOnly', label: 'Random Delay Only' },
+  { value: 'randomPowerAndDelay', label: 'Random Power/Delay' },
+];
+
 export interface ManualControlState {
   minimumStrokeMs: number;
   maximumStrokeMs: number;

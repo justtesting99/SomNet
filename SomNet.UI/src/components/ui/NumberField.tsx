@@ -73,6 +73,8 @@ interface MinMaxRowProps {
   onMinChange: (value: number) => void;
   onMaxChange: (value: number) => void;
   disabled?: boolean;
+  minDisabled?: boolean;
+  maxDisabled?: boolean;
   minLimit?: number;
   maxLimit?: number;
 }
@@ -84,9 +86,14 @@ export function MinMaxRow({
   onMinChange,
   onMaxChange,
   disabled = false,
+  minDisabled = false,
+  maxDisabled = false,
   minLimit = 0,
   maxLimit = 9999,
 }: MinMaxRowProps) {
+  const minFieldDisabled = disabled || minDisabled;
+  const maxFieldDisabled = disabled || maxDisabled;
+
   return (
     <div className={disabled ? 'opacity-50' : ''}>
       <p className="mb-2 text-sm text-slate-400">{label}</p>
@@ -97,7 +104,7 @@ export function MinMaxRow({
           value={min}
           min={minLimit}
           max={maxLimit}
-          disabled={disabled}
+          disabled={minFieldDisabled}
           onChange={(event) => onMinChange(Number(event.target.value))}
         />
         <NumberField
@@ -106,7 +113,7 @@ export function MinMaxRow({
           value={max}
           min={minLimit}
           max={maxLimit}
-          disabled={disabled}
+          disabled={maxFieldDisabled}
           onChange={(event) => onMaxChange(Number(event.target.value))}
         />
       </div>

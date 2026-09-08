@@ -1,4 +1,5 @@
 import type { AutomaticControlState, AutomaticRunMode, EndSessionMode } from '@/types/modes';
+import { normalizeAutomaticBurstFields } from '@/utils/burstFieldRules';
 
 export interface AutomaticFieldRules {
   disableMinimumPower: boolean;
@@ -57,5 +58,5 @@ export function applyAutomaticModeChange(
 export function normalizeAutomaticControlState(
   state: AutomaticControlState,
 ): AutomaticControlState {
-  return applyAutomaticModeChange(state, state.automaticMode);
+  return normalizeAutomaticBurstFields(applyAutomaticModeChange(state, state.automaticMode));
 }

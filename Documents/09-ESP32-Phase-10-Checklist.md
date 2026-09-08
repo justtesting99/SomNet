@@ -67,9 +67,9 @@ This is **not** manual burst mode. Manual burst is a one-shot command with fixed
 | **Delay Between Burst Strokes** | min/max sec | Inter-stroke gap **inside** a burst (mirror manual burst `burstDelayMs`) |
 | **Number of Strokes in Each Burst** | min/max | How many pulses per burst event |
 
-**Part 2 behavior (today):** entire Burst Settings panel is **hard-disabled** in `AutomaticControls`; API/device **reject** `burstsOn: true` on `automatic-start`.
+**Part 2 behavior (pre–Phase 10):** Burst Settings panel was hard-disabled; API/device rejected `burstsOn: true`.
 
-**Phase 10 UI exit:** enable panel when not `running`; **`getBurstFieldRules(burstStyle)`** for min-field disable rules (§2.1); validate ranges on save; send full snapshot including burst fields on Start.
+**Phase 10 UI (Phase D):** panel enabled when not `running`; `getBurstFieldRules(burstStyle)` for min-field disable rules (§2.1); burst ranges normalized on save; full snapshot including burst fields on Start.
 
 ---
 
@@ -547,7 +547,7 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 2. **Phase A — Config + reject removal** — parse/validate burst fields; `burstsOn: true` accepted; still no burst FSM (or stub log) — **done 2026-09-07**
 3. **Phase B — Burst sub-FSM on Periodic** — `burstPercent=100` smoke (always burst); serial `[AUTO] burst …`; then real percent — **implemented 2026-09-07** (Periodic + endSession strokes)
 4. **Phase C — All seven programs + minutes/noAutoEnd** — burst on all programs; wall-clock deadlines; noAutoEnd stride — **implemented 2026-09-07** (abort/stop mid-burst UI smoke deferred)
-5. **Phase D — API + UI** — enable panel; validator; E2E Periodic with bursts on
+5. **Phase D — API + UI** — enable panel; validator; E2E Periodic with bursts on — **implemented 2026-09-07**
 6. **Phase E — Docs + version** — `0.10.0-phase10`, sign-off
 
 ---
@@ -589,6 +589,14 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 - [ ] Abort mid-burst — deferred (UI path later)
 - [ ] Stop mid-burst — deferred (UI path later)
 - [x] End-session **strokes** limit — counts **main** strokes only; intra-burst pulses do **not** increment limit (P10-D2) — verified 2026-09-07
+
+### 7.0 Phase D — UI burst panel (2026-09-07)
+
+- [x] `AutomaticControls` — Burst Settings enabled when idle; read-only while `running` (P10-D11)
+- [x] Four-value Burst Style dropdown + min-field disable rules (§2.1)
+- [x] `getBurstFieldRules` + burst range normalization (`burstFieldRules.ts`)
+- [x] Session summary includes main strokes + burst event count when `burstsOn`
+- [ ] UI E2E — start with Bursts On, stop, history shows burst counts
 
 ### 7.2 UI E2E
 

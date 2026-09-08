@@ -5,6 +5,10 @@ export interface AutomaticResultJson {
   strokeMs?: number;
   gapSec?: number;
   strokesCompleted?: number;
+  burstsOn?: boolean;
+  mainStrokesCompleted?: number;
+  burstEventsCompleted?: number;
+  intraBurstStrokesCompleted?: number;
   durationMs?: number;
   /** 0 = noAutoEnd, 1 = minutes, 2 = strokes (device wire format) */
   endSessionMode?: number;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AUTOMATIC_RUN_MODE_OPTIONS,
+  BURST_STYLE_OPTIONS,
   type AutomaticControlState,
   type AutomaticRunMode,
   type EndSessionMode,
@@ -25,6 +26,11 @@ import {
   normalizeAutomaticControlState,
 } from '@/utils/automaticFieldRules';
 import { getAutomaticModeInfo } from '@/utils/automaticModeInfo';
+import {
+  getBurstFieldRules,
+  MAX_BURST_DELAY_SEC,
+  MAX_BURST_STROKES,
+} from '@/utils/burstFieldRules';
 import {
   clampMaximumStrokeMs,
   clampMinimumStrokeMs,
@@ -51,7 +57,7 @@ export function AutomaticControls() {
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { selectedSub } = useSubTarget();
   const { expandOnAction } = useVideoDisplay();
-  const { beginAutomaticSession, endAutomaticSession } = useLiveSession();
+  const { beginAutomaticSession, endAutomaticSession, activeSession } = useLiveSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
   const [commandError, setCommandError] = useState('');
@@ -63,12 +69,19 @@ export function AutomaticControls() {
     [state.automaticMode],
   );
 
+  const burstFieldRules = useMemo(
+    () => getBurstFieldRules(state.burstStyle),
+    [state.burstStyle],
+  );
+
   const modeInfo = useMemo(
     () => getAutomaticModeInfo(state.automaticMode),
     [state.automaticMode],
   );
 
-  const configLocked = state.running;
+  const automaticSessionActive = activeSession?.mode === 'automatic';
+  const configLocked = automaticSessionActive;
+  const burstSettingsLocked = automaticSessionActive;
   const hardwareReady = systemStatus.isReady;
   const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);
   const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop);
@@ -86,6 +99,16 @@ export function AutomaticControls() {
       setCommandError('');
     }
   }, [systemStatus.isReady]);
+
+  useEffect(() => {
+    if (isLoading || automaticSessionActive || startPending) {
+      return;
+    }
+
+    if (state.running) {
+      updateAutomatic({ ...state, running: false });
+    }
+  }, [isLoading, automaticSessionActive, startPending, state, updateAutomatic]);
 
   function update<K extends keyof AutomaticControlState>(
     key: K,
@@ -122,7 +145,16 @@ export function AutomaticControls() {
       normalizedStroke.maximumStrokeMs === state.maximumStrokeMs;
     const automaticUnchanged =
       normalizedAutomatic.automaticMode === state.automaticMode &&
-      normalizedAutomatic.endSessionMode === state.endSessionMode;
+      normalizedAutomatic.endSessionMode === state.endSessionMode &&
+      normalizedAutomatic.burstsOn === state.burstsOn &&
+      normalizedAutomatic.burstStyle === state.burstStyle &&
+      normalizedAutomatic.burstPercent === state.burstPercent &&
+      normalizedAutomatic.burstStrokePowerMin === state.burstStrokePowerMin &&
+      normalizedAutomatic.burstStrokePowerMax === state.burstStrokePowerMax &&
+      normalizedAutomatic.burstDelayMin === state.burstDelayMin &&
+      normalizedAutomatic.burstDelayMax === state.burstDelayMax &&
+      normalizedAutomatic.burstStrokesMin === state.burstStrokesMin &&
+      normalizedAutomatic.burstStrokesMax === state.burstStrokesMax;
 
     if (strokeUnchanged && automaticUnchanged) {
       return;
@@ -155,8 +187,8 @@ export function AutomaticControls() {
         HARDWARE_COMMAND_KEYS.automaticStart,
         payloadJson,
       );
-      update('running', true);
       await beginAutomaticSession();
+      update('running', true);
     } catch (error) {
       setCommandError(formatCommandError(error));
     }
@@ -181,7 +213,7 @@ export function AutomaticControls() {
 
   async function handleAbort() {
     setCommandError('');
-    const wasRunning = state.running;
+    const wasRunning = automaticSessionActive || state.running;
 
     try {
       const response = await sendHardwareCommandRaw(selectedSub, 'abort', '{}');
@@ -395,12 +427,16 @@ export function AutomaticControls() {
 
         <Panel title="Burst Settings">
           <div className="space-y-4">
-            <p className="text-xs text-slate-500">Burst-in-automatic — Phase 10 (see checklist); controls disabled until then.</p>
+            <p className="text-xs leading-relaxed text-slate-500">
+              When Bursts On is checked, scheduled burst clusters run on top of the selected
+              automatic program. Burst stroke power 0–100 is relative to main Power Settings
+              min/max.
+            </p>
             <div className="flex flex-wrap items-center gap-4">
               <Checkbox
                 label="Bursts On"
                 checked={state.burstsOn}
-                disabled
+                disabled={burstSettingsLocked}
                 onChange={(event) => update('burstsOn', event.target.checked)}
               />
               <NumberField
@@ -409,7 +445,7 @@ export function AutomaticControls() {
                 value={state.burstPercent}
                 min={0}
                 max={100}
-                disabled
+                disabled={burstSettingsLocked}
                 onChange={(event) => update('burstPercent', Number(event.target.value))}
               />
             </div>
@@ -417,40 +453,55 @@ export function AutomaticControls() {
             <SelectField
               label="Burst Style"
               value={state.burstStyle}
-              disabled
-              options={[{ value: 'fixedPowerDelay', label: 'Fixed Power/Delay' }]}
+              disabled={burstSettingsLocked}
+              options={BURST_STYLE_OPTIONS}
               onChange={(event) =>
                 update('burstStyle', event.target.value as AutomaticControlState['burstStyle'])
               }
             />
 
-            <MinMaxRow
-              label="Burst Stroke Power in Percent (0 to 100)"
-              min={state.burstStrokePowerMin}
-              max={state.burstStrokePowerMax}
-              minLimit={0}
-              maxLimit={100}
-              disabled
-              onMinChange={(value) => update('burstStrokePowerMin', value)}
-              onMaxChange={(value) => update('burstStrokePowerMax', value)}
-            />
+            <div className="space-y-1">
+              <MinMaxRow
+                label="Burst Stroke Power in Percent (0 to 100)"
+                min={state.burstStrokePowerMin}
+                max={state.burstStrokePowerMax}
+                minLimit={0}
+                maxLimit={100}
+                minDisabled={burstSettingsLocked || burstFieldRules.disableBurstStrokePowerMin}
+                maxDisabled={burstSettingsLocked}
+                onMinChange={(value) => update('burstStrokePowerMin', value)}
+                onMaxChange={(value) => update('burstStrokePowerMax', value)}
+              />
+              {burstFieldRules.disableBurstStrokePowerMin && !burstSettingsLocked ? (
+                <p className="text-xs text-slate-500">Min not used — device uses maximum power.</p>
+              ) : null}
+            </div>
 
-            <MinMaxRow
-              label="Delay Between Burst Strokes in Seconds"
-              min={state.burstDelayMin}
-              max={state.burstDelayMax}
-              minLimit={0}
-              disabled
-              onMinChange={(value) => update('burstDelayMin', value)}
-              onMaxChange={(value) => update('burstDelayMax', value)}
-            />
+            <div className="space-y-1">
+              <MinMaxRow
+                label="Delay Between Burst Strokes in Seconds"
+                min={state.burstDelayMin}
+                max={state.burstDelayMax}
+                minLimit={0}
+                maxLimit={MAX_BURST_DELAY_SEC}
+                minDisabled={burstSettingsLocked || burstFieldRules.disableBurstDelayMin}
+                maxDisabled={burstSettingsLocked}
+                onMinChange={(value) => update('burstDelayMin', value)}
+                onMaxChange={(value) => update('burstDelayMax', value)}
+              />
+              {burstFieldRules.disableBurstDelayMin && !burstSettingsLocked ? (
+                <p className="text-xs text-slate-500">Min not used — device uses maximum delay.</p>
+              ) : null}
+            </div>
 
             <MinMaxRow
               label="Number of Strokes in Each Burst"
               min={state.burstStrokesMin}
               max={state.burstStrokesMax}
               minLimit={1}
-              disabled
+              maxLimit={MAX_BURST_STROKES}
+              minDisabled={burstSettingsLocked}
+              maxDisabled={burstSettingsLocked}
               onMinChange={(value) => update('burstStrokesMin', value)}
               onMaxChange={(value) => update('burstStrokesMax', value)}
             />

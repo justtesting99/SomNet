@@ -43,7 +43,7 @@ describe('buildAutomaticSessionSummary', () => {
       endReason: 'manualStop',
     });
 
-    expect(summary).toBe('Periodic — 8 strokes over 2 min (stopped manually).');
+    expect(summary).toBe('Periodic — 8 main strokes over 2 min (stopped manually).');
   });
 
   it('builds summary for aborted automatic session', () => {
@@ -55,7 +55,23 @@ describe('buildAutomaticSessionSummary', () => {
       interrupted: true,
     });
 
-    expect(summary).toBe('Periodic — 4 strokes over 20 sec (aborted).');
+    expect(summary).toBe('Periodic — 4 main strokes over 20 sec (aborted).');
+  });
+
+  it('includes burst event counts when burstsOn', () => {
+    const summary = buildAutomaticSessionSummary({
+      automaticMode: 'periodic',
+      burstsOn: true,
+      mainStrokesCompleted: 8,
+      strokesCompleted: 8,
+      burstEventsCompleted: 4,
+      durationMs: 120_000,
+      endReason: 'endSession',
+    });
+
+    expect(summary).toBe(
+      'Periodic — 8 main strokes, 4 burst events over 2 min (end session rule).',
+    );
   });
 
   it('falls back when device result is missing', () => {

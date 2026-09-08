@@ -200,10 +200,10 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       );
       applySettings({
         ...settingsRef.current,
-        automatic: {
+        automatic: normalizeAutomaticControlState({
           ...automatic,
           ...normalizedStroke,
-        },
+        }),
       });
     },
     [applySettings, strokeLimits],

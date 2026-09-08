@@ -160,6 +160,10 @@ function formatAutomaticEndReason(endReason?: string, interrupted?: boolean): st
 export interface AutomaticSessionSummaryInput {
   automaticMode?: string;
   strokesCompleted?: number;
+  burstsOn?: boolean;
+  mainStrokesCompleted?: number;
+  burstEventsCompleted?: number;
+  intraBurstStrokesCompleted?: number;
   durationMs?: number;
   endReason?: string;
   interrupted?: boolean;
@@ -175,20 +179,35 @@ export function buildAutomaticSessionSummary(
   }
 
   const modeLabel = formatAutomaticModeLabel(deviceResult.automaticMode);
-  const strokeCount = deviceResult.strokesCompleted;
+  const mainStrokes =
+    deviceResult.mainStrokesCompleted ?? deviceResult.strokesCompleted;
   const durationLabel = formatAutomaticDuration(deviceResult.durationMs);
   const endLabel = formatAutomaticEndReason(deviceResult.endReason, deviceResult.interrupted);
 
   const detailParts: string[] = [];
 
-  if (strokeCount !== undefined && strokeCount >= 0) {
-    detailParts.push(`${strokeCount} stroke${strokeCount === 1 ? '' : 's'}`);
+  if (mainStrokes !== undefined && mainStrokes >= 0) {
+    detailParts.push(`${mainStrokes} main stroke${mainStrokes === 1 ? '' : 's'}`);
   }
 
-  if (durationLabel) {
-    detailParts.push(`over ${durationLabel}`);
+  if (
+    deviceResult.burstsOn &&
+    deviceResult.burstEventsCompleted !== undefined &&
+    deviceResult.burstEventsCompleted > 0
+  ) {
+    detailParts.push(
+      `${deviceResult.burstEventsCompleted} burst event${deviceResult.burstEventsCompleted === 1 ? '' : 's'}`,
+    );
   }
 
-  const detail = detailParts.length > 0 ? ` — ${detailParts.join(' ')}` : '';
+  const countLabel = detailParts.join(', ');
+  const detail =
+    countLabel.length > 0
+      ? durationLabel
+        ? ` — ${countLabel} over ${durationLabel}`
+        : ` — ${countLabel}`
+      : durationLabel
+        ? ` — over ${durationLabel}`
+        : '';
   return `${modeLabel}${detail} (${endLabel}).`;
 }
