@@ -27,4 +27,30 @@ describe('buildAutomaticStartPayload', () => {
     expect(payload.burstStrokePowerMin).toBe(defaultAutomaticState.burstStrokePowerMin);
     expect(payload.burstStrokesMax).toBe(defaultAutomaticState.burstStrokesMax);
   });
+
+  it('keeps burstsOn false for Part 2 regression (Phase E)', () => {
+    const payload = JSON.parse(
+      buildAutomaticStartPayload({
+        ...defaultAutomaticState,
+        automaticMode: 'periodic',
+        burstsOn: false,
+      }),
+    );
+
+    expect(payload.burstsOn).toBe(false);
+    expect(payload.automaticMode).toBe('periodic');
+  });
+
+  it('allows burstsOn true with burstPercent 0 (no schedule — Phase E)', () => {
+    const payload = JSON.parse(
+      buildAutomaticStartPayload({
+        ...defaultAutomaticState,
+        burstsOn: true,
+        burstPercent: 0,
+      }),
+    );
+
+    expect(payload.burstsOn).toBe(true);
+    expect(payload.burstPercent).toBe(0);
+  });
 });
