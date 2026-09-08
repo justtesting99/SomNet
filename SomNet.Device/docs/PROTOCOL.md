@@ -300,7 +300,7 @@ Device runs the full sequence locally; one completing ack with `resultJson` when
 | `delayBeforeStartSeconds` | int | Optional | Wait before first pulse |
 | `endSessionMode` | string | Optional | `minutes`, `strokes`, or `noAutoEnd` — wave/build-up require minutes or strokes |
 | `endSessionValue` | int | Optional | End after N minutes or strokes |
-| `burstsOn` | bool | Optional | Default **`false`**. When **`true`**, burst sub-fields validated (§6.7). **Phase 10A:** config accepted; burst FSM runs in Phase 10B+ |
+| `burstsOn` | bool | Optional | Default **`false`**. When **`true`**, burst sub-fields validated (§6.7); burst sub-FSM runs (Phase 10B+) |
 
 **UI rule:** Send full automatic settings snapshot; **omit `running`**. Device applies mode-specific ignore rules for disabled minimum fields.
 
@@ -320,7 +320,7 @@ Optional `{ "reason": "operator" }` — device reports measured `endReason` in s
 
 ### 6.7 automatic-start burst fields (Phase 10)
 
-When **`burstsOn: true`**, the start payload includes burst settings (full snapshot, camelCase). **Phase 10A:** device accepts and validates config; session runs Part 2 singles until burst FSM (Phase 10B).
+When **`burstsOn: true`**, the start payload includes burst settings (full snapshot, camelCase). Device validates config and runs burst sub-FSM interleaved with the selected automatic program (Phase 10B+).
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -413,7 +413,7 @@ When present, `resultJson` is a **string containing JSON** (not a nested object)
 | `durationMs` | Elapsed since first pulse (after start delay) |
 | `strokesCompleted` | Part 2: main program strokes. Phase 10 with bursts: **alias of `mainStrokesCompleted`** |
 
-**Phase 10 (when `burstsOn: true` — planned)** — additional fields on stop/complete:
+**Phase 10 (when `burstsOn: true`)** — additional fields on stop/complete (tier 1 implemented; tier 3 `burstDetails[]` optional):
 
 ```json
 {
@@ -510,5 +510,6 @@ If ack arrives within the per-command timeout:
 |------|--------|
 | 2026-09-05 | Phase 0 capture complete; `sub_target` JWT claim documented |
 | 2026-09-07 | Phase 9 Part 2 — `automatic-start`/`automatic-stop` payload + stop `resultJson`; burst payload; per-command ack timeouts |
+| 2026-09-07 | Phase 10B+ — burst sub-FSM; extended automatic stop `resultJson` (tier 1 verified UI E2E) |
 | 2026-09-07 | Phase 10A — `burstsOn` accept + burst field validation (firmware + API) |
 | 2026-09-07 | Phase 10 planned — §6.7 burst fields on `automatic-start`; extended automatic stop `resultJson` shape; §4.1 validation caps |

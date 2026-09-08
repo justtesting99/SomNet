@@ -128,24 +128,26 @@ Automatic mode runs a session based on your configured parameters.
 
 ### Power Settings
 
-- **Minimum / Maximum Power (%)** — The **power envelope for the entire automatic session**. Main-program strokes (random, wave, etc.) and burst strokes (when **Bursts On** is available) both resolve inside this range.
+- **Minimum / Maximum Power (%)** — The **power envelope for the entire automatic session**. Main-program strokes and burst strokes both resolve inside this range.
 - **Minimum / Maximum Stroke (ms)** — Duration range for strokes (maps power % to relay open time)
 
 ### Timing Between Strokes
 
 - **Minimum / Maximum (sec)** — Gap range between **main program** strokes (program-dependent — some modes fix min or max)
 
-### Burst Settings (Phase 10 — not yet available on device)
+### Burst Settings
 
-When **Bursts On** is enabled (future release), burst clusters are inserted at even intervals during the session:
+When **Bursts On** is checked, burst clusters are inserted at even intervals during the session:
 
-- **Percent (0–100)** — How many burst **events** spread across the session
+- **Percent (0–100)** — How many burst **events** spread across the session (e.g. 10% over 8 strokes → 1 burst event)
 - **Burst Style** — Fixed or random power/delay inside each burst
 - **Burst Stroke Power (0–100)** — **Relative to Power Settings above** (0 = session min, 100 = session max). Defaults **0–100** for full-strength bursts; lower values allow **lighter “break” strokes** between main strokes
 - **Delay between burst strokes** — Gap **inside** each burst cluster (separate from main-program gaps)
 - **Number of strokes in each burst** — Min/max strokes per burst event
 
-See [Hardware User Guide — Bursts during automatic (planned)](./Hardware-User-Guide.md#bursts-during-automatic-planned) and [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
+Burst Settings are editable when idle; read-only while a session is running.
+
+See [Hardware User Guide — Bursts during automatic](./Hardware-User-Guide.md#bursts-during-automatic) and [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
 
 ### End Session Rules
 
@@ -154,7 +156,7 @@ Choose how the automatic session ends:
 | Mode | Behavior |
 |------|----------|
 | **Minutes** | End after a set number of minutes |
-| **Strokes** | End after a number of **main program** strokes (when bursts are on, strokes inside burst clusters do not count — Phase 10) |
+| **Strokes** | End after a number of **main program** strokes (strokes inside burst clusters do not count toward the limit) |
 | **No auto end** | Run until you press Stop |
 
 ### Actions

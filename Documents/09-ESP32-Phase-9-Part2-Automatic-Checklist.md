@@ -188,9 +188,9 @@ For **Power and Timing Wave**, gap wave is **inverse** to power (180° out of ph
 
 (`delayBeforeStart` optional; when zero, first pulse is immediate after ack.)
 
-### Burst Settings (`burstsOn`) — deferred
+### Burst Settings (`burstsOn`) — Phase 10
 
-When **Bursts On** is checked, behavior is **additive** on top of the selected mode (P9-D6 deferred). Part 2 sign-off assumes **`burstsOn: false`**. See **[Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md)** — core burst-in-automatic semantics locked (scheduling, power envelope, gaps, stop/abort, `resultJson`); firmware/UI pending.
+When **Bursts On** is checked, behavior is **additive** on top of the selected mode. Part 2 sign-off used **`burstsOn: false`**. **Phase 10** implements burst-in-automatic — see **[Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md)** (verified UI E2E 2026-09-07).
 
 ### Session envelope + End Session (wave / build-up)
 
@@ -606,13 +606,13 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 | **noAutoEnd** | On Random P+T, under **End Session After** select **No AutoEnd** | The number box (left of the radios) greys out |
 | | Switch to **Power Wave** | **No AutoEnd** radio disabled; selection becomes **Minutes**; number box editable |
 | | Switch back to Random P+T, pick **No AutoEnd** again | Number box greys out again |
-| **burstsOn** | **Burst Settings** panel | All burst controls disabled until [Phase 10](./09-ESP32-Phase-10-Checklist.md); **Bursts On** unchecked; values still save/load with settings |
+| **burstsOn** | **Burst Settings** panel | **Phase 10:** Bursts On and sub-fields editable when idle; read-only while session running; values round-trip in settings JSON |
 | **Stroke limits** | **Power Settings:** edit **Minimum Stroke (ms)** / **Maximum Stroke (ms)** outside device limits | Clamps to API stroke limits on commit/load |
 | | Set maximum stroke below minimum | Minimum adjusts so min ≤ max |
 
-**Note:** Pre–Phase 10, burst sub-fields are hard-disabled in UI (not only `burstsOn === false`). Saved `burstsOn` and burst ranges should still round-trip in JSON.
+**Note (historical):** Pre–Phase 10, burst sub-fields were hard-disabled in UI. Phase 10 enabled the panel; saved `burstsOn` and burst ranges round-trip in JSON.
 
-**Automated sign-off (2026-09-07):** `automaticFieldRules.test.ts` (noAutoEnd coercion); `strokeMsLimits.test.ts` (clamp); burst panel intentionally all-disabled until Phase 10.
+**Automated sign-off (2026-09-07):** `automaticFieldRules.test.ts` (noAutoEnd coercion); `strokeMsLimits.test.ts` (clamp); `burstFieldRules.test.ts` (Phase 10 style rules).
 
 #### 6.3.3 API round-trip after mode change
 
@@ -807,7 +807,7 @@ Use **distinctive numbers** so you can spot accidental resets. Example using on-
 7. ~~**Phase E** — auto-end UI sync (hub listener)~~ — **signed off** 2026-09-07
 8. ~~**Phase F** — abort during automatic UI~~ — **signed off** 2026-09-07 (`sess-032`)
 9. ~~**Update** device plan + PROTOCOL + firmware version~~ — **done** 2026-09-07
-10. **Phase 10** — burst-in-automatic — [09-ESP32-Phase-10-Checklist.md](./09-ESP32-Phase-10-Checklist.md) (planning)
+10. **Phase 10** — burst-in-automatic — [09-ESP32-Phase-10-Checklist.md](./09-ESP32-Phase-10-Checklist.md) (**Phases A–D complete**; Phase E sign-off pending)
 
 ---
 

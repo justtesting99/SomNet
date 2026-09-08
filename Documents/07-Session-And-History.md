@@ -108,11 +108,12 @@ Periodic — 4 strokes over 20 sec (aborted).
 Power Wave — 12 strokes over 5 min (stopped manually).
 ```
 
-**Phase 10 (when `burstsOn: true` — planned):** summary includes **main stroke count** and **burst event count** (P10-D6):
+**Phase 10 (`burstsOn: true`):** summary includes **main stroke count** and **burst event count** (P10-D6):
 
 ```
-Periodic — 80 main strokes, 8 bursts over 25 min (stopped manually).
-Periodic — 45 main strokes, 4 bursts over 12 min (aborted).
+Periodic — 8 main strokes, 1 burst event over 1 min (end session rule).
+Periodic — 80 main strokes, 8 burst events over 25 min (stopped manually).
+Periodic — 45 main strokes, 4 burst events over 12 min (aborted).
 ```
 
 - **`mainStrokesCompleted`** — main program singles only (End Session **Strokes** limit)

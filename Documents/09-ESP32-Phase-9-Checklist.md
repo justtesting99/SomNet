@@ -316,8 +316,10 @@ Use plan §6, locked P9-D2/D4/D5/D6 + Part 2 §4 when implementing.
 
 ---
 
-## Next — Phase 10 (burst-in-automatic)
+## Phase 10 — burst-in-automatic (in progress)
 
-**Checklist:** [09-ESP32-Phase-10-Checklist.md](./09-ESP32-Phase-10-Checklist.md) — **planning**; lock §4 decisions before coding.
+**Checklist:** [09-ESP32-Phase-10-Checklist.md](./09-ESP32-Phase-10-Checklist.md) — **Phases A–D complete**; first UI E2E verified 2026-09-07.
 
-**Scope:** Enable **Bursts On** during automatic sessions (`burstsOn: true` on `automatic-start`); burst sub-FSM inside `AutomaticSessionMode`; enable UI Burst Settings panel.
+**Delivered:** `burstsOn: true` on `automatic-start`; burst sub-FSM in `AutomaticSessionMode`; UI Burst Settings panel enabled; firmware **`0.10.0-phase10`**.
+
+**Remaining:** Phase E sign-off — regression smoke, optional Phase C hardware smokes (Random/Wave, minutes, noAutoEnd), abort/stop mid-burst UI (deferred).

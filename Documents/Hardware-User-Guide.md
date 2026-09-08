@@ -9,7 +9,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | SomNet web app | [User Guide](./User-Guide.md) |
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 
-**Firmware status (2026-09-07):** Phases **0–9 Part 2** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app. Firmware **`0.9.1-phase9p2`**. Burst-in-automatic (Bursts On) → [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
+**Firmware status (2026-09-07):** Phases **0–10** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app, including **Bursts On** during automatic sessions. Firmware **`0.10.0-phase10`**. See [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
 
 ---
 
@@ -212,7 +212,7 @@ If the device is on your network and you can open its web page:
 - Operator selects **Automatic** in SomNet, configures the program, presses **Start**.
 - SomNet sends **one configuration snapshot** to the device; the **ESP32 runs the full session locally** (gaps between strokes, power changes, end rules) until **Stop**, **Abort**, or **End Session After**.
 - Unlike **manual burst** (fixed number of strokes you choose each time), automatic mode runs **ongoing single strokes** according to the selected **program** — with optional randomness or waves between min/max power and timing settings.
-- **Bursts during automatic** (**Bursts On**) — **not yet available** on device; design locked in [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md). See [Bursts during automatic (planned)](#bursts-during-automatic-planned) below.
+- **Bursts during automatic** (**Bursts On**) — **available** when checked in **Burst Settings**; scheduled burst clusters run on top of the selected program. See [Bursts during automatic](#bursts-during-automatic) below.
 
 ### Seven automatic programs (Automatic Mode dropdown)
 
@@ -264,11 +264,11 @@ Automatic mode controls **relay open time**, not tank pressure. On a charged com
 
 Reported **`actualStrokeMs`** in session history reflects what the device measured on the relay; small variation (a few ms) between strokes is normal.
 
-### Bursts during automatic (planned)
+### Bursts during automatic
 
-**Status:** Phase 10 — **planning complete for core semantics**; firmware/UI not implemented. **Bursts On** is disabled in SomNet today; device rejects `burstsOn: true`.
+**Status:** **Available** (Phase 10 — firmware **`0.10.0-phase10`**, UI burst panel enabled). Check **Bursts On** in Automatic mode **Burst Settings** before **Start**.
 
-When available, **Bursts On** adds **scheduled burst clusters** inside the same automatic session — on top of whichever program you selected (Periodic, Random, Wave, etc.):
+When **Bursts On** is checked, **scheduled burst clusters** run inside the same automatic session — on top of whichever program you selected (Periodic, Random, Wave, etc.):
 
 | Concept | Behavior |
 |---------|----------|
@@ -287,7 +287,6 @@ Developer detail: [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
 
 | Feature | When |
 |---------|------|
-| **Bursts On** during automatic | [Phase 10](./09-ESP32-Phase-10-Checklist.md) |
 | **Change settings while running** (live replan) | Future — original product supported this; needs mid-session device updates |
 
 ## Relay timing validation (oscilloscope)
@@ -369,7 +368,7 @@ From an operator or Dom perspective:
 | Feature | Target |
 |---------|--------|
 | Automatic session programs (timing/power variations) | [Automatic mode](#automatic-mode) — **available** (Phase 9 Part 2) |
-| Automatic bursts during session | [Phase 10](./09-ESP32-Phase-10-Checklist.md) |
+| Automatic bursts during session | [Bursts during automatic](#bursts-during-automatic) — **available** (Phase 10) |
 | Live settings change during automatic playback | Future |
 | Air-line pressure timing vs GPIO pulse | Optional installer follow-up — operators tune power / max stroke for felt impact |
 | LED indicators for setup / fault | Under consideration |
@@ -388,4 +387,5 @@ From an operator or Dom perspective:
 | 2026-09-06 | Bench notes: single/burst poll jitter (~±5 ms); air-line pressure vs operator power adjustment |
 | 2026-09-06 | Link to Phase 7 §G2 / device plan — deferred timing options (`esp_timer`, poll, dual-core; OTA-safe) |
 | 2026-09-07 | Automatic mode overview — **signed off**; Start/Stop/Abort; auto-end via end-session rules |
+| 2026-09-07 | Phase 10 burst-in-automatic — **available**; Bursts On, scheduling, stop/abort semantics |
 | 2026-09-07 | Phase 10 burst-in-automatic — planned operator semantics (power envelope, scheduling, stop/abort) |

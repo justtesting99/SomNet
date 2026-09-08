@@ -1,14 +1,14 @@
 # Phase 10 — Burst-in-automatic (`burstsOn`)
 
-**Status:** **§4 locked** — ready for implementation (2026-09-07). No firmware/UI coding started.
+**Status:** **Phases A–D implemented** — firmware **`0.10.0-phase10`**; UI burst panel enabled. **First UI E2E verified** 2026-09-07 (Periodic, 10%, 8 strokes). Phase E sign-off in progress.
 
 | Related | Link |
 |---------|------|
 | Parent plan | [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §6 automatic + manual burst |
 | Prior sign-off | [Phase 9 Part 2 checklist](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) — seven programs, Start/Stop/Abort |
 | Manual burst reference | [Phase 9 checklist](./09-ESP32-Phase-9-Checklist.md) — `BurstSequenceMode` |
-| UI burst panel | `SomNet.UI/src/components/modes/AutomaticControls.tsx` — **Burst Settings** (disabled today) |
-| Device rejection today | ~~`automatic_config.cpp`~~ — **Phase 10A:** `burstsOn: true` accepted + validated; burst FSM pending |
+| UI burst panel | `SomNet.UI/src/components/modes/AutomaticControls.tsx` — **Burst Settings enabled** when idle (Phase D) |
+| Device | **`burstsOn: true`** accepted; burst sub-FSM in `AutomaticSessionMode` (Phases B–C) |
 
 **Goal:** When **Bursts On** is checked, the ESP32 runs **bursts inside an automatic session** — additive on top of the selected automatic program (Periodic, Random, Wave, etc.). Operator enables burst settings in the UI; device accepts `burstsOn: true` on `automatic-start`.
 
@@ -24,8 +24,8 @@
 | **Duration** | ~1–2 weeks (design lock → Periodic+burst smoke → all modes → UI enable → E2E) |
 | **Hardware scope** | Same DevKit (`esp32-84CCA85C36B4` / `Slv66`); relay **D4** |
 | **Software scope** | `AutomaticSessionMode` burst sub-FSM; payload validation; enable UI Burst Settings; tests + docs |
-| **Blocks** | Operators using **Bursts On** during automatic (panel hard-disabled since Part 2) |
-| **Target firmware** | **`0.10.0-phase10`** (P10-D10 ☑) |
+| **Blocks** | ~~Operators using **Bursts On** during automatic~~ — **unblocked** (Phase D UI + verified E2E 2026-09-07) |
+| **Target firmware** | **`0.10.0-phase10`** (P10-D10 ☑) — **shipped** in Phase A |
 
 Update **Status** above and check boxes in **§7** as work completes. When Phase 10 is done, update [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §10 and bump firmware version.
 
@@ -35,10 +35,10 @@ Update **Status** above and check boxes in **§7** as work completes. When Phase
 
 - [x] Phase 9 Part 2 **signed off** — automatic Start/Stop/Abort, seven programs, hub auto-end/abort
 - [x] Phase 9 manual **burst** signed off — `BurstSequenceMode`, abort during burst, dual ack pattern
-- [x] Burst Settings UI fields exist and **round-trip in settings JSON** (controls disabled until Phase 10)
+- [x] Burst Settings UI fields exist and **round-trip in settings JSON** (panel enabled Phase D — 2026-09-07)
 - [x] **§4 decisions locked** (this document) — **required before firmware/UI coding**
-- [ ] Review `BurstSequenceMode` FSM — gap/pulse/abort pattern to reuse or embed
-- [ ] Review `AutomaticSessionMode` — `WaitingGap` / `Pulse` / `StartDelay` states
+- [x] Review `BurstSequenceMode` FSM — gap/pulse/abort pattern reused in embedded burst sub-FSM
+- [x] Review `AutomaticSessionMode` — burst sub-FSM embedded (P10-D7)
 
 ---
 
@@ -547,8 +547,8 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 2. **Phase A — Config + reject removal** — parse/validate burst fields; `burstsOn: true` accepted; still no burst FSM (or stub log) — **done 2026-09-07**
 3. **Phase B — Burst sub-FSM on Periodic** — `burstPercent=100` smoke (always burst); serial `[AUTO] burst …`; then real percent — **implemented 2026-09-07** (Periodic + endSession strokes)
 4. **Phase C — All seven programs + minutes/noAutoEnd** — burst on all programs; wall-clock deadlines; noAutoEnd stride — **implemented 2026-09-07** (abort/stop mid-burst UI smoke deferred)
-5. **Phase D — API + UI** — enable panel; validator; E2E Periodic with bursts on — **implemented 2026-09-07**
-6. **Phase E — Docs + version** — `0.10.0-phase10`, sign-off
+5. **Phase D — API + UI** — enable panel; validator; E2E Periodic with bursts on — **verified 2026-09-07** (UI Start → serial + hub `automatic-session-complete`)
+6. **Phase E — Docs + version + sign-off** — update operator/dev docs; remaining regression smoke; optional `burstDetails` tier 3
 
 ---
 
@@ -584,7 +584,7 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 ### 7.1 Firmware smoke (Swagger / serial)
 
 - [x] `automatic-start` with `burstsOn: true` — ack success (no reject) — verified 2026-09-07 serial
-- [x] Periodic + `burstPercent=100` — serial shows burst clusters + program gaps — verified 2026-09-07
+- [x] Periodic + `burstPercent=10`, endSession 8 strokes — 8 mains, 1 burst at milestone 8, 7 intra-burst strokes; hub `resultJson` tier 1 — **verified 2026-09-07 UI E2E**
 - [ ] Periodic + `burstPercent=0` — identical to Part 2 (singles only)
 - [ ] Abort mid-burst — deferred (UI path later)
 - [ ] Stop mid-burst — deferred (UI path later)
@@ -592,16 +592,16 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 
 ### 7.0 Phase D — UI burst panel (2026-09-07)
 
-- [x] `AutomaticControls` — Burst Settings enabled when idle; read-only while `running` (P10-D11)
+- [x] `AutomaticControls` — Burst Settings enabled when idle; read-only while session active (P10-D11)
 - [x] Four-value Burst Style dropdown + min-field disable rules (§2.1)
 - [x] `getBurstFieldRules` + burst range normalization (`burstFieldRules.ts`)
 - [x] Session summary includes main strokes + burst event count when `burstsOn`
-- [ ] UI E2E — start with Bursts On, stop, history shows burst counts
+- [x] UI E2E — Bursts On from UI → Periodic 10% / 8 strokes → device serial + hub summary — **verified 2026-09-07**
 
 ### 7.2 UI E2E
 
-- [ ] Burst Settings enabled when idle; disabled while running
-- [ ] Start with Bursts On → session runs → Stop — history shows plausible stroke count
+- [x] Burst Settings enabled when idle; read-only while running — **verified 2026-09-07**
+- [x] Start with Bursts On → session runs → auto-end — serial + `resultJson` tier 1 — **verified 2026-09-07**
 - [ ] Abort during burst-in-automatic — UI unlocks (reuse Phase F hub path)
 
 ### 7.3 Regression
@@ -625,6 +625,8 @@ Part 2 today emits **`strokesCompleted`** only (all main pulses). Phase 10 refac
 
 | Date | Change |
 |------|--------|
+| 2026-09-07 | Phase D UI E2E verified — Periodic 10% / 8 strokes from UI; hub `resultJson` tier 1 |
+| 2026-09-07 | Phases C–D implemented — all programs + minutes/noAutoEnd scheduling; UI burst panel enabled |
 | 2026-09-07 | Phase 10B verified — Periodic burstPercent 100% + 50% smoke (serial) |
 | 2026-09-07 | P10-D4/D5 locked — program gap after burst; burst power relative to main Power Settings (§2.2) |
 | 2026-09-07 | §3.3 — main strokes vs burst events; `resultJson` / history fields |
