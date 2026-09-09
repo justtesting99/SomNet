@@ -103,6 +103,7 @@ void tryWifiRecovery() {
     nvsStore.clearProvisioning();
     bootMode = DeviceBootMode::Provisioning;
     configWebServer.setBootMode(DeviceBootMode::Provisioning);
+    configWebServer.resetListenState();
     char apName[32];
     buildSoftApName(apName, sizeof(apName));
     wifiManager.beginSoftAp(apName);

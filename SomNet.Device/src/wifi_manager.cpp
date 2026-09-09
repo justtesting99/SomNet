@@ -223,7 +223,7 @@ void WifiManager::beginSoftAp(const char* apSsid) {
     }
     Serial.println(F("[HTTP] Config UI: http://192.168.4.1/"));
     Serial.println(F("[WIFI] join the SSID above on phone/PC, then open the URL"));
-    Serial.println(F("[WIFI] iPhone: if it spins, forget any old SomNet-Setup network in Wi-Fi settings"));
+    Serial.println(F("[WIFI] iPhone: if it spins, forget any old SomNetSetup network in Wi-Fi settings"));
 }
 
 void WifiManager::poll() {

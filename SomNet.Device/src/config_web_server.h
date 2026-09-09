@@ -17,6 +17,8 @@ public:
         SignalRClient* signalRClient = nullptr);
     void poll();
     void setBootMode(DeviceBootMode mode);
+    /** Call when switching STA ↔ setup AP so HTTP can bind on the new interface. */
+    void resetListenState();
 
 private:
     DeviceBootMode mode_ = DeviceBootMode::Running;
@@ -25,5 +27,6 @@ private:
     WifiManager* wifi_ = nullptr;
     SignalRClient* signalR_ = nullptr;
     bool started_ = false;
-    unsigned long deferStartUntilMs_ = 0;
+    /** millis() when STA last gained IP; 0 when disconnected. */
+    unsigned long staIpSinceMs_ = 0;
 };

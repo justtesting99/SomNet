@@ -36,7 +36,7 @@ Update **Status** above and check boxes in **§7** as work completes. When Phase
 
 - [x] Phase 10 **signed off** — burst sub-FSM, seven programs, Start/Stop/Abort, hub finalize
 - [x] **§4 decisions locked** — 2026-09-08
-- [ ] **[Network spec](./09-ESP32-Network-Spec.md) implemented** — smoke tests S1–S8 pass on bench hardware
+- [x] **[Network spec](./09-ESP32-Network-Spec.md) signed off** — **`0.12.0-network`**; S3–S6 verified 2026-09-09 (`.172` + API down/up)
 - [ ] Review `AutomaticSessionMode` FSM — states `Idle`, `StartDelay`, `WaitingGap`, `Pulse`, `BurstPulse`, `BurstGap`
 - [ ] Review planner separation — `AutomaticProgramBase::buildPlan()` vs sequencer (Part 2 §8)
 - [ ] Review UI `configLocked` / settings debounce path (`SettingsProvider`, `AutomaticControls`)

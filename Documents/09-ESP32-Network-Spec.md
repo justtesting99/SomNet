@@ -1,6 +1,6 @@
 # ESP32 Network Layer — Specification
 
-**Status:** **Locked for implementation** (2026-09-09) — decisions and behaviour contract; firmware refactor pending.
+**Status:** **Signed off** — firmware **`0.12.0-network`** (2026-09-09); bench smoke S3–S6 verified on `esp32-84CCA85C36B4` (`.172` during API down/up cycles).
 
 | Related | Link |
 |---------|------|
@@ -325,14 +325,14 @@ Execute as **one refactor pass** against this spec — not incremental patches o
 
 | Step | Task | Files |
 |------|------|-------|
-| **I1** | Align `config.h` constants to §6 | `include/config.h` |
-| **I2** | HTTP: settle-only start; remove hub gate; single static server | `config_web_server.*` |
-| **I3** | Wi‑Fi: document/limit `refreshAssociation()` callers | `wifi_manager.*`, `signalr_client.*` |
-| **I4** | Hub: `serverUnavailable_` + quiet probe; error table §7; no HTTP coupling | `signalr_client.*` |
-| **I5** | Main: loop order NET-D7; boot paths NET-D1 | `main.cpp` |
-| **I6** | Bump firmware version (e.g. `0.12.0-network`) | `platformio.ini` |
-| **I7** | Sync [Hardware User Guide](./Hardware-User-Guide.md) SSID to `SomNetSetup-XXXX` | docs |
-| **I8** | Run smoke tests §11; check boxes in Phase 11 checklist network prerequisites | checklists |
+| **I1** | Align `config.h` constants to §6 | `include/config.h` | ✅ |
+| **I2** | HTTP: settle-only start; remove hub gate; single static server | `config_web_server.*` | ✅ |
+| **I3** | Wi‑Fi: document/limit `refreshAssociation()` callers | `wifi_manager.*`, `signalr_client.*` | ✅ |
+| **I4** | Hub: `serverUnavailable_` + quiet probe; error table §7; no HTTP coupling | `signalr_client.*` | ✅ |
+| **I5** | Main: loop order NET-D7; boot paths NET-D1 | `main.cpp` | ✅ |
+| **I6** | Bump firmware version (e.g. `0.12.0-network`) | `platformio.ini` | ✅ |
+| **I7** | Sync [Hardware User Guide](./Hardware-User-Guide.md) SSID to `SomNetSetup-XXXX` | docs | ✅ |
+| **I8** | Run smoke tests §11; check boxes in Phase 11 checklist network prerequisites | checklists | ✅ (S3–S6, 2026-09-09) |
 
 **Definition of done:** All smoke tests pass on bench hardware (`esp32-84CCA85C36B4` or equivalent); no NET-F* logs during Phase C test.
 
@@ -375,3 +375,5 @@ Documented for future reviewers:
 | Date | Change |
 |------|--------|
 | 2026-09-09 | Initial spec — NET-D1–D7, phases A–D, implementation plan, smoke tests |
+| 2026-09-09 | Firmware **0.12.0-network** — I1–I7 implemented; S1–S8 smoke pending |
+| 2026-09-09 | **Signed off** — S3–S6 pass on bench (HTTP @ `.172` during API down; hub reconnect on API up) |

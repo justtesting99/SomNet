@@ -441,49 +441,6 @@ bool probeTcpHostQuiet(const IPAddress& ip, uint16_t port) {
     return ok;
 }
 
-bool probeTcpHost(const char* host, uint16_t port) {
-    if (host == nullptr || host[0] == '\0') {
-        return false;
-    }
-
-    IPAddress ip;
-    if (!ip.fromString(host)) {
-        Serial.print(F("[HUB] TCP probe bad host "));
-        Serial.println(host);
-        return false;
-    }
-
-    WiFiClient client;
-    client.setTimeout(2000);
-    const bool ok = client.connect(ip, port, 2000);
-    if (ok) {
-        client.stop();
-    }
-
-    Serial.print(F("[HUB] TCP probe "));
-    Serial.print(host);
-    Serial.print(':');
-    Serial.print(port);
-    Serial.println(ok ? F(" ok") : F(" failed"));
-    return ok;
-}
-
-void logNetworkDiagnostics() {
-    WiFiClient client;
-    const IPAddress gateway = WiFi.gatewayIP();
-    Serial.print(F("[HUB] gateway "));
-    Serial.print(gateway);
-    Serial.print(F(" probe "));
-    if (gateway != IPAddress(0, 0, 0, 0) && client.connect(gateway, 80, 1500)) {
-        Serial.println(F("ok"));
-        client.stop();
-    } else {
-        Serial.println(F("failed"));
-    }
-    Serial.print(F("[HUB] local IP="));
-    Serial.println(WiFi.localIP());
-}
-
 bool negotiateConnectionToken(NvsStore& nvs, char* tokenOut, size_t tokenLen) {
     char serverUrl[NvsStore::kMaxStringLen];
     buildEffectiveServerUrl(nvs, serverUrl, sizeof(serverUrl));
@@ -1320,29 +1277,11 @@ void SignalRClient::poll() {
         if (parseServerUrl(serverUrl, probeHost, sizeof(probeHost), &probePort, &probeTls)) {
             IPAddress probeIp;
             if (probeIp.fromString(probeHost) && !probeTcpHostQuiet(probeIp, probePort)) {
-                nextAttemptMs_ = millis() + HUB_SERVER_UNAVAILABLE_RETRY_MS;
-                state_ = HubConnectionState::Backoff;
+                enterServerUnavailable(kHttpConnectionRefused);
                 return;
             }
         }
         serverUnavailable_ = false;
-    }
-
-    if (!serverUnavailable_ && consecutiveTransportFailures_ > 0 && hasApiIp) {
-        char serverUrl[NvsStore::kMaxStringLen];
-        buildEffectiveServerUrl(*nvs_, serverUrl, sizeof(serverUrl));
-        char probeHost[96];
-        uint16_t probePort = 5031;
-        bool probeTls = false;
-        if (parseServerUrl(serverUrl, probeHost, sizeof(probeHost), &probePort, &probeTls) &&
-            !probeTcpHost(probeHost, probePort)) {
-            logNetworkDiagnostics();
-            if (wifi_->isHostArpResolved(apiIp)) {
-                onNegotiateTransportError(kHttpConnectionRefused);
-            } else {
-                beginArpWarm(apiIp);
-            }
-        }
     }
 
     if (hasApiIp) {

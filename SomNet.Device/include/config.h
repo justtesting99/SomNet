@@ -52,11 +52,9 @@ constexpr unsigned HUB_TRANSPORT_FAILURE_REBOOT_COUNT = 12;
 constexpr unsigned long HUB_SERVER_UNAVAILABLE_LOG_MS = 60000;
 /** Hub retry interval while API host is on LAN but port is closed. */
 constexpr unsigned long HUB_SERVER_UNAVAILABLE_RETRY_MS = 30000;
-/** On STA, start config HTTP this long after boot if hub is not connected yet. */
-constexpr unsigned long CONFIG_HTTP_STA_DEFER_MS = 10000;
-/** Legacy upper bound — same as STA defer (hub-first window, then HTTP always starts). */
-constexpr unsigned long CONFIG_HTTP_MAX_DEFER_MS = CONFIG_HTTP_STA_DEFER_MS;
-/** On setup AP (192.168.4.1), HTTP starts immediately — no hub defer. */
+/** On STA, start config HTTP this long after Wi-Fi has an IP (not gated on hub). */
+constexpr unsigned long CONFIG_HTTP_STA_SETTLE_MS = 3000;
+/** On setup AP (192.168.4.1), HTTP starts immediately — no settle. */
 
 /** Non-blocking ARP warm: poke API host MAC for this long before hub negotiate. */
 constexpr unsigned long LAN_ARP_WARM_MAX_MS = 5000;
@@ -82,7 +80,7 @@ constexpr unsigned long CREDENTIAL_RESET_WARN_MS = 5000;
 
 constexpr uint16_t CONFIG_HTTP_PORT = 80;
 
-/** WPA2 password for SomNet-Setup-XXXX provisioning AP (required by many phones/Windows). */
+/** WPA2 password for SomNetSetup-XXXX provisioning AP (required by many phones/Windows). */
 constexpr char SETUP_AP_PASSWORD[] = "somnetsetup";
 constexpr int SETUP_AP_CHANNEL = 6;
 constexpr int SETUP_AP_MAX_CLIENTS = 4;

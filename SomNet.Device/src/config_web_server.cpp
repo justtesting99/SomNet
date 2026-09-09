@@ -396,9 +396,11 @@ void registerRoutes(AsyncWebServer& server) {
 void ConfigWebServer::setBootMode(DeviceBootMode mode) {
     mode_ = mode;
     gHttpMode = mode;
-    if (mode == DeviceBootMode::Provisioning) {
-        deferStartUntilMs_ = 0;
-    }
+}
+
+void ConfigWebServer::resetListenState() {
+    started_ = false;
+    staIpSinceMs_ = 0;
 }
 
 bool ConfigWebServer::begin(
@@ -421,26 +423,41 @@ bool ConfigWebServer::begin(
     gWifi = wifi;
     gSignalR = signalRClient;
     gHttpMode = mode;
-    deferStartUntilMs_ =
-        mode == DeviceBootMode::Provisioning ? 0 : millis() + CONFIG_HTTP_MAX_DEFER_MS;
+    staIpSinceMs_ = 0;
     return true;
 }
 
 void ConfigWebServer::poll() {
-    if (started_ || wifi_ == nullptr || !wifi_->isConnected()) {
+    if (wifi_ == nullptr) {
+        return;
+    }
+
+    if (!wifi_->isConnected()) {
+        staIpSinceMs_ = 0;
+        return;
+    }
+
+    if (started_) {
         return;
     }
 
     const bool provisioningUi =
         wifi_->isSoftAp() || mode_ == DeviceBootMode::Provisioning;
-    const bool hubConnected = signalR_ != nullptr && signalR_->isHubConnected();
-    const bool maxDeferReached = deferStartUntilMs_ == 0 || millis() >= deferStartUntilMs_;
-    if (!provisioningUi && !hubConnected && !maxDeferReached) {
-        return;
+    if (!provisioningUi) {
+        if (staIpSinceMs_ == 0) {
+            staIpSinceMs_ = millis();
+        }
+        if (millis() - staIpSinceMs_ < CONFIG_HTTP_STA_SETTLE_MS) {
+            return;
+        }
     }
 
     static AsyncWebServer server(CONFIG_HTTP_PORT);
-    registerRoutes(server);
+    static bool routesRegistered = false;
+    if (!routesRegistered) {
+        registerRoutes(server);
+        routesRegistered = true;
+    }
     server.begin();
     started_ = true;
 

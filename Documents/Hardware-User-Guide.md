@@ -41,7 +41,7 @@ Connect USB power (or your installed power supply). The device boots in under a 
 
 If the device has never been configured (or was reset — see below), it creates a Wi‑Fi network:
 
-**Network name:** `SomNet-Setup-XXXX` (last four characters of the Device ID)  
+**Network name:** `SomNetSetup-XXXX` (last four characters of the Device ID)  
 **Password:** `somnetsetup`
 
 On a phone or laptop, join that network (WPA2 — password required).
@@ -137,7 +137,7 @@ If Wi‑Fi credentials were mistyped or the network changed, the device **cannot
 2. Press and **hold the button (D33)** for **10 seconds**.
    - At about **5 seconds**, the device logs a warning on serial (USB); future builds may add an LED pattern.
 3. Release after 10 seconds. The device clears **Wi‑Fi and server settings only**, then reboots.
-4. Follow **First-time setup** again (join `SomNet-Setup-XXXX` → **http://192.168.4.1/config**).
+4. Follow **First-time setup** again (join `SomNetSetup-XXXX` → **http://192.168.4.1/config**).
 
 **What is kept:** Device ID, friendly name, installer contact, and SomNet pairing (if already paired).  
 **What is cleared:** Wi‑Fi SSID, Wi‑Fi password, server URL, and the “provisioned” flag.
@@ -353,9 +353,9 @@ From an operator or Dom perspective:
 
 | Problem | What to try |
 |---------|-------------|
-| Cannot find setup Wi‑Fi | Hold button 10 s to force credential reset; look for `SomNet-Setup-XXXX` |
+| Cannot find setup Wi‑Fi | Hold button 10 s to force credential reset; look for `SomNetSetup-XXXX` |
 | Saved wrong Wi‑Fi password | Hold button 10 s → set up again |
-| Setup page will not load | Confirm you are on `SomNet-Setup-XXXX` or the same LAN as the device; try `http://192.168.4.1/` on setup AP |
+| Setup page will not load | Confirm you are on `SomNetSetup-XXXX` or the same LAN as the device; try `http://192.168.4.1/` on setup AP |
 | Device ID needed for pairing | Status page at `http://<device-ip>/` after Wi‑Fi works, or USB serial log for installers |
 | Paired but “not connected” in SomNet | Check server URL on device; confirm API is running; same LAN; Windows Firewall on dev PC may block LAN inbound port 5031 |
 | Device was paired; now “not paired” after ~1 year | **Expected** — pairing token expired. Dom: **Hardware** → **Pair** again (same Device ID). See [Pairing token renewal](./Hardware-User-Guide.md#pairing-token-renewal-about-once-a-year) |
