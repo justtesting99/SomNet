@@ -17,6 +17,10 @@ public:
     void clearPairing();
     void clearProvisioning();
 
+    /** True after credential reset until operator saves config again (forces setup AP). */
+    bool isCredentialResetPending() const;
+    bool setCredentialResetPending(bool value);
+
     // True when provisioned flag set and wifi_ssid + server_url stored
     bool isFullyProvisioned() const;
 

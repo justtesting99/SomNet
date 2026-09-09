@@ -17,16 +17,24 @@ void StatusLed::begin() {
     blinkPhase_ = false;
 }
 
+void StatusLed::pollBlink(unsigned long intervalMs) {
+    const unsigned long now = millis();
+    if (now - lastToggleMs_ >= intervalMs) {
+        lastToggleMs_ = now;
+        blinkPhase_ = !blinkPhase_;
+        writeLit(blinkPhase_);
+    }
+}
+
 void StatusLed::poll(bool hubConnected) {
     if (hubConnected) {
         writeLit(true);
         return;
     }
 
-    const unsigned long now = millis();
-    if (now - lastToggleMs_ >= STATUS_LED_BLINK_MS) {
-        lastToggleMs_ = now;
-        blinkPhase_ = !blinkPhase_;
-        writeLit(blinkPhase_);
-    }
+    pollBlink(STATUS_LED_BLINK_MS);
+}
+
+void StatusLed::pollCredentialResetFlash() {
+    pollBlink(STATUS_LED_CREDENTIAL_RESET_BLINK_MS);
 }

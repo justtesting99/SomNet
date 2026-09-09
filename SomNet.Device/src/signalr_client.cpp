@@ -24,6 +24,8 @@ namespace {
 
 constexpr char kHubPath[] = "/hubs/hardware";
 constexpr char kRecordSeparator = static_cast<char>(0x1E);
+/** ESP32 HTTPClient: host reachable but nothing listening (API down / firewall). */
+constexpr int kHttpConnectionRefused = -1;
 
 WebSocketsClient gWs;
 SignalRClient* gActiveClient = nullptr;
@@ -412,6 +414,33 @@ bool getApiHostIp(NvsStore& nvs, IPAddress& out) {
     return out.fromString(host);
 }
 
+bool isApiHostOnLan(WifiManager* wifi, NvsStore* nvs) {
+    if (wifi == nullptr || nvs == nullptr) {
+        return false;
+    }
+
+    IPAddress apiIp;
+    if (!getApiHostIp(*nvs, apiIp)) {
+        return false;
+    }
+
+    return wifi->isHostArpResolved(apiIp);
+}
+
+bool probeTcpHostQuiet(const IPAddress& ip, uint16_t port) {
+    if (ip == IPAddress(0, 0, 0, 0)) {
+        return false;
+    }
+
+    WiFiClient client;
+    client.setTimeout(1500);
+    const bool ok = client.connect(ip, port, 1500);
+    if (ok) {
+        client.stop();
+    }
+    return ok;
+}
+
 bool probeTcpHost(const char* host, uint16_t port) {
     if (host == nullptr || host[0] == '\0') {
         return false;
@@ -529,7 +558,7 @@ bool negotiateConnectionToken(NvsStore& nvs, char* tokenOut, size_t tokenLen) {
             Serial.print(http.errorToString(status).c_str());
             Serial.print(F(")"));
             if (gActiveClient != nullptr) {
-                gActiveClient->onNegotiateTransportError();
+                gActiveClient->onNegotiateTransportError(status);
             }
         }
         Serial.println();
@@ -984,6 +1013,7 @@ void SignalRClient::onWifiLinkRestored() {
     lastStallRecoveryMs_ = 0;
     consecutiveTransportFailures_ = 0;
     transportRecoveryUsed_ = false;
+    serverUnavailable_ = false;
     warmNetworkPath(wifi_, nvs_);
     IPAddress apiIp;
     if (getApiHostIp(*nvs_, apiIp)) {
@@ -1004,13 +1034,26 @@ void SignalRClient::recoverStalledConnection() {
     }
 
     lastStallRecoveryMs_ = millis();
+
+    if (serverUnavailable_) {
+        Serial.println(F("[HUB] stall recovery — server unavailable, keeping Wi-Fi up"));
+        nextAttemptMs_ = millis() + HUB_SERVER_UNAVAILABLE_RETRY_MS;
+        wifiLinkUpMs_ = millis();
+        return;
+    }
+
     Serial.print(F("[HUB] stall recovery — state="));
     Serial.print(hubStateLabel());
     Serial.println(F(" — forcing reconnect"));
     warmNetworkPath(wifi_, nvs_);
     if (consecutiveTransportFailures_ > 0 && !transportRecoveryUsed_) {
-        recoverNetworkTransport();
-        return;
+        if (isApiHostOnLan(wifi_, nvs_)) {
+            Serial.println(F("[HUB] stall recovery — API host on LAN, skip Wi-Fi refresh"));
+            consecutiveTransportFailures_ = 0;
+        } else {
+            recoverNetworkTransport();
+            return;
+        }
     }
     gSuppressDisconnectNotify = true;
     gWs.disconnect();
@@ -1021,13 +1064,37 @@ void SignalRClient::recoverStalledConnection() {
     onTransportLost(true);
 }
 
-void SignalRClient::onNegotiateTransportError() {
-    if (wifi_ != nullptr && nvs_ != nullptr) {
-        IPAddress apiIp;
-        if (getApiHostIp(*nvs_, apiIp) && !wifi_->isHostArpResolved(apiIp)) {
-            beginArpWarm(apiIp);
-            return;
+void SignalRClient::onNegotiateTransportError(int httpStatus) {
+    if (wifi_ == nullptr || nvs_ == nullptr) {
+        ++consecutiveTransportFailures_;
+        if (consecutiveTransportFailures_ >= HUB_TRANSPORT_FAILURE_REBOOT_COUNT) {
+            Serial.println(F("[HUB] transport failures — rebooting device"));
+            delay(100);
+            ESP.restart();
         }
+        return;
+    }
+
+    IPAddress apiIp;
+    if (!getApiHostIp(*nvs_, apiIp)) {
+        ++consecutiveTransportFailures_;
+        if (consecutiveTransportFailures_ >= HUB_TRANSPORT_FAILURE_REBOOT_COUNT) {
+            Serial.println(F("[HUB] transport failures — rebooting device"));
+            delay(100);
+            ESP.restart();
+        }
+        return;
+    }
+
+    // TCP reached host but nothing listening — API down, even if ARP cache is cold.
+    if (httpStatus == kHttpConnectionRefused) {
+        enterServerUnavailable(httpStatus);
+        return;
+    }
+
+    if (!wifi_->isHostArpResolved(apiIp)) {
+        beginArpWarm(apiIp);
+        return;
     }
 
     ++consecutiveTransportFailures_;
@@ -1038,12 +1105,53 @@ void SignalRClient::onNegotiateTransportError() {
     }
 }
 
+void SignalRClient::enterServerUnavailable(int httpStatus) {
+    const bool wasUnavailable = serverUnavailable_;
+    serverUnavailable_ = true;
+    arpWarmActive_ = false;
+    consecutiveTransportFailures_ = 0;
+    transportRecoveryUsed_ = false;
+
+    static unsigned long lastServerUnavailableLogMs = 0;
+    const unsigned long now = millis();
+    if (!wasUnavailable || now - lastServerUnavailableLogMs >= HUB_SERVER_UNAVAILABLE_LOG_MS) {
+        lastServerUnavailableLogMs = now;
+        Serial.print(F("[HUB] server unavailable — Wi-Fi kept up (status="));
+        Serial.print(httpStatus);
+        Serial.println(F(")"));
+        if (httpStatus == kHttpConnectionRefused) {
+            Serial.println(F("[HUB] hint: API running on PC? Allow TCP 5031 inbound (Allow-SomNetApiFirewall.ps1)"));
+        }
+    }
+
+    nextAttemptMs_ = now + HUB_SERVER_UNAVAILABLE_RETRY_MS;
+    backoffMs_ = HUB_SERVER_UNAVAILABLE_RETRY_MS;
+    pendingConnect_ = false;
+    gPendingConnectStartedMs = 0;
+    clearHandshakeState();
+    state_ = HubConnectionState::Backoff;
+}
+
 void SignalRClient::clearTransportFailures() {
     consecutiveTransportFailures_ = 0;
     transportRecoveryUsed_ = false;
+    serverUnavailable_ = false;
 }
 
 void SignalRClient::recoverNetworkTransport() {
+    if (serverUnavailable_) {
+        onTransportLost(false);
+        return;
+    }
+
+    if (isApiHostOnLan(wifi_, nvs_)) {
+        Serial.println(F("[HUB] transport recovery skipped — API host on LAN (start API)"));
+        consecutiveTransportFailures_ = 0;
+        transportRecoveryUsed_ = true;
+        onTransportLost(false);
+        return;
+    }
+
     Serial.print(F("[HUB] transport recovery after "));
     Serial.print(consecutiveTransportFailures_);
     Serial.println(F(" failures — refreshing Wi-Fi"));
@@ -1183,12 +1291,13 @@ void SignalRClient::poll() {
         return;
     }
 
-    if (arpWarmActive_ && !pollArpWarm()) {
+    if (!serverUnavailable_ && arpWarmActive_ && !pollArpWarm()) {
         state_ = HubConnectionState::Backoff;
         return;
     }
 
     if (!transportRecoveryUsed_ &&
+        !serverUnavailable_ &&
         consecutiveTransportFailures_ >= HUB_TRANSPORT_FAILURE_RECOVERY_COUNT) {
         recoverNetworkTransport();
         return;
@@ -1202,7 +1311,24 @@ void SignalRClient::poll() {
     IPAddress apiIp;
     const bool hasApiIp = getApiHostIp(*nvs_, apiIp);
 
-    if (consecutiveTransportFailures_ > 0 && hasApiIp) {
+    if (serverUnavailable_ && hasApiIp) {
+        char serverUrl[NvsStore::kMaxStringLen];
+        buildEffectiveServerUrl(*nvs_, serverUrl, sizeof(serverUrl));
+        char probeHost[96];
+        uint16_t probePort = 5031;
+        bool probeTls = false;
+        if (parseServerUrl(serverUrl, probeHost, sizeof(probeHost), &probePort, &probeTls)) {
+            IPAddress probeIp;
+            if (probeIp.fromString(probeHost) && !probeTcpHostQuiet(probeIp, probePort)) {
+                nextAttemptMs_ = millis() + HUB_SERVER_UNAVAILABLE_RETRY_MS;
+                state_ = HubConnectionState::Backoff;
+                return;
+            }
+        }
+        serverUnavailable_ = false;
+    }
+
+    if (!serverUnavailable_ && consecutiveTransportFailures_ > 0 && hasApiIp) {
         char serverUrl[NvsStore::kMaxStringLen];
         buildEffectiveServerUrl(*nvs_, serverUrl, sizeof(serverUrl));
         char probeHost[96];
@@ -1212,7 +1338,7 @@ void SignalRClient::poll() {
             !probeTcpHost(probeHost, probePort)) {
             logNetworkDiagnostics();
             if (wifi_->isHostArpResolved(apiIp)) {
-                onNegotiateTransportError();
+                onNegotiateTransportError(kHttpConnectionRefused);
             } else {
                 beginArpWarm(apiIp);
             }
@@ -1227,14 +1353,16 @@ void SignalRClient::poll() {
     handshakeComplete_ = false;
 
     if (!negotiateConnectionToken(*nvs_, gConnectionToken, sizeof(gConnectionToken))) {
-        if (hasApiIp && !wifi_->isHostArpResolved(apiIp)) {
+        if (!serverUnavailable_ && hasApiIp && !wifi_->isHostArpResolved(apiIp)) {
             beginArpWarm(apiIp);
         }
-        Serial.print(F("[HUB] retry in "));
-        Serial.print(backoffMs_ / 1000);
-        Serial.println(F(" s"));
-        nextAttemptMs_ = millis() + backoffMs_;
-        backoffMs_ = min(backoffMs_ * 2, HUB_RETRY_MAX_MS);
+        if (!serverUnavailable_) {
+            Serial.print(F("[HUB] retry in "));
+            Serial.print(backoffMs_ / 1000);
+            Serial.println(F(" s"));
+            nextAttemptMs_ = millis() + backoffMs_;
+            backoffMs_ = min(backoffMs_ * 2, HUB_RETRY_MAX_MS);
+        }
         state_ = HubConnectionState::Backoff;
         return;
     }

@@ -11,10 +11,20 @@ void ButtonInput::begin() {
 }
 
 void ButtonInput::handleCredentialResetHold(bool pressed) {
+    if (credentialResetAwaitRelease_ && !pressed) {
+        Serial.println(F("[BTN] released — rebooting to setup AP"));
+        delay(100);
+        ESP.restart();
+    }
+
     if (!pressed) {
         pressStartedMs_ = 0;
         credentialResetWarned_ = false;
         credentialResetTriggered_ = false;
+        return;
+    }
+
+    if (credentialResetAwaitRelease_) {
         return;
     }
 
@@ -26,19 +36,18 @@ void ButtonInput::handleCredentialResetHold(bool pressed) {
     const unsigned long heldMs = millis() - pressStartedMs_;
 
     if (!credentialResetWarned_ && heldMs >= CREDENTIAL_RESET_WARN_MS) {
-        Serial.println(F("[BTN] keep holding 10s to reset Wi-Fi / server credentials..."));
+        Serial.println(F("[BTN] keep holding 10s — fast LED flash when reset, then release"));
         credentialResetWarned_ = true;
     }
 
     if (!credentialResetTriggered_ && heldMs >= CREDENTIAL_RESET_HOLD_MS) {
         credentialResetTriggered_ = true;
+        credentialResetAwaitRelease_ = true;
         Serial.println(F("[NVS] credential reset — clearing Wi-Fi and server settings"));
         if (NvsStore* store = nvsStoreInstance()) {
             store->clearProvisioning();
         }
-        Serial.println(F("[BOOT] restarting..."));
-        delay(100);
-        ESP.restart();
+        Serial.println(F("[BTN] fast flash — release button to reboot to setup AP"));
     }
 }
 

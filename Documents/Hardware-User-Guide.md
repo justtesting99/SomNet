@@ -42,9 +42,9 @@ Connect USB power (or your installed power supply). The device boots in under a 
 If the device has never been configured (or was reset — see below), it creates a Wi‑Fi network:
 
 **Network name:** `SomNet-Setup-XXXX` (last four characters of the Device ID)  
-**Password:** none (open network)
+**Password:** `somnetsetup`
 
-On a phone or laptop, join that network.
+On a phone or laptop, join that network (WPA2 — password required).
 
 ### 3. Open the setup page
 

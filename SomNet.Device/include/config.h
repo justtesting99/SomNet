@@ -33,7 +33,7 @@ constexpr unsigned kWifiConnectFailuresBeforeRecovery = 5;
 
 constexpr unsigned long HUB_RETRY_BASE_MS = 1000;
 constexpr unsigned long HUB_RETRY_MAX_MS = 60000;
-constexpr unsigned long HUB_NEGOTIATE_TIMEOUT_MS = 8000;
+constexpr unsigned long HUB_NEGOTIATE_TIMEOUT_MS = 3000;
 constexpr unsigned long HUB_HANDSHAKE_TIMEOUT_MS = 15000;
 constexpr unsigned long HUB_CONNECT_TIMEOUT_MS = 15000;
 /** WebSockets library: block its internal reconnect loop; FSM calls begin() explicitly. */
@@ -48,8 +48,15 @@ constexpr unsigned long HUB_COLD_BOOT_SETTLE_MS = 8000;
 constexpr unsigned HUB_TRANSPORT_FAILURE_RECOVERY_COUNT = 6;
 /** Consecutive transport failures before device reboot. */
 constexpr unsigned HUB_TRANSPORT_FAILURE_REBOOT_COUNT = 12;
-/** Defer config HTTP until hub connected; max wait before starting anyway. */
-constexpr unsigned long CONFIG_HTTP_MAX_DEFER_MS = 120000;
+/** Log throttling when hub is up but API is down (Wi-Fi left up). */
+constexpr unsigned long HUB_SERVER_UNAVAILABLE_LOG_MS = 60000;
+/** Hub retry interval while API host is on LAN but port is closed. */
+constexpr unsigned long HUB_SERVER_UNAVAILABLE_RETRY_MS = 30000;
+/** On STA, start config HTTP this long after boot if hub is not connected yet. */
+constexpr unsigned long CONFIG_HTTP_STA_DEFER_MS = 10000;
+/** Legacy upper bound — same as STA defer (hub-first window, then HTTP always starts). */
+constexpr unsigned long CONFIG_HTTP_MAX_DEFER_MS = CONFIG_HTTP_STA_DEFER_MS;
+/** On setup AP (192.168.4.1), HTTP starts immediately — no hub defer. */
 
 /** Non-blocking ARP warm: poke API host MAC for this long before hub negotiate. */
 constexpr unsigned long LAN_ARP_WARM_MAX_MS = 5000;
@@ -57,6 +64,8 @@ constexpr unsigned long LAN_ARP_POKE_INTERVAL_MS = 100;
 
 /** Built-in status LED blink interval when hub is not connected. */
 constexpr unsigned long STATUS_LED_BLINK_MS = 500;
+/** Fast blink after credential reset (release button to reboot). */
+constexpr unsigned long STATUS_LED_CREDENTIAL_RESET_BLINK_MS = 100;
 
 constexpr unsigned long SNTP_SYNC_TIMEOUT_MS = 30000;
 constexpr uint64_t TOKEN_EXPIRY_BUFFER_MS = 5ULL * 60ULL * 1000ULL;
@@ -72,3 +81,8 @@ constexpr unsigned long CREDENTIAL_RESET_HOLD_MS = 10000;
 constexpr unsigned long CREDENTIAL_RESET_WARN_MS = 5000;
 
 constexpr uint16_t CONFIG_HTTP_PORT = 80;
+
+/** WPA2 password for SomNet-Setup-XXXX provisioning AP (required by many phones/Windows). */
+constexpr char SETUP_AP_PASSWORD[] = "somnetsetup";
+constexpr int SETUP_AP_CHANNEL = 6;
+constexpr int SETUP_AP_MAX_CLIENTS = 4;

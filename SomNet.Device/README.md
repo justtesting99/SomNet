@@ -236,8 +236,12 @@ See [Phase 4 checklist](../Documents/09-ESP32-Phase-4-Checklist.md) and device p
 
 | Mode | When | Wi-Fi | Config UI |
 |------|------|-------|-----------|
-| **PROVISIONING** | NVS not fully provisioned **and** no `secrets.ini` Wi-Fi | Soft-AP `SomNet-Setup-{last4}` | `http://192.168.4.1/` |
+| **PROVISIONING** | NVS not fully provisioned **and** no `secrets.ini` Wi-Fi | Soft-AP `SomNet-Setup-{last4}` (password `somnetsetup`) | `http://192.168.4.1/` |
 | **RUNNING** | NVS provisioned **or** `secrets.ini` fallback | STA | `http://<device-ip>/` |
+
+**HTTP start timing:** On **setup AP** (`192.168.4.1`), the web server starts **immediately** after the AP comes up. On **STA**, it starts when SignalR connects **or** after **~10 s** (whichever comes first). Watch serial for `[HTTP] server started on port 80`.
+
+**Credential reset (10 s button):** Clears NVS Wi‑Fi/server and sets **`cred_reset`** so the next boot **always** opens **`SomNet-Setup-XXXX`** — **`secrets.ini` Wi‑Fi is ignored** until you save `/config` again. Join that AP before opening `http://192.168.4.1/config`.
 
 **Fully provisioned** = `provisioned` flag + non-empty `wifi_ssid` + `server_url` in NVS.
 
@@ -257,20 +261,23 @@ See [Phase 4 checklist](../Documents/09-ESP32-Phase-4-Checklist.md) and device p
 
 See **[Hardware User Guide](../Documents/Hardware-User-Guide.md#wrong-wi-fi-password-or-need-to-change-network)** for the end-user procedure.
 
-Hold **D33** for **10 seconds** (warning at 5 s) to clear **Wi-Fi and server settings** only, then reboot:
+Hold **D33** for **10 seconds** (warning at 5 s) to clear **Wi-Fi and server settings** only:
 
-- Clears `wifi_ssid`, `wifi_pass`, `server_url`, and the provisioned flag
+- At **10 s**: NVS cleared, LED **fast-flashes** (~5×/s)
+- **Release** the button → device reboots to setup AP
 - Keeps device ID, friendly name, and pairing data (if any)
-- After reboot: uses `secrets.ini` fallback (dev) or Soft-AP **`SomNet-Setup-XXXX`** (production)
+- Sets **`cred_reset`** so **`secrets.ini` Wi‑Fi is ignored** until you save `/config` again
 
-Serial: `[BTN] keep holding 10s to reset Wi-Fi / server credentials...` → `[NVS] credential reset — clearing Wi-Fi and server settings`
+Serial: `[BTN] keep holding 10s — fast LED flash when reset, then release` → `[NVS] credential reset...` → `[BTN] fast flash — release button...` → `[BTN] released — rebooting to setup AP`
+
+After reboot, join **`SomNet-Setup-XXXX`** on your phone/PC (not home Wi‑Fi). A captive-portal page may open automatically; otherwise open **`http://192.168.4.1/`**. Watch serial for `[WIFI] client joined setup AP` and `[HTTP] GET /`.
 
 Full **factory reset** (all NVS including pairing) is still available on **`/config`** when the device is reachable on the LAN.
 
 ### Provisioning flow (first boot or after credential reset)
 
-1. Device broadcasts Soft-AP **`SomNet-Setup-XXXX`** (open, no password).
-2. On phone/laptop, join that network.
+1. Device broadcasts Soft-AP **`SomNet-Setup-XXXX`** (WPA2 password **`somnetsetup`**).
+2. On phone/laptop, join that network (password required).
 3. Open **`http://192.168.4.1/`** → **Configure**.
 4. Enter home Wi-Fi SSID/password and SomNet server URL → **Save and reboot**.
 5. Device joins your LAN; serial logs `[HTTP] Config UI: http://<ip>/`.
@@ -303,7 +310,7 @@ Firmware **0.3.0-phase3** adds a LAN config web UI on port **80**.
 
 | Prefix | Module |
 |--------|--------|
-| `[BOOT]` | Startup |
+| `[BOOT]` | Startup (includes firmware version, e.g. `0.11.1-phase11`) |
 | `[WIFI]` | Wi-Fi manager |
 | `[CMD]` | Command handler |
 | `[RELAY]` | Relay controller (Phase 6+) |

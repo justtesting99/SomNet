@@ -30,3 +30,4 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [ESP32 Phase 9 Part 2 — Automatic](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) | Developers | Automatic mode UI rules, decisions (P9P2-D*), implementation checklist |
 | [ESP32 Phase 10 Checklist](./09-ESP32-Phase-10-Checklist.md) | Developers | Burst-in-automatic — **Signed off** (2026-09-07) |
 | [ESP32 Phase 11 Checklist](./09-ESP32-Phase-11-Checklist.md) | Developers | Live automatic settings (`automatic-update`) — **Planning** |
+| [ESP32 Network Spec](./09-ESP32-Network-Spec.md) | Developers | **Wi‑Fi / HTTP / hub architecture** — locked 2026-09-09; implement before Phase 11 network-dependent smoke |

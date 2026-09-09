@@ -9,6 +9,7 @@
 | Original design notes | [Phase 9 Part 2 §9](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#9-future--live-settings-during-automatic-playback-not-part-2) (superseded by this doc for implementation) |
 | UI today | `AutomaticControls.tsx` — **`configLocked`** while session active; settings read-only |
 | Device today | Config snapshot at **`automatic-start` only**; no mid-session replan |
+| **Network layer** | [09-ESP32-Network-Spec.md](./09-ESP32-Network-Spec.md) — **implement + smoke S1–S8 before** hub-dependent Phase 11 E2E |
 
 **Goal:** Restore original-product behavior — operator can change Automatic tab settings **while a session is running**; device **replans** from new config without stopping the session. New command key **`automatic-update`**.
 
@@ -35,6 +36,7 @@ Update **Status** above and check boxes in **§7** as work completes. When Phase
 
 - [x] Phase 10 **signed off** — burst sub-FSM, seven programs, Start/Stop/Abort, hub finalize
 - [x] **§4 decisions locked** — 2026-09-08
+- [ ] **[Network spec](./09-ESP32-Network-Spec.md) implemented** — smoke tests S1–S8 pass on bench hardware
 - [ ] Review `AutomaticSessionMode` FSM — states `Idle`, `StartDelay`, `WaitingGap`, `Pulse`, `BurstPulse`, `BurstGap`
 - [ ] Review planner separation — `AutomaticProgramBase::buildPlan()` vs sequencer (Part 2 §8)
 - [ ] Review UI `configLocked` / settings debounce path (`SettingsProvider`, `AutomaticControls`)

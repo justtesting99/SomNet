@@ -22,6 +22,7 @@ constexpr char kKeyDomTarget[] = "dom_target";
 constexpr char kKeySubTarget[] = "sub_target";
 constexpr char kKeyPaired[] = "paired";
 constexpr char kKeyProvisioned[] = "provisioned";
+constexpr char kKeyCredReset[] = "cred_reset";
 
 Preferences preferences;
 NvsStore* gNvsStoreInstance = nullptr;
@@ -84,6 +85,7 @@ void NvsStore::clearProvisioning() {
     setServerUrl("");
     setUseTls(false);
     setProvisioned(false);
+    setCredentialResetPending(true);
 }
 
 bool NvsStore::getString(const char* key, char* out, size_t outLen) const {
@@ -188,7 +190,25 @@ bool NvsStore::setProvisioned(bool value) {
     if (!open_) {
         return false;
     }
+    if (value) {
+        setCredentialResetPending(false);
+    }
     return preferences.putBool(kKeyProvisioned, value) > 0;
+}
+
+bool NvsStore::isCredentialResetPending() const {
+    if (!open_) {
+        return false;
+    }
+    return preferences.getBool(kKeyCredReset, false);
+}
+
+bool NvsStore::setCredentialResetPending(bool value) {
+    if (!open_) {
+        return false;
+    }
+    preferences.putBool(kKeyCredReset, value);
+    return true;
 }
 
 bool NvsStore::isFullyProvisioned() const {

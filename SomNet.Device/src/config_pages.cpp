@@ -174,7 +174,10 @@ void renderStatus(
     append(out, outLen, &offset, "<h1>SomNet Device</h1>");
 
     if (provisioningMode) {
-        append(out, outLen, &offset, "<div class=\"panel note\"><strong>Setup mode.</strong> Connect this device to your Wi-Fi and SomNet server.</div>");
+        append(out, outLen, &offset,
+            "<div class=\"panel note\"><strong>Setup mode.</strong> On your phone or PC, join Wi-Fi "
+            "<strong>SomNetSetup-XXXX</strong> (last 4 of Device ID below) with password "
+            "<strong>somnetsetup</strong>, then open <a href=\"/config\">Configure</a>.</div>");
     }
 
     append(out, outLen, &offset, "<div class=\"panel\"><p><strong>Device ID</strong> (pair in SomNet)</p><div class=\"device-id\">");

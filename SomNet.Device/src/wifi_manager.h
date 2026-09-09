@@ -62,4 +62,6 @@ private:
     bool sntpTimedOut_ = false;
     bool linkJustRestored_ = false;
     unsigned long sntpStartedMs_ = 0;
+    uint8_t lastSoftApStationCount_ = 0;
+    unsigned long lastSoftApStatusLogMs_ = 0;
 };

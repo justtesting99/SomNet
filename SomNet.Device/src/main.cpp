@@ -45,7 +45,7 @@ void buildSoftApName(char* out, size_t outLen) {
     const char* deviceId = deviceIdentity.deviceId();
     const size_t idLen = strlen(deviceId);
     const char* suffix = idLen >= 4 ? deviceId + idLen - 4 : "0000";
-    snprintf(out, outLen, "SomNet-Setup-%s", suffix);
+    snprintf(out, outLen, "SomNetSetup-%s", suffix);
 }
 
 void startNetwork() {
@@ -62,7 +62,7 @@ void startNetwork() {
     if (nvsStore.isFullyProvisioned() && nvsStore.getWifiSsid(ssid, sizeof(ssid))) {
         nvsStore.getWifiPass(pass, sizeof(pass));
         Serial.println(F("[MODE] RUNNING (NVS credentials)"));
-    } else if (WIFI_SSID[0] != '\0') {
+    } else if (!nvsStore.isCredentialResetPending() && WIFI_SSID[0] != '\0') {
         strncpy(ssid, WIFI_SSID, sizeof(ssid) - 1);
         strncpy(pass, WIFI_PASSWORD, sizeof(pass) - 1);
         ssid[sizeof(ssid) - 1] = '\0';
@@ -103,7 +103,6 @@ void tryWifiRecovery() {
     nvsStore.clearProvisioning();
     bootMode = DeviceBootMode::Provisioning;
     configWebServer.setBootMode(DeviceBootMode::Provisioning);
-    signalRClient.poll();
     char apName[32];
     buildSoftApName(apName, sizeof(apName));
     wifiManager.beginSoftAp(apName);
@@ -129,6 +128,12 @@ void printSerialBanner() {
     Serial.print(F(" Wi-Fi: "));
     if (wifiManager.isSoftAp()) {
         Serial.println(F("setup AP"));
+        Serial.print(F(" Setup SSID: SomNetSetup-"));
+        const char* deviceId = deviceIdentity.deviceId();
+        const size_t idLen = strlen(deviceId);
+        Serial.println(idLen >= 4 ? deviceId + idLen - 4 : "????");
+        Serial.print(F(" Setup password: "));
+        Serial.println(SETUP_AP_PASSWORD);
     } else {
         Serial.println(wifiManager.isConnected() ? F("connected") : F("disconnected / retrying"));
     }
@@ -146,7 +151,8 @@ void setup() {
     Serial.begin(115200);
     delay(500);
     Serial.println();
-    Serial.println(F("[BOOT] SomNet.Device starting"));
+    Serial.print(F("[BOOT] SomNet.Device starting — firmware "));
+    Serial.println(FIRMWARE_VERSION);
 
     if (!nvsStore.begin()) {
         Serial.println(F("[NVS] failed to open namespace"));
@@ -157,7 +163,10 @@ void setup() {
     nvsStoreSetInstance(&nvsStore);
     deviceIdentity.begin(nvsStore);
 
-    if (nvsStore.isFullyProvisioned() || WIFI_SSID[0] != '\0') {
+    if (nvsStore.isCredentialResetPending()) {
+        bootMode = DeviceBootMode::Provisioning;
+        Serial.println(F("[BOOT] credential reset pending — setup AP (ignore secrets.ini)"));
+    } else if (nvsStore.isFullyProvisioned() || WIFI_SSID[0] != '\0') {
         bootMode = DeviceBootMode::Running;
     } else {
         bootMode = DeviceBootMode::Provisioning;
@@ -177,9 +186,13 @@ void setup() {
 void loop() {
     wifiManager.poll();
     tryWifiRecovery();
-    signalRClient.poll();
     configWebServer.poll();
-    statusLed.poll(signalRClient.isHubConnected());
+    signalRClient.poll();
+    if (buttonInput.isAwaitingCredentialResetRelease()) {
+        statusLed.pollCredentialResetFlash();
+    } else {
+        statusLed.poll(signalRClient.isHubConnected());
+    }
     relayController.poll();
     executionContext.poll();
     commandHandler.poll();

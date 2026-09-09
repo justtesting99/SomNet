@@ -3,6 +3,8 @@
 #include "config.h"
 
 #include <Arduino.h>
+#include <DNSServer.h>
+#include <esp_wifi.h>
 #include <time.h>
 
 extern "C" {
@@ -14,6 +16,120 @@ extern "C" {
 extern struct netif* netif_list;
 
 namespace {
+
+bool wifiEventsRegistered = false;
+DNSServer dnsServer;
+bool dnsServerStarted = false;
+
+void stopCaptiveDns() {
+    if (dnsServerStarted) {
+        dnsServer.stop();
+        dnsServerStarted = false;
+    }
+}
+
+void startCaptiveDns() {
+    stopCaptiveDns();
+    if (dnsServer.start(53, "*", IPAddress(192, 168, 4, 1))) {
+        dnsServerStarted = true;
+        Serial.println(F("[WIFI] DNS captive portal active (all names -> 192.168.4.1)"));
+    } else {
+        Serial.println(F("[WIFI] warning: DNS captive portal failed to start"));
+    }
+}
+
+void onWifiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
+    switch (event) {
+    case ARDUINO_EVENT_WIFI_AP_START:
+        Serial.println(F("[WIFI] setup AP beacon active"));
+        break;
+    case ARDUINO_EVENT_WIFI_AP_STOP:
+        Serial.println(F("[WIFI] setup AP stopped"));
+        break;
+    case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
+        Serial.print(F("[WIFI] client joined setup AP MAC="));
+        {
+            const uint8_t* mac = info.wifi_ap_staconnected.mac;
+            for (int i = 0; i < 6; ++i) {
+                if (i > 0) {
+                    Serial.print(':');
+                }
+                if (mac[i] < 16) {
+                    Serial.print('0');
+                }
+                Serial.print(mac[i], HEX);
+            }
+            Serial.println();
+        }
+        break;
+    case ARDUINO_EVENT_WIFI_AP_STADISCONNECTED:
+        Serial.println(F("[WIFI] client left setup AP"));
+        break;
+    default:
+        break;
+    }
+}
+
+uint8_t countSoftApClients() {
+    wifi_sta_list_t stationList = {};
+    if (esp_wifi_ap_get_sta_list(&stationList) != ESP_OK) {
+        return WiFi.softAPgetStationNum();
+    }
+    return stationList.num;
+}
+
+void logApSecurityMode() {
+    wifi_config_t conf = {};
+    if (esp_wifi_get_config(WIFI_IF_AP, &conf) != ESP_OK) {
+        Serial.println(F("[WIFI] warning: could not read AP config"));
+        return;
+    }
+
+    Serial.print(F("[WIFI] setup AP authmode="));
+    switch (conf.ap.authmode) {
+    case WIFI_AUTH_OPEN:
+        Serial.println(F("OPEN (no password — phones may spin)"));
+        break;
+    case WIFI_AUTH_WPA_PSK:
+        Serial.println(F("WPA"));
+        break;
+    case WIFI_AUTH_WPA2_PSK:
+        Serial.println(F("WPA2"));
+        break;
+    case WIFI_AUTH_WPA_WPA2_PSK:
+        Serial.println(F("WPA/WPA2"));
+        break;
+    default:
+        Serial.println(static_cast<int>(conf.ap.authmode));
+        break;
+    }
+}
+
+bool forceWpa2ApConfig(const char* apSsid) {
+    wifi_config_t conf = {};
+    const size_t ssidLen = strlen(apSsid);
+    if (ssidLen == 0 || ssidLen >= sizeof(conf.ap.ssid)) {
+        return false;
+    }
+
+    memcpy(conf.ap.ssid, apSsid, ssidLen);
+    conf.ap.ssid_len = ssidLen;
+    strncpy(reinterpret_cast<char*>(conf.ap.password), SETUP_AP_PASSWORD, sizeof(conf.ap.password) - 1);
+    conf.ap.channel = SETUP_AP_CHANNEL;
+    conf.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    conf.ap.ssid_hidden = 0;
+    conf.ap.max_connection = SETUP_AP_MAX_CLIENTS;
+    conf.ap.beacon_interval = 100;
+    return esp_wifi_set_config(WIFI_IF_AP, &conf) == ESP_OK;
+}
+
+void registerWifiEventsOnce() {
+    if (wifiEventsRegistered) {
+        return;
+    }
+    wifiEventsRegistered = true;
+    WiFi.onEvent(onWifiEvent);
+}
 
 struct netif* findStaNetif() {
     const IPAddress local = WiFi.localIP();
@@ -38,7 +154,10 @@ struct netif* findStaNetif() {
 } // namespace
 
 void WifiManager::beginStation(const char* ssid, const char* password) {
+    stopCaptiveDns();
+    registerWifiEventsOnce();
     softApMode_ = false;
+    lastSoftApStationCount_ = 0;
     loggedConfigUi_ = false;
     strncpy(ssid_, ssid != nullptr ? ssid : "", sizeof(ssid_) - 1);
     strncpy(password_, password != nullptr ? password : "", sizeof(password_) - 1);
@@ -58,24 +177,76 @@ void WifiManager::beginStation(const char* ssid, const char* password) {
 void WifiManager::beginSoftAp(const char* apSsid) {
     softApMode_ = true;
     loggedConfigUi_ = false;
-    ssid_[0] = '\0';
+    strncpy(ssid_, apSsid != nullptr ? apSsid : "", sizeof(ssid_) - 1);
+    ssid_[sizeof(ssid_) - 1] = '\0';
     password_[0] = '\0';
+    lastSoftApStationCount_ = 0;
+    lastSoftApStatusLogMs_ = millis();
 
-    WiFi.mode(WIFI_AP);
+    registerWifiEventsOnce();
+
+    stopCaptiveDns();
+    WiFi.persistent(false);
+    WiFi.mode(WIFI_OFF);
+    delay(100);
+    // AP+STA required for DNSServer + AsyncTCP captive portal on ESP32 Arduino.
+    WiFi.mode(WIFI_AP_STA);
+    delay(50);
+    WiFi.setSleep(WIFI_PS_NONE);
+    WiFi.setTxPower(WIFI_POWER_19_5dBm);
     WiFi.softAPConfig(IPAddress(192, 168, 4, 1), IPAddress(192, 168, 4, 1), IPAddress(255, 255, 255, 0));
-    const bool started = WiFi.softAP(apSsid);
+    forceWpa2ApConfig(apSsid);
+    const bool started = WiFi.softAP(
+        apSsid,
+        SETUP_AP_PASSWORD,
+        SETUP_AP_CHANNEL,
+        0,
+        SETUP_AP_MAX_CLIENTS);
+    delay(100);
+    logApSecurityMode();
     state_ = started ? WifiConnectionState::Connected : WifiConnectionState::Disconnected;
     loggedConnected_ = false;
 
-    Serial.print(F("[WIFI] Soft-AP "));
-    Serial.print(apSsid);
-    Serial.print(F(" IP="));
+    Serial.println(F("[WIFI] ---- setup AP credentials ----"));
+    Serial.print(F("[WIFI] SSID: "));
+    Serial.println(apSsid);
+    Serial.print(F("[WIFI] password: "));
+    Serial.println(SETUP_AP_PASSWORD);
+    Serial.print(F("[WIFI] channel: "));
+    Serial.println(SETUP_AP_CHANNEL);
+    Serial.print(F("[WIFI] IP: "));
     Serial.println(WiFi.softAPIP());
+    if (!started) {
+        Serial.println(F("[WIFI] warning: softAP start failed"));
+    } else {
+        startCaptiveDns();
+    }
     Serial.println(F("[HTTP] Config UI: http://192.168.4.1/"));
+    Serial.println(F("[WIFI] join the SSID above on phone/PC, then open the URL"));
+    Serial.println(F("[WIFI] iPhone: if it spins, forget any old SomNet-Setup network in Wi-Fi settings"));
 }
 
 void WifiManager::poll() {
     if (softApMode_) {
+        if (dnsServerStarted) {
+            dnsServer.processNextRequest();
+        }
+
+        const uint8_t stations = countSoftApClients();
+        if (stations != lastSoftApStationCount_) {
+            lastSoftApStationCount_ = stations;
+            Serial.print(F("[WIFI] setup AP clients connected: "));
+            Serial.println(stations);
+        }
+
+        const unsigned long now = millis();
+        if (now - lastSoftApStatusLogMs_ >= 30000UL) {
+            lastSoftApStatusLogMs_ = now;
+            Serial.print(F("[WIFI] setup AP heartbeat clients="));
+            Serial.print(stations);
+            Serial.print(F(" SSID="));
+            Serial.println(WiFi.softAPSSID());
+        }
         return;
     }
 

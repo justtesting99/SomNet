@@ -48,6 +48,62 @@ void trimTrailingSlashes(char* url) {
     }
 }
 
+void logHttpRequest(AsyncWebServerRequest* request, const char* path) {
+    Serial.print(F("[HTTP] "));
+    Serial.print(request->methodToString());
+    Serial.print(' ');
+    Serial.print(path);
+    if (request->client() != nullptr) {
+        Serial.print(F(" from "));
+        Serial.print(request->client()->remoteIP());
+    }
+    Serial.println();
+}
+
+bool extractUrlHost(const char* url, char* hostOut, size_t hostOutLen) {
+    if (url == nullptr || hostOutLen == 0) {
+        return false;
+    }
+    hostOut[0] = '\0';
+
+    const char* hostStart = strstr(url, "://");
+    hostStart = hostStart != nullptr ? hostStart + 3 : url;
+    if (hostStart[0] == '\0') {
+        return false;
+    }
+
+    size_t i = 0;
+    while (hostStart[i] != '\0' && hostStart[i] != '/' && hostStart[i] != ':' && i + 1 < hostOutLen) {
+        hostOut[i] = hostStart[i];
+        ++i;
+    }
+    hostOut[i] = '\0';
+    return hostOut[0] != '\0';
+}
+
+bool isValidServerUrlHost(const char* host) {
+    if (host == nullptr || host[0] == '\0') {
+        return false;
+    }
+
+    bool numericHost = true;
+    int dotCount = 0;
+    for (const char* p = host; *p != '\0'; ++p) {
+        if (*p == '.') {
+            ++dotCount;
+        } else if (*p < '0' || *p > '9') {
+            numericHost = false;
+            break;
+        }
+    }
+
+    if (numericHost && dotCount > 0) {
+        return dotCount == 3;
+    }
+
+    return true;
+}
+
 bool saveConfigFromRequest(AsyncWebServerRequest* request, String& errorOut) {
     if (gNvs == nullptr) {
         errorOut = "NVS unavailable";
@@ -102,6 +158,16 @@ bool saveConfigFromRequest(AsyncWebServerRequest* request, String& errorOut) {
     strncpy(serverBuf, serverUrl.c_str(), sizeof(serverBuf) - 1);
     serverBuf[sizeof(serverBuf) - 1] = '\0';
     trimTrailingSlashes(serverBuf);
+
+    char serverHost[96];
+    if (!extractUrlHost(serverBuf, serverHost, sizeof(serverHost))) {
+        errorOut = "Server URL must include a host (e.g. http://192.168.1.100:5031)";
+        return false;
+    }
+    if (!isValidServerUrlHost(serverHost)) {
+        errorOut = "Server host looks like an incomplete IP — use four octets (e.g. 192.168.1.100)";
+        return false;
+    }
 
     const bool useTls = strncmp(serverBuf, "https://", 8) == 0;
 
@@ -180,14 +246,17 @@ void sendHtml(AsyncWebServerRequest* request, const char* html) {
 }
 
 void handlePing(AsyncWebServerRequest* request) {
+    logHttpRequest(request, "/ping");
     request->send(200, "text/plain", "ok");
 }
 
 void handleFavicon(AsyncWebServerRequest* request) {
+    logHttpRequest(request, "/favicon.ico");
     request->send(204);
 }
 
 void handleStatus(AsyncWebServerRequest* request) {
+    logHttpRequest(request, "/");
     char html[5120];
     char serverUrl[NvsStore::kMaxStringLen];
     buildEffectiveServerUrl(serverUrl, sizeof(serverUrl));
@@ -205,6 +274,7 @@ void handleStatus(AsyncWebServerRequest* request) {
 }
 
 void handleConfigGet(AsyncWebServerRequest* request) {
+    logHttpRequest(request, "/config");
     char html[5120];
     char serverUrl[NvsStore::kMaxStringLen];
     buildEffectiveServerUrl(serverUrl, sizeof(serverUrl));
@@ -227,6 +297,7 @@ void scheduleRestartAfterResponse(AsyncWebServerRequest* request) {
 }
 
 void handleConfigPost(AsyncWebServerRequest* request) {
+    logHttpRequest(request, "/config");
     String error;
     if (!saveConfigFromRequest(request, error)) {
         request->send(400, "text/plain", error);
@@ -242,6 +313,7 @@ void handleConfigPost(AsyncWebServerRequest* request) {
 }
 
 void handleApiStatus(AsyncWebServerRequest* request) {
+    logHttpRequest(request, "/api/status");
     char serverUrl[NvsStore::kMaxStringLen];
     char friendly[NvsStore::kMaxStringLen];
     buildEffectiveServerUrl(serverUrl, sizeof(serverUrl));
@@ -266,6 +338,7 @@ void handleApiStatus(AsyncWebServerRequest* request) {
 }
 
 void handleResetWifi(AsyncWebServerRequest* request) {
+    logHttpRequest(request, "/config/reset-wifi");
     if (gNvs != nullptr) {
         gNvs->clearProvisioning();
     }
@@ -276,6 +349,7 @@ void handleResetWifi(AsyncWebServerRequest* request) {
 }
 
 void handleFactoryReset(AsyncWebServerRequest* request) {
+    logHttpRequest(request, "/config/factory-reset");
     if (gNvs != nullptr) {
         gNvs->clearAll();
     }
@@ -285,16 +359,34 @@ void handleFactoryReset(AsyncWebServerRequest* request) {
     sendHtml(request, html);
 }
 
+void handleCaptivePortalProbe(AsyncWebServerRequest* request) {
+    logHttpRequest(request, request->url().c_str());
+    request->redirect("/");
+}
+
 void registerRoutes(AsyncWebServer& server) {
     server.on("/ping", HTTP_GET, handlePing);
     server.on("/favicon.ico", HTTP_GET, handleFavicon);
     server.on("/", HTTP_GET, handleStatus);
+    server.on("/generate_204", HTTP_GET, handleCaptivePortalProbe);
+    server.on("/gen_204", HTTP_GET, handleCaptivePortalProbe);
+    server.on("/hotspot-detect.html", HTTP_GET, handleCaptivePortalProbe);
+    server.on("/library/test/success.html", HTTP_GET, handleCaptivePortalProbe);
+    server.on("/connectivity-check.html", HTTP_GET, handleCaptivePortalProbe);
+    server.on("/ncsi.txt", HTTP_GET, handleCaptivePortalProbe);
+    server.on("/canonical.html", HTTP_GET, handleCaptivePortalProbe);
     server.on("/config/reset-wifi", HTTP_POST, handleResetWifi);
     server.on("/config/factory-reset", HTTP_POST, handleFactoryReset);
+    server.on("/config/", HTTP_GET, [](AsyncWebServerRequest* request) {
+        logHttpRequest(request, "/config/");
+        request->redirect("/config");
+    });
     server.on(AsyncURIMatcher::exact("/config"), HTTP_GET, handleConfigGet);
     server.on(AsyncURIMatcher::exact("/config"), HTTP_POST, handleConfigPost);
     server.on("/api/status", HTTP_GET, handleApiStatus);
     server.onNotFound([](AsyncWebServerRequest* request) {
+        Serial.print(F("[HTTP] 404 "));
+        Serial.println(request->url());
         request->redirect("/");
     });
 }
@@ -304,6 +396,9 @@ void registerRoutes(AsyncWebServer& server) {
 void ConfigWebServer::setBootMode(DeviceBootMode mode) {
     mode_ = mode;
     gHttpMode = mode;
+    if (mode == DeviceBootMode::Provisioning) {
+        deferStartUntilMs_ = 0;
+    }
 }
 
 bool ConfigWebServer::begin(
@@ -326,7 +421,8 @@ bool ConfigWebServer::begin(
     gWifi = wifi;
     gSignalR = signalRClient;
     gHttpMode = mode;
-    deferStartUntilMs_ = millis() + CONFIG_HTTP_MAX_DEFER_MS;
+    deferStartUntilMs_ =
+        mode == DeviceBootMode::Provisioning ? 0 : millis() + CONFIG_HTTP_MAX_DEFER_MS;
     return true;
 }
 
@@ -335,9 +431,11 @@ void ConfigWebServer::poll() {
         return;
     }
 
+    const bool provisioningUi =
+        wifi_->isSoftAp() || mode_ == DeviceBootMode::Provisioning;
     const bool hubConnected = signalR_ != nullptr && signalR_->isHubConnected();
-    const bool maxDeferReached = deferStartUntilMs_ != 0 && millis() >= deferStartUntilMs_;
-    if (!hubConnected && !maxDeferReached) {
+    const bool maxDeferReached = deferStartUntilMs_ == 0 || millis() >= deferStartUntilMs_;
+    if (!provisioningUi && !hubConnected && !maxDeferReached) {
         return;
     }
 

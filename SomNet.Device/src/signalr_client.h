@@ -41,10 +41,11 @@ public:
     void onWifiLinkRestored();
     void recoverStalledConnection();
     void recoverNetworkTransport();
-    void onNegotiateTransportError();
+    void onNegotiateTransportError(int httpStatus = 0);
     void clearTransportFailures();
 
 private:
+    void enterServerUnavailable(int httpStatus);
     void beginArpWarm(const IPAddress& target);
     bool pollArpWarm();
     NvsStore* nvs_ = nullptr;
@@ -65,4 +66,5 @@ private:
     bool arpWarmActive_ = false;
     unsigned long arpWarmStartedMs_ = 0;
     unsigned long lastArpPokeMs_ = 0;
+    bool serverUnavailable_ = false;
 };
