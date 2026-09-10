@@ -1,6 +1,6 @@
 # UI Session Rehydration — browser refresh during active automatic session
 
-**Status:** **Bench — R1/R2 pass** (2026-09-10); R3–R5 pending
+**Status:** **Bench — R1–R5 pass** (2026-09-10); doc updates pending (§3.3)
 
 | Related | Link |
 |---------|------|
@@ -76,9 +76,9 @@
 |---|-------|---------------|--------|
 | **R1** | Start automatic; refresh mid-session; **Stop**; refresh again | Rehydrate shows Stop/Abort; stop ends device session; **second refresh** shows Start (not false rehydrate) | ☑ **2026-09-10** |
 | **R2** | (Covered by R1) Stop after refresh | `manualStop` + hub `automatic-session-complete`; server session ended | ☑ **2026-09-10** |
-| **R3** | Start automatic; refresh; let session **auto-end** on device | Hub listener finalizes; UI `running` clears; history entry complete | ☐ |
-| **R4** | Start automatic; **Abort** on UI after refresh | Session ends; `(aborted)` or equivalent summary | ☐ |
-| **R5** | No active session; refresh | No spurious `activeSession`; Start normal | ☐ |
+| **R3** | Start automatic; refresh; let session **auto-end** on device | Hub listener finalizes; UI `running` clears; history entry complete | ☑ **2026-09-10** |
+| **R4** | Start automatic; **Abort** on UI after refresh | Session ends; `(aborted)` or equivalent summary | ☑ **2026-09-10** |
+| **R5** | No active session; refresh (repeat 2–3×) | No spurious `activeSession`; Start normal; **settings unchanged** (not defaults) | ☑ **2026-09-10** |
 
 ---
 
@@ -107,6 +107,12 @@ Page load
 | 2026-09-10 | Initial checklist — post Phase 12 sign-off; P13-D1–D8 locked; implementation started |
 | 2026-09-10 | R1 partial — post-stop refresh false rehydrate; fix finalize order + device idle probe |
 | 2026-09-10 | **R1/R2 pass** — refresh mid-session → Stop → refresh shows Start; device `manualStop` 2 strokes @ 14:04:07 |
+| 2026-09-10 | **R3 pass** — Periodic 5 strokes; refresh mid-session; device `endSession` + hub finalize @ 14:25:58 |
+| 2026-09-10 | **R4 pass** — refresh mid-session → Abort; `reason=abort` strokes=3 @ 14:32:53 |
+| 2026-09-10 | **R5 partial** — repeat refresh reset settings to defaults; fix: wait for `settingsLoaded`, no persist on rehydrate `running` |
+| 2026-09-10 | **R5 fix v2** — gate AutomaticControls on `settingsLoaded`; running-only changes local-only; normalization local-only; cancel pending save on settings fetch |
+| 2026-09-10 | **R5 fix v3** — block all API persist until `settingsLoadedRef`; ignore stale in-flight saves; hide automatic controls until loaded; remove mount normalization effects |
+| 2026-09-10 | **R5 fix v4** — persist only after explicit user edit (`userEditedRef`); fixed TS build break in hub listener; **`npm run build` required** — API serves `SomNet.UI/dist`, not Vite dev |
 
 ### 6. Bench notes (2026-09-10)
 
@@ -117,5 +123,21 @@ Page load
 - `14:04:07` `automatic-stop` → `[AUTO] complete reason=manualStop` strokes=2
 - `automatic-session-complete` hub ack with `resultJson`
 - Refresh after stop — **Start** enabled (no false rehydrate)
+
+**R3** (`esp32-84CCA85C36B4` / `Slv66`, **Periodic**, End Session **5 strokes**):
+
+- `14:25:36` `automatic-start` mode=periodic
+- Refresh mid-session (after stroke 2–3 per plan)
+- Strokes 1–5 complete without operator Stop
+- `14:25:58` `[AUTO] complete reason=endSession` strokes=5 durationMs=22062
+- `automatic-session-complete` hub ack + `resultJson` (`endReason=endSession`)
+
+**R4** (`esp32-84CCA85C36B4` / `Slv66`, **Periodic**):
+
+- `14:32:38` `automatic-start` → strokes 1–2
+- Refresh mid-session → rehydrator `automatic-update` probe @ `14:32:45` (expected)
+- `14:32:53` UI **Abort** → `[AUTO] aborted` → `complete reason=abort` strokes=3
+- `automatic-session-complete` hub ack + `resultJson` (`interrupted=true`, `endReason=abort`)
+- UI + history OK (operator confirmed)
 
 **Fixes in this run:** `finalizeSession` clears local state only after `/end` succeeds; cooperative Stop awaits hub finalize; rehydrator probes device idle before restoring UI.

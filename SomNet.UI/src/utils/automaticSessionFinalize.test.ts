@@ -67,19 +67,17 @@ describe('waitForAutomaticHubFinalize', () => {
 
 describe('applyAutomaticDeviceComplete', () => {
   it('clears running and ends session with device result', async () => {
-    const updateAutomatic = vi.fn();
+    const clearAutomaticRunning = vi.fn();
     const endAutomaticSession = vi.fn().mockResolvedValue(undefined);
 
     await applyAutomaticDeviceComplete(
       { ...defaultAutomaticState, running: true },
       { commandKey: 'automatic-stop', strokesCompleted: 3, endReason: 'abort', interrupted: true },
-      updateAutomatic,
+      clearAutomaticRunning,
       endAutomaticSession,
     );
 
-    expect(updateAutomatic).toHaveBeenCalledWith(
-      expect.objectContaining({ running: false }),
-    );
+    expect(clearAutomaticRunning).toHaveBeenCalledTimes(1);
     expect(endAutomaticSession).toHaveBeenCalledWith(
       '',
       expect.objectContaining({ endReason: 'abort' }),
@@ -87,35 +85,33 @@ describe('applyAutomaticDeviceComplete', () => {
   });
 
   it('no-ops when session is not running', async () => {
-    const updateAutomatic = vi.fn();
+    const clearAutomaticRunning = vi.fn();
     const endAutomaticSession = vi.fn();
 
     await applyAutomaticDeviceComplete(
       { ...defaultAutomaticState, running: false },
       { commandKey: 'automatic-stop', strokesCompleted: 1 },
-      updateAutomatic,
+      clearAutomaticRunning,
       endAutomaticSession,
     );
 
-    expect(updateAutomatic).not.toHaveBeenCalled();
+    expect(clearAutomaticRunning).not.toHaveBeenCalled();
     expect(endAutomaticSession).not.toHaveBeenCalled();
   });
 
   it('finalizes rehydrated session when running flag is false but session is active', async () => {
-    const updateAutomatic = vi.fn();
+    const clearAutomaticRunning = vi.fn();
     const endAutomaticSession = vi.fn().mockResolvedValue(undefined);
 
     await applyAutomaticDeviceComplete(
       { ...defaultAutomaticState, running: false },
       { commandKey: 'automatic-stop', strokesCompleted: 5, endReason: 'endSession' },
-      updateAutomatic,
+      clearAutomaticRunning,
       endAutomaticSession,
       true,
     );
 
-    expect(updateAutomatic).toHaveBeenCalledWith(
-      expect.objectContaining({ running: false }),
-    );
+    expect(clearAutomaticRunning).toHaveBeenCalledTimes(1);
     expect(endAutomaticSession).toHaveBeenCalled();
   });
 });

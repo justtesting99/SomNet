@@ -21,7 +21,6 @@ import { ApiError } from '@/api/client';
 import {
   clampMaximumStrokeMs,
   clampMinimumStrokeMs,
-  normalizeStrokeMsPair,
   resolveStrokeMsBounds,
 } from '@/utils/strokeMsLimits';
 
@@ -53,38 +52,6 @@ export function ManualControls() {
       setCommandError('');
     }
   }, [systemStatus.isReady]);
-
-  useEffect(() => {
-    if (isLoading) {
-      return;
-    }
-
-    const normalizedBurstStrokes = clampBurstValue('burstStrokes', state.burstStrokes);
-    const normalizedBurstDelay = clampBurstValue('burstDelaySeconds', state.burstDelaySeconds);
-    const normalizedStroke = normalizeStrokeMsPair(
-      state.minimumStrokeMs,
-      state.maximumStrokeMs,
-      strokeLimits,
-    );
-
-    const burstValuesValid =
-      state.burstStrokes === normalizedBurstStrokes &&
-      state.burstDelaySeconds === normalizedBurstDelay;
-    const strokeValuesValid =
-      state.minimumStrokeMs === normalizedStroke.minimumStrokeMs &&
-      state.maximumStrokeMs === normalizedStroke.maximumStrokeMs;
-
-    if (burstValuesValid && strokeValuesValid) {
-      return;
-    }
-
-    updateManual({
-      ...state,
-      burstStrokes: normalizedBurstStrokes,
-      burstDelaySeconds: normalizedBurstDelay,
-      ...normalizedStroke,
-    });
-  }, [isLoading, state, strokeLimits, updateManual]);
 
   const strokeMs = useMemo(
     () => computeStrokeMs(state.powerPercent, state.minimumStrokeMs, state.maximumStrokeMs),

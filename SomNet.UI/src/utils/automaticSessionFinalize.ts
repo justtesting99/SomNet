@@ -55,7 +55,7 @@ export async function waitForAutomaticHubFinalize(
 export async function applyAutomaticDeviceComplete(
   automatic: AutomaticControlState,
   parsed: AutomaticResultJson,
-  updateAutomatic: (next: AutomaticControlState) => void,
+  clearAutomaticRunning: () => void,
   endAutomaticSession: (
     reason: string,
     deviceResult?: AutomaticResultJson | null,
@@ -66,6 +66,6 @@ export async function applyAutomaticDeviceComplete(
     return;
   }
 
-  updateAutomatic({ ...automatic, running: false });
+  clearAutomaticRunning();
   await endAutomaticSession('', parsed);
 }

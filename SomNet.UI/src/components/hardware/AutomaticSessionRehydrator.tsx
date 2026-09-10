@@ -19,42 +19,36 @@ export function AutomaticSessionRehydrator() {
   const { user } = useAuth();
   const { selectedSub } = useSubTarget();
   const { setMode } = useMode();
-  const { isLoading, settings, updateAutomatic } = useOptions();
+  const { isLoading, settingsLoaded, settings, setAutomaticRunningLocal } = useOptions();
   const { activeSession, rehydrateSession } = useLiveSession();
-  const attemptedKeyRef = useRef<string | null>(null);
-  const automaticRef = useRef(settings.automatic);
+  const settingsRef = useRef(settings);
 
-  automaticRef.current = settings.automatic;
+  settingsRef.current = settings;
 
   const domTarget = user?.displayName ?? user?.username ?? '';
 
   useEffect(() => {
-    attemptedKeyRef.current = null;
-  }, [domTarget, selectedSub]);
-
-  useEffect(() => {
-    if (!domTarget || isLoading || activeSession) {
+    if (!domTarget || isLoading || !settingsLoaded || activeSession) {
       return;
     }
 
-    const attemptKey = `${domTarget}:${selectedSub}`;
-    if (attemptedKeyRef.current === attemptKey) {
-      return;
-    }
-
-    attemptedKeyRef.current = attemptKey;
+    let cancelled = false;
 
     void (async () => {
       try {
         const entry = await fetchActiveSession(selectedSub);
-        if (!entry || !isRehydratableAutomaticSession(entry)) {
+        if (cancelled || !entry || !isRehydratableAutomaticSession(entry)) {
           return;
         }
 
         const deviceActive = await probeDeviceAutomaticSessionActive(
           selectedSub,
-          automaticRef.current,
+          settingsRef.current.automatic,
         );
+
+        if (cancelled) {
+          return;
+        }
 
         if (deviceActive === false) {
           await endSession(entry.id, STALE_AUTOMATIC_SESSION_SUMMARY);
@@ -64,22 +58,26 @@ export function AutomaticSessionRehydrator() {
         rehydrateSession(entry);
         setMode('automatic');
 
-        const automatic = automaticRef.current;
-        if (!automatic.running) {
-          updateAutomatic({ ...automatic, running: true });
+        if (!settingsRef.current.automatic.running) {
+          setAutomaticRunningLocal(true);
         }
       } catch {
         // Leave UI in default idle state.
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     activeSession,
     domTarget,
     isLoading,
     rehydrateSession,
     selectedSub,
+    setAutomaticRunningLocal,
     setMode,
-    updateAutomatic,
+    settingsLoaded,
   ]);
 
   return null;

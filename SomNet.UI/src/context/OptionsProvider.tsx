@@ -24,9 +24,13 @@ interface OptionsContextValue {
   options: AppOptions;
   strokeLimits: StrokeMsLimits;
   isLoading: boolean;
+  /** True after pairing settings were fetched for the current Dom/Sub. */
+  settingsLoaded: boolean;
   setOptions: (options: AppOptions) => Promise<void>;
   updateManual: (manual: ManualControlState) => void;
   updateAutomatic: (automatic: AutomaticControlState) => void;
+  /** Set running flag locally without persisting (session rehydration). */
+  setAutomaticRunningLocal: (running: boolean) => void;
   isDialogOpen: boolean;
   openDialog: () => void;
   closeDialog: () => void;
@@ -42,33 +46,52 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
   const domTarget = user?.displayName ?? user?.username ?? '';
   const [settings, setSettings] = useState<PairingSettings>(DEFAULT_PAIRING_SETTINGS);
   const [strokeLimits, setStrokeLimits] = useState<StrokeMsLimits>(DEFAULT_STROKE_MS_LIMITS);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const settingsRef = useRef(settings);
   const saveTimerRef = useRef<number | null>(null);
+  const settingsLoadedRef = useRef(false);
+  const userEditedRef = useRef(false);
+  const persistGenerationRef = useRef(0);
 
   settingsRef.current = settings;
 
+  useEffect(() => {
+    settingsLoadedRef.current = settingsLoaded;
+  }, [settingsLoaded]);
+
   const persistSettings = useCallback(
-    async (nextSettings: PairingSettings) => {
+    async (nextSettings: PairingSettings, generation: number) => {
       if (!domTarget) {
         return nextSettings;
       }
 
-      return savePairingSettings(selectedSub, nextSettings);
+      const savedSettings = await savePairingSettings(selectedSub, nextSettings);
+      if (generation !== persistGenerationRef.current) {
+        return savedSettings;
+      }
+
+      return savedSettings;
     },
     [domTarget, selectedSub],
   );
 
   const queuePersist = useCallback(
     (nextSettings: PairingSettings) => {
+      if (!settingsLoadedRef.current || !userEditedRef.current) {
+        return;
+      }
+
       if (saveTimerRef.current !== null) {
         window.clearTimeout(saveTimerRef.current);
       }
 
+      const generation = persistGenerationRef.current;
+
       saveTimerRef.current = window.setTimeout(() => {
         saveTimerRef.current = null;
-        void persistSettings(nextSettings).catch(() => {
+        void persistSettings(nextSettings, generation).catch(() => {
           // Keep local state; the next change or dialog save can retry.
         });
       }, SAVE_DEBOUNCE_MS);
@@ -78,12 +101,26 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!domTarget) {
+      persistGenerationRef.current += 1;
+      userEditedRef.current = false;
       setSettings(DEFAULT_PAIRING_SETTINGS);
+      setSettingsLoaded(false);
+      setIsLoading(false);
       return;
     }
 
     let cancelled = false;
+
+    persistGenerationRef.current += 1;
+    userEditedRef.current = false;
+
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
     setIsLoading(true);
+    setSettingsLoaded(false);
 
     Promise.all([fetchPairingSettings(selectedSub), fetchStrokeLimits()])
       .then(([loadedSettings, loadedStrokeLimits]) => {
@@ -110,11 +147,13 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
               ...automaticStroke,
             }),
           });
+          setSettingsLoaded(true);
         }
       })
       .catch(() => {
         if (!cancelled) {
           setSettings(DEFAULT_PAIRING_SETTINGS);
+          setSettingsLoaded(false);
         }
       })
       .finally(() => {
@@ -138,10 +177,10 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
   );
 
   const applySettings = useCallback(
-    (nextSettings: PairingSettings, persistImmediately = false) => {
+    (nextSettings: PairingSettings, persistImmediately = false, skipPersist = false) => {
       setSettings(nextSettings);
 
-      if (!domTarget) {
+      if (!domTarget || skipPersist || !settingsLoadedRef.current || !userEditedRef.current) {
         return;
       }
 
@@ -151,8 +190,11 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
           saveTimerRef.current = null;
         }
 
-        void persistSettings(nextSettings).then((savedSettings) => {
-          setSettings(savedSettings);
+        const generation = persistGenerationRef.current;
+        void persistSettings(nextSettings, generation).then((savedSettings) => {
+          if (generation === persistGenerationRef.current) {
+            setSettings(savedSettings);
+          }
         });
         return;
       }
@@ -164,6 +206,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
   const setOptions = useCallback(
     async (nextOptions: AppOptions) => {
+      userEditedRef.current = true;
       const nextSettings = {
         ...settingsRef.current,
         appOptions: nextOptions,
@@ -175,6 +218,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
   const updateManual = useCallback(
     (manual: ManualControlState) => {
+      userEditedRef.current = true;
       const normalizedStroke = normalizeStrokeMsPair(
         manual.minimumStrokeMs,
         manual.maximumStrokeMs,
@@ -193,6 +237,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
   const updateAutomatic = useCallback(
     (automatic: AutomaticControlState) => {
+      userEditedRef.current = true;
       const normalizedStroke = normalizeStrokeMsPair(
         automatic.minimumStrokeMs,
         automatic.maximumStrokeMs,
@@ -209,6 +254,23 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     [applySettings, strokeLimits],
   );
 
+  const setAutomaticRunningLocal = useCallback(
+    (running: boolean) => {
+      applySettings(
+        {
+          ...settingsRef.current,
+          automatic: {
+            ...settingsRef.current.automatic,
+            running,
+          },
+        },
+        false,
+        true,
+      );
+    },
+    [applySettings],
+  );
+
   const openDialog = useCallback(() => {
     setIsDialogOpen(true);
   }, []);
@@ -223,9 +285,11 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       options: settings.appOptions,
       strokeLimits,
       isLoading,
+      settingsLoaded,
       setOptions,
       updateManual,
       updateAutomatic,
+      setAutomaticRunningLocal,
       isDialogOpen,
       openDialog,
       closeDialog,
@@ -234,9 +298,11 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       settings,
       strokeLimits,
       isLoading,
+      settingsLoaded,
       setOptions,
       updateManual,
       updateAutomatic,
+      setAutomaticRunningLocal,
       isDialogOpen,
       openDialog,
       closeDialog,

@@ -24,7 +24,6 @@ import {
   applyAutomaticModeChange,
   getAutomaticFieldRules,
   MIN_STROKE_GAP_SECONDS,
-  normalizeAutomaticControlState,
 } from '@/utils/automaticFieldRules';
 import { getAutomaticModeInfo } from '@/utils/automaticModeInfo';
 import {
@@ -37,7 +36,6 @@ import {
 import {
   clampMaximumStrokeMs,
   clampMinimumStrokeMs,
-  normalizeStrokeMsPair,
   resolveStrokeMsBounds,
 } from '@/utils/strokeMsLimits';
 import { useHardwareCommand } from '@/context/HardwareCommandProvider';
@@ -56,7 +54,15 @@ const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
 ];
 
 export function AutomaticControls() {
-  const { settings, options, updateAutomatic, isLoading, strokeLimits } = useOptions();
+  const {
+    settings,
+    options,
+    updateAutomatic,
+    setAutomaticRunningLocal,
+    isLoading,
+    settingsLoaded,
+    strokeLimits,
+  } = useOptions();
   const state = settings.automatic;
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { selectedSub } = useSubTarget();
@@ -125,7 +131,7 @@ export function AutomaticControls() {
   }, [liveOverridesActive]);
 
   useEffect(() => {
-    if (isLoading || !liveOverridesActive) {
+    if (isLoading || !settingsLoaded || !liveOverridesActive) {
       return;
     }
 
@@ -160,17 +166,28 @@ export function AutomaticControls() {
         window.clearTimeout(updateDebounceRef.current);
       }
     };
-  }, [isLoading, liveOverridesActive, selectedSub, state]);
+  }, [isLoading, settingsLoaded, liveOverridesActive, selectedSub, state]);
 
   useEffect(() => {
-    if (isLoading || automaticSessionActive || startPending) {
+    if (isLoading || !settingsLoaded || automaticSessionActive || startPending) {
       return;
     }
 
     if (state.running) {
-      updateAutomatic({ ...state, running: false });
+      setAutomaticRunningLocal(false);
     }
-  }, [isLoading, automaticSessionActive, startPending, state, updateAutomatic]);
+  }, [
+    isLoading,
+    settingsLoaded,
+    automaticSessionActive,
+    startPending,
+    state.running,
+    setAutomaticRunningLocal,
+  ]);
+
+  function setRunningLocal(running: boolean) {
+    setAutomaticRunningLocal(running);
+  }
 
   function update<K extends keyof AutomaticControlState>(
     key: K,
@@ -184,52 +201,17 @@ export function AutomaticControls() {
       return;
     }
 
+    if (key === 'running') {
+      setRunningLocal(value as boolean);
+      return;
+    }
+
     updateAutomatic({ ...state, [key]: value });
   }
 
   function handleAutomaticModeChange(nextMode: AutomaticRunMode) {
     updateAutomatic(applyAutomaticModeChange(state, nextMode));
   }
-
-  useEffect(() => {
-    if (isLoading) {
-      return;
-    }
-
-    const normalizedStroke = normalizeStrokeMsPair(
-      state.minimumStrokeMs,
-      state.maximumStrokeMs,
-      strokeLimits,
-    );
-    const normalizedAutomatic = normalizeAutomaticControlState({
-      ...state,
-      ...normalizedStroke,
-    });
-
-    const strokeUnchanged =
-      normalizedStroke.minimumStrokeMs === state.minimumStrokeMs &&
-      normalizedStroke.maximumStrokeMs === state.maximumStrokeMs;
-    const automaticUnchanged =
-      normalizedAutomatic.automaticMode === state.automaticMode &&
-      normalizedAutomatic.endSessionMode === state.endSessionMode &&
-      normalizedAutomatic.burstsOn === state.burstsOn &&
-      normalizedAutomatic.burstStyle === state.burstStyle &&
-      normalizedAutomatic.burstPercent === state.burstPercent &&
-      normalizedAutomatic.burstStrokePowerMin === state.burstStrokePowerMin &&
-      normalizedAutomatic.burstStrokePowerMax === state.burstStrokePowerMax &&
-      normalizedAutomatic.burstDelayMin === state.burstDelayMin &&
-      normalizedAutomatic.burstDelayMax === state.burstDelayMax &&
-      normalizedAutomatic.burstStrokesMin === state.burstStrokesMin &&
-      normalizedAutomatic.burstStrokesMax === state.burstStrokesMax &&
-      normalizedAutomatic.strokeMinSeconds === state.strokeMinSeconds &&
-      normalizedAutomatic.strokeMaxSeconds === state.strokeMaxSeconds;
-
-    if (strokeUnchanged && automaticUnchanged) {
-      return;
-    }
-
-    updateAutomatic(normalizedAutomatic);
-  }, [isLoading, state, strokeLimits, updateAutomatic]);
 
   async function finalizeStaleRehydratedSession(message?: string | null) {
     if (!automaticSessionActive) {
@@ -411,12 +393,16 @@ export function AutomaticControls() {
     [state.maximumPower, state.minimumStrokeMs, state.maximumStrokeMs],
   );
 
+  if (isLoading || !settingsLoaded) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-slate-500">Loading saved automatic settings…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      {isLoading ? (
-        <p className="text-sm text-slate-500">Loading saved automatic settings…</p>
-      ) : null}
-
       {sessionRunning ? (
         <p className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200">
           {allowLiveOverrides ? (

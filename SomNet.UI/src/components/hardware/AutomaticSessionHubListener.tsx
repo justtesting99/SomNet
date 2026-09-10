@@ -31,17 +31,17 @@ function shouldHandleAutomaticSessionComplete(ack: HardwareCommandAck): boolean 
  */
 export function AutomaticSessionHubListener() {
   const { isAuthenticated } = useAuth();
-  const { settings, updateAutomatic } = useOptions();
+  const { settings, setAutomaticRunningLocal } = useOptions();
   const { activeSession, endAutomaticSession } = useLiveSession();
   const automaticRef = useRef(settings.automatic);
   const activeSessionRef = useRef(activeSession);
   const endAutomaticSessionRef = useRef(endAutomaticSession);
-  const updateAutomaticRef = useRef(updateAutomatic);
+  const clearAutomaticRunningRef = useRef<() => void>(() => setAutomaticRunningLocal(false));
 
   automaticRef.current = settings.automatic;
   activeSessionRef.current = activeSession;
   endAutomaticSessionRef.current = endAutomaticSession;
-  updateAutomaticRef.current = updateAutomatic;
+  clearAutomaticRunningRef.current = () => setAutomaticRunningLocal(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -67,7 +67,7 @@ export function AutomaticSessionHubListener() {
       void applyAutomaticDeviceComplete(
         automatic,
         parsed,
-        updateAutomaticRef.current,
+        clearAutomaticRunningRef.current,
         endAutomaticSessionRef.current,
         sessionActive,
       );
