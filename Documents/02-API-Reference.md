@@ -58,9 +58,18 @@ This matches the UI, which uses `user.displayName` as the controller name.
 
 | Method | Route | Description |
 |--------|-------|-------------|
+| GET | `/api/sessions/active?subTarget=` | Latest **in-progress** session for Dom + Sub (404 if none) |
 | POST | `/api/sessions` | Start a new session |
 | PATCH | `/api/sessions/{sessionId}` | Update in-progress session summary |
 | POST | `/api/sessions/{sessionId}/end` | End session with final summary |
+
+### Get Active Session
+
+**Query:** `subTarget` (required)
+
+**Response:** `SessionHistoryEntryDto` for the most recent session whose summary is `"In progress"` or starts with `"In progress:"`.
+
+**404** when no in-progress session exists for that Dom/Sub pair.
 
 ### Start Session
 

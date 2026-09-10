@@ -46,6 +46,7 @@ import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
 import { buildAutomaticStartPayload } from '@/utils/automaticStartPayload';
 import { parseAutomaticResultJson } from '@/utils/automaticResultJson';
 import { waitForAutomaticHubFinalize, computeAutomaticStopGraceMs } from '@/utils/automaticSessionFinalize';
+import { isDeviceAutomaticIdleMessage } from '@/utils/automaticSessionReconcile';
 import { ApiError } from '@/api/client';
 
 const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
@@ -66,7 +67,9 @@ export function AutomaticControls() {
   const [commandError, setCommandError] = useState('');
   const [cooperativeStopInProgress, setCooperativeStopInProgress] = useState(false);
   const runningRef = useRef(state.running);
+  const activeSessionRef = useRef(activeSession);
   runningRef.current = state.running;
+  activeSessionRef.current = activeSession;
 
   const fieldRules = useMemo(
     () => getAutomaticFieldRules(state.automaticMode),
@@ -228,6 +231,29 @@ export function AutomaticControls() {
     updateAutomatic(normalizedAutomatic);
   }, [isLoading, state, strokeLimits, updateAutomatic]);
 
+  async function finalizeStaleRehydratedSession(message?: string | null) {
+    if (!automaticSessionActive) {
+      return false;
+    }
+
+    const normalized = (message ?? '').toLowerCase();
+    if (
+      !isDeviceAutomaticIdleMessage(message) &&
+      !normalized.includes('nothing to stop') &&
+      !normalized.includes('nothing to abort')
+    ) {
+      return false;
+    }
+
+    update('running', false);
+    await endAutomaticSession('stopped manually (device already idle)');
+    return true;
+  }
+
+  function isAutomaticSessionPendingFinalize(): boolean {
+    return runningRef.current || activeSessionRef.current?.mode === 'automatic';
+  }
+
   function formatCommandError(error: unknown): string {
     if (error instanceof HardwareCommandError) {
       return error.message;
@@ -282,6 +308,10 @@ export function AutomaticControls() {
       }
 
       if (!response.success) {
+        if (await finalizeStaleRehydratedSession(response.message)) {
+          return;
+        }
+
         setCommandError(response.message ?? 'Nothing to stop.');
         return;
       }
@@ -301,20 +331,18 @@ export function AutomaticControls() {
 
       // Stop accepted — hub delivers summary when current stroke/burst finishes (P10-D3).
       setCooperativeStopInProgress(true);
-      void (async () => {
-        try {
-          await waitForAutomaticHubFinalize(
-            () => runningRef.current,
-            async () => {
-              update('running', false);
-              await endAutomaticSession('stopped manually');
-            },
-            computeAutomaticStopGraceMs(state),
-          );
-        } finally {
-          setCooperativeStopInProgress(false);
-        }
-      })();
+      try {
+        await waitForAutomaticHubFinalize(
+          isAutomaticSessionPendingFinalize,
+          async () => {
+            update('running', false);
+            await endAutomaticSession('stopped manually');
+          },
+          computeAutomaticStopGraceMs(state),
+        );
+      } finally {
+        setCooperativeStopInProgress(false);
+      }
     } catch (error) {
       setCommandError(formatCommandError(error));
     }
@@ -338,6 +366,10 @@ export function AutomaticControls() {
       }
 
       if (!response.success) {
+        if (await finalizeStaleRehydratedSession(response.message)) {
+          return;
+        }
+
         setCommandError(response.message ?? 'Nothing to abort.');
         return;
       }
@@ -347,7 +379,7 @@ export function AutomaticControls() {
       }
 
       await waitForAutomaticHubFinalize(
-        () => runningRef.current,
+        isAutomaticSessionPendingFinalize,
         async () => {
           update('running', false);
           await endAutomaticSession('aborted');

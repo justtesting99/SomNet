@@ -52,7 +52,7 @@ export async function waitForAutomaticHubFinalize(
   }
 }
 
-export function applyAutomaticDeviceComplete(
+export async function applyAutomaticDeviceComplete(
   automatic: AutomaticControlState,
   parsed: AutomaticResultJson,
   updateAutomatic: (next: AutomaticControlState) => void,
@@ -60,11 +60,12 @@ export function applyAutomaticDeviceComplete(
     reason: string,
     deviceResult?: AutomaticResultJson | null,
   ) => Promise<void>,
-): void {
-  if (!automatic.running) {
+  sessionActive = false,
+): Promise<void> {
+  if (!automatic.running && !sessionActive) {
     return;
   }
 
   updateAutomatic({ ...automatic, running: false });
-  void endAutomaticSession('', parsed);
+  await endAutomaticSession('', parsed);
 }

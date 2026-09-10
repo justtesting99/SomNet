@@ -217,6 +217,26 @@ public sealed class SomNetDataStore : ISomNetDataStore
         return ToDto(notification);
     }
 
+    public SessionHistoryEntryDto? GetActiveSession(string domTarget, string subTarget)
+    {
+        if (string.IsNullOrWhiteSpace(domTarget))
+        {
+            throw new ArgumentException("DomTarget is required.", nameof(domTarget));
+        }
+
+        var normalizedSub = SubTargetValidation.Normalize(subTarget);
+        var session = _db.Sessions
+            .AsNoTracking()
+            .Where(entry =>
+                entry.DomTarget == domTarget.Trim() &&
+                entry.SubTarget == normalizedSub)
+            .OrderByDescending(entry => entry.StartedAt)
+            .AsEnumerable()
+            .FirstOrDefault(entry => SessionProgressHelper.IsInProgress(entry.Summary));
+
+        return session is null ? null : ToDto(session);
+    }
+
     public SessionHistoryEntryDto StartSession(string domTarget, StartSessionRequestDto request)
     {
         if (string.IsNullOrWhiteSpace(domTarget))

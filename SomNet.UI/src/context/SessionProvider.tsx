@@ -19,6 +19,7 @@ import {
   type ManualSessionEndReason,
 } from '@/utils/sessionSummary';
 import type { AutomaticResultJson } from '@/utils/automaticResultJson';
+import type { SessionHistoryEntry } from '@/types/sessionHistory';
 
 interface ActiveSessionState {
   id: string;
@@ -46,6 +47,7 @@ interface SessionContextValue {
     deviceResult?: AutomaticResultJson | null,
   ) => Promise<void>;
   endActiveSessionIfNeeded: (reason: ManualSessionEndReason | string) => Promise<void>;
+  rehydrateSession: (entry: SessionHistoryEntry) => void;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -110,13 +112,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    activeSessionRef.current = null;
-    setActiveSession(null);
-
     try {
       await endSessionApi(current.id, summary);
+      activeSessionRef.current = null;
+      setActiveSession(null);
     } catch {
-      // Session already cleared locally; history may be missing this end event.
+      // Keep activeSession so Stop/retry or rehydration can finish the server record.
     }
   }, []);
 
@@ -239,6 +240,23 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [finalizeSession],
   );
 
+  const rehydrateSession = useCallback((entry: SessionHistoryEntry) => {
+    if (activeSessionRef.current || startingRef.current) {
+      return;
+    }
+
+    const nextSession: ActiveSessionState = {
+      id: entry.id,
+      startedAt: entry.startedAt,
+      mode: entry.mode,
+      subTarget: entry.subTarget,
+      events: [],
+      abortCount: 0,
+    };
+    activeSessionRef.current = nextSession;
+    setActiveSession(nextSession);
+  }, []);
+
   const endActiveSessionIfNeeded = useCallback(
     async (reason: ManualSessionEndReason | string) => {
       const current = activeSessionRef.current;
@@ -275,6 +293,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       endManualSession,
       endAutomaticSession,
       endActiveSessionIfNeeded,
+      rehydrateSession,
     }),
     [
       activeSession,
@@ -282,6 +301,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       endActiveSessionIfNeeded,
       endAutomaticSession,
       endManualSession,
+      rehydrateSession,
       recordManualBurst,
       recordManualStroke,
       recordManualAbort,

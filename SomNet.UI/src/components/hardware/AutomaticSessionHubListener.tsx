@@ -32,12 +32,14 @@ function shouldHandleAutomaticSessionComplete(ack: HardwareCommandAck): boolean 
 export function AutomaticSessionHubListener() {
   const { isAuthenticated } = useAuth();
   const { settings, updateAutomatic } = useOptions();
-  const { endAutomaticSession } = useLiveSession();
+  const { activeSession, endAutomaticSession } = useLiveSession();
   const automaticRef = useRef(settings.automatic);
+  const activeSessionRef = useRef(activeSession);
   const endAutomaticSessionRef = useRef(endAutomaticSession);
   const updateAutomaticRef = useRef(updateAutomatic);
 
   automaticRef.current = settings.automatic;
+  activeSessionRef.current = activeSession;
   endAutomaticSessionRef.current = endAutomaticSession;
   updateAutomaticRef.current = updateAutomatic;
 
@@ -52,7 +54,8 @@ export function AutomaticSessionHubListener() {
       }
 
       const automatic = automaticRef.current;
-      if (!automatic.running) {
+      const sessionActive = activeSessionRef.current?.mode === 'automatic';
+      if (!automatic.running && !sessionActive) {
         return;
       }
 
@@ -61,11 +64,12 @@ export function AutomaticSessionHubListener() {
         return;
       }
 
-      applyAutomaticDeviceComplete(
+      void applyAutomaticDeviceComplete(
         automatic,
         parsed,
         updateAutomaticRef.current,
         endAutomaticSessionRef.current,
+        sessionActive,
       );
     });
 

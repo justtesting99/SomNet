@@ -66,11 +66,11 @@ describe('waitForAutomaticHubFinalize', () => {
 });
 
 describe('applyAutomaticDeviceComplete', () => {
-  it('clears running and ends session with device result', () => {
+  it('clears running and ends session with device result', async () => {
     const updateAutomatic = vi.fn();
-    const endAutomaticSession = vi.fn();
+    const endAutomaticSession = vi.fn().mockResolvedValue(undefined);
 
-    applyAutomaticDeviceComplete(
+    await applyAutomaticDeviceComplete(
       { ...defaultAutomaticState, running: true },
       { commandKey: 'automatic-stop', strokesCompleted: 3, endReason: 'abort', interrupted: true },
       updateAutomatic,
@@ -86,11 +86,11 @@ describe('applyAutomaticDeviceComplete', () => {
     );
   });
 
-  it('no-ops when session is not running', () => {
+  it('no-ops when session is not running', async () => {
     const updateAutomatic = vi.fn();
     const endAutomaticSession = vi.fn();
 
-    applyAutomaticDeviceComplete(
+    await applyAutomaticDeviceComplete(
       { ...defaultAutomaticState, running: false },
       { commandKey: 'automatic-stop', strokesCompleted: 1 },
       updateAutomatic,
@@ -99,5 +99,23 @@ describe('applyAutomaticDeviceComplete', () => {
 
     expect(updateAutomatic).not.toHaveBeenCalled();
     expect(endAutomaticSession).not.toHaveBeenCalled();
+  });
+
+  it('finalizes rehydrated session when running flag is false but session is active', async () => {
+    const updateAutomatic = vi.fn();
+    const endAutomaticSession = vi.fn().mockResolvedValue(undefined);
+
+    await applyAutomaticDeviceComplete(
+      { ...defaultAutomaticState, running: false },
+      { commandKey: 'automatic-stop', strokesCompleted: 5, endReason: 'endSession' },
+      updateAutomatic,
+      endAutomaticSession,
+      true,
+    );
+
+    expect(updateAutomatic).toHaveBeenCalledWith(
+      expect.objectContaining({ running: false }),
+    );
+    expect(endAutomaticSession).toHaveBeenCalled();
   });
 });

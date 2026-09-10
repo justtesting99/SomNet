@@ -19,6 +19,32 @@ public class SessionsController : ControllerBase
         _dataStore = dataStore;
     }
 
+    [HttpGet("active")]
+    public ActionResult<SessionHistoryEntryDto> GetActive([FromQuery] string subTarget)
+    {
+        var domTarget = GetDomTarget();
+
+        if (domTarget is null)
+        {
+            return Unauthorized();
+        }
+
+        if (string.IsNullOrWhiteSpace(subTarget))
+        {
+            return BadRequest("subTarget is required.");
+        }
+
+        try
+        {
+            var session = _dataStore.GetActiveSession(domTarget, subTarget);
+            return session is null ? NotFound() : Ok(session);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
     [HttpPost]
     public ActionResult<SessionHistoryEntryDto> Start([FromBody] StartSessionRequestDto request)
     {

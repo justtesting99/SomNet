@@ -30,5 +30,6 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [ESP32 Phase 9 Part 2 — Automatic](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md) | Developers | Automatic mode UI rules, decisions (P9P2-D*), implementation checklist |
 | [ESP32 Phase 10 Checklist](./09-ESP32-Phase-10-Checklist.md) | Developers | Burst-in-automatic — **Signed off** (2026-09-07) |
 | [ESP32 Phase 11 Checklist](./09-ESP32-Phase-11-Checklist.md) | Developers | Live automatic settings (`automatic-update`) — **Signed off** (2026-09-10) |
-| [ESP32 Phase 12 Checklist](./09-ESP32-Phase-12-Network-Hardening-Checklist.md) | Developers | Network hardening — **`0.13.0-network`** planning (non-blocking hub FSM) |
+| [ESP32 Phase 12 Checklist](./09-ESP32-Phase-12-Network-Hardening-Checklist.md) | Developers | Network hardening — **`0.13.0-network`** **signed off** (2026-09-10) |
+| [UI Session Rehydration](./10-UI-Session-Rehydration-Checklist.md) | Developers | Restore Stop/Abort after browser refresh during automatic session |
 | [ESP32 Network Spec](./09-ESP32-Network-Spec.md) | Developers | **Wi‑Fi / HTTP / hub architecture** — signed off **`0.12.0-network`** (2026-09-09); S3–S6 verified |

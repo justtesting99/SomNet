@@ -1,7 +1,32 @@
 import type { OperationMode } from '@/types/modes';
 import type { SubTargetName } from '@/config/sessionUsers';
 import type { SessionHistoryEntry } from '@/types/sessionHistory';
-import { apiFetch } from '@/api/client';
+import { apiFetch, ApiError } from '@/api/client';
+import { normalizeSessionMode } from '@/utils/sessionProgress';
+
+function normalizeSessionEntry(entry: SessionHistoryEntry): SessionHistoryEntry {
+  return {
+    ...entry,
+    mode: normalizeSessionMode(String(entry.mode)),
+  };
+}
+
+export async function fetchActiveSession(
+  subTarget: SubTargetName,
+): Promise<SessionHistoryEntry | null> {
+  const params = new URLSearchParams({ subTarget });
+
+  try {
+    const entry = await apiFetch<SessionHistoryEntry>(`/api/sessions/active?${params.toString()}`);
+    return normalizeSessionEntry(entry);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return null;
+    }
+
+    throw error;
+  }
+}
 
 export async function startSession(
   subTarget: SubTargetName,
