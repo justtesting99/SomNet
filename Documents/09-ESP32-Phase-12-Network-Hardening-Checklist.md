@@ -1,6 +1,6 @@
 # Phase 12 — Network hardening (post–`0.12.0-network`)
 
-**Status:** **12A bench — partial sign-off** (2026-09-10) — S9–S12 + Phase 11 B1 + boot/API cycle **pass**; S1–S8 Network Spec regression **pending**.
+**Status:** **12A bench — signed off** (2026-09-10) — S1–S12 + Phase 11 B1 **pass** on **`0.13.0-network`** (`esp32-84CCA85C36B4`).
 
 | Related | Link |
 |---------|------|
@@ -163,7 +163,7 @@ HubIdle → ArpWarm → ProbeTcp → NegotiateStart → NegotiateWait → WsConn
 
 | # | Scenario | Pass criteria |
 |---|----------|---------------|
-| **S1–S8** | From [Network Spec §11](./09-ESP32-Network-Spec.md#11-smoke-test-plan) | All pass (S1–S2, S7–S8 previously optional — **required** for Phase 12 sign-off) |
+| **S1–S8** | From [Network Spec §11](./09-ESP32-Network-Spec.md#11-smoke-test-plan) | All pass (S1–S2, S7–S8 previously optional — **required** for Phase 12 sign-off) | ☑ **2026-09-10** |
 | **S9** | Flash **`0.13.0-network`** while API **down**; within 5 s of `[HTTP] server started`, GET `http://<ip>/ping` from PC | `[HTTP] GET` in serial; `ok` response | ☑ **2026-09-10** |
 | **S10** | Boot race: API **up** but start ESP32 **after** API; hub connects ≤120 s; HTTP GET works throughout | No wedge; Phase 11 `automatic-start` ack success | ☑ **2026-09-10** (5/5 boots post-fix) |
 | **S11** | Mid-session hub drop (stop API 30 s, restart) during automatic Periodic 10 strokes | Session continues or cleanly reconnects; abort still <15 s; no relay stuck | ☑ **2026-09-10** |
@@ -191,8 +191,8 @@ HubIdle → ArpWarm → ProbeTcp → NegotiateStart → NegotiateWait → WsConn
 ### 6.3 Regression
 
 - [x] Phase 11 spot check — `automatic-update` at stroke 5 (B1 cadence) — **2026-09-10** on `0.13.0-network`
-- [ ] Pairing / revoke unchanged
-- [ ] Setup AP path (S1) unchanged
+- [x] Pairing / revoke unchanged (paired through S8 URL change + S7 router cycle)
+- [x] Setup AP path (S1) unchanged — reset-wifi → `SomNetSetup-36B4` @ `192.168.4.1`; captive portal + `/config` on phone (2026-09-10)
 
 ---
 
@@ -322,24 +322,39 @@ Run on `esp32-84CCA85C36B4`. Record date + serial snippet per row. **Suggested o
 
 | # | Steps | Pass criteria | Result |
 |---|-------|---------------|--------|
-| **S3** | Browse `http://192.168.1.172/` (or `/ping`) while STA up | `[HTTP] GET /` or `/ping` in serial; page/`ok` loads | ☐ |
-| **S4** | API running; device booted or already up | `[HUB] handshake ok` within **120 s** of Wi‑Fi up | ☐ |
-| **S5** | Hub paired; **stop API** 30 s; GET `http://192.168.1.172/ping` | `.172` responds; **no** `[WIFI] refresh association`; **no** `[HTTP] server stopped` | ☐ |
-| **S6** | **Start API** (after S5) | `[HUB] handshake ok` within **120 s**; no device reboot | ☐ |
-| **S8** | On `/config`: set `server_url` to `http://192.168.1.47:5032` (wrong port); Save → reboot; then restore `:5031` and Save → reboot | After 1st reboot: negotiate log shows **:5032**; after restore: **:5031** + `handshake ok` | ☐ |
-| **S2** | (Covered by S8 save/reboot) or edit friendly name on `/config`, Save | `[HTTP] server started` **once** within **5 s** of `[WIFI] connected` | ☐ |
-| **S7** | Reboot **router/AP** (or disable Wi‑Fi on router 60 s); wait for STA recovery | Device reconnects STA; `[HTTP] GET` works; hub `handshake ok` ≤120 s | ☐ |
-| **S1** | Hold button **10 s** → release → credential reset reboot **or** Factory reset on `/config` | Join `SomNetSetup-XXXX`; `http://192.168.4.1/ping` → `ok`; re-provision Wi‑Fi + server URL to return to RUNNING | ☐ |
+| **S3** | Browse `http://192.168.1.172/` (or `/ping`) while STA up | `[HTTP] GET /` or `/ping` in serial; page/`ok` loads | ☑ **2026-09-10** |
+| **S4** | API running; device booted or already up | `[HUB] handshake ok` within **120 s** of Wi‑Fi up | ☑ **2026-09-10** (~14 s) |
+| **S5** | Hub paired; **stop API** 30 s; GET `http://192.168.1.172/ping` | `.172` responds; **no** `[WIFI] refresh association`; **no** `[HTTP] server stopped` | ☑ **2026-09-10** |
+| **S6** | **Start API** (after S5) | `[HUB] handshake ok` within **120 s**; no device reboot | ☑ **2026-09-10** (`handshake ok` 46 s after Wi‑Fi; note: power-cycle during test) |
+| **S8** | On `/config`: set `server_url` to `http://192.168.1.47:5032` (wrong port); Save → reboot; then restore `:5031` and Save → reboot | After 1st reboot: negotiate log shows **:5032**; after restore: **:5031** + `handshake ok` | ☑ **2026-09-10** |
+| **S2** | (Covered by S8 save/reboot) or edit friendly name on `/config`, Save | `[HTTP] server started` **once** within **5 s** of `[WIFI] connected` | ☑ **2026-09-10** (3 s on restore reboot) |
+| **S7** | Reboot **router/AP** (or disable Wi‑Fi on router 60 s); wait for STA recovery | Device reconnects STA; `[HTTP] GET` works; hub `handshake ok` ≤120 s | ☑ **2026-09-10** (STA ~3 min; hub 10 s after STA) |
+| **S1** | **Reset Wi‑Fi / server** on `/config` (or 10 s button hold) → reboot | Join `SomNetSetup-XXXX` on phone/PC; `http://192.168.4.1/` or `/ping` → page/`ok`; re-provision → RUNNING + hub | ☑ **2026-09-10** |
 
 **NET-F* watch (must NOT appear during S5/S6/S7):** `[HTTP] server stopped`, `[WIFI] refresh association` while API host on LAN.
 
 **S3–S6 note:** Extensively covered 2026-09-10 (S9/S10/API cycles); re-run S5/S6 once for explicit §11 sign-off if desired.
 
-### 9.9 Remaining before Phase 12 sign-off
+### 9.9 S1–S7/S8 bench notes (2026-09-10)
 
-- [ ] **S1–S8** — complete §9.8 table above on `0.13.0-network`
+| Test | Key evidence |
+|------|----------------|
+| **S3** | `[HTTP] GET / from 192.168.1.47`; status page displayed |
+| **S4** | Boot `12:37:22` Wi‑Fi → `12:37:36` `handshake ok` |
+| **S5** | API down; `[HTTP] GET /` at `12:39:04` during hub retry; no NET-F2/F3 |
+| **S6** | `handshake ok` `12:40:57` after API up (device power-cycled during test) |
+| **S8** | Banner `Server: …5032`; negotiate `:5032`; restore → `:5031` + `handshake ok` |
+| **S2** | `[HTTP] server started` 3 s after Wi‑Fi on restore reboot (`12:42:55`→`12:42:58`) |
+| **S7** | Router cycle: `[WIFI] link lost` → reconnect `12:47:48` → `handshake ok` `12:47:58` |
+| **S1** | `POST /config/reset-wifi` → `Mode: PROVISIONING`; iPhone @ `192.168.4.2` captive portal + `/config`; save → `.172` + `handshake ok` `13:11:32` |
+
+### 9.10 Phase 12 sign-off
+
+- [x] **S1** — Setup AP (`SomNetSetup-36B4` + `192.168.4.1`; phone captive portal + re-provision) — **2026-09-10**
 
 **12B (hub FreeRTOS task):** Not required — S9/S10 pass on 12A.
+
+**Operator note:** `192.168.4.1` is reachable only while joined to **`SomNetSetup-XXXX`** (not from home LAN). Use **`192.168.1.172`** (or DHCP IP) for day‑to‑day config on STA.
 
 ---
 
@@ -365,3 +380,6 @@ Run on `esp32-84CCA85C36B4`. Record date + serial snippet per row. **Suggested o
 | 2026-09-10 | S11 pass — Periodic 10 strokes through API down; P12-D3 defer verified; hub reconnect post-session |
 | 2026-09-10 | S12 pass — 5× manual 201 ms strokes; actualStrokeMs 208–210 ms (prior band) |
 | 2026-09-10 | Phase 11 B1 spot check pass on `0.13.0-network` — automatic-update at stroke 5 |
+| 2026-09-10 | S2–S8 pass on `0.13.0-network` (S1 Setup AP pending) |
+| 2026-09-10 | **S1 pass** — reset-wifi → setup AP; iPhone captive portal @ `192.168.4.2`; re-provision → `.172` + `handshake ok` |
+| 2026-09-10 | **Phase 12A signed off** — S1–S12 + B1 on `0.13.0-network` |
