@@ -7,7 +7,7 @@
 | Parent plan | [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) |
 | Operator setup | [Hardware-User-Guide.md](./Hardware-User-Guide.md) |
 | Hub protocol | [06-SignalR-And-Hardware.md](./06-SignalR-And-Hardware.md) |
-| Phase 11 (blocked on network stability) | [09-ESP32-Phase-11-Checklist.md](./09-ESP32-Phase-11-Checklist.md) |
+| Phase 11 (live automatic settings) | [09-ESP32-Phase-11-Checklist.md](./09-ESP32-Phase-11-Checklist.md) — **signed off** 2026-09-10 |
 | Firmware source | [SomNet.Device/README](../SomNet.Device/README.md) |
 
 **Purpose:** Define how SomNet ESP32 firmware handles **Wi‑Fi**, **LAN config HTTP**, and **SignalR hub** connectivity using **tried-and-tested embedded patterns** — not ad‑hoc stop/start or Wi‑Fi refresh rules layered on top of each other.
@@ -355,7 +355,9 @@ Execute as **one refactor pass** against this spec — not incremental patches o
 
 ## 12. Relationship to Phase 11
 
-Phase 11 (`automatic-update`) depends on a **stable hub connection** and responsive device loop. Implement **this network spec first**, sign off smoke tests **S1–S8**, then resume Phase 11 feature work.
+Phase 11 (`automatic-update`) depends on a **stable hub connection** and responsive device loop. This network spec was implemented in **`0.12.0-network`** and signed off with smokes **S3–S6** (2026-09-09). Phase 11 hardware verification completed 2026-09-10 on **`0.12.2-phase11`**.
+
+Remaining smokes **S1–S2**, **S7–S8** are optional follow-up; core Phase 11 E2E used S3–S6 path (HTTP @ `.172` during API down/up; hub reconnect).
 
 ---
 
@@ -375,5 +377,6 @@ Documented for future reviewers:
 | Date | Change |
 |------|--------|
 | 2026-09-09 | Initial spec — NET-D1–D7, phases A–D, implementation plan, smoke tests |
-| 2026-09-09 | Firmware **0.12.0-network** — I1–I7 implemented; S1–S8 smoke pending |
-| 2026-09-09 | **Signed off** — S3–S6 pass on bench (HTTP @ `.172` during API down; hub reconnect on API up) |
+| 2026-09-09 | Firmware **0.12.0-network** — I1–I7 implemented |
+| 2026-09-09 | **Signed off** — S3–S6 pass on bench (HTTP @ `.172` during API down; hub reconnect on API up); S1–S2/S7–S8 optional |
+| 2026-09-10 | Phase 11 E2E complete on **`0.12.2-phase11`** using network layer from this spec |

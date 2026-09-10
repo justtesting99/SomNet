@@ -67,7 +67,7 @@ SomNet is a full-stack web application for controlling and recording sessions be
 
 Each Dom+Sub combination has persisted settings stored as JSON in `DomSubSettings`:
 
-- **App options** — UI preferences (sound, confirmations, video expand behavior)
+- **App options** — UI preferences (sound, confirmations, video expand behavior, **`allowAutomaticModeOverrides`** for live automatic settings)
 - **Manual control state** — Power %, stroke duration range, burst parameters
 - **Automatic control state** — Run mode, power/timing ranges, end-session rules, burst style
 
@@ -83,7 +83,7 @@ Settings load when a Sub is selected and save automatically (debounced) when cha
 
 ESP32 devices connect to the SignalR hub at `/hubs/hardware`. Pairing binds a physical device to a specific Dom+Sub pair via a long-lived device JWT. Commands are dispatched through the hub and acknowledged by the device.
 
-> **Note:** The backend hardware pipeline is complete. The React UI currently uses a simulated command acknowledgment (450 ms timeout) and does not yet call `/api/devices/commands` or subscribe to SignalR for live acks.
+> **Note:** The backend hardware pipeline and React UI command dispatch are complete (Phases 8–11). Manual and automatic commands call **`POST /api/devices/commands`**; **`AutomaticSessionHubListener`** subscribes to operator hub events for automatic session completion. Browser refresh during an automatic session does not rehydrate in-memory UI session state — see Phase 11 checklist §9.
 
 ## Request Flow Examples
 
@@ -103,7 +103,9 @@ User clicks Stroke
   → UI records event in SessionProvider event log
   → If no active session: POST /api/sessions
   → PATCH /api/sessions/{id} with aggregated summary
-  → CommandButton shows pending state (simulated ack today)
+  → POST /api/devices/commands { stroke payload }
+  → CommandButton pending until device ack
+  → Session summary updated from device resultJson
 ```
 
 ### Settings Change

@@ -21,6 +21,17 @@ export function OptionsGeneralPanel({ pendingOptions, onUpdate }: OptionsGeneral
           onChange={(event) => onUpdate('confirmBeforeCommands', event.target.checked)}
         />
         <Checkbox
+          label="Allow automatic mode overrides while a session is running"
+          checked={pendingOptions.allowAutomaticModeOverrides}
+          onChange={(event) =>
+            onUpdate('allowAutomaticModeOverrides', event.target.checked)
+          }
+        />
+        <p className="text-xs leading-relaxed text-slate-500">
+          When enabled, automatic settings stay editable during a session and changes are sent to
+          the device after the current stroke. When disabled, settings lock until Stop or Abort.
+        </p>
+        <Checkbox
           label="Auto-expand video feeds on mobile when commands run"
           checked={pendingOptions.autoExpandVideoOnMobile}
           onChange={(event) => onUpdate('autoExpandVideoOnMobile', event.target.checked)}

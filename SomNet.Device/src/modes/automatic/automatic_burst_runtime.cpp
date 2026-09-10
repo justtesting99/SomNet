@@ -104,6 +104,32 @@ void buildCadenceStridePlan(int burstPercent, AutomaticBurstPlan* outPlan) {
 
 } // namespace
 
+void advanceBurstPlanPastProgress(AutomaticBurstPlan* plan, int mainStrokesCompleted) {
+    if (plan == nullptr || !plan->active) {
+        return;
+    }
+
+    switch (plan->kind) {
+        case BurstScheduleKind::StrokeMilestones:
+            while (plan->nextMilestoneIndex < plan->burstEventCount &&
+                   mainStrokesCompleted >= plan->milestones[plan->nextMilestoneIndex]) {
+                plan->nextMilestoneIndex++;
+            }
+            break;
+        case BurstScheduleKind::CadenceStride:
+            if (plan->cadenceStride > 0) {
+                int nextTrigger = plan->cadenceStride;
+                while (nextTrigger <= mainStrokesCompleted) {
+                    nextTrigger += plan->cadenceStride;
+                }
+                plan->nextCadenceTriggerStroke = nextTrigger;
+            }
+            break;
+        default:
+            break;
+    }
+}
+
 void buildAutomaticBurstPlan(const AutomaticConfig& config, AutomaticBurstPlan* outPlan) {
     if (outPlan == nullptr) {
         return;
@@ -130,6 +156,60 @@ void buildAutomaticBurstPlan(const AutomaticConfig& config, AutomaticBurstPlan* 
 
         case EndSessionMode::NoAutoEnd:
             buildCadenceStridePlan(config.burstPercent, outPlan);
+            break;
+
+        default:
+            break;
+    }
+}
+
+void buildAutomaticBurstPlanForReplan(
+    const AutomaticConfig& config,
+    int mainStrokesCompleted,
+    unsigned long sessionStartMs,
+    unsigned long nowMs,
+    AutomaticBurstPlan* outPlan) {
+    if (outPlan == nullptr) {
+        return;
+    }
+
+    buildAutomaticBurstPlan(config, outPlan);
+    if (!outPlan->active) {
+        return;
+    }
+
+    switch (outPlan->kind) {
+        case BurstScheduleKind::StrokeMilestones:
+            for (int i = 0; i < outPlan->burstEventCount; ++i) {
+                outPlan->milestones[i] += mainStrokesCompleted;
+            }
+            advanceBurstPlanPastProgress(outPlan, mainStrokesCompleted);
+            break;
+
+        case BurstScheduleKind::WallClockDeadlines: {
+            const unsigned long elapsedMs =
+                sessionStartMs == 0 || nowMs <= sessionStartMs ? 0UL : nowMs - sessionStartMs;
+            const int elapsedOffset =
+                elapsedMs > static_cast<unsigned long>(INT32_MAX)
+                    ? INT32_MAX
+                    : static_cast<int>(elapsedMs);
+            for (int i = 0; i < outPlan->burstEventCount; ++i) {
+                const long long combined =
+                    static_cast<long long>(outPlan->milestones[i]) + elapsedOffset;
+                outPlan->milestones[i] =
+                    combined > INT32_MAX ? INT32_MAX : static_cast<int>(combined);
+            }
+            while (outPlan->nextMilestoneIndex < outPlan->burstEventCount &&
+                   sessionStartMs != 0 &&
+                   nowMs >= sessionStartMs +
+                       static_cast<unsigned long>(outPlan->milestones[outPlan->nextMilestoneIndex])) {
+                outPlan->nextMilestoneIndex++;
+            }
+            break;
+        }
+
+        case BurstScheduleKind::CadenceStride:
+            advanceBurstPlanPastProgress(outPlan, mainStrokesCompleted);
             break;
 
         default:

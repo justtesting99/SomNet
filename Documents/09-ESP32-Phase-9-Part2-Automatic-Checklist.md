@@ -23,7 +23,7 @@
 | **Duration** | ~2–3 weeks (phased — Periodic first, then random, then wave/build-up) |
 | **Hardware scope** | Same DevKit (`esp32-84CCA85C36B4` / `Slv66`); relay **D4**; serial `[RELAY]` / `[AUTO]` logs |
 | **Software scope** | `AutomaticSessionMode` + program factory; `automatic-start`/`stop`; UI wiring; SignalR auto-end/abort sync; API payload validation |
-| **Explicitly out of scope** | Burst-in-automatic ([Phase 10](./09-ESP32-Phase-10-Checklist.md)); live `automatic-update` (§9); `esp_timer` gap precision |
+| **Explicitly out of scope (Part 2 sign-off)** | Burst-in-automatic → [Phase 10](./09-ESP32-Phase-10-Checklist.md) (**done**); live `automatic-update` → [Phase 11](./09-ESP32-Phase-11-Checklist.md) (**done**); `esp_timer` gap precision |
 | **Blocks** | ~~Operators using **Automatic Start/Stop** from web app~~ — **unblocked** (Phase D, 2026-09-07) |
 
 Update **Status** above and check boxes in **§7** as work completes. When Part 2 is done, update [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §6 and bump firmware version (P9P2-D38).
@@ -396,7 +396,7 @@ execution_context
 
 | Class / module | Responsibility | Changes when adding program #8 |
 |----------------|----------------|--------------------------------|
-| **`AutomaticSessionMode`** | Sequencer FSM, relay, end-session, abort, ack/`resultJson`, session counters, future `automatic-update` | **None** (or factory registration only) |
+| **`AutomaticSessionMode`** | Sequencer FSM, relay, end-session, abort, ack/`resultJson`, session counters, **`automatic-update`** replan (Phase 11) | **None** (or factory registration only) |
 | **`AutomaticProgramBase`** | Virtual **`buildPlan()`**; optional **`strokeAt(i)`** for parametric rows; config validation | Unchanged |
 | **`PeriodicProgram`**, etc. | Mode-specific plan / wave math only | **New subclass file** + factory case |
 | **`automatic_program_factory.*`** | `create(AutomaticRunMode)` → `AutomaticProgram*` | One `case` + `#include` |
@@ -445,7 +445,7 @@ Part 2 sequencer stays **single-stroke steps** only. Phase 10 adds an optional b
 
 ## 9. Future — live settings during automatic playback (not Part 2)
 
-> **Implementation moved to [Phase 11 checklist](./09-ESP32-Phase-11-Checklist.md).** The notes below are retained as historical context; lock decisions in Phase 11 §4 before coding.
+> **Implemented in [Phase 11 checklist](./09-ESP32-Phase-11-Checklist.md) — signed off 2026-09-10 (`0.12.2-phase11`).** The notes below are retained as historical design context.
 
 **Source (2026-09-06):** Original product supports *“Settings can be adjustable during automatic playback, allowing on-the-fly pattern changes.”* **Nice-to-have later** — capture now so Part 2 design does not block it.
 
@@ -461,10 +461,10 @@ Part 2 sequencer stays **single-stroke steps** only. Phase 10 adds an optional b
 
 ### Why Part 2 differs today
 
-| Part 2 (initial) | Future (live adjust) |
-|------------------|----------------------|
-| Config snapshot at **`automatic-start` only** | **`automatic-update`** (or equivalent) mid-session |
-| UI controls **read-only while `running`** (P9P2-D18) | Controls **editable**; each save pushes device update |
+| Part 2 (initial) | Phase 11 (live adjust — **done**) |
+|------------------|-------------------------------------|
+| Config snapshot at **`automatic-start` only** | **`automatic-update`** mid-session |
+| UI controls **read-only while `running`** (P9P2-D18) | Editable when **`allowAutomaticModeOverrides`** enabled; debounced push |
 | Planner runs **once** at start | Planner **re-runs** on update with **carry-forward state** |
 
 ### Device state required for replan
@@ -535,10 +535,10 @@ Heavy replan (large `schedule[]`) may still add one loop iteration — acceptabl
 
 | # | Decision | Options | Choice | Date |
 |---|----------|---------|--------|------|
-| P9P2-D28 | **Apply update timing** | Immediate off / after stroke / **after stroke + overlapped replan** | ☐ **Proposed:** finish current stroke; **`buildPlan()` while stroke ends** (§9) | 2026-09-07 |
-| P9P2-D29 | **Wave phase on update** | Keep phase `t` / reset to 0 / rescale to remaining envelope | ☐ TBD | |
-| P9P2-D30 | **Command key** | `automatic-update` / other | ☐ **Proposed:** `automatic-update` | |
-| P9P2-D31 | **UI debounce** | Every keystroke / blur-save / explicit Apply | ☐ TBD | |
+| P9P2-D28 | **Apply update timing** | Immediate off / after stroke / **after stroke + overlapped replan** | ☑ **Locked in Phase 11** as P11-D1 | 2026-09-08 |
+| P9P2-D29 | **Wave phase on update** | Keep phase `t` / reset to 0 / rescale to remaining envelope | ☑ **Locked in Phase 11** as P11-D2 (keep phase) | 2026-09-08 |
+| P9P2-D30 | **Command key** | `automatic-update` / other | ☑ **`automatic-update`** (P11-D9) | 2026-09-08 |
+| P9P2-D31 | **UI debounce** | Every keystroke / blur-save / explicit Apply | ☑ **400 ms debounced auto-push** (P11-D4) | 2026-09-09 |
 
 **Explicitly out of scope:** Part 2 sign-off; burst-in-automatic → [Phase 10](./09-ESP32-Phase-10-Checklist.md).
 

@@ -5,6 +5,7 @@ export type MobileVideoExpandDefault = Exclude<VideoExpandMode, 'none'>;
 export interface AppOptions {
   enableSoundAlerts: boolean;
   confirmBeforeCommands: boolean;
+  allowAutomaticModeOverrides: boolean;
   autoExpandVideoOnMobile: boolean;
   mobileVideoExpandDefault: MobileVideoExpandDefault;
   showSessionTimestamps: boolean;
@@ -33,6 +34,7 @@ export const DEFAULT_NOTIFICATIONS_APP_OPTIONS: Pick<
 export const DEFAULT_GENERAL_APP_OPTIONS: Pick<
   AppOptions,
   | 'confirmBeforeCommands'
+  | 'allowAutomaticModeOverrides'
   | 'autoExpandVideoOnMobile'
   | 'mobileVideoExpandDefault'
   | 'reconnectIntervalSeconds'
@@ -40,6 +42,7 @@ export const DEFAULT_GENERAL_APP_OPTIONS: Pick<
   | 'defaultNotesPrefix'
 > = {
   confirmBeforeCommands: false,
+  allowAutomaticModeOverrides: false,
   autoExpandVideoOnMobile: true,
   mobileVideoExpandDefault: 'both',
   reconnectIntervalSeconds: 10,

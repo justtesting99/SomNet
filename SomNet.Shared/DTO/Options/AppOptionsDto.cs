@@ -8,6 +8,8 @@ public sealed class AppOptionsDto
 
     public bool ConfirmBeforeCommands { get; init; }
 
+    public bool AllowAutomaticModeOverrides { get; init; }
+
     public bool AutoExpandVideoOnMobile { get; init; } = true;
 
     public VideoExpandMode MobileVideoExpandDefault { get; init; } = VideoExpandMode.Both;

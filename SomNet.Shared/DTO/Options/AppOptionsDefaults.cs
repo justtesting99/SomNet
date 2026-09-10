@@ -8,6 +8,7 @@ public static class AppOptionsDefaults
     {
         EnableSoundAlerts = true,
         ConfirmBeforeCommands = false,
+        AllowAutomaticModeOverrides = false,
         AutoExpandVideoOnMobile = true,
         MobileVideoExpandDefault = VideoExpandMode.Both,
         ShowSessionTimestamps = true,

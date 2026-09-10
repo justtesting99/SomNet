@@ -71,7 +71,22 @@ float phaseFromElapsed(unsigned long elapsedSec, unsigned long tWaveSec) {
     return elapsed / period;
 }
 
-bool buildPowerWaveSchedule(const AutomaticConfig& config, StrokeScheduleRow** outRows, size_t* outCount) {
+float wrapUnitPhase(float phase) {
+    float wrapped = phase;
+    while (wrapped >= 1.0f) {
+        wrapped -= 1.0f;
+    }
+    while (wrapped < 0.0f) {
+        wrapped += 1.0f;
+    }
+    return wrapped;
+}
+
+bool buildPowerWaveSchedule(
+    const AutomaticConfig& config,
+    StrokeScheduleRow** outRows,
+    size_t* outCount,
+    float phaseOffsetNorm) {
     const int fixedGap = config.strokeMaxSeconds;
     if (fixedGap <= 0) {
         Serial.println(F("[AUTO] reject: strokeMaxSeconds required for powerWave"));
@@ -94,7 +109,7 @@ bool buildPowerWaveSchedule(const AutomaticConfig& config, StrokeScheduleRow** o
 
     for (size_t i = 0; i < count; ++i) {
         const unsigned long elapsedSec = static_cast<unsigned long>(i) * static_cast<unsigned long>(fixedGap);
-        const float phase = phaseFromElapsed(elapsedSec, tWaveSec);
+        const float phase = wrapUnitPhase(phaseFromElapsed(elapsedSec, tWaveSec) + phaseOffsetNorm);
         rows[i].powerPercent =
             sampleTrianglePowerPercent(config.minimumPower, config.maximumPower, phase);
         rows[i].gapSec = fixedGap;
@@ -105,7 +120,11 @@ bool buildPowerWaveSchedule(const AutomaticConfig& config, StrokeScheduleRow** o
     return true;
 }
 
-bool buildPowerAndTimingWaveSchedule(const AutomaticConfig& config, StrokeScheduleRow** outRows, size_t* outCount) {
+bool buildPowerAndTimingWaveSchedule(
+    const AutomaticConfig& config,
+    StrokeScheduleRow** outRows,
+    size_t* outCount,
+    float phaseOffsetNorm) {
     const int avgGap = averageGapSeconds(config.strokeMinSeconds, config.strokeMaxSeconds);
     if (config.strokeMinSeconds <= 0 || config.strokeMaxSeconds <= 0) {
         Serial.println(F("[AUTO] reject: strokeMin/MaxSeconds required for powerAndTimingWave"));
@@ -129,7 +148,7 @@ bool buildPowerAndTimingWaveSchedule(const AutomaticConfig& config, StrokeSchedu
     unsigned long elapsedSec = 0;
 
     for (size_t i = 0; i < count; ++i) {
-        const float phase = phaseFromElapsed(elapsedSec, tWaveSec);
+        const float phase = wrapUnitPhase(phaseFromElapsed(elapsedSec, tWaveSec) + phaseOffsetNorm);
         rows[i].powerPercent =
             sampleTrianglePowerPercent(config.minimumPower, config.maximumPower, phase);
         rows[i].gapSec = sampleInverseTriangleGapSec(
@@ -147,7 +166,11 @@ bool buildPowerAndTimingWaveSchedule(const AutomaticConfig& config, StrokeSchedu
     return true;
 }
 
-bool buildBuildUpSchedule(const AutomaticConfig& config, StrokeScheduleRow** outRows, size_t* outCount) {
+bool buildBuildUpSchedule(
+    const AutomaticConfig& config,
+    StrokeScheduleRow** outRows,
+    size_t* outCount,
+    float phaseOffsetNorm) {
     const int avgGap = averageGapSeconds(config.strokeMinSeconds, config.strokeMaxSeconds);
     if (config.strokeMinSeconds <= 0 || config.strokeMaxSeconds <= 0) {
         Serial.println(F("[AUTO] reject: strokeMin/MaxSeconds required for buildUp"));
@@ -167,7 +190,8 @@ bool buildBuildUpSchedule(const AutomaticConfig& config, StrokeScheduleRow** out
     }
 
     for (size_t i = 0; i < count; ++i) {
-        const float t = count > 1 ? static_cast<float>(i) / static_cast<float>(count - 1) : 0.0f;
+        const float rowPhase = count > 1 ? static_cast<float>(i) / static_cast<float>(count - 1) : 0.0f;
+        const float t = rowPhase + phaseOffsetNorm > 1.0f ? 1.0f : rowPhase + phaseOffsetNorm;
         sampleBuildUpRow(
             config.minimumPower,
             config.maximumPower,
@@ -193,7 +217,11 @@ void freeStrokeSchedule(StrokeScheduleRow* rows) {
     delete[] rows;
 }
 
-bool buildStrokeSchedule(const AutomaticConfig& config, StrokeScheduleRow** outRows, size_t* outCount) {
+bool buildStrokeSchedule(
+    const AutomaticConfig& config,
+    StrokeScheduleRow** outRows,
+    size_t* outCount,
+    float phaseOffsetNorm) {
     if (outRows == nullptr || outCount == nullptr || !config.valid) {
         return false;
     }
@@ -212,11 +240,11 @@ bool buildStrokeSchedule(const AutomaticConfig& config, StrokeScheduleRow** outR
 
     switch (config.mode) {
         case AutomaticRunMode::PowerWave:
-            return buildPowerWaveSchedule(config, outRows, outCount);
+            return buildPowerWaveSchedule(config, outRows, outCount, phaseOffsetNorm);
         case AutomaticRunMode::PowerAndTimingWave:
-            return buildPowerAndTimingWaveSchedule(config, outRows, outCount);
+            return buildPowerAndTimingWaveSchedule(config, outRows, outCount, phaseOffsetNorm);
         case AutomaticRunMode::BuildUp:
-            return buildBuildUpSchedule(config, outRows, outCount);
+            return buildBuildUpSchedule(config, outRows, outCount, phaseOffsetNorm);
         default:
             return false;
     }

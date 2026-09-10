@@ -16,6 +16,7 @@ constexpr size_t kMaxAutomaticScheduleRows = 2048;
 bool buildStrokeSchedule(
     const AutomaticConfig& config,
     StrokeScheduleRow** outRows,
-    size_t* outCount);
+    size_t* outCount,
+    float phaseOffsetNorm = 0.0f);
 
 void freeStrokeSchedule(StrokeScheduleRow* rows);

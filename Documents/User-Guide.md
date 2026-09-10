@@ -145,7 +145,7 @@ When **Bursts On** is checked, burst clusters are inserted at even intervals dur
 - **Delay between burst strokes** — Gap **inside** each burst cluster; UI **Min** ≥ **1** sec (max may be 0 for back-to-back intra-burst strokes on device)
 - **Number of strokes in each burst** — Min/max strokes per burst event
 
-Burst Settings are editable when idle; read-only while a session is running.
+Burst Settings are **locked while a session is running** unless you enable **Allow automatic mode overrides** in Options → General (see below).
 
 See [Hardware User Guide — Bursts during automatic](./Hardware-User-Guide.md#bursts-during-automatic) and [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
 
@@ -169,6 +169,21 @@ Choose how the automatic session ends:
 
 Unlike manual mode, the session starts immediately when you press Start.
 
+### Changing settings during a session
+
+By default, automatic settings are **locked** while a session is running (same as the original Phase 10 behavior).
+
+To adjust power, timing, program mode, end-session rules, or burst settings **during** a session:
+
+1. Open **Options → General**
+2. Enable **Allow automatic mode overrides while a session is running**
+3. Return to Automatic mode — settings become editable
+4. Changes save automatically and are sent to the device after the **current stroke completes**
+
+A helper banner explains that changes apply after the current stroke. **Delay before start** stays locked once a session has begun.
+
+**Important:** Do not refresh the browser during an active automatic session if you need Stop/Abort — the UI may show Start as available even though the device is still running (known limitation; session continues on device).
+
 A **visual session timeline or graph** (preview before start or replay in history) is planned for a future release — not available yet.
 
 ---
@@ -179,11 +194,11 @@ Click **Options** in the header to configure preferences and default control val
 
 Settings are organized into tabs:
 
-- **App** — Sound effects, confirmation dialogs, video expand behavior, timestamp display
-- **Manual** — Default manual control values (power, stroke range, burst params)
-- **Automatic** — Default automatic control values (power range, timing, end session rules)
+- **General** — Sound effects, confirmation dialogs, video expand behavior, timestamp display, **allow automatic mode overrides while running**, system status reconnect interval
+- **Notifications** — Notification preferences
+- **Account** — Operator display name and password
 
-Changes save automatically after a brief delay. Settings persist across sessions and browser restarts.
+Default control values for **Manual** and **Automatic** modes are edited on each mode page (not in Options). Changes save automatically after a brief delay (400 ms). Settings persist across sessions and browser restarts.
 
 ---
 
@@ -236,7 +251,7 @@ The status indicator in the header shows connection state:
 | **Connecting** | Attempting connection |
 | **Unknown** | Status not yet determined |
 
-When hardware devices are paired, status will reflect device connectivity. **Options → Hardware device** shows the pairing token expiry date and a warning when renewal is due. Pairing credentials expire after about **one year**; the Dom must **pair the device again** (same Device ID — no Wi‑Fi re-setup). See the [Hardware User Guide](./Hardware-User-Guide.md#pairing-token-renewal-about-once-a-year).
+When hardware devices are paired, status reflects device connectivity for the selected Sub. Click the **Hardware** button in the header to pair, revoke, or view pairing token expiry. Pairing credentials expire after about **one year**; the Dom must **pair the device again** (same Device ID — no Wi‑Fi re-setup). See the [Hardware User Guide](./Hardware-User-Guide.md#pairing-token-renewal-about-once-a-year).
 
 ---
 
@@ -256,6 +271,8 @@ When hardware devices are paired, status will reflect device connectivity. **Opt
 |---------|----------|
 | Kicked to login screen | Session expired — sign in again |
 | Settings not saving | Check network connection; ensure a sub is selected |
+| Refreshed page during automatic session — Start enabled, Stop disabled | Expected v1 behavior — device may still be running; wait for session to end on device or avoid refresh mid-session |
+| Live setting change had no effect | Enable **Allow automatic mode overrides** in Options → General |
 | Sub not in list | Add it via the Sub Selection dialog |
 | Changes after refresh lost | Mode selection resets on refresh — re-select manual/automatic |
 | Button stays pending | Wait a moment; if stuck, refresh the page |

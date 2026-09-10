@@ -9,7 +9,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | SomNet web app | [User Guide](./User-Guide.md) |
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 
-**Firmware status (2026-09-07):** Phases **0–10** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app, including **Bursts On** during automatic sessions. Firmware **`0.10.0-phase10`**. See [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
+**Firmware status (2026-09-10):** Phases **0–11** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app, including **Bursts On** during automatic sessions and live **`automatic-update`** mid-session replan. Firmware **`0.12.2-phase11`**. See [Phase 11 checklist](./09-ESP32-Phase-11-Checklist.md).
 
 ---
 
@@ -285,12 +285,22 @@ After each burst, the program waits its normal **gap between main strokes** befo
 
 Developer detail: [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
 
+### Live settings during automatic (Phase 11)
+
+When the operator enables **Allow automatic mode overrides** in SomNet **Options → General**, the web app sends **`automatic-update`** commands while the session runs. The device replans after the current main or intra-burst stroke finishes — no Stop/Start required.
+
+**Operator notes:**
+
+- Default behavior remains **locked settings** while running (overrides option off).
+- **`burstPercent`** controls how **often** burst events occur, not burst pulse power.
+- **Do not refresh the browser** mid-session if you need Stop/Abort from the UI — refresh clears in-memory session state while the device continues (see Phase 11 checklist §9).
+
 ### Not yet available
 
 | Feature | When |
 |---------|------|
-| **Change settings while running** (live replan) | [Phase 11](./09-ESP32-Phase-11-Checklist.md) — `automatic-update` mid-session |
 | **Session timeline / graph** | Future — visual plan or replay of automatic session (main strokes, bursts, gaps); Automatic page and/or session history — TBD |
+| **UI session rehydration after browser refresh** | Future — restore Stop/Abort when page reloads during active device session |
 
 ## Relay timing validation (oscilloscope)
 

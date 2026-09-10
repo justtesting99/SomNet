@@ -127,8 +127,9 @@ Active sessions are ended automatically on mode switch, sign-out, or sub change.
 - Session starts immediately on Start (REST `automatic-start` + live session record)
 - Stop sends cooperative stop; session summary from device via hub `automatic-session-complete`
 - Abort cuts immediately; same hub path for history
+- **Live overrides (Phase 11):** When **`allowAutomaticModeOverrides`** is enabled (Options → General), settings stay editable during a session; debounced save (400 ms) also sends **`automatic-update`** to the device. Default is **locked** while running.
 
-**Commands:** Keys `automatic-start`, `automatic-stop`, `abort` (manual abort key during automatic session).
+**Commands:** Keys `automatic-start`, `automatic-stop`, `automatic-update` (when live overrides enabled), `abort` (during automatic session).
 
 **Hub:** `AutomaticSessionHubListener` syncs end-rule, abort, and cooperative stop without blocking the UI on long bursts.
 
@@ -203,19 +204,20 @@ Automatic session ran 12 minutes, stop.
 
 ```
 User clicks CommandButton
-  → HardwareCommandProvider.runCommand(key, action)
-  → action() executes (e.g. recordManualStroke)
-  → waitForHardwareAck(key) — 450ms simulated timeout
-  → Pending state cleared
-```
-
-**Planned integration:**
-
-```
-User clicks CommandButton
+  → sendHardwareCommand / sendHardwareCommandRaw (api/hardwareCommand.ts)
   → POST /api/devices/commands { subTarget, commandKey, payloadJson }
-  → Optional: SignalR CommandAcknowledged for live feedback
-  → Pending state cleared on response/ack
+  → Device ack returned in REST response (delivered / acknowledged / success)
+  → SessionProvider updated after ack (manual stroke/burst; automatic start/stop)
+  → Automatic session end also via AutomaticSessionHubListener (hub CommandAcknowledged)
+```
+
+**Automatic live update (Phase 11):**
+
+```
+User edits automatic setting while session running (overrides enabled)
+  → OptionsProvider debounced PUT /api/settings (400 ms)
+  → AutomaticControls debounced automatic-update push (400 ms)
+  → POST /api/devices/commands { commandKey: automatic-update, payloadJson: full snapshot }
 ```
 
 ## Video Components
@@ -226,7 +228,7 @@ User clicks CommandButton
 - **VideoFeed** — Feed display
 - **VideoMaximizeOverlay** — Full-screen overlay on mobile when `expandOnAction` triggers
 
-Video expand behavior is controlled by `appOptions.videoExpandMode` (`None`, `Monitor1`, `Monitor2`, `Both`).
+Video expand behavior is controlled by `appOptions.autoExpandVideoOnMobile` and `appOptions.mobileVideoExpandDefault` (`None`, `Monitor1`, `Monitor2`, `Both`).
 
 ## Styling
 
@@ -246,11 +248,10 @@ Video expand behavior is controlled by `appOptions.videoExpandMode` (`None`, `Mo
 
 ## Known Gaps
 
-1. No SignalR client library in UI for operator-side events
-2. `SystemStatusProvider` does not pass `subTarget` query param
-3. No device pairing UI — pairing is API-only today
-4. `options.ts` API module is orphaned from pre-refactor MockDataStore era
+1. **Automatic session rehydration on browser refresh** — `SessionProvider.activeSession` and UI `running` flag are in-memory only; refresh shows Start enabled while device session may still be running. See [Phase 11 checklist §9](./09-ESP32-Phase-11-Checklist.md#9-relationship-to-other-work).
+2. `options.ts` API module is orphaned from pre-refactor MockDataStore era
 
 ## Future Enhancements
 
 - **Session timeline / graph** — visual plan or replay of an automatic session (main strokes, burst clusters, gaps, power envelope). Placement TBD: Automatic page (pre-start preview or live), session history detail, or both. See [Phase 10 checklist §8](./09-ESP32-Phase-10-Checklist.md#8-relationship-to-other-future-work).
+- **UI session rehydration** — restore Stop/Abort and hub finalize path after page reload when device session is active

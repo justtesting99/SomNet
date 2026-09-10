@@ -55,7 +55,7 @@ const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
 ];
 
 export function AutomaticControls() {
-  const { settings, updateAutomatic, isLoading, strokeLimits } = useOptions();
+  const { settings, options, updateAutomatic, isLoading, strokeLimits } = useOptions();
   const state = settings.automatic;
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { selectedSub } = useSubTarget();
@@ -84,9 +84,14 @@ export function AutomaticControls() {
   );
 
   const automaticSessionActive = activeSession?.mode === 'automatic';
-  const configLocked = automaticSessionActive;
-  const burstSettingsLocked = automaticSessionActive;
+  const sessionRunning = automaticSessionActive;
+  const allowLiveOverrides = options.allowAutomaticModeOverrides;
+  const liveOverridesActive = sessionRunning && allowLiveOverrides;
+  const configLocked = sessionRunning && !allowLiveOverrides;
+  const delayStartLocked = sessionRunning;
   const hardwareReady = systemStatus.isReady;
+  const lastPushedUpdateRef = useRef<string | null>(null);
+  const updateDebounceRef = useRef<number | null>(null);
   const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);
   const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop);
   const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
@@ -111,6 +116,50 @@ export function AutomaticControls() {
   }, [systemStatus.isReady]);
 
   useEffect(() => {
+    if (!liveOverridesActive) {
+      lastPushedUpdateRef.current = null;
+    }
+  }, [liveOverridesActive]);
+
+  useEffect(() => {
+    if (isLoading || !liveOverridesActive) {
+      return;
+    }
+
+    const payload = buildAutomaticStartPayload(state);
+    if (payload === lastPushedUpdateRef.current) {
+      return;
+    }
+
+    if (updateDebounceRef.current !== null) {
+      window.clearTimeout(updateDebounceRef.current);
+    }
+
+    updateDebounceRef.current = window.setTimeout(() => {
+      updateDebounceRef.current = null;
+      void (async () => {
+        try {
+          await sendHardwareCommand(
+            selectedSub,
+            HARDWARE_COMMAND_KEYS.automaticUpdate,
+            payload,
+          );
+          lastPushedUpdateRef.current = payload;
+          setCommandError('');
+        } catch (error) {
+          setCommandError(formatCommandError(error));
+        }
+      })();
+    }, 400);
+
+    return () => {
+      if (updateDebounceRef.current !== null) {
+        window.clearTimeout(updateDebounceRef.current);
+      }
+    };
+  }, [isLoading, liveOverridesActive, selectedSub, state]);
+
+  useEffect(() => {
     if (isLoading || automaticSessionActive || startPending) {
       return;
     }
@@ -124,6 +173,10 @@ export function AutomaticControls() {
     key: K,
     value: AutomaticControlState[K],
   ) {
+    if (configLocked) {
+      return;
+    }
+
     if (key === 'minimumStrokeMs' || key === 'maximumStrokeMs') {
       return;
     }
@@ -200,6 +253,7 @@ export function AutomaticControls() {
         payloadJson,
       );
       await beginAutomaticSession();
+      lastPushedUpdateRef.current = payloadJson;
       update('running', true);
     } catch (error) {
       setCommandError(formatCommandError(error));
@@ -304,7 +358,7 @@ export function AutomaticControls() {
     }
   }
 
-  const endSessionValueDisabled = configLocked || state.endSessionMode === 'noAutoEnd';
+  const endSessionValueDisabled = state.endSessionMode === 'noAutoEnd';
 
   const endSessionOptions = useMemo(
     () =>
@@ -331,9 +385,19 @@ export function AutomaticControls() {
         <p className="text-sm text-slate-500">Loading saved automatic settings…</p>
       ) : null}
 
-      {configLocked ? (
+      {sessionRunning ? (
         <p className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200">
-          Session running — settings are read-only until you stop or abort.
+          {allowLiveOverrides ? (
+            <>
+              Session running — changes apply after the current stroke. Delay-before-start stays
+              locked.
+            </>
+          ) : (
+            <>
+              Session running — settings are locked. Enable live overrides in Options → General to
+              adjust mid-session.
+            </>
+          )}
           {cooperativeStopInProgress ? (
             <> Stop requested — finishing current stroke or burst. Abort cuts off immediately.</>
           ) : state.burstsOn ? (
@@ -352,6 +416,9 @@ export function AutomaticControls() {
               max={absoluteMaximum}
               disabled={configLocked}
               onCommit={(nextMin) => {
+                if (configLocked) {
+                  return;
+                }
                 const nextStroke = clampMinimumStrokeMs(
                   nextMin,
                   state.maximumStrokeMs,
@@ -370,6 +437,9 @@ export function AutomaticControls() {
               max={absoluteMaximum}
               disabled={configLocked}
               onCommit={(nextMax) => {
+                if (configLocked) {
+                  return;
+                }
                 updateAutomatic({
                   ...state,
                   maximumStrokeMs: clampMaximumStrokeMs(
@@ -398,7 +468,7 @@ export function AutomaticControls() {
                 }
                 onChange={(event) => update('minimumPower', Number(event.target.value))}
               />
-              {fieldRules.disableMinimumPower && !configLocked ? (
+              {fieldRules.disableMinimumPower ? (
                 <p className="text-center text-xs text-slate-500 sm:text-left">
                   Not used — device uses maximum power.
                 </p>
@@ -435,7 +505,7 @@ export function AutomaticControls() {
                     }
                     onChange={(event) => update('strokeMinSeconds', Number(event.target.value))}
                   />
-                  {fieldRules.disableStrokeMinSeconds && !configLocked ? (
+                  {fieldRules.disableStrokeMinSeconds ? (
                     <p className="text-xs text-slate-500">Not used — device uses maximum gap.</p>
                   ) : null}
                 </div>
@@ -452,7 +522,7 @@ export function AutomaticControls() {
                   alignLabelHeight
                   value={state.delayBeforeStartSeconds}
                   min={0}
-                  disabled={configLocked}
+                  disabled={delayStartLocked}
                   onChange={(event) =>
                     update('delayBeforeStartSeconds', Number(event.target.value))
                   }
@@ -466,7 +536,7 @@ export function AutomaticControls() {
                 <NumberField
                   value={state.endSessionValue}
                   min={0}
-                  disabled={endSessionValueDisabled}
+                  disabled={configLocked || endSessionValueDisabled}
                   className="w-20 text-center"
                   onChange={(event) => update('endSessionValue', Number(event.target.value))}
                 />
@@ -478,7 +548,7 @@ export function AutomaticControls() {
                   onChange={(value) => update('endSessionMode', value as EndSessionMode)}
                 />
               </div>
-              {modeInfo.endSessionNote && !configLocked ? (
+              {modeInfo.endSessionNote ? (
                 <p className="mt-2 text-xs text-slate-500">{modeInfo.endSessionNote}</p>
               ) : null}
             </div>
@@ -496,7 +566,7 @@ export function AutomaticControls() {
               <Checkbox
                 label="Bursts On"
                 checked={state.burstsOn}
-                disabled={burstSettingsLocked}
+                disabled={configLocked}
                 onChange={(event) => update('burstsOn', event.target.checked)}
               />
               <NumberField
@@ -505,7 +575,7 @@ export function AutomaticControls() {
                 value={state.burstPercent}
                 min={0}
                 max={100}
-                disabled={burstSettingsLocked}
+                disabled={configLocked}
                 onChange={(event) => update('burstPercent', Number(event.target.value))}
               />
             </div>
@@ -513,7 +583,7 @@ export function AutomaticControls() {
             <SelectField
               label="Burst Style"
               value={state.burstStyle}
-              disabled={burstSettingsLocked}
+              disabled={configLocked}
               options={BURST_STYLE_OPTIONS}
               onChange={(event) =>
                 update('burstStyle', event.target.value as AutomaticControlState['burstStyle'])
@@ -528,12 +598,12 @@ export function AutomaticControls() {
                 minLimit={0}
                 minValueMin={MIN_BURST_STROKE_POWER}
                 maxLimit={100}
-                minDisabled={burstSettingsLocked || burstFieldRules.disableBurstStrokePowerMin}
-                maxDisabled={burstSettingsLocked}
+                disabled={configLocked}
+                minDisabled={burstFieldRules.disableBurstStrokePowerMin}
                 onMinChange={(value) => update('burstStrokePowerMin', value)}
                 onMaxChange={(value) => update('burstStrokePowerMax', value)}
               />
-              {burstFieldRules.disableBurstStrokePowerMin && !burstSettingsLocked ? (
+              {burstFieldRules.disableBurstStrokePowerMin ? (
                 <p className="text-xs text-slate-500">Min not used — device uses maximum power.</p>
               ) : null}
             </div>
@@ -546,12 +616,12 @@ export function AutomaticControls() {
                 minLimit={0}
                 minValueMin={MIN_BURST_DELAY_SEC}
                 maxLimit={MAX_BURST_DELAY_SEC}
-                minDisabled={burstSettingsLocked || burstFieldRules.disableBurstDelayMin}
-                maxDisabled={burstSettingsLocked}
+                disabled={configLocked}
+                minDisabled={burstFieldRules.disableBurstDelayMin}
                 onMinChange={(value) => update('burstDelayMin', value)}
                 onMaxChange={(value) => update('burstDelayMax', value)}
               />
-              {burstFieldRules.disableBurstDelayMin && !burstSettingsLocked ? (
+              {burstFieldRules.disableBurstDelayMin ? (
                 <p className="text-xs text-slate-500">Min not used — device uses maximum delay.</p>
               ) : null}
             </div>
@@ -562,8 +632,7 @@ export function AutomaticControls() {
               max={state.burstStrokesMax}
               minLimit={1}
               maxLimit={MAX_BURST_STROKES}
-              minDisabled={burstSettingsLocked}
-              maxDisabled={burstSettingsLocked}
+              disabled={configLocked}
               onMinChange={(value) => update('burstStrokesMin', value)}
               onMaxChange={(value) => update('burstStrokesMax', value)}
             />
@@ -598,7 +667,7 @@ export function AutomaticControls() {
               commandKey={HARDWARE_COMMAND_KEYS.automaticStart}
               size="lg"
               fullWidth
-              disabled={!hardwareReady || configLocked || stopPending}
+              disabled={!hardwareReady || sessionRunning || stopPending}
               title={hardwareDisabledReason}
               onCommand={handleStart}
               className="py-4 text-base"
@@ -612,7 +681,7 @@ export function AutomaticControls() {
               variant="secondary"
               disabled={
                 !hardwareReady ||
-                !configLocked ||
+                !sessionRunning ||
                 startPending ||
                 abortPending ||
                 cooperativeStopInProgress
@@ -623,7 +692,7 @@ export function AutomaticControls() {
             >
               Stop
             </CommandButton>
-            {configLocked ? (
+            {sessionRunning ? (
               <CommandButton
                 commandKey={HARDWARE_COMMAND_KEYS.manualAbort}
                 size="lg"

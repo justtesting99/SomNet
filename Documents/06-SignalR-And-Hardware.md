@@ -2,11 +2,11 @@
 
 SomNet provides real-time communication between the API and ESP32 hardware devices through a SignalR hub.
 
-| Layer | Status (2026-09-05) |
+| Layer | Status (2026-09-10) |
 |-------|------------------------|
-| **API + hub** | Complete — pairing, dispatch, ack registry |
-| **ESP32 firmware** | **Phases 0–6 signed off** — `stroke` + `abort` on hardware; firmware **`0.6.0-phase6`** |
-| **React UI** | **Partial** — minimal pairing in Options; stroke/burst buttons still use simulated ack |
+| **API + hub** | Complete — pairing, dispatch, ack registry, per-command ack timeouts |
+| **ESP32 firmware** | **Phases 0–11 signed off** — stroke/burst/abort/automatic + **`automatic-update`**; firmware **`0.12.2-phase11`** |
+| **React UI** | **Complete** — Hardware dialog pairing; REST command dispatch; operator hub listener for automatic session end |
 
 **Related docs:** [ESP32 Device Plan](./09-ESP32-Device-Plan.md) (source of truth) · [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md) (wire capture) · [Hardware User Guide](./Hardware-User-Guide.md) · [SomNet.Device/README](../SomNet.Device/README.md)
 
@@ -110,7 +110,7 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 
 **Revoke:** `DELETE /api/devices/pair?subTarget=Slv66` — sets `IsRevoked`, clears active connection.
 
-**Dev UI path:** SomNet **Options → Hardware device** (`DevicePairingPanel`) — paste device ID from ESP32 status page. **Production UX** (dedicated dialog, pending list) → Phase 8.
+**Dev UI path:** SomNet **Hardware** toolbar dialog — paste device ID from ESP32 status page, pick from online unpaired list, or manage all Subs. Implemented Phase 8.
 
 ---
 
@@ -136,7 +136,7 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
      │◄──────────────────────────────│                               │
 ```
 
-**Verified path (2026-09-05):** Swagger `POST /api/devices/commands` with `commandKey: stroke` on paired hardware (`esp32-84CCA85C36B4` / Sub `Slv66`). React UI buttons do **not** call this endpoint yet.
+**Verified path (2026-09-10):** UI and Swagger `POST /api/devices/commands` on paired hardware (`esp32-84CCA85C36B4` / Sub `Slv66`) — manual stroke/burst/abort; automatic start/stop/update; device ack + hub `CommandAcknowledged` for automatic session completion.
 
 ### Command Request
 
@@ -177,7 +177,7 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 |---------|-------------|----------------|-----------|
 | Device ack + success | `true` | `true` | `true` |
 | Device ack + failure (validation, busy, etc.) | `true` | `true` | `false` |
-| Timeout (no ack in 10 s) | `true` | `false` | `false` |
+| Timeout (no ack within command timeout) | `true` | `false` | `false` |
 | Device offline / not paired | `false` | `false` | `false` |
 
 Example — device rejected missing `strokeMs`:
@@ -200,7 +200,7 @@ Example — device rejected missing `strokeMs`:
 
 ## Command Keys
 
-Aligned with UI constants (`types/hardwareCommand.ts`). **Firmware status** as of **`0.10.0-phase10`**:
+Aligned with UI constants (`types/hardwareCommand.ts`). **Firmware status** as of **`0.12.2-phase11`**:
 
 | Key | Trigger | Typical Payload | Firmware |
 |-----|---------|-----------------|----------|
@@ -209,7 +209,7 @@ Aligned with UI constants (`types/hardwareCommand.ts`). **Firmware status** as o
 | `burst` | Manual burst button | `{ powerPercent, strokeMs, burstStrokes, burstDelayMs }` | **Implemented** — `BurstSequenceMode` |
 | `automatic-start` | Automatic start | Full automatic config snapshot (omit `running`) | **Implemented** — immediate ack (P9-D2) |
 | `automatic-stop` | Automatic stop | `{}` | **Implemented** — immediate accept; summary via hub |
-| `automatic-update` | Live automatic settings | Same snapshot as `automatic-start` | **Phase 11A** — validate + log + ack; replan Phase B+ |
+| `automatic-update` | Live automatic settings | Same snapshot as `automatic-start` | **Implemented** — validate + immediate ack; queue replan after current stroke (Phase 11) |
 
 **Stroke rules (firmware):** `strokeMs` required, > 0, max 30 000 ms. Overlapping commands while a pulse is active → reject with `success: false` (busy). **`automatic-update`** is allowed during an active automatic session (not treated as busy).
 
@@ -253,17 +253,16 @@ Also surfaced via **GET /api/system/status?subTarget=Slv66** for header display.
 
 Device JWT Sub claim is the device id; Sub **name** is claim `sub_target` (not `sub`).
 
-### What is implemented (Phases 0–6)
+### What is implemented (Phases 0–11)
 
 | Phase | Capability |
 |-------|------------|
-| 0 | Protocol capture → `PROTOCOL.md` |
-| 1 | PlatformIO scaffold, module tree, Wi-Fi |
-| 2 | NVS + MAC `device_id` |
-| 3 | Config web UI (Soft-AP provisioning, `/`, `/config`) |
-| 4 | SignalR client — negotiate, WebSocket, `PairDevice`, reconnect |
-| 5 | `ExecuteCommand` → `stroke` validation + `AckCommand`; handshake race fix |
-| 6 | `relay_controller` GPIO pulse (`micros()` FSM), `abort`, measured `actualStrokeMs` in serial `resultJson` |
+| 0–6 | Protocol, scaffold, NVS identity, config UI, SignalR, stroke/abort, relay GPIO |
+| 7 | Resilience, themed config UI, `prod_cloud` profile |
+| 8 | UI command dispatch + Hardware pairing dialog |
+| 9 | Burst mode + automatic start/stop (seven programs) |
+| 10 | Burst-in-automatic (`burstsOn`) |
+| 11 | Live **`automatic-update`** mid-session replan |
 
 **Libraries:** `links2004/WebSockets`, `bblanchon/ArduinoJson`, `ESPAsyncWebServer` (config UI).
 
@@ -291,10 +290,10 @@ Device JWT Sub claim is the device id; Sub **name** is claim `sub_target` (not `
 
 ### Main loop order
 
-Cooperative `loop()` in `main.cpp` (must not block):
+Cooperative `loop()` in `main.cpp` (must not block; NET-D7):
 
 ```
-wifi_manager → signalr_client → relay_controller → execution_context → command_handler → button_input → config_web_server
+wifi_manager → config_web_server → signalr_client → relay_controller → execution_context → command_handler → button_input
 ```
 
 ### Reconnection
@@ -321,10 +320,11 @@ wifi_manager → signalr_client → relay_controller → execution_context → c
 | **Pair / revoke device** | ✅ **Hardware** toolbar dialog (all Subs + unpaired list) |
 | **Device status API** | ✅ Used by Hardware dialog + system status |
 | **System status with subTarget** | ✅ `SystemStatusProvider` passes selected Sub |
-| UI calls `/api/devices/commands` for stroke/abort | ✅ REST + device ack; session after ack |
+| UI calls `/api/devices/commands` | ✅ Manual + automatic start/stop/update |
 | UI operator hub for automatic session end | ✅ `AutomaticSessionHubListener` — `automatic-session-complete` (end-rule, abort, cooperative stop) |
-| Dedicated pairing dialog + pending list | ✅ Phase 8 |
-| Session/history from device `resultJson` | ✅ `actualStrokeMs` on stroke; abort count on abort ack |
+| Live automatic settings while running | ✅ When **`allowAutomaticModeOverrides`** enabled — debounced **`automatic-update`** (400 ms) |
+| Dedicated pairing dialog + pending list | ✅ Hardware toolbar dialog (Phase 8) |
+| Session/history from device `resultJson` | ✅ Stroke/burst/automatic summaries from device ack |
 
 ### Phase 8 — completed (2026-09-06)
 
@@ -345,7 +345,7 @@ See [Phase 8 Checklist](./09-ESP32-Phase-8-Checklist.md).
 | Connection aborted | Missing `deviceId` and invalid/missing token |
 | Negotiate / WS connection refused (ESP32 only) | Wrong server URL (`localhost` on device); Windows Firewall blocking LAN inbound 5031 |
 | Command not delivered | Device offline or not paired |
-| `delivered: true`, `acknowledged: false` | Device did not ack within 10 s; firmware hang; hub not connected |
+| `delivered: true`, `acknowledged: false` | Device did not ack within command timeout (stroke/abort 15 s; automatic commands 5 s); firmware hang; hub not connected |
 | `acknowledged: true`, `success: false` | Device rejected command (validation, busy, not implemented key) — read `message` |
 | `hub not ready` on first command (fixed Phase 5) | Handshake race — ensure firmware ≥ `0.5.0-phase5` |
 | PairDevice not received | Device not in `unpaired:{deviceId}` group or wrong deviceId |

@@ -27,6 +27,28 @@ int endSessionModeToWire(EndSessionMode mode) {
     }
 }
 
+AutomaticConfig scheduleConfigForReplan(
+    const AutomaticConfig& config,
+    int strokesCompleted,
+    unsigned long sessionStartMs,
+    unsigned long nowMs) {
+    AutomaticConfig out = config;
+    if (out.endSessionMode == EndSessionMode::Strokes && out.endSessionValue > 0) {
+        out.endSessionValue -= strokesCompleted;
+        if (out.endSessionValue < 0) {
+            out.endSessionValue = 0;
+        }
+    } else if (out.endSessionMode == EndSessionMode::Minutes && out.endSessionValue > 0 &&
+               sessionStartMs > 0) {
+        const int elapsedMin = static_cast<int>((nowMs - sessionStartMs) / kMsPerMinute);
+        out.endSessionValue -= elapsedMin;
+        if (out.endSessionValue < 0) {
+            out.endSessionValue = 0;
+        }
+    }
+    return out;
+}
+
 } // namespace
 
 void AutomaticSessionMode::setRelay(RelayController* relay) {
@@ -61,36 +83,12 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
     endSessionMode_ = endSessionModeToWire(config.endSessionMode);
     burstsOn_ = config.burstsOn;
     buildAutomaticBurstPlan(config, &burstPlan_);
+    assignAutomaticModeLabel(config.mode);
 
-    switch (config.mode) {
-        case AutomaticRunMode::Periodic:
-            strncpy(automaticMode_, "periodic", sizeof(automaticMode_) - 1);
-            break;
-        case AutomaticRunMode::RandomPowerOnly:
-            strncpy(automaticMode_, "randomPowerOnly", sizeof(automaticMode_) - 1);
-            break;
-        case AutomaticRunMode::RandomTimingOnly:
-            strncpy(automaticMode_, "randomTimingOnly", sizeof(automaticMode_) - 1);
-            break;
-        case AutomaticRunMode::RandomPowerAndTiming:
-            strncpy(automaticMode_, "randomPowerAndTiming", sizeof(automaticMode_) - 1);
-            break;
-        case AutomaticRunMode::PowerWave:
-            strncpy(automaticMode_, "powerWave", sizeof(automaticMode_) - 1);
-            break;
-        case AutomaticRunMode::PowerAndTimingWave:
-            strncpy(automaticMode_, "powerAndTimingWave", sizeof(automaticMode_) - 1);
-            break;
-        case AutomaticRunMode::BuildUp:
-            strncpy(automaticMode_, "buildUp", sizeof(automaticMode_) - 1);
-            break;
-        default:
-            strncpy(automaticMode_, "unknown", sizeof(automaticMode_) - 1);
-            break;
-    }
-    automaticMode_[sizeof(automaticMode_) - 1] = '\0';
-
+    pendingUpdate_ = false;
+    pendingConfigJson_[0] = '\0';
     strokesCompleted_ = 0;
+    scheduleBaseStroke_ = 0;
     burstEventsCompleted_ = 0;
     intraBurstStrokesCompleted_ = 0;
     burstStrokesTarget_ = 0;
@@ -186,6 +184,136 @@ bool AutomaticSessionMode::requestStop(
     return true;
 }
 
+void AutomaticSessionMode::assignAutomaticModeLabel(AutomaticRunMode mode) {
+    switch (mode) {
+        case AutomaticRunMode::Periodic:
+            strncpy(automaticMode_, "periodic", sizeof(automaticMode_) - 1);
+            break;
+        case AutomaticRunMode::RandomPowerOnly:
+            strncpy(automaticMode_, "randomPowerOnly", sizeof(automaticMode_) - 1);
+            break;
+        case AutomaticRunMode::RandomTimingOnly:
+            strncpy(automaticMode_, "randomTimingOnly", sizeof(automaticMode_) - 1);
+            break;
+        case AutomaticRunMode::RandomPowerAndTiming:
+            strncpy(automaticMode_, "randomPowerAndTiming", sizeof(automaticMode_) - 1);
+            break;
+        case AutomaticRunMode::PowerWave:
+            strncpy(automaticMode_, "powerWave", sizeof(automaticMode_) - 1);
+            break;
+        case AutomaticRunMode::PowerAndTimingWave:
+            strncpy(automaticMode_, "powerAndTimingWave", sizeof(automaticMode_) - 1);
+            break;
+        case AutomaticRunMode::BuildUp:
+            strncpy(automaticMode_, "buildUp", sizeof(automaticMode_) - 1);
+            break;
+        default:
+            strncpy(automaticMode_, "unknown", sizeof(automaticMode_) - 1);
+            break;
+    }
+    automaticMode_[sizeof(automaticMode_) - 1] = '\0';
+}
+
+bool AutomaticSessionMode::configUsesScheduleTable(AutomaticRunMode mode) const {
+    return mode == AutomaticRunMode::PowerWave || mode == AutomaticRunMode::PowerAndTimingWave ||
+        mode == AutomaticRunMode::BuildUp;
+}
+
+float AutomaticSessionMode::computeSchedulePhaseOffset() const {
+    if (endSessionMode_ == endSessionModeToWire(EndSessionMode::Strokes)) {
+        if (endSessionValue_ <= 0) {
+            return 0.0f;
+        }
+        return static_cast<float>(strokesCompleted_) / static_cast<float>(endSessionValue_);
+    }
+
+    if (endSessionMode_ == endSessionModeToWire(EndSessionMode::Minutes)) {
+        if (endSessionValue_ <= 0 || sessionStartMs_ == 0) {
+            return 0.0f;
+        }
+        const float elapsedMin =
+            static_cast<float>(millis() - sessionStartMs_) / static_cast<float>(kMsPerMinute);
+        return elapsedMin / static_cast<float>(endSessionValue_);
+    }
+
+    return 0.0f;
+}
+
+bool AutomaticSessionMode::applyPendingUpdate() {
+    if (!pendingUpdate_ || pendingConfigJson_[0] == '\0') {
+        return false;
+    }
+
+    AutomaticConfig config{};
+    if (!parseAutomaticConfig(pendingConfigJson_, &config)) {
+        pendingUpdate_ = false;
+        pendingConfigJson_[0] = '\0';
+        Serial.println(F("[AUTO] update rejected — invalid payload"));
+        return false;
+    }
+
+    const bool cancelBurst =
+        !config.burstsOn && (state_ == State::BurstPulse || state_ == State::BurstGap);
+    const float phaseOffset = computeSchedulePhaseOffset();
+    const unsigned long nowMs = millis();
+
+    strncpy(configJson_, pendingConfigJson_, sizeof(configJson_) - 1);
+    configJson_[sizeof(configJson_) - 1] = '\0';
+    minimumStrokeMs_ = config.minimumStrokeMs;
+    maximumStrokeMs_ = config.maximumStrokeMs;
+    endSessionValue_ = config.endSessionValue;
+    endSessionMode_ = endSessionModeToWire(config.endSessionMode);
+    burstsOn_ = config.burstsOn;
+    assignAutomaticModeLabel(config.mode);
+
+    destroyAutomaticProgram(program_);
+    if (configUsesScheduleTable(config.mode)) {
+        const AutomaticConfig scheduleConfig =
+            scheduleConfigForReplan(config, strokesCompleted_, sessionStartMs_, nowMs);
+        scheduleBaseStroke_ = strokesCompleted_;
+        program_ = createAutomaticProgram(scheduleConfig, phaseOffset);
+    } else {
+        scheduleBaseStroke_ = 0;
+        program_ = createAutomaticProgram(config);
+    }
+
+    if (program_ == nullptr) {
+        pendingUpdate_ = false;
+        pendingConfigJson_[0] = '\0';
+        Serial.println(F("[AUTO] update failed — program create"));
+        finishSession(false, "automatic update failed", "error", true);
+        return false;
+    }
+
+    if (burstsOn_) {
+        const AutomaticConfig burstConfig =
+            scheduleConfigForReplan(config, strokesCompleted_, sessionStartMs_, nowMs);
+        buildAutomaticBurstPlanForReplan(
+            burstConfig, strokesCompleted_, sessionStartMs_, nowMs, &burstPlan_);
+    } else {
+        burstPlan_ = AutomaticBurstPlan{};
+    }
+
+    pendingUpdate_ = false;
+    pendingConfigJson_[0] = '\0';
+
+    if (cancelBurst) {
+        burstStrokesTarget_ = 0;
+        burstStrokesCompletedInEvent_ = 0;
+        burstDelayMs_ = 0;
+        state_ = State::WaitingGap;
+        nextGapDeadlineMs_ = nowMs + static_cast<unsigned long>(effectiveGapSecondsForMode(config)) * 1000UL;
+    }
+
+    Serial.print(F("[AUTO] update applied mode="));
+    Serial.print(automaticMode_);
+    Serial.print(F(" mainStrokes="));
+    Serial.print(strokesCompleted_);
+    Serial.print(F(" burstsOn="));
+    Serial.println(burstsOn_ ? F("true") : F("false"));
+    return true;
+}
+
 bool AutomaticSessionMode::queueSessionUpdate(const char* payloadJson) {
     if (!active_) {
         return false;
@@ -197,7 +325,11 @@ bool AutomaticSessionMode::queueSessionUpdate(const char* payloadJson) {
         return false;
     }
 
-    Serial.print(F("[AUTO] update received (Phase 11A — replan deferred) mainStrokes="));
+    strncpy(pendingConfigJson_, payloadJson != nullptr ? payloadJson : "{}", sizeof(pendingConfigJson_) - 1);
+    pendingConfigJson_[sizeof(pendingConfigJson_) - 1] = '\0';
+    pendingUpdate_ = true;
+
+    Serial.print(F("[AUTO] update queued mainStrokes="));
     Serial.print(strokesCompleted_);
     Serial.print(F(" burstsOn="));
     Serial.println(config.burstsOn ? F("true") : F("false"));
@@ -223,6 +355,9 @@ void AutomaticSessionMode::poll() {
 
         sessionStartMs_ = millis();
         Serial.println(F("[AUTO] start delay complete"));
+        if (pendingUpdate_) {
+            applyPendingUpdate();
+        }
         if (!startNextPulse()) {
             finishSession(false, "automatic session failed — relay busy", "error", true);
         }
@@ -232,6 +367,10 @@ void AutomaticSessionMode::poll() {
     if (state_ == State::BurstGap) {
         if (millis() - burstGapStartMs_ < burstDelayMs_) {
             return;
+        }
+
+        if (pendingUpdate_) {
+            applyPendingUpdate();
         }
 
         if (!startNextBurstPulse()) {
@@ -267,6 +406,10 @@ void AutomaticSessionMode::poll() {
         return;
     }
 
+    if (pendingUpdate_) {
+        applyPendingUpdate();
+    }
+
     if (!startNextPulse()) {
         finishSession(false, "automatic session failed — relay busy", "error", true);
     }
@@ -282,7 +425,8 @@ bool AutomaticSessionMode::startNextPulse() {
         return false;
     }
 
-    program_->getStrokeParameters(strokesCompleted_, config, powerPercent_, gapSec_);
+    program_->getStrokeParameters(
+        strokesCompleted_ - scheduleBaseStroke_, config, powerPercent_, gapSec_);
     strokeMs_ = strokeMsFromPower(powerPercent_, minimumStrokeMs_, maximumStrokeMs_);
 
     if (strokeMs_ <= 0 || strokeMs_ > static_cast<int>(kMaxStrokeMs)) {
@@ -323,7 +467,8 @@ bool AutomaticSessionMode::beginBurstEvent() {
 
     if (program_ != nullptr) {
         int dummyPower = 0;
-        program_->getStrokeParameters(strokesCompleted_, config, dummyPower, postBurstGapSec_);
+        program_->getStrokeParameters(
+            strokesCompleted_ - scheduleBaseStroke_, config, dummyPower, postBurstGapSec_);
     } else {
         postBurstGapSec_ = gapSec_;
     }
@@ -419,6 +564,10 @@ void AutomaticSessionMode::onRelayPulseComplete(void* context, unsigned long /*a
     Serial.print(F("[AUTO] stroke complete count="));
     Serial.println(mode->strokesCompleted_);
 
+    if (mode->pendingUpdate_) {
+        mode->applyPendingUpdate();
+    }
+
     if (mode->burstsOn_ &&
         shouldTriggerBurstAfterMainStroke(mode->burstPlan_, mode->strokesCompleted_)) {
         if (!mode->beginBurstEvent()) {
@@ -453,6 +602,18 @@ void AutomaticSessionMode::onBurstPulseComplete(void* context, unsigned long /*a
 
     mode->burstStrokesCompletedInEvent_++;
     mode->intraBurstStrokesCompleted_++;
+
+    if (mode->pendingUpdate_) {
+        mode->applyPendingUpdate();
+        if (mode->state_ == State::WaitingGap) {
+            if (mode->stopRequested_) {
+                mode->finishSession(true, "automatic session stopped", "manualStop", false);
+            } else if (mode->shouldEndSession()) {
+                mode->finishSession(true, "automatic session complete", "endSession", false);
+            }
+            return;
+        }
+    }
 
     if (mode->burstStrokesCompletedInEvent_ >= mode->burstStrokesTarget_) {
         mode->finishBurstEvent();
@@ -584,12 +745,15 @@ void AutomaticSessionMode::finishSession(
     }
 
     stopRequested_ = false;
+    pendingUpdate_ = false;
+    pendingConfigJson_[0] = '\0';
     onComplete_ = nullptr;
     callbackContext_ = nullptr;
     sessionNotifyContext_ = nullptr;
     sessionNotify_ = nullptr;
     stopCorrelationId_[0] = '\0';
     strokesCompleted_ = 0;
+    scheduleBaseStroke_ = 0;
     burstEventsCompleted_ = 0;
     intraBurstStrokesCompleted_ = 0;
     burstStrokesTarget_ = 0;

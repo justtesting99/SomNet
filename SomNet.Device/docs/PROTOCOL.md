@@ -3,7 +3,7 @@
 Captured and verified in **Phase 0** (2026-09-05) against SomNet API `http://localhost:5031`.
 
 **Audience:** ESP32 firmware (`SomNet.Device`) implementing a minimal SignalR JSON client.  
-**Scope:** Commands `stroke`, `burst`, `abort`, `automatic-start`, and `automatic-stop` (Phases 5–9 Part 2).
+**Scope:** Commands `stroke`, `burst`, `abort`, `automatic-start`, `automatic-stop`, and **`automatic-update`** (Phase 11). Firmware also accepts legacy alias **`automatic:update`**; API/UI use **`automatic-update`** only.
 
 **Source references:**
 
@@ -318,9 +318,9 @@ Optional `{ "reason": "operator" }` — device reports measured `endReason` in s
 
 **Ack:** **Immediate** `success: true` when stop is accepted (P9-D2 pattern). Session **`resultJson`** arrives via hub `automatic-session-complete` when the current stroke or burst finishes (P10-D3). REST timeout **5 s**.
 
-### 6.8 automatic-update payload (Phase 11A)
+### 6.8 automatic-update payload (Phase 11)
 
-When an **automatic session is already running**, the operator (or UI) may send **`automatic-update`** with the same snapshot shape as **`automatic-start`** (§6.5–6.7). **Phase 11A:** device validates, logs, and acks — **replan not applied yet** (Phase B+).
+When an **automatic session is already running**, the operator (or UI) may send **`automatic-update`** with the same snapshot shape as **`automatic-start`** (§6.5–6.7). Device validates, acks immediately, **queues replan**, and applies after the current main or intra-burst stroke (P11-D1/D7/D8).
 
 | Property | Value |
 |----------|--------|
@@ -328,8 +328,10 @@ When an **automatic session is already running**, the operator (or UI) may send 
 | **Payload** | Full automatic settings snapshot; **omit `running`** |
 | **Ack** | Immediate `success: true`, message `"automatic update queued"` (P11-D10) |
 | **Reject** | No active automatic session; invalid payload (same validation as start) |
+| **Apply** | After current `Pulse` or `BurstPulse`; full gap wait in `WaitingGap`/`BurstGap` (P11-D7) |
+| **Replan** | Remaining session envelope (strokes/minutes); wave/build-up phase offset (P11-D2); burst slots recomputed (P11-D6) |
 
-**Phase 11A serial:** `[AUTO] update received (Phase 11A — replan deferred) …`
+**Serial:** `[AUTO] update queued …` on receive; `[AUTO] update applied mode=…` when replan runs.
 
 ### 6.7 automatic-start burst fields (Phase 10)
 

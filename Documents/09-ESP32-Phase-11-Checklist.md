@@ -1,15 +1,15 @@
 # Phase 11 — Live automatic settings (`automatic-update`)
 
-**Status:** **Planning — Phase A complete** (2026-09-08) — firmware **`0.11.0-phase11`**; API validation + ack timeout; firmware validate/log/ack stub (no replan).
+**Status:** **Signed off** (2026-09-10) — firmware **`0.12.2-phase11`** verified on bench (`esp32-84CCA85C36B4` / `Slv66`); §8 hardware + UI smokes complete. Known follow-up: UI session rehydration on browser refresh (§9).
 
 | Related | Link |
 |---------|------|
 | Parent plan | [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) §6 automatic |
 | Prior sign-off | [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md) — burst-in-automatic (`burstsOn`) |
 | Original design notes | [Phase 9 Part 2 §9](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#9-future--live-settings-during-automatic-playback-not-part-2) (superseded by this doc for implementation) |
-| UI today | `AutomaticControls.tsx` — **`configLocked`** while session active; settings read-only |
-| Device today | Config snapshot at **`automatic-start` only**; no mid-session replan |
-| **Network layer** | [09-ESP32-Network-Spec.md](./09-ESP32-Network-Spec.md) — **implement + smoke S1–S8 before** hub-dependent Phase 11 E2E |
+| UI today | `AutomaticControls.tsx` — editable when **`allowAutomaticModeOverrides`** enabled (Options → General); debounced **`automatic-update`** push |
+| Device today | **`automatic-update`** queues replan; applies after current stroke/gap per P11-D1/D7/D8 |
+| **Network layer** | [09-ESP32-Network-Spec.md](./09-ESP32-Network-Spec.md) — signed off **`0.12.0-network`**; S3–S6 verified before Phase 11 E2E |
 
 **Goal:** Restore original-product behavior — operator can change Automatic tab settings **while a session is running**; device **replans** from new config without stopping the session. New command key **`automatic-update`**.
 
@@ -26,7 +26,7 @@
 | **Hardware scope** | Same DevKit bench (`esp32-84CCA85C36B4` / `Slv66`) |
 | **Software scope** | Firmware replan path; API validation + ack timeout; UI unlock + debounced push; tests + docs |
 | **Blocks** | Operators tuning power/timing/mode/end rules without Stop/Abort |
-| **Target firmware** | **`0.11.0-phase11`** (proposed — bump in Phase A) |
+| **Target firmware** | **`0.12.2-phase11`** (build-up replan index fix over `0.12.1-phase11`) |
 
 Update **Status** above and check boxes in **§7** as work completes. When Phase 11 is done, update [Device plan §10](./09-ESP32-Device-Plan.md#10-implementation-phases) and bump firmware version.
 
@@ -37,9 +37,9 @@ Update **Status** above and check boxes in **§7** as work completes. When Phase
 - [x] Phase 10 **signed off** — burst sub-FSM, seven programs, Start/Stop/Abort, hub finalize
 - [x] **§4 decisions locked** — 2026-09-08
 - [x] **[Network spec](./09-ESP32-Network-Spec.md) signed off** — **`0.12.0-network`**; S3–S6 verified 2026-09-09 (`.172` + API down/up)
-- [ ] Review `AutomaticSessionMode` FSM — states `Idle`, `StartDelay`, `WaitingGap`, `Pulse`, `BurstPulse`, `BurstGap`
-- [ ] Review planner separation — `AutomaticProgramBase::buildPlan()` vs sequencer (Part 2 §8)
-- [ ] Review UI `configLocked` / settings debounce path (`SettingsProvider`, `AutomaticControls`)
+- [x] Review `AutomaticSessionMode` FSM — states `Idle`, `StartDelay`, `WaitingGap`, `Pulse`, `BurstPulse`, `BurstGap`
+- [x] Review planner separation — `AutomaticProgramBase::buildPlan()` vs sequencer (Part 2 §8)
+- [x] Review UI `configLocked` / settings debounce path (`OptionsProvider`, `AutomaticControls`)
 
 ---
 
@@ -102,7 +102,7 @@ sessionState = {
 | **noAutoEnd** | N/A | Unbounded; replan uses new config until Stop/Abort |
 | **Wave / build-up** | 50% of original envelope | Continue from **`t = 0.5`** vs reset — **P11-D2** |
 
-### 3.2 Apply timing — overlapped replan (proposed P11-D1)
+### 3.2 Apply timing — overlapped replan (P11-D1)
 
 When **`automatic-update`** arrives during **`Pulse`** or **`BurstPulse`**:
 
@@ -138,7 +138,7 @@ When update arrives during **`WaitingGap`**, **`StartDelay`**, or **`BurstGap`**
 | P11-D10 | **Ack pattern** | Immediate accept / wait until replan applied | ☑ Immediate **`success: true`** when config valid + update queued (P9-D2) | 2026-09-08 |
 | P11-D11 | **Reject while idle** | 400 if no session / silent no-op | ☑ **Reject** — no active automatic session | 2026-09-08 |
 | P11-D12 | **Session history** | No record / PATCH summary note / append event log | ☑ **No record** for v1 — silent replan; final summary on stop/abort/end only | 2026-09-08 |
-| P11-D13 | **Firmware version** | `0.11.0-phase11` / other | ☑ **`0.11.0-phase11`** at sign-off | 2026-09-08 |
+| P11-D13 | **Firmware version** | `0.12.1-phase11` / other | ☑ **`0.12.2-phase11`** verified at sign-off (build-up fix) | 2026-09-10 |
 | P11-D14 | **API validation** | Same as `automatic-start` / stricter | ☑ Same snapshot schema; reject invalid burst ranges when `burstsOn: true` | 2026-09-08 |
 | P11-D15 | **UI read-only exceptions** | Start/Stop/Abort only / also lock program during burst | ☑ Unlock settings panels; **Start** disabled while running | 2026-09-08 |
 
@@ -245,7 +245,7 @@ Idle ──start──► StartDelay ──► WaitingGap ⇄ Pulse
 | File | Change |
 |------|--------|
 | `AutomaticControls.tsx` | Remove or narrow `configLocked`; show “changes apply after current stroke” hint |
-| `SettingsProvider` / save path | When `running`, debounced save → **`automatic-update`** in addition to PUT settings |
+| `OptionsProvider` / save path | When `running` + overrides enabled, debounced save (400 ms) → **`automatic-update`** in addition to PUT settings |
 | `hardwareCommand.ts` | Send update command |
 | `types/hardwareCommand.ts` | Add key + timeout constant |
 
@@ -257,53 +257,56 @@ Idle ──start──► StartDelay ──► WaitingGap ⇄ Pulse
 
 1. **Lock §4 decisions** — review this doc with operator; mark ☑
 2. **Phase A — Protocol stub** — API accepts `automatic-update`; firmware logs + immediate ack; no replan yet; **`0.11.0-phase11`** — **done 2026-09-08** (hardware smoke pending)
-3. **Phase B — Replan without bursts** — Periodic + endSession strokes; change power/gap mid-session; serial `[AUTO] update applied`
-4. **Phase C — All seven programs + remaining envelope** — strokes/minutes/noAutoEnd; wave phase policy (P11-D2)
-5. **Phase D — Bursts** — update during mains-only; toggle `burstsOn`; recompute burst slots (P11-D6, P11-D8)
-6. **Phase E — UI** — unlock controls; wire debounced/Apply push; error toast on reject
-7. **Phase F — E2E verification** — hardware smokes §7.4; regression burst-off; Stop/Abort unchanged
+3. **Phase B — Replan without bursts** — **done 2026-09-09** — Periodic + endSession strokes; serial `[AUTO] update applied`
+4. **Phase C — All seven programs + remaining envelope** — **done 2026-09-09** — strokes/minutes/noAutoEnd; wave phase policy (P11-D2)
+5. **Phase D — Bursts** — **done 2026-09-09** — toggle `burstsOn`; recompute burst slots (P11-D6, P11-D8)
+6. **Phase E — UI** — **done 2026-09-09** — unlock controls; debounced push; error toast on reject
+7. **Phase F — E2E verification** — **done 2026-09-10** — hardware smokes §8; regression burst-off; Stop/Abort unchanged
 
 ---
 
 ## 8. Verification checklist
 
+**Hardware sign-off:** 2026-09-09 – 2026-09-10 on `esp32-84CCA85C36B4` / `Slv66` / firmware **`0.12.2-phase11`**. Live overrides enabled via Options → General unless testing default-off lock (§8.5).
+
 ### 8.1 Phase A — protocol
 
 - [x] `automatic-update` registered in firmware command handler
 - [x] API validator + 5 s ack timeout
-- [x] Reject when no automatic session active (P11-D11)
-- [ ] Swagger smoke — ack success, serial `[AUTO] update received` (hardware)
+- [x] Reject when no automatic session active (P11-D11) — **A1** 2026-09-09
+- [x] Active session ack — **A2** 2026-09-09 (UI + serial `[AUTO] update queued`)
 
 ### 8.2 Phase B — Periodic replan
 
-- [ ] Start Periodic 20 strokes; at stroke 5 send update (shorter `strokeMaxSeconds`) — cadence changes after current stroke
-- [ ] Remaining count — 15 strokes after 5 completed (P11-D3)
-- [ ] Invalid payload — ack failure; session continues on old plan
+- [x] Start Periodic 20 strokes; at stroke 5 send update (shorter `strokeMaxSeconds`) — cadence changes after current stroke — **B1** 2026-09-09
+- [x] Remaining count — 15 strokes after 5 completed (P11-D3) — **B2** 2026-09-09
+- [x] Invalid payload — ack failure; session continues on old plan — **B3** 2026-09-09
 
 ### 8.3 Phase C — programs + end rules
 
-- [ ] Random P+T — change min/max power mid-session
-- [ ] Power Wave — change `T_rise` via end-session minutes update; phase policy per P11-D2
-- [ ] Build-Up — update min/max power; ramp continues from progress
-- [ ] Minutes mode — 30 min session, update at 10 min elapsed; ~20 min remaining
+- [x] Random P+T — change min/max power mid-session — **C1** 2026-09-09
+- [x] Power Wave — change end-session minutes; phase policy per P11-D2 — **C2** 2026-09-09
+- [x] Build-Up — update min/max power; ramp continues from progress — **C3** 2026-09-09 (retest on `0.12.2-phase11` after `scheduleBaseStroke_` fix)
+- [x] Minutes mode — 6 min → 8 min at ~3 min elapsed; ends ~8 min from start — **C4** 2026-09-09
 
 ### 8.4 Phase D — bursts
 
-- [ ] `burstsOn: true` → change `burstPercent` mid-session; new slots from remaining envelope
-- [ ] `burstsOn: true` → `false` on update; cancel pending burst slots
-- [ ] Update during intra-burst stroke — applies after that stroke (P11-D8)
-- [ ] Stop/Abort during/after update — unchanged (P10-D3 regression)
+- [x] `burstsOn: true` → change `burstPercent` mid-session; new slots from remaining envelope — **D1 / F3** 2026-09-09 (`burstPercent` = event frequency, not pulse power)
+- [x] `burstsOn: true` → `false` on update; cancel pending burst slots — **D2** 2026-09-09
+- [x] Update during intra-burst stroke — applies after that stroke (P11-D8) — **D3** 2026-09-09
+- [x] Stop/Abort during/after update — unchanged (P10-D3 regression) — **D4a** Stop 2026-09-09; **D4b** Abort (update then abort) 2026-09-09
 
 ### 8.5 Phase E — UI
 
-- [ ] Controls editable while running (except Start / delay-before-start)
-- [ ] Settings persist to server **and** device on change (P11-D4)
-- [ ] Banner or helper text — “Changes apply after current stroke”
-- [ ] Failed update — operator-visible error; session continues
+- [x] Controls editable while running when **`allowAutomaticModeOverrides`** enabled (except Start / delay-before-start) — 2026-09-10
+- [x] Default-off lock — controls locked while running when override option disabled — 2026-09-10
+- [x] Settings persist to server **and** device on change (P11-D4) — 2026-09-10
+- [x] Banner or helper text — “Changes apply after current stroke” — verified during smokes
+- [x] Failed update — operator-visible error; session continues — 2026-09-10
 
 ### 8.6 Phase F — hardware smoke recipes
 
-#### F1 — Periodic power tweak
+#### F1 — Periodic power tweak — **pass** (covered by §8.2 B1, 2026-09-09)
 
 | Step | Action | Pass if |
 |------|--------|---------|
@@ -311,7 +314,7 @@ Idle ──start──► StartDelay ──► WaitingGap ⇄ Pulse
 | 2 | At stroke 3, send update — higher `maximumPower` | Ack success |
 | 3 | Observe strokes 4+ | Stronger strokes; 7 mains remain |
 
-#### F2 — Mode switch mid-session
+#### F2 — Mode switch mid-session — **pass** 2026-09-10
 
 | Step | Action | Pass if |
 |------|--------|---------|
@@ -319,7 +322,7 @@ Idle ──start──► StartDelay ──► WaitingGap ⇄ Pulse
 | 2 | At stroke 8, update to `randomPowerAndTiming` | Ack success |
 | 3 | Strokes 9+ | Random power/gap within new bounds; 12 mains remain |
 
-#### F3 — Burst percent replan
+#### F3 — Burst percent replan — **pass** 2026-09-09 (same run as §8.4 D1)
 
 | Step | Action | Pass if |
 |------|--------|---------|
@@ -335,8 +338,10 @@ Idle ──start──► StartDelay ──► WaitingGap ⇄ Pulse
 |------|----------------|
 | **Phase 10 bursts** | Update must handle `BurstPulse` / `BurstGap`; recompute burst slots (§3, P11-D6) |
 | **Session timeline graph** | Independent future work — richer `resultJson` would help replay |
+| **UI session rehydration on refresh** | **Known follow-up (out of Phase 11).** Browser refresh clears in-memory `activeSession` and forces `running: false` on settings load (`settings.ts`). Device session continues; Start/Stop/Abort buttons do not reflect true state until session ends. **Workaround:** do not refresh during an active automatic session. **Future fix:** query device/API for active session on load and restore UI session state + hub finalize path. |
 | **OTA** | Out of scope |
 | **Part 2 §9** | Design absorbed here; do not implement from Part 2 doc alone |
+| **Network reliability (`0.13.0-network`)** | Designed separately — hub/HTTP cooperative-loop wedge; see [09-ESP32-Network-Spec.md](./09-ESP32-Network-Spec.md). Workaround: power-cycle + start API before device. |
 
 ---
 
@@ -344,6 +349,9 @@ Idle ──start──► StartDelay ──► WaitingGap ⇄ Pulse
 
 | Date | Change |
 |------|--------|
+| 2026-09-10 | **§8 signed off** — all hardware + UI smokes pass on **`0.12.2-phase11`**; refresh/rehydration noted as follow-up in §9 |
+| 2026-09-09 | **Build-up replan fix** — `scheduleBaseStroke_` in `0.12.2-phase11`; C3 retest pass |
+| 2026-09-09 | **Phases B–E** — firmware replan + UI unlock (`0.12.1-phase11`); PROTOCOL §6.8 updated |
 | 2026-09-08 | **Phase A** — `automatic-update` API + firmware stub (`0.11.0-phase11`); PROTOCOL §6.8 |
 | 2026-09-08 | **§4 decisions locked** — P11-D1–D15 (operator form + technical defaults) |
 | 2026-09-08 | Initial Phase 11 planning doc — migrated from Part 2 §9 + Phase 10 burst constraints |

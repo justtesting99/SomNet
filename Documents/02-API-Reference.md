@@ -162,11 +162,23 @@ Per Dom+Sub pairing settings stored as JSON.
 
 ```json
 {
-  "appOptions": { /* AppOptionsDto */ },
+  "appOptions": {
+    "enableSoundAlerts": true,
+    "confirmBeforeCommands": false,
+    "allowAutomaticModeOverrides": false,
+    "autoExpandVideoOnMobile": true,
+    "mobileVideoExpandDefault": "Both",
+    "showSessionTimestamps": true,
+    "operatorDisplayName": "",
+    "defaultNotesPrefix": "Session",
+    "reconnectIntervalSeconds": 10
+  },
   "manual": { /* ManualControlStateDto */ },
   "automatic": { /* AutomaticControlStateDto */ }
 }
 ```
+
+**`allowAutomaticModeOverrides`** (default `false`) — when `true`, Automatic mode settings stay editable during a session and the UI sends **`automatic-update`** to the device (debounced). Persisted in `appOptions`; stripped from device command payloads (`running` is also UI-only and omitted on send).
 
 Defaults are applied server-side when no record exists. Legacy millisecond-based power values are migrated to 0–100% on read via `PairingSettingsSerializer`.
 
@@ -272,7 +284,7 @@ Command keys used by the UI (defined in `hardwareCommand.ts`):
 | `abort` | Manual abort / end |
 | `automatic-start` | Automatic session start |
 | `automatic-stop` | Automatic session stop |
-| `automatic-update` | Live automatic settings (Phase 11 — device replan Phase B+) |
+| `automatic-update` | Live automatic settings — device replan after current stroke (**implemented**, Phase 11 signed off) |
 
 The dispatcher uses **per-command ack timeouts** (stroke/abort 15 s, burst formula, `automatic-start`/`automatic-stop`/`automatic-update` 5 s). See [SignalR & Hardware](./06-SignalR-And-Hardware.md).
 

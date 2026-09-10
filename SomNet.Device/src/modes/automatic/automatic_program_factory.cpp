@@ -8,7 +8,9 @@
 
 #include <Arduino.h>
 
-AutomaticProgramBase* createAutomaticProgram(const AutomaticConfig& config) {
+AutomaticProgramBase* createAutomaticProgram(
+    const AutomaticConfig& config,
+    float schedulePhaseOffsetNorm) {
     if (!config.valid) {
         return nullptr;
     }
@@ -25,7 +27,7 @@ AutomaticProgramBase* createAutomaticProgram(const AutomaticConfig& config) {
         case AutomaticRunMode::BuildUp: {
             StrokeScheduleRow* rows = nullptr;
             size_t count = 0;
-            if (!buildStrokeSchedule(config, &rows, &count)) {
+            if (!buildStrokeSchedule(config, &rows, &count, schedulePhaseOffsetNorm)) {
                 return nullptr;
             }
 

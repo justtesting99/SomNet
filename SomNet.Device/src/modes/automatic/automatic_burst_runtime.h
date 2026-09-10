@@ -25,6 +25,14 @@ struct AutomaticBurstPlan {
 /** Build burst schedule from end-session envelope (all programs — Phase 10C). */
 void buildAutomaticBurstPlan(const AutomaticConfig& config, AutomaticBurstPlan* outPlan);
 
+/** Rebuild burst schedule for mid-session replan (remaining envelope + absolute milestones). */
+void buildAutomaticBurstPlanForReplan(
+    const AutomaticConfig& config,
+    int mainStrokesCompleted,
+    unsigned long sessionStartMs,
+    unsigned long nowMs,
+    AutomaticBurstPlan* outPlan);
+
 /** After a main stroke completes (stroke milestones or noAutoEnd stride). */
 bool shouldTriggerBurstAfterMainStroke(const AutomaticBurstPlan& plan, int mainStrokesCompleted);
 

@@ -6,9 +6,18 @@ PlatformIO firmware for the SomNet hardware device (ESP32 DevKit V1 clone). Live
 **Partitions / OTA headroom:** [docs/PARTITIONS.md](docs/PARTITIONS.md)  
 **Hardware user guide:** [Documents/Hardware-User-Guide.md](../Documents/Hardware-User-Guide.md)  
 **Plan:** [Documents/09-ESP32-Device-Plan.md](../Documents/09-ESP32-Device-Plan.md)  
-**Phase checklists (0–6 complete):** [0](../Documents/09-ESP32-Phase-0-Checklist.md) · [1](../Documents/09-ESP32-Phase-1-Checklist.md) · [2](../Documents/09-ESP32-Phase-2-Checklist.md) · [3](../Documents/09-ESP32-Phase-3-Checklist.md) · [4](../Documents/09-ESP32-Phase-4-Checklist.md) · [5](../Documents/09-ESP32-Phase-5-Checklist.md) · [6](../Documents/09-ESP32-Phase-6-Checklist.md) · [7](../Documents/09-ESP32-Phase-7-Checklist.md) (**next**)
+**Phase checklists (0–11 complete):** [0](../Documents/09-ESP32-Phase-0-Checklist.md) · … · [10](../Documents/09-ESP32-Phase-10-Checklist.md) · [11](../Documents/09-ESP32-Phase-11-Checklist.md)
 
-**Current firmware:** `0.7.0-phase7` — Phase 7 in progress: token expiry, **SomNet-themed config UI**, **`prod_cloud` / wss build profile** (compile-only). SignalR stroke/relay unchanged from Phase 6.
+**Current firmware:** `0.12.2-phase11` — manual stroke/burst/abort; automatic start/stop (seven programs); burst-in-automatic; live **`automatic-update`** mid-session replan; network layer per [Network Spec](../Documents/09-ESP32-Network-Spec.md).
+
+### Capability summary
+
+| Phase | Commands / behavior |
+|-------|---------------------|
+| 5–6 | `stroke`, `abort`, relay GPIO |
+| 9 | `burst`, `automatic-start`, `automatic-stop` |
+| 10 | `burstsOn` during automatic sessions |
+| 11 | `automatic-update` — replan after current stroke |
 
 ## Hardware (default wiring)
 
@@ -82,7 +91,7 @@ If you flash **`dev`** but enter an `https://` server URL, serial logs:
 
 **Partition table:** `min_spiffs.csv` (set in `platformio.ini`) — dual OTA slots ~**1.9 MB** each. Config HTML uses PROGMEM, not SPIFFS, so the large SPIFFS region from the default profile is unused.
 
-| Metric | Typical (`0.7.0-phase7`, `dev`) | `prod_cloud` |
+| Metric | Typical (`0.12.2-phase11`, `dev`) | `prod_cloud` |
 |--------|-----------------------------------|--------------|
 | RAM | ~15.4% | ~15.4% |
 | Flash (one OTA slot) | ~53.7% (~1.06 MB / 1.97 MB) | ~53.7% (~1.06 MB / 1.97 MB) |
@@ -310,7 +319,8 @@ Firmware **0.3.0-phase3** adds a LAN config web UI on port **80**.
 
 | Prefix | Module |
 |--------|--------|
-| `[BOOT]` | Startup (includes firmware version, e.g. `0.11.1-phase11`) |
+| `[BOOT]` | Startup (includes firmware version, e.g. `0.12.2-phase11`) |
+| `[AUTO]` | Automatic session mode (start/stop/update/replan) |
 | `[WIFI]` | Wi-Fi manager |
 | `[CMD]` | Command handler |
 | `[RELAY]` | Relay controller (Phase 6+) |

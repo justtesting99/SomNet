@@ -24,7 +24,7 @@ public:
         void* callbackContext,
         AutomaticCompleteCallback onComplete);
 
-    /** Phase 11A: validate + log; replan deferred to Phase B. */
+    /** Phase 11: validate, queue, apply after current stroke/gap (P11-D1/D7/D8). */
     bool queueSessionUpdate(const char* payloadJson);
 
     void setSessionNotifier(void* callbackContext, AutomaticCompleteCallback onNotify);
@@ -47,6 +47,10 @@ private:
     bool beginBurstEvent();
     bool startNextBurstPulse();
     void finishBurstEvent();
+    bool applyPendingUpdate();
+    void assignAutomaticModeLabel(AutomaticRunMode mode);
+    float computeSchedulePhaseOffset() const;
+    bool configUsesScheduleTable(AutomaticRunMode mode) const;
 
     RelayController* relay_ = nullptr;
     AutomaticProgramBase* program_ = nullptr;
@@ -58,6 +62,8 @@ private:
     int powerPercent_ = 0;
     int gapSec_ = 0;
     int strokesCompleted_ = 0;
+    /** Table programs (wave/build-up): row index base after replan (P11-D2). */
+    int scheduleBaseStroke_ = 0;
     int burstEventsCompleted_ = 0;
     int intraBurstStrokesCompleted_ = 0;
     int burstStrokesTarget_ = 0;
@@ -70,6 +76,8 @@ private:
     unsigned long delayStartMs_ = 0;
     unsigned long nextGapDeadlineMs_ = 0;
     char configJson_[768] = {};
+    char pendingConfigJson_[768] = {};
+    bool pendingUpdate_ = false;
     char automaticMode_[32] = {};
     int minimumStrokeMs_ = 25;
     int maximumStrokeMs_ = 400;
