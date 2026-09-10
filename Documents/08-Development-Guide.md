@@ -258,7 +258,7 @@ Available in Development at `/swagger`. Disabled in production.
 | DLL locked on build | Stop running API process (Task Manager or `Stop-Process`) |
 | Port 5031 in use | Change port in launchSettings.json or kill conflicting process |
 | LocalDB not found | Install SQL Server Express LocalDB via Visual Studio Installer |
-| UI changes not visible | Run `npm run build` in UI or rebuild API (integrated build) |
+| UI changes not visible | Run `npm run build` in `SomNet.UI` or rebuild API — integrated hosting serves `dist/`, not the Vite dev server |
 | 401 on all requests | Token expired — log in again; check Jwt:Key matches |
 | Empty subs list | Add sub via Sub selection dialog or check DomTarget matches display name |
 | Migration fails | Delete mdf and restart, or run `dotnet ef database update` |

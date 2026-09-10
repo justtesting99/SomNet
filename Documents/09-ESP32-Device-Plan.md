@@ -14,9 +14,9 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 **End-user / installer documentation:** [Hardware User Guide](./Hardware-User-Guide.md) — provisioning, Wi‑Fi recovery (10 s button hold), Device ID, relay operation.
 
-**Implementation progress (2026-09-10):** Phases **0–11 signed off**. Current firmware **`0.12.2-phase11`** — manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On**; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; **`resultJson`** end-to-end. See §10.
+**Implementation progress (2026-09-10):** Phases **0–12 signed off**. Current firmware **`0.13.0-network`** — manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On**; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; network hardening (Phase 12); **`resultJson`** end-to-end. SomNet UI: automatic session rehydration on browser refresh — [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md). See §10.
 
-**Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 11 (live automatic settings) signed off (2026-09-10).** SomNet API/UI integration complete for manual and automatic commands (Phases 8–11).
+**Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 12 (network hardening) signed off (2026-09-10).** SomNet API/UI integration complete for manual and automatic commands (Phases 8–12 UI follow-up).
 
 **Related docs:** [Hardware User Guide](./Hardware-User-Guide.md), [SignalR & Hardware](./06-SignalR-And-Hardware.md), [Authentication & Security](./05-Authentication-And-Security.md), [API Reference](./02-API-Reference.md), [SomNet.Device/README](../SomNet.Device/README.md), [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md)  
 **Phase checklists (0–11):** [0](./09-ESP32-Phase-0-Checklist.md) · [1](./09-ESP32-Phase-1-Checklist.md) · [2](./09-ESP32-Phase-2-Checklist.md) · [3](./09-ESP32-Phase-3-Checklist.md) · [4](./09-ESP32-Phase-4-Checklist.md) · [5](./09-ESP32-Phase-5-Checklist.md) · [6](./09-ESP32-Phase-6-Checklist.md) · [7](./09-ESP32-Phase-7-Checklist.md) · [8](./09-ESP32-Phase-8-Checklist.md) · [9](./09-ESP32-Phase-9-Checklist.md) · [10](./09-ESP32-Phase-10-Checklist.md) · [11](./09-ESP32-Phase-11-Checklist.md)
@@ -1677,11 +1677,14 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 **Phase 11:** [Live automatic settings (`automatic-update`)](./09-ESP32-Phase-11-Checklist.md) — **signed off** 2026-09-10 on firmware **`0.12.2-phase11`**.
 
-**Known follow-ups (post–Phase 11):**
+**Phase 12:** [Network reliability hardening](./09-ESP32-Phase-12-Network-Hardening-Checklist.md) — **signed off** 2026-09-10 on firmware **`0.13.0-network`**.
 
-- **UI session rehydration on browser refresh** — in-memory session state is lost on refresh while device session continues; see Phase 11 checklist §9.
+**UI session rehydration:** [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md) — **signed off** 2026-09-10 (automatic sessions only; no firmware change).
+
+**Known follow-ups (post–Phase 12 / UI rehydration):**
+
 - **Session timeline visualization** — graph or timeline of a planned or completed automatic session (main strokes, burst events, gaps, relative power). Placement TBD: Automatic mode page (pre-start preview or live), session history detail, or both.
-- **Network reliability hardening (`0.13.0-network`)** — see [Network Spec](./09-ESP32-Network-Spec.md).
+- **Manual session rehydration on browser refresh** — automatic rehydration is done; manual in-progress event log still not restored after reload.
 
 ---
 

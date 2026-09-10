@@ -13,7 +13,7 @@
 
 **Goal:** Eliminate cooperative-loop starvation where hub I/O blocks LAN HTTP (`.172`) and wedge “server started but no GET” after boot or reconnect — **without** violating NET-D3/D4/D5.
 
-**Explicitly out of scope (Phase 12):** OTA client implementation; `prod_cloud` CA pinning; Azure SignalR Service; UI session rehydration (separate follow-up).
+**Explicitly out of scope (Phase 12):** OTA client implementation; `prod_cloud` CA pinning; Azure SignalR Service. UI session rehydration was a separate follow-up — **done** [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md) (2026-09-10).
 
 ---
 
@@ -201,7 +201,7 @@ HubIdle → ArpWarm → ProbeTcp → NegotiateStart → NegotiateWait → WsConn
 | Item | Why deferred |
 |------|--------------|
 | OTA download/install | Separate phase; partition ready |
-| UI session rehydration | Separate UI phase |
+| UI session rehydration | Done — [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md) (2026-09-10) |
 | Azure / multi-instance SignalR | Infrastructure |
 | Dual-core hub pinning | Risk vs reward (§2 Q2) |
 | “Disable all hub work during session” | Would break mid-session reconnect + commands |

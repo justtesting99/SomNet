@@ -15,6 +15,8 @@ Sequential string IDs: `sess-001`, `sess-002`, … generated server-side.
 | Manual | First stroke or burst | `POST /api/sessions` |
 | Automatic | Start button pressed | `POST /api/sessions` |
 
+Initial summary for automatic sessions: `"In progress"` (unchanged until end — no mid-run PATCH).
+
 Initial summary for manual sessions: `"In progress"` or `"In progress: …"` as actions accumulate.
 
 ### When Sessions Update
@@ -235,10 +237,24 @@ Historical subs from sessions/notifications appear in the subs list even without
 | Active session ID | `SessionProvider` state, synced to server |
 | Manual event log | Client memory until PATCH/end |
 | Completed sessions | Server (`Sessions` table) |
-| In-progress summary | Client builds, server stores latest PATCH |
+| In-progress summary | Manual: client builds, server stores latest PATCH. Automatic: `"In progress"` until end |
 | Selected sub | Client state; triggers settings reload |
+| Active automatic session after refresh | Restored via `GET /api/sessions/active` + device probe (see below) |
 
-On page refresh during an active manual session, the in-progress session may exist server-side with the last PATCHed summary, but the local event log is lost. The UI does not currently resume editing an in-progress session after refresh.
+### Automatic session rehydration (browser refresh)
+
+When the operator reloads the page during an **automatic** session:
+
+1. `OptionsProvider` loads pairing settings (`running` forced false in API).
+2. `AutomaticSessionRehydrator` calls **`GET /api/sessions/active?subTarget=`** — latest session whose summary is in progress (`SessionProgressHelper.IsInProgress` on server; exact `"In progress"` required for automatic rehydrate on client).
+3. If found, the UI probes the device with **`automatic-update`** (accept = session still running; idle message = stale server record → `POST /end` and skip rehydrate).
+4. On success: `SessionProvider.rehydrateSession(entry)` restores `activeSession` without a new POST; local `settings.automatic.running` set true (not persisted); mode switches to automatic.
+
+Hub finalize (`AutomaticSessionHubListener`) gates on **`activeSession?.mode === 'automatic'`**, not the `running` flag.
+
+See [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md).
+
+On page refresh during an active **manual** session, the in-progress session may exist server-side with the last PATCHed summary, but the local event log is lost. The UI does not resume editing an in-progress manual session after refresh.
 
 ---
 
@@ -251,6 +267,7 @@ On page refresh during an active manual session, the in-progress session may exi
 | `endManualSession(reason)` | End with aggregated summary |
 | `beginAutomaticSession()` | POST new automatic session |
 | `endAutomaticSession(reason, deviceResult?)` | End with device-measured summary |
+| `rehydrateSession(entry)` | Restore `activeSession` from server row (no POST) — used after browser refresh |
 | `endActiveSessionIfNeeded(reason)` | Guard for navigation events |
 
 All methods are async and handle API errors internally (logged, not always surfaced to UI).

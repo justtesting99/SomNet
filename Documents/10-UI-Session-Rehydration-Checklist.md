@@ -1,6 +1,6 @@
 # UI Session Rehydration — browser refresh during active automatic session
 
-**Status:** **Bench — R1–R5 pass** (2026-09-10); doc updates pending (§3.3)
+**Status:** **Signed off** — bench R1–R5 pass + doc audit (2026-09-10)
 
 | Related | Link |
 |---------|------|
@@ -16,9 +16,9 @@
 
 ---
 
-## 1. Problem statement
+## 1. Problem statement (before this phase — resolved 2026-09-10)
 
-| Layer | Today | After refresh |
+| Layer | Before fix | After refresh (broken) |
 |-------|-------|---------------|
 | Device | `AutomaticSessionMode` running | Unchanged |
 | Server | Session row `summary = "In progress"` | Unchanged |
@@ -64,9 +64,10 @@
 
 ### 3.3 Docs
 
-- [ ] Update [03-Frontend-Architecture.md](./03-Frontend-Architecture.md) Known Gaps
-- [ ] Update [Hardware User Guide](./Hardware-User-Guide.md) — refresh now safe for automatic
-- [ ] Update [Device Plan](./09-ESP32-Device-Plan.md) follow-ups
+- [x] Update [03-Frontend-Architecture.md](./03-Frontend-Architecture.md) Known Gaps
+- [x] Update [Hardware User Guide](./Hardware-User-Guide.md) — refresh now safe for automatic
+- [x] Update [Device Plan](./09-ESP32-Device-Plan.md) follow-ups
+- [x] Cross-doc audit — [01-System-Overview](./01-System-Overview.md), [07-Session-And-History](./07-Session-And-History.md), [User Guide](./User-Guide.md), Phase 11 §9
 
 ---
 
@@ -98,6 +99,8 @@ Page load
 
 **No firmware change.** Device authority unchanged; UI catches up to server + device state.
 
+**Settings on idle refresh:** `OptionsProvider` loads from server only; PUT runs after explicit user edit (`userEditedRef`). Rebuild `SomNet.UI/dist` when testing via API-hosted UI.
+
 ---
 
 ## Document history
@@ -113,6 +116,8 @@ Page load
 | 2026-09-10 | **R5 fix v2** — gate AutomaticControls on `settingsLoaded`; running-only changes local-only; normalization local-only; cancel pending save on settings fetch |
 | 2026-09-10 | **R5 fix v3** — block all API persist until `settingsLoadedRef`; ignore stale in-flight saves; hide automatic controls until loaded; remove mount normalization effects |
 | 2026-09-10 | **R5 fix v4** — persist only after explicit user edit (`userEditedRef`); fixed TS build break in hub listener; **`npm run build` required** — API serves `SomNet.UI/dist`, not Vite dev |
+| 2026-09-10 | **R5 pass** — 3× idle refresh; settings unchanged after UI rebuild + API restart |
+| 2026-09-10 | **Phase signed off** — §3.3 doc audit complete |
 
 ### 6. Bench notes (2026-09-10)
 

@@ -182,7 +182,7 @@ To adjust power, timing, program mode, end-session rules, or burst settings **du
 
 A helper banner explains that changes apply after the current stroke. **Delay before start** stays locked once a session has begun.
 
-**Important:** Do not refresh the browser during an active automatic session if you need Stop/Abort — the UI may show Start as available even though the device is still running (known limitation; session continues on device).
+**Browser refresh:** If you reload the page during an automatic session, the app restores **Stop / Abort** when the device is still running (server + device probe). After the session ends, a refresh shows **Start** as normal.
 
 A **visual session timeline or graph** (preview before start or replay in history) is planned for a future release — not available yet.
 
@@ -271,10 +271,10 @@ When hardware devices are paired, status reflects device connectivity for the se
 |---------|----------|
 | Kicked to login screen | Session expired — sign in again |
 | Settings not saving | Check network connection; ensure a sub is selected |
-| Refreshed page during automatic session — Start enabled, Stop disabled | Expected v1 behavior — device may still be running; wait for session to end on device or avoid refresh mid-session |
+| Refreshed page during automatic session — Start enabled, Stop disabled | Wait a few seconds for rehydration; if still wrong, device may be idle while server row is stale — use Stop/Abort or refresh again |
 | Live setting change had no effect | Enable **Allow automatic mode overrides** in Options → General |
 | Sub not in list | Add it via the Sub Selection dialog |
-| Changes after refresh lost | Mode selection resets on refresh — re-select manual/automatic |
+| Wrong mode after refresh | Last mode (manual/automatic) is remembered — use **Switch mode** if needed |
 | Button stays pending | Wait a moment; if stuck, refresh the page |
 
 For technical issues, server logs, or hardware pairing, refer to the [Development Guide](./08-Development-Guide.md) and [SignalR & Hardware](./06-SignalR-And-Hardware.md) documentation.

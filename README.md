@@ -43,14 +43,15 @@ Full documentation lives in the [`Documents/`](Documents/) folder. See [Document
 | [Development Guide](Documents/08-Development-Guide.md) | Local setup, ports, troubleshooting |
 | [User Guide](Documents/User-Guide.md) | Operator how-to (web app) |
 | [Hardware User Guide](Documents/Hardware-User-Guide.md) | ESP32 setup, Wi‑Fi provisioning, Device ID, pairing |
-| [ESP32 Device Plan](Documents/09-ESP32-Device-Plan.md) | Firmware plan — **source of truth** (Phases 0–11 signed off) |
+| [ESP32 Device Plan](Documents/09-ESP32-Device-Plan.md) | Firmware plan — **source of truth** (Phases 0–12 signed off) |
+| [UI Session Rehydration](Documents/10-UI-Session-Rehydration-Checklist.md) | Browser refresh during automatic session — **signed off** |
 | [SomNet.Device/README](SomNet.Device/README.md) | Build, flash, and test ESP32 firmware |
 
-**ESP32 phase checklists:** [0](Documents/09-ESP32-Phase-0-Checklist.md) · … · [10](Documents/09-ESP32-Phase-10-Checklist.md) · [11](Documents/09-ESP32-Phase-11-Checklist.md) — **0–11 signed off** (firmware **`0.12.2-phase11`**)
+**ESP32 phase checklists:** [0](Documents/09-ESP32-Phase-0-Checklist.md) · … · [11](Documents/09-ESP32-Phase-11-Checklist.md) · [12](Documents/09-ESP32-Phase-12-Network-Hardening-Checklist.md) · [UI rehydration](Documents/10-UI-Session-Rehydration-Checklist.md) — **0–12 + UI rehydration signed off** (firmware **`0.13.0-network`**)
 
 ## ESP32 firmware (quick pointer)
 
-Firmware lives in [`SomNet.Device/`](SomNet.Device/). Current release track: **`0.12.2-phase11`** — manual stroke/burst/abort; automatic start/stop with seven programs and burst-in-automatic; live **`automatic-update`** mid-session (Phase 11).
+Firmware lives in [`SomNet.Device/`](SomNet.Device/). Current release track: **`0.13.0-network`** — manual stroke/burst/abort; automatic start/stop with seven programs and burst-in-automatic; live **`automatic-update`** mid-session (Phase 11); network hardening (Phase 12).
 
 ```bash
 cd SomNet.Device
@@ -75,9 +76,10 @@ Copy `secrets.ini.example` → `secrets.ini` with your Wi‑Fi and PC **LAN IP**
 | React UI (auth, modes, settings, history) | Complete |
 | Dom/Sub management | Complete |
 | SignalR hub + device pairing (API) | Complete |
-| ESP32 firmware (pairing, stroke/burst/automatic) | **Phases 0–11 signed off** — firmware **`0.12.2-phase11`** |
+| ESP32 firmware (pairing, stroke/burst/automatic) | **Phases 0–12 signed off** — firmware **`0.13.0-network`** |
 | UI device pairing | **Hardware** toolbar dialog (Phase 8) |
 | UI → hardware command dispatch | **Complete** — REST + operator hub listener (Phases 8–11) |
+| UI automatic session rehydration (browser refresh) | **Complete** — [checklist](Documents/10-UI-Session-Rehydration-Checklist.md) |
 | Email notifications | Future |
 
 ## License

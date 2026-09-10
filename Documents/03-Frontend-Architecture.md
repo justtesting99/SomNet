@@ -30,6 +30,8 @@ SubTargetProvider          ← Selected sub name, sub dialog
   SessionProvider            ← Live session lifecycle + API sync
     DomSessionsProvider      ← Dom-wide sessions dialog
       OptionsProvider        ← Per Dom+Sub settings (debounced save)
+        AutomaticSessionHubListener  ← Hub finalize for automatic session end
+        AutomaticSessionRehydrator   ← Restore session after browser refresh
         NotifyProvider         ← Notify dialog state
           HistoryProvider      ← History dialog state
             SystemStatusProvider ← Polls /api/system/status (10s interval)
@@ -45,11 +47,13 @@ SubTargetProvider          ← Selected sub name, sub dialog
 | Provider | File | Key Behavior |
 |----------|------|--------------|
 | **AuthProvider** | `context/AuthProvider.tsx` | Login, register, logout; persists session in `localStorage` key `somnet-auth`; attaches Bearer token to all API calls; 401 → logout |
-| **ModeProvider** | `context/ModeProvider.tsx` | `manual` \| `automatic` \| `null` |
+| **ModeProvider** | `context/ModeProvider.tsx` | `manual` \| `automatic` \| `null`; persists last mode in `localStorage` (`somnet.operationMode`) |
 | **SubTargetProvider** | `context/SubTargetProvider.tsx` | Current sub name; opens `SubSelectionDialog` |
 | **SessionProvider** | `context/SessionProvider.tsx` | Creates/updates/ends sessions via API; maintains manual event log for summaries |
 | **DomSessionsProvider** | `context/DomSessionsProvider.tsx` | Dom sessions dialog open state |
-| **OptionsProvider** | `context/OptionsProvider.tsx` | Loads/saves `PairingSettingsDto` via `/api/settings`; 400 ms debounce on writes |
+| **OptionsProvider** | `context/OptionsProvider.tsx` | Loads/saves `PairingSettingsDto` via `/api/settings`; **persists only after explicit user edit** (`userEditedRef`); 400 ms debounce; `running` never persisted |
+| **AutomaticSessionRehydrator** | `components/hardware/AutomaticSessionRehydrator.tsx` | On load: `GET /api/sessions/active`, device probe, restore `activeSession` + local `running` |
+| **AutomaticSessionHubListener** | `components/hardware/AutomaticSessionHubListener.tsx` | Finalizes automatic sessions on hub `automatic-session-complete`; gates on `activeSession`, not `running` |
 | **NotifyProvider** | `context/NotifyProvider.tsx` | Notify dialog state |
 | **HistoryProvider** | `context/HistoryProvider.tsx` | History dialog state |
 | **SystemStatusProvider** | `context/SystemStatusProvider.tsx` | Polls system status every 10 seconds |
@@ -128,6 +132,7 @@ Active sessions are ended automatically on mode switch, sign-out, or sub change.
 - Stop sends cooperative stop; session summary from device via hub `automatic-session-complete`
 - Abort cuts immediately; same hub path for history
 - **Live overrides (Phase 11):** When **`allowAutomaticModeOverrides`** is enabled (Options → General), settings stay editable during a session; debounced save (400 ms) also sends **`automatic-update`** to the device. Default is **locked** while running.
+- **Browser refresh (UI rehydration):** `AutomaticSessionRehydrator` queries the server for an in-progress automatic session, probes the device (`automatic-update` accept/reject), restores `SessionProvider.activeSession`, sets local `running: true`, and switches to automatic mode. Stale server rows (device idle) are closed without rehydrating. Controls do not render until settings finish loading.
 
 **Commands:** Keys `automatic-start`, `automatic-stop`, `automatic-update` (when live overrides enabled), `abort` (during automatic session).
 
@@ -164,7 +169,7 @@ Fetch wrappers in `src/api/`:
 | Module | Endpoints |
 |--------|-----------|
 | `auth.ts` | `/api/auth/*` |
-| `sessions.ts` | `/api/sessions/*` |
+| `sessions.ts` | `/api/sessions/*` including `GET /api/sessions/active` |
 | `history.ts` | `/api/history/*` |
 | `settings.ts` | `/api/settings` |
 | `subs.ts` | `/api/subs` |
@@ -181,6 +186,9 @@ All authenticated calls go through a shared `apiFetch` helper that injects the B
 | `types/hardwareCommand.ts` | Command key constants |
 | `types/sessionHistory.ts` | History DTO mirrors |
 | `utils/sessionSummary.ts` | Aggregates manual events into readable summaries |
+| `utils/sessionProgress.ts` | In-progress session heuristics; automatic rehydrate eligibility |
+| `utils/automaticSessionReconcile.ts` | Device idle probe via `automatic-update`; stale session cleanup |
+| `utils/automaticSessionFinalize.ts` | Hub finalize grace period; cooperative stop helpers |
 | `utils/stroke.ts` | Maps power % to stroke duration ms |
 | `config/sessionUsers.ts` | Default/suggested sub names |
 
@@ -220,6 +228,26 @@ User edits automatic setting while session running (overrides enabled)
   → POST /api/devices/commands { commandKey: automatic-update, payloadJson: full snapshot }
 ```
 
+## Automatic Session Rehydration (Browser Refresh)
+
+See [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md).
+
+```text
+Page load (authenticated; last mode may restore from localStorage)
+  → OptionsProvider: GET /api/settings + stroke limits (running forced false in API response)
+  → AutomaticSessionRehydrator (after settingsLoaded):
+       GET /api/sessions/active?subTarget=
+       if automatic + summary === "In progress":
+            probe device (automatic-update)
+            if device idle → POST /end (stale server record); skip rehydrate
+            else → rehydrateSession(entry) + setAutomaticRunningLocal(true) + setMode('automatic')
+  → AutomaticSessionHubListener: finalize when hub ack + activeSession.mode === 'automatic'
+```
+
+**Settings safety on refresh:** Pairing settings are not written back to the API until the operator edits a control (`userEditedRef`). The `running` flag is local-only and stripped on every settings PUT/GET.
+
+**Deployment note:** When using integrated API hosting, run `npm run build` in `SomNet.UI` (or rebuild the API project) so `dist/` includes UI changes — the API serves the production bundle, not the Vite dev server.
+
 ## Video Components
 
 `components/video/`:
@@ -241,17 +269,19 @@ Video expand behavior is controlled by `appOptions.autoExpandVideoOnMobile` and 
 | Data | Storage |
 |------|---------|
 | Auth token + user | `localStorage` (`somnet-auth`) |
-| Settings | Server (`DomSubSettings` table) |
+| Last operation mode | `localStorage` (`somnet.operationMode`) — manual or automatic |
+| Settings | Server (`DomSubSettings` table); loaded on mount; saved only after user edit |
+| Active automatic session (after refresh) | Restored from server via `GET /api/sessions/active` + device probe |
 | Session history | Server (`Sessions` table) |
-| UI mode selection | React state only (lost on refresh) |
-| Selected sub | React state (defaults to first available sub) |
+| Selected sub | React state (defaults to `Slv66`; not persisted across refresh) |
+| `settings.automatic.running` | Local React state only — never persisted to server |
 
 ## Known Gaps
 
-1. **Automatic session rehydration on browser refresh** — `SessionProvider.activeSession` and UI `running` flag are in-memory only; refresh shows Start enabled while device session may still be running. See [Phase 11 checklist §9](./09-ESP32-Phase-11-Checklist.md#9-relationship-to-other-work).
+1. **Manual session rehydration on browser refresh** — in-progress manual sessions may exist server-side, but the local event log is not restored; operator must continue without full mid-session UI state.
 2. `options.ts` API module is orphaned from pre-refactor MockDataStore era
+3. **Multi-tab sync** — two browser tabs do not coordinate live session or settings state
 
 ## Future Enhancements
 
 - **Session timeline / graph** — visual plan or replay of an automatic session (main strokes, burst clusters, gaps, power envelope). Placement TBD: Automatic page (pre-start preview or live), session history detail, or both. See [Phase 10 checklist §8](./09-ESP32-Phase-10-Checklist.md#8-relationship-to-other-future-work).
-- **UI session rehydration** — restore Stop/Abort and hub finalize path after page reload when device session is active

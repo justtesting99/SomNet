@@ -1,6 +1,6 @@
 # Phase 11 — Live automatic settings (`automatic-update`)
 
-**Status:** **Signed off** (2026-09-10) — firmware **`0.12.2-phase11`** verified on bench (`esp32-84CCA85C36B4` / `Slv66`); §8 hardware + UI smokes complete. Known follow-up: UI session rehydration on browser refresh (§9).
+**Status:** **Signed off** (2026-09-10) — firmware **`0.12.2-phase11`** verified on bench (`esp32-84CCA85C36B4` / `Slv66`); §8 hardware + UI smokes complete. UI session rehydration follow-up **completed** — [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md).
 
 | Related | Link |
 |---------|------|
@@ -338,7 +338,7 @@ Idle ──start──► StartDelay ──► WaitingGap ⇄ Pulse
 |------|----------------|
 | **Phase 10 bursts** | Update must handle `BurstPulse` / `BurstGap`; recompute burst slots (§3, P11-D6) |
 | **Session timeline graph** | Independent future work — richer `resultJson` would help replay |
-| **UI session rehydration on refresh** | **Known follow-up (out of Phase 11).** Browser refresh clears in-memory `activeSession` and forces `running: false` on settings load (`settings.ts`). Device session continues; Start/Stop/Abort buttons do not reflect true state until session ends. **Workaround:** do not refresh during an active automatic session. **Future fix:** query device/API for active session on load and restore UI session state + hub finalize path. |
+| **UI session rehydration on refresh** | **Done (2026-09-10)** — [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md). Automatic sessions: `GET /api/sessions/active`, device probe, restore Stop/Abort + hub finalize. Manual sessions: still not rehydrated. |
 | **OTA** | Out of scope |
 | **Part 2 §9** | Design absorbed here; do not implement from Part 2 doc alone |
 | **Network reliability (`0.13.0-network`)** | Designed separately — hub/HTTP cooperative-loop wedge; see [09-ESP32-Network-Spec.md](./09-ESP32-Network-Spec.md). Workaround: power-cycle + start API before device. |

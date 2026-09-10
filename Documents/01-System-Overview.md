@@ -83,7 +83,7 @@ Settings load when a Sub is selected and save automatically (debounced) when cha
 
 ESP32 devices connect to the SignalR hub at `/hubs/hardware`. Pairing binds a physical device to a specific Dom+Sub pair via a long-lived device JWT. Commands are dispatched through the hub and acknowledged by the device.
 
-> **Note:** The backend hardware pipeline and React UI command dispatch are complete (Phases 8–11). Manual and automatic commands call **`POST /api/devices/commands`**; **`AutomaticSessionHubListener`** subscribes to operator hub events for automatic session completion. Browser refresh during an automatic session does not rehydrate in-memory UI session state — see Phase 11 checklist §9.
+> **Note:** The backend hardware pipeline and React UI command dispatch are complete (Phases 8–12). Manual and automatic commands call **`POST /api/devices/commands`**; **`AutomaticSessionHubListener`** subscribes to operator hub events for automatic session completion. **Automatic** browser refresh rehydration is implemented (2026-09-10) — see [UI Session Rehydration checklist](./10-UI-Session-Rehydration-Checklist.md). Manual in-progress sessions are not rehydrated after reload.
 
 ## Request Flow Examples
 

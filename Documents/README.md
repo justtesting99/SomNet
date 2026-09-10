@@ -16,7 +16,7 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Development Guide](./08-Development-Guide.md) | Developers | Local setup, ports, build pipeline, and common tasks |
 | [User Guide](./User-Guide.md) | Operators | How to use the web application day to day |
 | [Hardware User Guide](./Hardware-User-Guide.md) | Installers / owners | ESP32 setup, Wi‑Fi provisioning, pairing, relay status (updated 2026-09-10) |
-| [ESP32 Device Plan](./09-ESP32-Device-Plan.md) | Developers | **Source of truth** — firmware plan (Phases 0–11 signed off; firmware **`0.12.2-phase11`**) |
+| [ESP32 Device Plan](./09-ESP32-Device-Plan.md) | Developers | **Source of truth** — firmware plan (Phases 0–12 signed off; firmware **`0.13.0-network`**) |
 | [ESP32 Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | Developers | Protocol capture — **Complete** (2026-09-05) |
 | [ESP32 Phase 1 Checklist](./09-ESP32-Phase-1-Checklist.md) | Developers | PlatformIO scaffold — **Complete** (2026-09-05) |
 | [ESP32 Phase 2 Checklist](./09-ESP32-Phase-2-Checklist.md) | Developers | NVS + MAC device identity — **Complete** (2026-09-05) |
@@ -31,5 +31,5 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [ESP32 Phase 10 Checklist](./09-ESP32-Phase-10-Checklist.md) | Developers | Burst-in-automatic — **Signed off** (2026-09-07) |
 | [ESP32 Phase 11 Checklist](./09-ESP32-Phase-11-Checklist.md) | Developers | Live automatic settings (`automatic-update`) — **Signed off** (2026-09-10) |
 | [ESP32 Phase 12 Checklist](./09-ESP32-Phase-12-Network-Hardening-Checklist.md) | Developers | Network hardening — **`0.13.0-network`** **signed off** (2026-09-10) |
-| [UI Session Rehydration](./10-UI-Session-Rehydration-Checklist.md) | Developers | Restore Stop/Abort after browser refresh during automatic session |
+| [UI Session Rehydration](./10-UI-Session-Rehydration-Checklist.md) | Developers | Restore Stop/Abort after browser refresh during automatic session — **signed off** (2026-09-10) |
 | [ESP32 Network Spec](./09-ESP32-Network-Spec.md) | Developers | **Wi‑Fi / HTTP / hub architecture** — signed off **`0.12.0-network`** (2026-09-09); S3–S6 verified |
