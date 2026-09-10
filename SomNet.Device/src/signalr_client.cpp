@@ -7,7 +7,6 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <HTTPClient.h>
 #include <WebSocketsClient.h>
 #include <WiFi.h>
 #include <esp_system.h>
@@ -427,130 +426,384 @@ bool isApiHostOnLan(WifiManager* wifi, NvsStore* nvs) {
     return wifi->isHostArpResolved(apiIp);
 }
 
-bool probeTcpHostQuiet(const IPAddress& ip, uint16_t port) {
-    if (ip == IPAddress(0, 0, 0, 0)) {
-        return false;
-    }
-
-    WiFiClient client;
-    client.setTimeout(1500);
-    const bool ok = client.connect(ip, port, 1500);
-    if (ok) {
-        client.stop();
-    }
-    return ok;
-}
-
-bool negotiateConnectionToken(NvsStore& nvs, char* tokenOut, size_t tokenLen) {
-    char serverUrl[NvsStore::kMaxStringLen];
-    buildEffectiveServerUrl(nvs, serverUrl, sizeof(serverUrl));
-    if (serverUrl[0] == '\0') {
-        Serial.println(F("[HUB] no server URL — use /config or secrets.ini"));
-        return false;
-    }
-
-    bool tls = false;
-    if (!parseServerUrl(serverUrl, gWsHost, sizeof(gWsHost), &gWsPort, &tls)) {
-        Serial.println(F("[HUB] invalid server_url"));
-        return false;
-    }
-
-    gUseTls = tls || nvs.getUseTls();
-    if (gUseTls) {
-#ifndef SOMNET_USE_WSS
-        Serial.println(F("[HUB] TLS/wss requires prod_cloud firmware — pio run -e prod_cloud -t upload"));
-        return false;
-#else
-        Serial.println(F("[HUB] TLS mode (wss) — certificate validation disabled until Azure deploy"));
-#endif
-    }
-
-    HTTPClient http;
-    char negotiateUrl[256];
-    if (gUseTls) {
-        snprintf(
-            negotiateUrl,
-            sizeof(negotiateUrl),
-            "https://%s:%u/hubs/hardware/negotiate?negotiateVersion=1",
-            gWsHost,
-            gWsPort);
-    } else {
-        snprintf(
-            negotiateUrl,
-            sizeof(negotiateUrl),
-            "http://%s:%u/hubs/hardware/negotiate?negotiateVersion=1",
-            gWsHost,
-            gWsPort);
-    }
-
-    if (gNegotiateClient.connected()) {
-        gNegotiateClient.stop();
-    }
-
 #ifdef SOMNET_USE_WSS
-    WiFiClientSecure tlsClient;
-    if (gUseTls) {
-        tlsClient.setInsecure();
-        http.begin(tlsClient, negotiateUrl);
-    } else {
-        http.begin(gNegotiateClient, negotiateUrl);
-    }
-#else
-    http.begin(gNegotiateClient, negotiateUrl);
+WiFiClientSecure gNegotiateTlsClient;
 #endif
-    http.addHeader("Content-Type", "application/json");
-    http.setReuse(false);
-    http.setConnectTimeout(3000);
-    http.setTimeout(HUB_NEGOTIATE_TIMEOUT_MS);
 
-    Serial.print(F("[HUB] negotiate "));
-    Serial.println(negotiateUrl);
+enum class HubTcpProbeResult { Idle, InProgress, Open, Closed, Timeout };
 
-    const int status = http.POST("{}");
-    if (status != HTTP_CODE_OK) {
-        Serial.print(F("[HUB] negotiate failed status="));
-        Serial.print(status);
-        if (status < 0) {
-            Serial.print(F(" ("));
-            Serial.print(http.errorToString(status).c_str());
-            Serial.print(F(")"));
-            if (gActiveClient != nullptr) {
-                gActiveClient->onNegotiateTransportError(status);
+struct HubQuietProbeFsm {
+    bool active = false;
+    IPAddress ip;
+    uint16_t port = 0;
+    unsigned long startedMs = 0;
+    HubTcpProbeResult lastResult = HubTcpProbeResult::Idle;
+
+    void cancel() {
+        active = false;
+        lastResult = HubTcpProbeResult::Idle;
+        if (gNegotiateClient.connected()) {
+            gNegotiateClient.stop();
+        }
+    }
+
+    void start(const IPAddress& ipIn, uint16_t portIn) {
+        cancel();
+        ip = ipIn;
+        port = portIn;
+        startedMs = millis();
+        active = true;
+        lastResult = HubTcpProbeResult::InProgress;
+    }
+
+    HubTcpProbeResult tick(unsigned budgetMs) {
+        if (!active) {
+            return lastResult;
+        }
+        if (ip == IPAddress(0, 0, 0, 0)) {
+            cancel();
+            lastResult = HubTcpProbeResult::Closed;
+            return lastResult;
+        }
+        if (millis() - startedMs > 1500UL) {
+            cancel();
+            lastResult = HubTcpProbeResult::Timeout;
+            return lastResult;
+        }
+        if (gNegotiateClient.connected()) {
+            gNegotiateClient.stop();
+            active = false;
+            lastResult = HubTcpProbeResult::Open;
+            return lastResult;
+        }
+        const int slice = static_cast<int>(budgetMs > 0 ? budgetMs : 1);
+        gNegotiateClient.stop();
+        if (gNegotiateClient.connect(ip, port, slice)) {
+            gNegotiateClient.stop();
+            active = false;
+            lastResult = HubTcpProbeResult::Open;
+            return lastResult;
+        }
+        return HubTcpProbeResult::InProgress;
+    }
+};
+
+enum class HubNegotiateResult { Idle, InProgress, Success, Failed };
+
+enum class NegotiatePhase { Idle, TcpConnect, SendRequest, ReadResponse };
+
+struct HubNegotiateFsm {
+    NegotiatePhase phase = NegotiatePhase::Idle;
+    unsigned long startedMs = 0;
+    char negotiateUrl[256] = {};
+    char host[96] = {};
+    uint16_t port = 5031;
+    bool useTls = false;
+    char response[768] = {};
+    size_t responseLen = 0;
+    bool requestSent = false;
+    unsigned long lastTickLogMs = 0;
+    NegotiatePhase lastLoggedPhase = NegotiatePhase::Idle;
+
+    Client& stream() {
+#ifdef SOMNET_USE_WSS
+        if (useTls) {
+            return gNegotiateTlsClient;
+        }
+#endif
+        return gNegotiateClient;
+    }
+
+    void cancel() {
+        phase = NegotiatePhase::Idle;
+        responseLen = 0;
+        requestSent = false;
+        if (gNegotiateClient.connected()) {
+            gNegotiateClient.stop();
+        }
+#ifdef SOMNET_USE_WSS
+        if (gNegotiateTlsClient.connected()) {
+            gNegotiateTlsClient.stop();
+        }
+#endif
+    }
+
+    bool start(NvsStore& nvs) {
+        cancel();
+
+        char serverUrl[NvsStore::kMaxStringLen];
+        buildEffectiveServerUrl(nvs, serverUrl, sizeof(serverUrl));
+        if (serverUrl[0] == '\0') {
+            Serial.println(F("[HUB] no server URL — use /config or secrets.ini"));
+            return false;
+        }
+
+        bool tls = false;
+        if (!parseServerUrl(serverUrl, gWsHost, sizeof(gWsHost), &gWsPort, &tls)) {
+            Serial.println(F("[HUB] invalid server_url"));
+            return false;
+        }
+
+        gUseTls = tls || nvs.getUseTls();
+        if (gUseTls) {
+#ifndef SOMNET_USE_WSS
+            Serial.println(F("[HUB] TLS/wss requires prod_cloud firmware — pio run -e prod_cloud -t upload"));
+            return false;
+#else
+            Serial.println(F("[HUB] TLS mode (wss) — certificate validation disabled until Azure deploy"));
+#endif
+        }
+
+        useTls = gUseTls;
+        strncpy(host, gWsHost, sizeof(host) - 1);
+        host[sizeof(host) - 1] = '\0';
+        port = gWsPort;
+
+        if (useTls) {
+            snprintf(
+                negotiateUrl,
+                sizeof(negotiateUrl),
+                "https://%s:%u/hubs/hardware/negotiate?negotiateVersion=1",
+                host,
+                port);
+        } else {
+            snprintf(
+                negotiateUrl,
+                sizeof(negotiateUrl),
+                "http://%s:%u/hubs/hardware/negotiate?negotiateVersion=1",
+                host,
+                port);
+        }
+
+        startedMs = millis();
+        lastTickLogMs = 0;
+        lastLoggedPhase = NegotiatePhase::Idle;
+        responseLen = 0;
+        requestSent = false;
+        phase = NegotiatePhase::TcpConnect;
+
+        Serial.print(F("[HUB] negotiate "));
+        Serial.println(negotiateUrl);
+        return true;
+    }
+
+    bool parseResponse(char* tokenOut, size_t tokenLen, int* httpStatusOut) {
+        const char* headerEnd = strstr(response, "\r\n\r\n");
+        if (headerEnd == nullptr) {
+            return false;
+        }
+
+        int httpStatus = 0;
+        if (sscanf(response, "HTTP/1.%*d %d", &httpStatus) != 1) {
+            return false;
+        }
+        if (httpStatusOut != nullptr) {
+            *httpStatusOut = httpStatus;
+        }
+        if (httpStatus != 200) {
+            return false;
+        }
+
+        const char* body = headerEnd + 4;
+        StaticJsonDocument<768> doc;
+        const DeserializationError err = deserializeJson(doc, body);
+        if (err) {
+            Serial.print(F("[HUB] negotiate JSON error: "));
+            Serial.println(err.c_str());
+            return false;
+        }
+
+        const char* token = doc["connectionToken"] | "";
+        if (token[0] == '\0') {
+            Serial.println(F("[HUB] negotiate missing connectionToken"));
+            return false;
+        }
+
+        strncpy(tokenOut, token, tokenLen - 1);
+        tokenOut[tokenLen - 1] = '\0';
+        if (gActiveClient != nullptr) {
+            gActiveClient->clearTransportFailures();
+        }
+        return true;
+    }
+
+    bool responseComplete(Client& client) const {
+        const char* headerEnd = strstr(response, "\r\n\r\n");
+        if (headerEnd == nullptr) {
+            return false;
+        }
+
+        const char* bodyStart = headerEnd + 4;
+        const size_t bodyLen = responseLen - static_cast<size_t>(bodyStart - response);
+
+        const char* contentLengthKey = strstr(response, "Content-Length:");
+        if (contentLengthKey != nullptr && contentLengthKey < headerEnd) {
+            int contentLength = 0;
+            if (sscanf(contentLengthKey, "Content-Length: %d", &contentLength) == 1 && contentLength >= 0) {
+                return bodyLen >= static_cast<size_t>(contentLength);
             }
         }
-        Serial.println();
-        if (status < 0) {
-            Serial.println(F("[HUB] hint: same LAN subnet as API? API bound to 0.0.0.0:5031?"));
+
+        // No Content-Length — wait for server close after headers (Connection: close).
+        if (!client.connected()) {
+            return bodyLen > 0;
         }
-        http.end();
-        gNegotiateClient.stop();
+
         return false;
     }
 
-    const String body = http.getString();
-    http.end();
-    gNegotiateClient.stop();
-
-    StaticJsonDocument<768> doc;
-    const DeserializationError err = deserializeJson(doc, body);
-    if (err) {
-        Serial.print(F("[HUB] negotiate JSON error: "));
-        Serial.println(err.c_str());
-        return false;
+    void logTickIfNeeded() {
+        const unsigned long now = millis();
+        if (phase != lastLoggedPhase || now - lastTickLogMs >= 500UL) {
+            lastTickLogMs = now;
+            lastLoggedPhase = phase;
+            Serial.print(F("[HUB] negotiate tick "));
+            switch (phase) {
+            case NegotiatePhase::TcpConnect:
+                Serial.println(F("connect"));
+                break;
+            case NegotiatePhase::SendRequest:
+                Serial.println(F("send"));
+                break;
+            case NegotiatePhase::ReadResponse:
+                Serial.println(F("read"));
+                break;
+            default:
+                Serial.println(F("idle"));
+                break;
+            }
+        }
     }
 
-    const char* token = doc["connectionToken"] | "";
-    if (token[0] == '\0') {
-        Serial.println(F("[HUB] negotiate missing connectionToken"));
-        return false;
-    }
+    HubNegotiateResult tick(NvsStore& nvs, char* tokenOut, size_t tokenLen, unsigned budgetMs) {
+        (void)nvs;
+        if (phase == NegotiatePhase::Idle) {
+            return HubNegotiateResult::Idle;
+        }
 
-    strncpy(tokenOut, token, tokenLen - 1);
-    tokenOut[tokenLen - 1] = '\0';
-    if (gActiveClient != nullptr) {
-        gActiveClient->clearTransportFailures();
+        if (millis() - startedMs >= HUB_NEGOTIATE_TIMEOUT_MS) {
+            Serial.print(F("[HUB] negotiate timeout phase="));
+            switch (phase) {
+            case NegotiatePhase::TcpConnect:
+                Serial.println(F("connect"));
+                break;
+            case NegotiatePhase::ReadResponse:
+                Serial.println(F("read"));
+                break;
+            default:
+                Serial.println(F("other"));
+                break;
+            }
+            cancel();
+            return HubNegotiateResult::Failed;
+        }
+
+        logTickIfNeeded();
+
+        const unsigned long tickDeadline = millis() + budgetMs;
+        auto budgetLeft = [&]() -> unsigned {
+            const long left = static_cast<long>(tickDeadline - millis());
+            return left > 0 ? static_cast<unsigned>(left) : 0;
+        };
+
+        while (budgetLeft() > 0) {
+            switch (phase) {
+            case NegotiatePhase::TcpConnect: {
+                IPAddress ip;
+                if (!ip.fromString(host)) {
+                    cancel();
+                    return HubNegotiateResult::Failed;
+                }
+
+                const int slice = static_cast<int>(budgetLeft() > 0 ? budgetLeft() : 1);
+#ifdef SOMNET_USE_WSS
+                if (useTls) {
+                    gNegotiateTlsClient.setInsecure();
+                    if (gNegotiateTlsClient.connected()) {
+                        phase = NegotiatePhase::SendRequest;
+                        break;
+                    }
+                    gNegotiateTlsClient.stop();
+                    if (gNegotiateTlsClient.connect(ip, port, slice)) {
+                        phase = NegotiatePhase::SendRequest;
+                        break;
+                    }
+                    return HubNegotiateResult::InProgress;
+                }
+#endif
+                if (gNegotiateClient.connected()) {
+                    phase = NegotiatePhase::SendRequest;
+                    break;
+                }
+                gNegotiateClient.stop();
+                if (gNegotiateClient.connect(ip, port, slice)) {
+                    phase = NegotiatePhase::SendRequest;
+                    break;
+                }
+                return HubNegotiateResult::InProgress;
+            }
+            case NegotiatePhase::SendRequest: {
+                Client& client = stream();
+                client.print(F("POST /hubs/hardware/negotiate?negotiateVersion=1 HTTP/1.1\r\n"));
+                client.print(F("Host: "));
+                client.print(host);
+                client.print(':');
+                client.println(port);
+                client.println(F("Content-Type: application/json"));
+                client.println(F("Accept: application/json"));
+                client.println(F("Connection: close"));
+                client.println(F("Content-Length: 2"));
+                client.println();
+                client.print(F("{}"));
+                requestSent = true;
+                phase = NegotiatePhase::ReadResponse;
+                break;
+            }
+            case NegotiatePhase::ReadResponse: {
+                Client& client = stream();
+                while (client.available() && responseLen + 1 < sizeof(response) && budgetLeft() > 0) {
+                    response[responseLen++] = static_cast<char>(client.read());
+                }
+                response[responseLen] = '\0';
+
+                if (responseComplete(client)) {
+                    int httpStatus = 0;
+                    if (parseResponse(tokenOut, tokenLen, &httpStatus)) {
+                        cancel();
+                        return HubNegotiateResult::Success;
+                    }
+
+                    Serial.print(F("[HUB] negotiate failed status="));
+                    Serial.println(httpStatus > 0 ? httpStatus : kHttpConnectionRefused);
+                    if (gActiveClient != nullptr) {
+                        gActiveClient->onNegotiateTransportError(
+                            httpStatus > 0 ? httpStatus : kHttpConnectionRefused);
+                    }
+                    if (httpStatus <= 0) {
+                        Serial.println(F("[HUB] hint: same LAN subnet as API? API bound to 0.0.0.0:5031?"));
+                    }
+                    cancel();
+                    return HubNegotiateResult::Failed;
+                }
+
+                return HubNegotiateResult::InProgress;
+            }
+            default:
+                cancel();
+                return HubNegotiateResult::Failed;
+            }
+        }
+
+        return HubNegotiateResult::InProgress;
     }
-    return true;
+};
+
+HubQuietProbeFsm gQuietProbe;
+HubNegotiateFsm gNegotiateFsm;
+
+void resetHubNetworkFsms() {
+    gQuietProbe.cancel();
+    gNegotiateFsm.cancel();
 }
 
 void sendHandshake() {
@@ -878,6 +1131,10 @@ bool SignalRClient::begin(NvsStore* nvsStore, DeviceIdentity* identity, WifiMana
     return true;
 }
 
+void SignalRClient::setExecutionActiveProbe(ExecutionActiveProbe probe) {
+    executionActiveProbe_ = probe;
+}
+
 const char* SignalRClient::hubStateLabel() const {
     switch (state_) {
     case HubConnectionState::Offline:
@@ -1127,9 +1384,9 @@ void SignalRClient::recoverNetworkTransport() {
     gPendingConnectStartedMs = 0;
     clearHandshakeState();
 
-    if (gNegotiateClient.connected()) {
-        gNegotiateClient.stop();
-    }
+    negotiateFsmActive_ = false;
+    tcpProbeFsmActive_ = false;
+    resetHubNetworkFsms();
 
     if (wifi_ != nullptr) {
         wifi_->refreshAssociation();
@@ -1147,6 +1404,9 @@ void SignalRClient::poll() {
 
     if (wifi_->isSoftAp() || !wifi_->isConnected() || !hasHubServerConfig(*nvs_)) {
         wifiLinkUpMs_ = 0;
+        negotiateFsmActive_ = false;
+        tcpProbeFsmActive_ = false;
+        resetHubNetworkFsms();
         if (state_ != HubConnectionState::Offline) {
             gSuppressDisconnectNotify = true;
             gWs.disconnect();
@@ -1276,12 +1536,75 @@ void SignalRClient::poll() {
         bool probeTls = false;
         if (parseServerUrl(serverUrl, probeHost, sizeof(probeHost), &probePort, &probeTls)) {
             IPAddress probeIp;
-            if (probeIp.fromString(probeHost) && !probeTcpHostQuiet(probeIp, probePort)) {
-                enterServerUnavailable(kHttpConnectionRefused);
-                return;
+            if (probeIp.fromString(probeHost)) {
+                if (!tcpProbeFsmActive_) {
+                    gQuietProbe.start(probeIp, probePort);
+                    tcpProbeFsmActive_ = true;
+                }
+
+                const HubTcpProbeResult probeResult =
+                    gQuietProbe.tick(HUB_NETWORK_TICK_BUDGET_MS);
+                if (probeResult == HubTcpProbeResult::InProgress) {
+                    state_ = HubConnectionState::Backoff;
+                    return;
+                }
+
+                tcpProbeFsmActive_ = false;
+                if (probeResult != HubTcpProbeResult::Open) {
+                    enterServerUnavailable(kHttpConnectionRefused);
+                    return;
+                }
             }
         }
         serverUnavailable_ = false;
+    }
+
+    if (negotiateFsmActive_) {
+        if (hasApiIp) {
+            wifi_->pokeHostArp(apiIp);
+        }
+        state_ = HubConnectionState::Negotiating;
+        const HubNegotiateResult negotiateResult =
+            gNegotiateFsm.tick(*nvs_, gConnectionToken, sizeof(gConnectionToken), HUB_NETWORK_TICK_BUDGET_MS);
+        if (negotiateResult == HubNegotiateResult::InProgress) {
+            return;
+        }
+
+        negotiateFsmActive_ = false;
+        if (negotiateResult != HubNegotiateResult::Success) {
+            if (hasApiIp) {
+                wifi_->pokeHostArp(apiIp);
+                if (!wifi_->isHostArpResolved(apiIp)) {
+                    beginArpWarm(apiIp);
+                }
+            }
+            if (!serverUnavailable_) {
+                Serial.print(F("[HUB] retry in "));
+                Serial.print(backoffMs_ / 1000);
+                Serial.println(F(" s"));
+                nextAttemptMs_ = millis() + backoffMs_;
+                backoffMs_ = min(backoffMs_ * 2, HUB_RETRY_MAX_MS);
+            }
+            state_ = HubConnectionState::Backoff;
+            return;
+        }
+
+        backoffMs_ = HUB_RETRY_BASE_MS;
+        pendingConnect_ = true;
+        state_ = HubConnectionState::Connecting;
+
+        if (!startWebSocket(*nvs_, *identity_)) {
+            pendingConnect_ = false;
+            nextAttemptMs_ = millis() + backoffMs_;
+            backoffMs_ = min(backoffMs_ * 2, HUB_RETRY_MAX_MS);
+            state_ = HubConnectionState::Backoff;
+        }
+        return;
+    }
+
+    if (executionActiveProbe_ != nullptr && executionActiveProbe_()) {
+        state_ = HubConnectionState::Backoff;
+        return;
     }
 
     if (hasApiIp) {
@@ -1291,10 +1614,7 @@ void SignalRClient::poll() {
     state_ = HubConnectionState::Negotiating;
     handshakeComplete_ = false;
 
-    if (!negotiateConnectionToken(*nvs_, gConnectionToken, sizeof(gConnectionToken))) {
-        if (!serverUnavailable_ && hasApiIp && !wifi_->isHostArpResolved(apiIp)) {
-            beginArpWarm(apiIp);
-        }
+    if (!gNegotiateFsm.start(*nvs_)) {
         if (!serverUnavailable_) {
             Serial.print(F("[HUB] retry in "));
             Serial.print(backoffMs_ / 1000);
@@ -1306,23 +1626,14 @@ void SignalRClient::poll() {
         return;
     }
 
-    backoffMs_ = HUB_RETRY_BASE_MS;
-    pendingConnect_ = true;
-    state_ = HubConnectionState::Connecting;
-
-    if (!startWebSocket(*nvs_, *identity_)) {
-        pendingConnect_ = false;
-        nextAttemptMs_ = millis() + backoffMs_;
-        backoffMs_ = min(backoffMs_ * 2, HUB_RETRY_MAX_MS);
-        state_ = HubConnectionState::Backoff;
-        return;
-    }
-
-    // Defer handshake + further hub work to next loop iteration (shallower stack).
+    negotiateFsmActive_ = true;
     return;
 }
 
 void SignalRClient::onTransportLost(bool immediateRetry) {
+    negotiateFsmActive_ = false;
+    tcpProbeFsmActive_ = false;
+    resetHubNetworkFsms();
     pendingConnect_ = false;
     gPendingConnectStartedMs = 0;
     clearHandshakeState();

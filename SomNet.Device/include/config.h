@@ -55,6 +55,13 @@ constexpr unsigned long HUB_SERVER_UNAVAILABLE_RETRY_MS = 30000;
 /** On STA, start config HTTP this long after Wi-Fi has an IP (not gated on hub). */
 constexpr unsigned long CONFIG_HTTP_STA_SETTLE_MS = 3000;
 /** On setup AP (192.168.4.1), HTTP starts immediately — no settle. */
+/** STA: rebind HTTP if no GET within this window after boot settle (Phase 12 P12-D4). */
+constexpr unsigned long CONFIG_HTTP_HEALTH_NO_GET_MS = 10000;
+constexpr unsigned CONFIG_HTTP_HEALTH_REBIND_MAX = 1;
+/** Do not health-rebind until this long after STA IP (covers hub cold boot settle). */
+constexpr unsigned long CONFIG_HTTP_HEALTH_GRACE_MS = HUB_COLD_BOOT_SETTLE_MS;
+/** Max blocking network I/O per hub poll tick (Phase 12 P12-D2). */
+constexpr unsigned HUB_NETWORK_TICK_BUDGET_MS = 5;
 
 /** Non-blocking ARP warm: poke API host MAC for this long before hub negotiate. */
 constexpr unsigned long LAN_ARP_WARM_MAX_MS = 5000;

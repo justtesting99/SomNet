@@ -177,6 +177,7 @@ void setup() {
     executionContext.begin(&relayController);
     buttonInput.begin();
     signalRClient.begin(&nvsStore, &deviceIdentity, &wifiManager);
+    signalRClient.setExecutionActiveProbe([]() { return executionContext.isActive(); });
     commandHandler.begin(&executionContext, &nvsStore, &deviceIdentity, &signalRClient);
     statusLed.begin();
 

@@ -11,6 +11,8 @@
 #include <Arduino.h>
 
 static DeviceBootMode gHttpMode = DeviceBootMode::Running;
+static AsyncWebServer gHttpServer(CONFIG_HTTP_PORT);
+static bool gHttpRoutesRegistered = false;
 
 namespace {
 
@@ -48,7 +50,12 @@ void trimTrailingSlashes(char* url) {
     }
 }
 
+ConfigWebServer* gActiveHttpServer = nullptr;
+
 void logHttpRequest(AsyncWebServerRequest* request, const char* path) {
+    if (request != nullptr && request->method() == HTTP_GET && gActiveHttpServer != nullptr) {
+        gActiveHttpServer->noteFirstGet();
+    }
     Serial.print(F("[HTTP] "));
     Serial.print(request->methodToString());
     Serial.print(' ');
@@ -399,8 +406,32 @@ void ConfigWebServer::setBootMode(DeviceBootMode mode) {
 }
 
 void ConfigWebServer::resetListenState() {
+    if (started_) {
+        gHttpServer.end();
+    }
     started_ = false;
     staIpSinceMs_ = 0;
+    httpStartedMs_ = 0;
+    httpFirstGetMs_ = 0;
+}
+
+void ConfigWebServer::rebindListenState() {
+    if (!started_) {
+        return;
+    }
+    gHttpServer.end();
+    started_ = false;
+    staIpSinceMs_ = 0;
+    httpStartedMs_ = 0;
+    httpFirstGetMs_ = 0;
+    ++healthRebindCount_;
+    Serial.println(F("[HTTP] health rebind"));
+}
+
+void ConfigWebServer::noteFirstGet() {
+    if (httpFirstGetMs_ == 0) {
+        httpFirstGetMs_ = millis();
+    }
 }
 
 bool ConfigWebServer::begin(
@@ -424,6 +455,7 @@ bool ConfigWebServer::begin(
     gSignalR = signalRClient;
     gHttpMode = mode;
     staIpSinceMs_ = 0;
+    gActiveHttpServer = this;
     return true;
 }
 
@@ -438,6 +470,15 @@ void ConfigWebServer::poll() {
     }
 
     if (started_) {
+        const bool provisioningUi =
+            wifi_->isSoftAp() || mode_ == DeviceBootMode::Provisioning;
+        if (!provisioningUi && httpFirstGetMs_ == 0 && httpStartedMs_ != 0 &&
+            staIpSinceMs_ != 0 &&
+            millis() - staIpSinceMs_ >= CONFIG_HTTP_HEALTH_GRACE_MS &&
+            millis() - (staIpSinceMs_ + CONFIG_HTTP_HEALTH_GRACE_MS) >= CONFIG_HTTP_HEALTH_NO_GET_MS &&
+            healthRebindCount_ < CONFIG_HTTP_HEALTH_REBIND_MAX) {
+            rebindListenState();
+        }
         return;
     }
 
@@ -452,14 +493,14 @@ void ConfigWebServer::poll() {
         }
     }
 
-    static AsyncWebServer server(CONFIG_HTTP_PORT);
-    static bool routesRegistered = false;
-    if (!routesRegistered) {
-        registerRoutes(server);
-        routesRegistered = true;
+    if (!gHttpRoutesRegistered) {
+        registerRoutes(gHttpServer);
+        gHttpRoutesRegistered = true;
     }
-    server.begin();
+    gHttpServer.begin();
     started_ = true;
+    httpStartedMs_ = millis();
+    httpFirstGetMs_ = 0;
 
     Serial.print(F("[HTTP] server started on port "));
     Serial.println(CONFIG_HTTP_PORT);

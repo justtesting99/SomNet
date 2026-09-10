@@ -20,9 +20,12 @@ enum class HubConnectionState {
     Paired,
 };
 
+using ExecutionActiveProbe = bool (*)();
+
 class SignalRClient {
 public:
     bool begin(NvsStore* nvsStore, DeviceIdentity* identity, WifiManager* wifi);
+    void setExecutionActiveProbe(ExecutionActiveProbe probe);
     void poll();
 
     HubConnectionState hubState() const { return state_; }
@@ -67,4 +70,7 @@ private:
     unsigned long arpWarmStartedMs_ = 0;
     unsigned long lastArpPokeMs_ = 0;
     bool serverUnavailable_ = false;
+    ExecutionActiveProbe executionActiveProbe_ = nullptr;
+    bool negotiateFsmActive_ = false;
+    bool tcpProbeFsmActive_ = false;
 };
