@@ -39,6 +39,16 @@ SomNet is a full-stack web application for controlling and recording sessions be
                     │   ESP32 Device       │
                     │   (paired per Sub)   │
                     └──────────────────────┘
+
+     Video (separate path — see [13-Video-And-Camera-Architecture.md](./13-Video-And-Camera-Architecture.md)):
+
+                    ┌──────────────────────┐
+                    │  Edge gateway (Pi)   │◄── RTSP ── IP cameras (front / rear)
+                    │  HLS + snapshots     │
+                    └──────────┬───────────┘
+                               │ tunnel (not Azure video egress)
+                               ▼
+                         Browser iframes          Azure Blob ◄── JPEGs on action ack
 ```
 
 ## Projects
@@ -158,4 +168,5 @@ For deeper coverage:
 - ESP32 protocol → [SignalR & Hardware](./06-SignalR-And-Hardware.md)
 - Session summaries → [Session & History](./07-Session-And-History.md)
 - Local dev → [Development Guide](./08-Development-Guide.md)
+- Video / cameras → [Video & Camera Architecture](./13-Video-And-Camera-Architecture.md)
 - Operator usage → [User Guide](./User-Guide.md)

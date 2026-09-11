@@ -34,4 +34,5 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [UI Session Rehydration (automatic)](./10-UI-Session-Rehydration-Checklist.md) | Developers | Restore Stop/Abort after browser refresh during automatic session — **signed off** (2026-09-10) |
 | [UI Manual Session Rehydration](./11-UI-Manual-Session-Rehydration-Checklist.md) | Developers | Restore manual event log after browser refresh — **signed off** (2026-09-11) |
 | [UI Multi-Tab Sync](./12-UI-Multi-Tab-Sync-Checklist.md) | Developers | Coordinate live session/mode/sub across browser tabs — **signed off** (2026-09-11) |
+| [Video & Camera Architecture](./13-Video-And-Camera-Architecture.md) | Developers / installers | Session-scoped streams, edge gateway (Pi), webcam/IP cameras, snapshots — **design** |
 | [ESP32 Network Spec](./09-ESP32-Network-Spec.md) | Developers | **Wi‑Fi / HTTP / hub architecture** — signed off **`0.12.0-network`** (2026-09-09); S3–S6 verified |

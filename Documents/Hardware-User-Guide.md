@@ -8,6 +8,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | Developers | [ESP32 Device Plan](./09-ESP32-Device-Plan.md) · [SomNet.Device/README](../SomNet.Device/README.md) |
 | SomNet web app | [User Guide](./User-Guide.md) |
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
+| Video at tool site | [Video & Camera Architecture](./13-Video-And-Camera-Architecture.md) — Pi + cameras (separate from ESP32) |
 
 **Firmware status (2026-09-10):** Phases **0–11** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app, including **Bursts On** during automatic sessions and live **`automatic-update`** mid-session replan. Firmware **`0.12.2-phase11`**. See [Phase 11 checklist](./09-ESP32-Phase-11-Checklist.md).
 
@@ -28,6 +29,16 @@ The SomNet device is a small Wi‑Fi controller that connects **outbound** to yo
 Production enclosures may label the button differently; the **10 second hold** behavior is the same.
 
 When a stroke command runs, the relay energizes for the requested duration (milliseconds to seconds, set by the operator’s power settings in SomNet), then de-energizes. You may see the relay module’s built-in indicator LED during that time.
+
+### Video (separate from ESP32)
+
+Remote camera feeds for the operator are **not** handled by the ESP32. The supported tool-site video setup is:
+
+- **Raspberry Pi 4/5** — edge gateway (streams + snapshots)
+- **Layout A:** 1× USB webcam (front) + 1× IP camera (rear) — default
+- **Layout B:** 2× IP cameras (front + rear)
+
+No Blue Iris, Windows NVR, or extra PC server is required for SomNet video. Full design: [13-Video-And-Camera-Architecture.md](./13-Video-And-Camera-Architecture.md).
 
 ---
 

@@ -302,5 +302,7 @@ Not yet configured. Recommended direction:
 1. Azure App Service or container for API
 2. Azure SQL Database (replace LocalDB connection string)
 3. Azure SignalR Service (for scale-out hub)
+
+**Local-first policy:** Develop API, UI, ESP32, and video integration on the PC (LocalDB, LAN ESP32) before Azure deployment. Camera work does not require Azure — see [Video & Camera Architecture — §15 Deployment order](./13-Video-And-Camera-Architecture.md#15-deployment-order--local-first-azure-last).
 4. Key Vault for JWT signing key
 5. Separate CDN for UI static assets (optional — integrated hosting works for small deployments)
