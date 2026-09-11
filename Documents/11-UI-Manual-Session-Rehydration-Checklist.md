@@ -1,6 +1,6 @@
 # UI Manual Session Rehydration — browser refresh during active manual session
 
-**Status:** **Implementation complete** — bench smoke tests pending (2026-09-10)
+**Status:** **Signed off** — bench M1–M5 pass (2026-09-11)
 
 | Related | Link |
 |---------|------|
@@ -37,6 +37,7 @@
 | **P14-D5** | Device probe | **None** — manual abort probe would interrupt device; trust server summary | 2026-09-10 |
 | **P14-D6** | Mode switch on rehydrate | **`setMode('manual')`** when manual session rehydrated | 2026-09-10 |
 | **P14-D7** | Rehydrator component | **`SessionRehydrator`** handles both manual and automatic paths | 2026-09-10 |
+| **P14-D8** | Rehydrate trigger | **Once per page load per Dom+Sub** — do not re-run when `activeSession` clears (Switch mode / Stop) | 2026-09-11 |
 
 ---
 
@@ -69,11 +70,11 @@
 
 | # | Steps | Pass criteria | Result |
 |---|-------|---------------|--------|
-| **M1** | Manual: 2 strokes; refresh; 1 more stroke; **End session** | One session row; summary includes all 3 strokes | ☐ |
-| **M2** | Manual: stroke + burst; refresh; end session | Parsed events include burst params; single session row | ☐ |
-| **M3** | Manual: stroke; **Abort** mid-burst; refresh; end | Abort count restored; summary correct | ☐ |
-| **M4** | No active session; refresh (manual mode) | No spurious `activeSession`; first stroke starts new session | ☐ |
-| **M5** | In-progress automatic session; refresh | Automatic path unchanged (P13 regression) | ☐ |
+| **M1** | Manual: 2 strokes; refresh; 1 more stroke; **End session** | One session row; summary includes all 3 strokes | ☑ **2026-09-11** |
+| **M2** | Manual: stroke + burst; refresh; end session | Parsed events include burst params; single session row | ☑ **2026-09-11** |
+| **M3** | Manual: stroke; **Abort** mid-burst; refresh; end | Abort count restored; summary correct | ☑ **2026-09-11** |
+| **M4** | No active session; refresh (manual mode) | No spurious `activeSession`; first stroke starts new session | ☑ **2026-09-11** |
+| **M5** | In-progress automatic session; refresh | Automatic path unchanged (P13 regression) | ☑ **2026-09-11** |
 
 ---
 
@@ -82,7 +83,7 @@
 ```text
 Page load
   → OptionsProvider fetch settings
-  → SessionRehydrator (after settingsLoaded, no activeSession)
+  → SessionRehydrator (after settingsLoaded; once per Dom+Sub per load)
        → GET /api/sessions/active?subTarget=
        → if manual + isSessionInProgress(summary):
             parseManualInProgressSummary(summary)
@@ -95,8 +96,39 @@ Page load
 
 ---
 
+## 6. Bench notes (2026-09-11)
+
+**M1** — three manual strokes (2 pre-refresh @ 50%, 1 post-refresh); single session row on end.
+
+Serial (`esp32-84CCA85C36B4` / `Slv66`):
+
+- `06:58:32` stroke @ 50% (217 ms)
+- `06:58:35` stroke @ 50% (218 ms)
+- refresh
+- `06:58:41` stroke @ 50% (218 ms)
+
+**M2** — stroke + 2-stroke burst; refresh; end session; burst params preserved in summary.
+
+- `07:02:35` stroke @ 59% (253 ms)
+- `07:02:36` burst 2× @ 59%, 2 s delay — complete
+
+**M3** — 4-stroke burst aborted after stroke 2; refresh; abort count restored.
+
+- `07:03:57` burst start 4× @ 43%, 5 s delay
+- `07:04:05` abort — `strokesCompleted=2`, `interrupted=true`
+
+**M4** — idle refresh in manual mode; no spurious session.
+
+**M5** — automatic refresh regression; P13 path unchanged.
+
+**Switch mode fix (2026-09-11):** Rehydrator no longer re-runs when `activeSession` clears after **Switch mode** (P14-D8).
+
+---
+
 ## Document history
 
 | Date | Change |
 |------|--------|
 | 2026-09-10 | Initial checklist — P14-D1–D7; implementation + unit tests |
+| 2026-09-11 | P14-D8 — rehydrate once per Dom+Sub; Switch mode no longer forced back to active mode |
+| 2026-09-11 | **M1–M5 pass** — phase signed off |

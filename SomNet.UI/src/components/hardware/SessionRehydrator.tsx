@@ -25,6 +25,7 @@ export function SessionRehydrator() {
   const { isLoading, settingsLoaded, settings, setAutomaticRunningLocal } = useOptions();
   const { activeSession, rehydrateSession } = useLiveSession();
   const settingsRef = useRef(settings);
+  const attemptedRehydrationKeyRef = useRef<string | null>(null);
 
   settingsRef.current = settings;
 
@@ -34,6 +35,13 @@ export function SessionRehydrator() {
     if (!domTarget || isLoading || !settingsLoaded || activeSession) {
       return;
     }
+
+    const rehydrationKey = `${domTarget}:${selectedSub}`;
+    if (attemptedRehydrationKeyRef.current === rehydrationKey) {
+      return;
+    }
+
+    attemptedRehydrationKeyRef.current = rehydrationKey;
 
     let cancelled = false;
 

@@ -45,7 +45,7 @@ Full documentation lives in the [`Documents/`](Documents/) folder. See [Document
 | [Hardware User Guide](Documents/Hardware-User-Guide.md) | ESP32 setup, Wi‑Fi provisioning, Device ID, pairing |
 | [ESP32 Device Plan](Documents/09-ESP32-Device-Plan.md) | Firmware plan — **source of truth** (Phases 0–12 signed off) |
 | [UI Session Rehydration](Documents/10-UI-Session-Rehydration-Checklist.md) | Browser refresh during automatic session — **signed off** |
-| [UI Manual Session Rehydration](Documents/11-UI-Manual-Session-Rehydration-Checklist.md) | Browser refresh during manual session |
+| [UI Manual Session Rehydration](Documents/11-UI-Manual-Session-Rehydration-Checklist.md) | Browser refresh during manual session — **signed off** |
 | [SomNet.Device/README](SomNet.Device/README.md) | Build, flash, and test ESP32 firmware |
 
 **ESP32 phase checklists:** [0](Documents/09-ESP32-Phase-0-Checklist.md) · … · [11](Documents/09-ESP32-Phase-11-Checklist.md) · [12](Documents/09-ESP32-Phase-12-Network-Hardening-Checklist.md) · [UI rehydration](Documents/10-UI-Session-Rehydration-Checklist.md) · [manual rehydration](Documents/11-UI-Manual-Session-Rehydration-Checklist.md) — **0–12 + UI rehydration signed off** (firmware **`0.13.0-network`**)

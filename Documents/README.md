@@ -32,5 +32,5 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [ESP32 Phase 11 Checklist](./09-ESP32-Phase-11-Checklist.md) | Developers | Live automatic settings (`automatic-update`) — **Signed off** (2026-09-10) |
 | [ESP32 Phase 12 Checklist](./09-ESP32-Phase-12-Network-Hardening-Checklist.md) | Developers | Network hardening — **`0.13.0-network`** **signed off** (2026-09-10) |
 | [UI Session Rehydration (automatic)](./10-UI-Session-Rehydration-Checklist.md) | Developers | Restore Stop/Abort after browser refresh during automatic session — **signed off** (2026-09-10) |
-| [UI Manual Session Rehydration](./11-UI-Manual-Session-Rehydration-Checklist.md) | Developers | Restore manual event log after browser refresh — implementation complete (2026-09-10) |
+| [UI Manual Session Rehydration](./11-UI-Manual-Session-Rehydration-Checklist.md) | Developers | Restore manual event log after browser refresh — **signed off** (2026-09-11) |
 | [ESP32 Network Spec](./09-ESP32-Network-Spec.md) | Developers | **Wi‑Fi / HTTP / hub architecture** — signed off **`0.12.0-network`** (2026-09-09); S3–S6 verified |

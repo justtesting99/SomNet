@@ -1679,7 +1679,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 **Phase 12:** [Network reliability hardening](./09-ESP32-Phase-12-Network-Hardening-Checklist.md) — **signed off** 2026-09-10 on firmware **`0.13.0-network`**.
 
-**UI session rehydration:** [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md) (automatic, signed off) and [11-UI-Manual-Session-Rehydration-Checklist.md](./11-UI-Manual-Session-Rehydration-Checklist.md) (manual, 2026-09-10) — no firmware change.
+**UI session rehydration:** [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md) (automatic) and [11-UI-Manual-Session-Rehydration-Checklist.md](./11-UI-Manual-Session-Rehydration-Checklist.md) (manual) — **both signed off** (2026-09-11); no firmware change.
 
 **Known follow-ups (post–Phase 12 / UI rehydration):**
 

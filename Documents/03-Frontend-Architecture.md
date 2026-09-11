@@ -235,7 +235,7 @@ See [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checkli
 ```text
 Page load (authenticated; last mode may restore from localStorage)
   → OptionsProvider: GET /api/settings + stroke limits (running forced false in API response)
-  → SessionRehydrator (after settingsLoaded):
+  → SessionRehydrator (after settingsLoaded; once per Dom+Sub per page load):
        GET /api/sessions/active?subTarget=
        if manual + summary starts with "In progress":
             parseManualInProgressSummary → rehydrateSession + setMode('manual')
