@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useDoubleActivate } from '@/hooks/useDoubleActivate';
 
 interface VideoFeedProps {
@@ -5,11 +6,35 @@ interface VideoFeedProps {
   src?: string;
   expanded?: boolean;
   onExpand?: () => void;
+  /** Stagger iframe mount (rear after front) to avoid DirectShow camera races on Windows. */
+  loadDelayMs?: number;
 }
 
-export function VideoFeed({ label, src, expanded = false, onExpand }: VideoFeedProps) {
+export function VideoFeed({
+  label,
+  src,
+  expanded = false,
+  onExpand,
+  loadDelayMs = 0,
+}: VideoFeedProps) {
   const { onDoubleClick, onTouchEnd } = useDoubleActivate(onExpand);
   const isExpandable = Boolean(onExpand);
+  const [iframeSrc, setIframeSrc] = useState<string | undefined>(
+    loadDelayMs > 0 ? undefined : src,
+  );
+
+  useEffect(() => {
+    if (!src) {
+      setIframeSrc(undefined);
+      return;
+    }
+    if (loadDelayMs <= 0) {
+      setIframeSrc(src);
+      return;
+    }
+    const timer = window.setTimeout(() => setIframeSrc(src), loadDelayMs);
+    return () => window.clearTimeout(timer);
+  }, [src, loadDelayMs]);
 
   return (
     <div
@@ -37,15 +62,21 @@ export function VideoFeed({ label, src, expanded = false, onExpand }: VideoFeedP
       }
     >
       {src ? (
-        <iframe
-          src={src}
-          title={label}
-          className={[
-            'absolute inset-0 h-full w-full border-0',
-            isExpandable ? 'pointer-events-none' : '',
-          ].join(' ')}
-          allow="autoplay; encrypted-media; picture-in-picture"
-        />
+        iframeSrc ? (
+          <iframe
+            src={iframeSrc}
+            title={label}
+            className={[
+              'absolute inset-0 h-full w-full border-0',
+              isExpandable ? 'pointer-events-none' : '',
+            ].join(' ')}
+            allow="autoplay; encrypted-media; picture-in-picture"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-500">
+            Loading feed…
+          </div>
+        )
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center">
           <div className="rounded-full border border-dashed border-slate-600 p-3">

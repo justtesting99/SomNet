@@ -85,6 +85,42 @@ npm run dev
 
 Vite runs on http://localhost:56761 and proxies `/api` to port 5031.
 
+### 4. Local video feeds (Phase 2)
+
+With [go2rtc running](../SomNet.Edge/README.md) on the bench PC:
+
+| File | Purpose |
+|------|---------|
+| `SomNet.UI/.env.development` | URLs when using `npm run dev` |
+| `SomNet.UI/.env.production` | URLs baked into `dist/` for `dotnet run` / integrated build |
+| `SomNet.UI/.env.example` | Template |
+
+Default URLs (Phase 1a webcam bench — **same-origin** via API proxy in Development):
+
+```
+VITE_VIDEO_VIEWER_MODE=mse
+VITE_VIDEO_FRONT_URL=/go2rtc/stream.html?src=front
+VITE_VIDEO_REAR_URL=/go2rtc/stream.html?src=front
+```
+
+The API proxies `/go2rtc/*` → `http://localhost:1984/*` (YARP in `appsettings.Development.json`). Do **not** point iframes at `http://localhost:1984` from the SomNet UI — cross-origin embeds block autoplay on Windows (camera on/off, blank panels). Direct `http://localhost:1984/stream.html?...` in a top-level tab is fine for bench checks.
+
+go2rtc must allow proxied WebSocket origins — in `D:\SomNet.Edge\go2rtc.yaml`:
+
+```yaml
+api:
+  listen: ":1984"
+  origin: "*"
+```
+
+Restart go2rtc after changing that file.
+
+Use **`src=front` for both panels** until the IP rear camera is configured — one camera producer avoids choppy RTSP restream. Phase 1b: set rear to `src=rear` and add RTSP in `D:\SomNet.Edge\go2rtc.yaml`.
+
+After changing env files, rebuild UI (`npm run build`) for integrated API hosting. Omit a URL to show the placeholder for that monitor.
+
+**Note:** go2rtc must be running before opening Manual/Automatic mode. Session tokens (Phase 3) replace static env URLs later.
+
 ---
 
 ## Ports and Launch Profiles

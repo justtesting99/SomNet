@@ -12,7 +12,7 @@ Video work is **separate from ESP32 firmware phases** and **separate from UI reh
 | Phase | Checklist | Goal | Host | SomNet code? |
 |-------|-----------|------|------|--------------|
 | **1** | [Phase 1 — Edge bench](./14-Video-Phase-1-Edge-Bench-Checklist.md) | go2rtc + cameras → HLS in browser | **PC** | No — **1a in progress** |
-| **2** | [Phase 2 — UI embed](./15-Video-Phase-2-UI-Embed-Checklist.md) | `VideoFeed` iframes in dashboard (LAN URLs) | PC | UI |
+| **2** | [Phase 2 — UI embed](./15-Video-Phase-2-UI-Embed-Checklist.md) | `VideoFeed` iframes in dashboard (LAN URLs) | PC | UI — **in progress** |
 | **3** | [Phase 3 — Session tokens](./16-Video-Phase-3-Session-Tokens-Checklist.md) | API mints session-scoped stream tokens; UI fetches on session start | PC + local API | API + UI |
 | **4** | [Phase 4 — Action snapshots](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | Capture on device ack; local disk or Azurite; link to session events | PC + local API | API + edge script |
 | **5** | [Phase 5 — Edge agent](./18-Video-Phase-5-Edge-Agent-Checklist.md) | Session start/end → enable streams; token validation at gateway | PC | API + edge agent |

@@ -132,6 +132,12 @@ builder.Services.AddSignalR(options =>
 })
     .AddJsonProtocol(options => SomNetJsonOptions.Configure(options.PayloadSerializerOptions));
 
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddReverseProxy()
+        .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+}
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -239,6 +245,11 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<HardwareHub>("/hubs/hardware");
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapReverseProxy();
+}
 
 if (uiDistExists)
 {

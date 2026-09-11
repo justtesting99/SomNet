@@ -260,7 +260,7 @@ Page load (authenticated; last mode may restore from localStorage)
 
 Video expand behavior is controlled by `appOptions.autoExpandVideoOnMobile` and `appOptions.mobileVideoExpandDefault` (`None`, `Monitor1`, `Monitor2`, `Both`).
 
-> **Planned feed mapping:** Monitor 1 = front (expression, primary); Monitor 2 = rear (tool result). Delivery architecture (edge gateway, tunnel, snapshots) is documented in [13-Video-And-Camera-Architecture.md](./13-Video-And-Camera-Architecture.md) — separate from ESP32/API checklists. `VideoFeed` iframes expect HTTPS viewer URLs; snapshot URLs will attach to session events when implemented.
+**Feed mapping (Phase 2):** Dashboard labels **Front** / **Rear** (`monitor1` / `monitor2` internally). URLs from `getDashboardVideoSources()` reading `VITE_VIDEO_FRONT_URL` and `VITE_VIDEO_REAR_URL` (see [08-Development-Guide.md](./08-Development-Guide.md)). Unset env → placeholder panel. Session-scoped tokens in Phase 3. Architecture: [13-Video-And-Camera-Architecture.md](./13-Video-And-Camera-Architecture.md).
 
 ## Styling
 

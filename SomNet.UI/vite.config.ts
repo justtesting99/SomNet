@@ -25,6 +25,12 @@ export default defineConfig({
         target: 'http://localhost:5031',
         changeOrigin: true,
       },
+      '/go2rtc': {
+        target: 'http://localhost:1984',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/go2rtc/, ''),
+        ws: true,
+      },
     },
   },
 });

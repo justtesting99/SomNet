@@ -1,27 +1,28 @@
 # Video — Phase 2 UI embed (dashboard iframes)
 
-**Status:** **Blocked** — complete [Phase 1](./14-Video-Phase-1-Edge-Bench-Checklist.md) first
+**Status:** **In progress** — implementation complete; operator smoke tests pending
 
 | Related | Link |
 |---------|------|
 | Architecture | [13-Video-And-Camera-Architecture.md](./13-Video-And-Camera-Architecture.md) |
 | Frontend video components | [03-Frontend-Architecture.md](./03-Frontend-Architecture.md) — Video Components |
 | Plan | [14-Video-Implementation-Plan.md](./14-Video-Implementation-Plan.md) |
+| Phase 1 | [14-Video-Phase-1-Edge-Bench-Checklist.md](./14-Video-Phase-1-Edge-Bench-Checklist.md) — 1a pass |
 
 **Goal:** Show **live front + rear** HLS feeds inside the SomNet dashboard (`DashboardLayout` / `VideoFeed` iframes) using **dev LAN URLs** from go2rtc (no session tokens yet).
 
-**Explicitly out of scope:** Session-scoped tokens; tunnel; snapshots; pairing settings API; mobile expand default to front only (may include if trivial).
+**Explicitly out of scope:** Session-scoped tokens; tunnel; snapshots; pairing settings API.
 
 ---
 
-## Locked decisions (draft — lock before implementation)
+## Locked decisions
 
-| ID | Decision | Proposed choice |
-|----|----------|-----------------|
-| **V2-D1** | URL source v1 | Dev-only: `VITE_VIDEO_FRONT_URL` / `VITE_VIDEO_REAR_URL` env vars |
-| **V2-D2** | Feed mapping | Monitor 1 = **front**, Monitor 2 = **rear** |
-| **V2-D3** | Auth | None on iframe URL (LAN bench only); tokens in Phase 3 |
-| **V2-D4** | CSP / mixed content | SomNet dev on `localhost`; go2rtc on `http://<pc-ip>:1984` — document operator must allow or use same host proxy |
+| ID | Decision | Choice | Date |
+|----|----------|--------|------|
+| **V2-D1** | URL source v1 | `VITE_VIDEO_FRONT_URL` / `VITE_VIDEO_REAR_URL` | 2026-09-11 |
+| **V2-D2** | Feed mapping | Monitor 1 = **Front**, Monitor 2 = **Rear** | 2026-09-11 |
+| **V2-D3** | Auth | None on iframe URL (LAN bench); tokens in Phase 3 | 2026-09-11 |
+| **V2-D4** | CSP / mixed content | localhost SomNet + localhost go2rtc for v1 | 2026-09-11 |
 
 ---
 
@@ -29,19 +30,23 @@
 
 ### UI
 
-- [ ] Pass `videoSources` into `DashboardLayout` from manual + automatic mode views
-- [ ] Read front/rear base URLs from env or dev config module
-- [ ] Build iframe `src` (go2rtc `stream.html?src=front|rear` or custom embed from `SomNet.Edge`)
-- [ ] Placeholder when URL unset (current behavior)
+- [x] `config/videoSources.ts` — `getDashboardVideoSources()`
+- [x] Pass `videoSources` into `DashboardLayout` from `App.tsx` (manual + automatic)
+- [x] `.env.development` / `.env.production` / `.env.example` with go2rtc viewer URLs
+- [x] Dashboard labels **Front** / **Rear**
+- [x] Placeholder when URL unset (existing `VideoFeed` behavior)
+- [x] Unit test — `videoSources.test.ts`
 
 ### Docs
 
-- [ ] [03-Frontend-Architecture.md](./03-Frontend-Architecture.md) — videoSources wiring
-- [ ] [08-Development-Guide.md](./08-Development-Guide.md) — env vars for local video
+- [x] [03-Frontend-Architecture.md](./03-Frontend-Architecture.md) — videoSources wiring
+- [x] [08-Development-Guide.md](./08-Development-Guide.md) — env vars for local video
 
 ---
 
 ## Smoke tests
+
+**Prerequisites:** go2rtc running (`start-go2rtc-windows.ps1`); UI rebuilt if using integrated API.
 
 | # | Steps | Pass criteria | Result |
 |---|-------|---------------|--------|
@@ -63,3 +68,9 @@
 | Date | Change |
 |------|--------|
 | 2026-09-11 | Initial stub |
+| 2026-09-11 | Implementation — env URLs, App wiring, Front/Rear labels |
+| 2026-09-11 | Fix — viewer mode + defer rear iframe (Windows DirectShow race) |
+| 2026-09-11 | Perf — Phase 1a both panels `src=front`; exec libx264 for WebRTC compatibility |
+| 2026-09-11 | Fix — MP4V-ES/WebRTC mismatch → exec libx264 transcode in go2rtc.yaml |
+| 2026-09-11 | Fix — blank page on `mode=hls` in Chrome → default viewer `mse` |
+| 2026-09-11 | Fix — iframe embed blank/camera flash → same-origin `/go2rtc` API proxy (YARP) |

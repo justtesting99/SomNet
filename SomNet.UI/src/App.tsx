@@ -20,10 +20,12 @@ import { AutomaticSessionHubListener } from '@/components/hardware/AutomaticSess
 import { SessionRehydrator } from '@/components/hardware/SessionRehydrator';
 import { TabSyncProvider } from '@/context/TabSyncProvider';
 import { TabSyncBanner } from '@/components/layout/TabSyncBanner';
+import { getDashboardVideoSources } from '@/config/videoSources';
 
 export function App() {
   const { isAuthenticated, isRestoring } = useAuth();
   const { mode } = useMode();
+  const videoSources = getDashboardVideoSources();
 
   if (isRestoring) {
     return (
@@ -60,6 +62,7 @@ export function App() {
                                 controls={
                                   mode === 'manual' ? <ManualControls /> : <AutomaticControls />
                                 }
+                                videoSources={videoSources}
                               />
                             </HardwareCommandProvider>
                           </VideoDisplayProvider>

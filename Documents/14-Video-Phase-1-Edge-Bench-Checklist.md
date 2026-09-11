@@ -192,6 +192,10 @@ No tunnel, no SomNet, no Azure.
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | **`Could not set video options`** / I/O on **HD User Facing** | Forced `video_size` / `framerate` not supported | Use `ffmpeg:device?video=0#video=h264` only (no size/fps in yaml) |
+| **WebRTC `MP4V-ES` codec not matched** | Camera not outputting H264 | Use `exec:` ffmpeg **libx264** in go2rtc.yaml |
+| **Blank stream.html, camera on/off, no errors** | `mode=hls` only on Chrome/Edge | Use `mode=mse` or `mode=webrtc,mse` (not hls alone on Windows) |
+| **`Could not find video device with name ["HD]`** / `video="HD.` | Wrong dshow quoting in `exec:` line | Use `-i "video=HD User Facing"` (quotes around whole input), not `video="HD User Facing"` |
+| **`websocket: request origin not allowed`** | UI/proxy Origin ≠ go2rtc Host (:1984) | Add `api.origin: "*"` in go2rtc.yaml; restart go2rtc |
 | `Error opening output file 0` / mjpeg decode errors on **front** | Wrong device index or camera in use | Run `list-camera-devices.ps1`; close Zoom/Teams/Camera app |
 | **`bind: Only one usage of each socket address`** | go2rtc already running (duplicate start) | `.\SomNet.Edge\scripts\stop-go2rtc-windows.ps1` or close other PowerShell window |
 | HLS errors on **rear** with `lavfi` / `testsrc` | Linux-only test source on **go2rtc win32** build | Use `rtsp://127.0.0.1:8554/front` for Phase 1a |

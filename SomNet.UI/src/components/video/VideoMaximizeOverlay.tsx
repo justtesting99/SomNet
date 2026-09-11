@@ -28,9 +28,9 @@ export function VideoMaximizeOverlay({ sources }: VideoMaximizeOverlayProps) {
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-white">
             {expandMode === 'monitor1'
-              ? 'Monitor 1'
+              ? 'Front'
               : expandMode === 'monitor2'
-                ? 'Monitor 2'
+                ? 'Rear'
                 : 'Video monitors'}
           </p>
           <p className="text-xs text-slate-400">
@@ -58,7 +58,7 @@ export function VideoMaximizeOverlay({ sources }: VideoMaximizeOverlayProps) {
                 : 'flex w-full shrink-0 items-center justify-center px-3 sm:px-4'
             }
           >
-            <VideoFeed label="Monitor 1" src={sources[0]} expanded />
+            <VideoFeed label="Front" src={sources[0]} expanded />
           </div>
         ) : null}
         {showMonitor2 ? (
@@ -69,7 +69,7 @@ export function VideoMaximizeOverlay({ sources }: VideoMaximizeOverlayProps) {
                 : 'flex w-full shrink-0 items-center justify-center px-3 sm:px-4'
             }
           >
-            <VideoFeed label="Monitor 2" src={sources[1]} expanded />
+            <VideoFeed label="Rear" src={sources[1]} expanded />
           </div>
         ) : null}
       </div>

@@ -6,6 +6,8 @@ log:
 
 api:
   listen: ":1984"
+  # Required for SomNet UI iframe embed via API /go2rtc proxy (Phase 2 bench)
+  origin: "*"
 
 rtsp:
   listen: ":8554"
@@ -14,14 +16,13 @@ streams:
   # --- Windows (Phase 1a) ---
   # Run list-camera-devices.ps1 — use video=0, video=1, ... (DirectShow index)
   # Do NOT use Linux-only lavfi/testsrc for rear on Windows go2rtc builds.
+  # Windows: if WebRTC shows MP4V-ES codec error, use exec libx264 (see D:\SomNet.Edge\go2rtc.yaml)
   front:
     - ffmpeg:device?video=0#video=h264
-  # Optional if camera supports it (test with ffmpeg dshow first):
-  # - ffmpeg:device?video=0&video_size=1280x720&framerate=15#video=h264
+  # Or explicit transcode, e.g.:
+  # - 'exec:ffmpeg -hide_banner -f dshow -i "video=HD User Facing" -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 25 -an -f mpegts -'
 
-  # Phase 1a placeholder: restream front until IP camera configured
-  rear:
-    - rtsp://127.0.0.1:8554/front
+  # Phase 1a: SomNet UI uses src=front for BOTH panels (no rear stream here)
 
   # --- Phase 1b: IP rear (Layout A or B front+rear) ---
   # rear:

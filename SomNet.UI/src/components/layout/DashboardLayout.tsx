@@ -4,6 +4,7 @@ import { useIsMobileViewport } from '@/hooks/useIsMobileViewport';
 import { VideoMonitor } from '@/components/video/VideoMonitor';
 import { VideoMaximizeOverlay } from '@/components/video/VideoMaximizeOverlay';
 import { Button } from '@/components/ui/Button';
+import { REAR_VIDEO_LOAD_DELAY_MS } from '@/config/videoSources';
 
 interface DashboardLayoutProps {
   controls: ReactNode;
@@ -36,16 +37,18 @@ export function DashboardLayout({ controls, videoSources = [] }: DashboardLayout
           ) : null}
 
           <VideoMonitor
-            label="Monitor 1"
+            label="Front"
             src={sources[0]}
             showMaximize={isMobile}
             onMaximize={() => setExpandMode('monitor1')}
+            loadDelayMs={0}
           />
           <VideoMonitor
-            label="Monitor 2"
+            label="Rear"
             src={sources[1]}
             showMaximize={isMobile}
             onMaximize={() => setExpandMode('monitor2')}
+            loadDelayMs={sources[0] && sources[1] ? REAR_VIDEO_LOAD_DELAY_MS : 0}
           />
         </aside>
       </div>

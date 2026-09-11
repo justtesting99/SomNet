@@ -37,7 +37,7 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Video & Camera Architecture](./13-Video-And-Camera-Architecture.md) | Developers / installers | Session-scoped streams, edge gateway (Pi), webcam/IP cameras, snapshots — **design** |
 | [Video Implementation Plan](./14-Video-Implementation-Plan.md) | Developers | Phases 1–8 roadmap — **Phase 1 not started** |
 | [Video Phase 1 — Edge bench](./14-Video-Phase-1-Edge-Bench-Checklist.md) | Developers | go2rtc on PC, HLS in browser — **active** |
-| [Video Phase 2 — UI embed](./15-Video-Phase-2-UI-Embed-Checklist.md) | Developers | Dashboard iframes — blocked |
+| [Video Phase 2 — UI embed](./15-Video-Phase-2-UI-Embed-Checklist.md) | Developers | Dashboard iframes — **in progress** |
 | [Video Phase 3 — Session tokens](./16-Video-Phase-3-Session-Tokens-Checklist.md) | Developers | API session-scoped tokens — blocked |
 | [Video Phase 4 — Action snapshots](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | Developers | Stills on ack (local storage) — blocked |
 | [Video Phase 5 — Edge agent](./18-Video-Phase-5-Edge-Agent-Checklist.md) | Developers | Session lifecycle on gateway — blocked |
