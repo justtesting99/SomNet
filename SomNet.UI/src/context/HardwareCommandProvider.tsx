@@ -2,12 +2,14 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from 'react';
 import type { HardwareCommandKey, HardwareCommandStatus } from '@/types/hardwareCommand';
+import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
 
 interface HardwareCommandContextValue {
   getCommandStatus: (commandKey: HardwareCommandKey) => HardwareCommandStatus;
@@ -59,6 +61,18 @@ export function HardwareCommandProvider({ children }: { children: ReactNode }) {
     (commandKey: HardwareCommandKey) => pendingKeys.has(commandKey),
     [pendingKeys],
   );
+
+  useEffect(() => {
+    if (!shouldBroadcastLocalChange()) {
+      return;
+    }
+
+    postTabSync({
+      type: 'command-lock',
+      tabId: getTabId(),
+      keys: [...pendingKeys],
+    });
+  }, [pendingKeys]);
 
   const value = useMemo(
     () => ({

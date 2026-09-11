@@ -184,6 +184,8 @@ A helper banner explains that changes apply after the current stroke. **Delay be
 
 **Browser refresh:** If you reload during an **automatic** session, the app restores **Stop / Abort** when the device is still running (server + device probe). After the session ends, a refresh shows **Start** as normal. During a **manual** session, refresh restores your in-progress session so the next stroke continues on the same history row.
 
+**Multiple browser tabs:** You can open SomNet in more than one tab while signed in as the same Dom. Session state (automatic **Stop/Abort**, manual strokes, selected Sub, sign-out) stays aligned across tabs. If another tab is sending a command, you'll see a short banner and **Start** / **Stroke** buttons are temporarily disabled in this tab.
+
 A **visual session timeline or graph** (preview before start or replay in history) is planned for a future release — not available yet.
 
 ---

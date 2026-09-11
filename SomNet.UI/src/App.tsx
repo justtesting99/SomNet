@@ -18,6 +18,8 @@ import { ManualControls } from '@/components/modes/ManualControls';
 import { AutomaticControls } from '@/components/modes/AutomaticControls';
 import { AutomaticSessionHubListener } from '@/components/hardware/AutomaticSessionHubListener';
 import { SessionRehydrator } from '@/components/hardware/SessionRehydrator';
+import { TabSyncProvider } from '@/context/TabSyncProvider';
+import { TabSyncBanner } from '@/components/layout/TabSyncBanner';
 
 export function App() {
   const { isAuthenticated, isRestoring } = useAuth();
@@ -41,29 +43,32 @@ export function App() {
         <DomSessionsProvider>
           <HardwareProvider>
             <OptionsProvider>
-              <NotifyProvider>
-                <AutomaticSessionHubListener />
-                <SessionRehydrator />
-                <HistoryProvider>
-                  <SystemStatusProvider enabled>
-                    <AppShell wide={mode !== null}>
-                      {!mode ? (
-                        <ModeSelector />
-                      ) : (
-                        <VideoDisplayProvider>
-                          <HardwareCommandProvider>
-                            <DashboardLayout
-                              controls={
-                                mode === 'manual' ? <ManualControls /> : <AutomaticControls />
-                              }
-                            />
-                          </HardwareCommandProvider>
-                        </VideoDisplayProvider>
-                      )}
-                    </AppShell>
-                  </SystemStatusProvider>
-                </HistoryProvider>
-              </NotifyProvider>
+              <TabSyncProvider>
+                <NotifyProvider>
+                  <AutomaticSessionHubListener />
+                  <SessionRehydrator />
+                  <HistoryProvider>
+                    <SystemStatusProvider enabled>
+                      <AppShell wide={mode !== null}>
+                        <TabSyncBanner />
+                        {!mode ? (
+                          <ModeSelector />
+                        ) : (
+                          <VideoDisplayProvider>
+                            <HardwareCommandProvider>
+                              <DashboardLayout
+                                controls={
+                                  mode === 'manual' ? <ManualControls /> : <AutomaticControls />
+                                }
+                              />
+                            </HardwareCommandProvider>
+                          </VideoDisplayProvider>
+                        )}
+                      </AppShell>
+                    </SystemStatusProvider>
+                  </HistoryProvider>
+                </NotifyProvider>
+              </TabSyncProvider>
             </OptionsProvider>
           </HardwareProvider>
         </DomSessionsProvider>

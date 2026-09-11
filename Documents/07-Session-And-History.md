@@ -261,6 +261,12 @@ Hub finalize (`AutomaticSessionHubListener`) gates on **`activeSession?.mode ===
 
 See [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md) and [11-UI-Manual-Session-Rehydration-Checklist.md](./11-UI-Manual-Session-Rehydration-Checklist.md).
 
+### Multi-tab sync (live tabs)
+
+`TabSyncProvider` broadcasts session, `running`, sub, and command-lock state across tabs via `BroadcastChannel`. Auth and mode use `localStorage` `storage` events. New tabs send `request-sync` on load; visible tabs reconcile via `GET /api/sessions/active`.
+
+See [12-UI-Multi-Tab-Sync-Checklist.md](./12-UI-Multi-Tab-Sync-Checklist.md).
+
 ---
 
 ## SessionProvider Key Methods

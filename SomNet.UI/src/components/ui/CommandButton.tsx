@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { useHardwareCommand } from '@/context/HardwareCommandProvider';
+import { useTabSync } from '@/context/TabSyncProvider';
 import type { HardwareCommandKey } from '@/types/hardwareCommand';
 import { Button } from '@/components/ui/Button';
 
@@ -20,13 +21,14 @@ export function CommandButton({
   ...props
 }: CommandButtonProps) {
   const { executeCommand, isCommandPending } = useHardwareCommand();
+  const { hasRemoteCommandLock } = useTabSync();
   const pending = isCommandPending(commandKey);
 
   return (
     <Button
       {...props}
       pending={pending}
-      disabled={disabled || pending}
+      disabled={disabled || pending || hasRemoteCommandLock}
       aria-busy={pending}
       onClick={() => void executeCommand(commandKey, onCommand)}
     >

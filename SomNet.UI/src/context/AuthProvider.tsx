@@ -16,6 +16,9 @@ import {
 import { ApiError } from '@/api/client';
 import { setUnauthorizedHandler } from '@/api/client';
 import type { AuthSession, LoginCredentials, RegisterCredentials, User } from '@/types/auth';
+import { withRemoteSyncApply } from '@/utils/tabSync';
+
+export const AUTH_STORAGE_KEY = 'somnet-auth';
 
 export interface AuthContextValue {
   user: User | null;
@@ -46,9 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     applySessionToken(nextSession);
 
     if (nextSession) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSession));
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextSession));
     } else {
-      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(AUTH_STORAGE_KEY);
     }
   }, []);
 
@@ -105,6 +108,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUnauthorizedHandler(logout);
     return () => setUnauthorizedHandler(null);
   }, [logout]);
+
+  useEffect(() => {
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== AUTH_STORAGE_KEY) {
+        return;
+      }
+
+      if (!event.newValue) {
+        withRemoteSyncApply(() => {
+          persistSession(null);
+        });
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(event.newValue) as AuthSession;
+        if (!parsed.user || !parsed.token?.accessToken) {
+          return;
+        }
+
+        withRemoteSyncApply(() => {
+          persistSession(parsed);
+        });
+      } catch {
+        // Ignore malformed cross-tab auth payloads.
+      }
+    }
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [persistSession]);
 
   useEffect(() => {
     let cancelled = false;
@@ -165,11 +199,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-const STORAGE_KEY = 'somnet-auth';
-
 function loadStoredSession(): AuthSession | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
     if (!raw) {
       return null;
     }

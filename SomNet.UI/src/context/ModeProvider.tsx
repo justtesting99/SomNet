@@ -1,6 +1,19 @@
-import { createContext, useContext, type ReactNode, useState, useCallback } from 'react';
+import {
+  createContext,
+  useContext,
+  type ReactNode,
+  useState,
+  useCallback,
+  useEffect,
+} from 'react';
 import type { OperationMode } from '@/types/modes';
-import { readLastOperationMode, writeLastOperationMode } from '@/config/operationMode';
+import {
+  readLastOperationMode,
+  writeLastOperationMode,
+  OPERATION_MODE_STORAGE_KEY,
+  isValidOperationMode,
+} from '@/config/operationMode';
+import { withRemoteSyncApply } from '@/utils/tabSync';
 
 interface ModeContextValue {
   mode: OperationMode | null;
@@ -15,6 +28,28 @@ export function ModeProvider({ children }: { children: ReactNode }) {
   const setMode = useCallback((nextMode: OperationMode | null) => {
     setModeState(nextMode);
     writeLastOperationMode(nextMode);
+  }, []);
+
+  useEffect(() => {
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== OPERATION_MODE_STORAGE_KEY) {
+        return;
+      }
+
+      withRemoteSyncApply(() => {
+        if (event.newValue && isValidOperationMode(event.newValue)) {
+          setModeState(event.newValue);
+          return;
+        }
+
+        if (event.newValue === null) {
+          setModeState(null);
+        }
+      });
+    }
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   return (

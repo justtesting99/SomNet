@@ -14,7 +14,7 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 **End-user / installer documentation:** [Hardware User Guide](./Hardware-User-Guide.md) — provisioning, Wi‑Fi recovery (10 s button hold), Device ID, relay operation.
 
-**Implementation progress (2026-09-10):** Phases **0–12 signed off**. Current firmware **`0.13.0-network`** — manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On**; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; network hardening (Phase 12); **`resultJson`** end-to-end. SomNet UI: session rehydration on browser refresh (automatic + manual) — [10](./10-UI-Session-Rehydration-Checklist.md) / [11](./11-UI-Manual-Session-Rehydration-Checklist.md). See §10.
+**Implementation progress (2026-09-10):** Phases **0–12 signed off**. Current firmware **`0.13.0-network`** — manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On**; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; network hardening (Phase 12); **`resultJson`** end-to-end. SomNet UI: session rehydration [10](./10-UI-Session-Rehydration-Checklist.md) / [11](./11-UI-Manual-Session-Rehydration-Checklist.md) + multi-tab sync [12](./12-UI-Multi-Tab-Sync-Checklist.md) — all signed off. See §10.
 
 **Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 12 (network hardening) signed off (2026-09-10).** SomNet API/UI integration complete for manual and automatic commands (Phases 8–12 UI follow-up).
 
@@ -1679,7 +1679,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 **Phase 12:** [Network reliability hardening](./09-ESP32-Phase-12-Network-Hardening-Checklist.md) — **signed off** 2026-09-10 on firmware **`0.13.0-network`**.
 
-**UI session rehydration:** [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md) (automatic) and [11-UI-Manual-Session-Rehydration-Checklist.md](./11-UI-Manual-Session-Rehydration-Checklist.md) (manual) — **both signed off** (2026-09-11); no firmware change.
+**UI session rehydration + multi-tab sync:** [10](./10-UI-Session-Rehydration-Checklist.md) · [11](./11-UI-Manual-Session-Rehydration-Checklist.md) · [12](./12-UI-Multi-Tab-Sync-Checklist.md) — **signed off** (2026-09-11); no firmware change.
 
 **Known follow-ups (post–Phase 12 / UI rehydration):**
 

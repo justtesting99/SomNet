@@ -6,11 +6,14 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { DEFAULT_SUB_TARGET, type SubTargetName } from '@/config/sessionUsers';
+import { type SubTargetName } from '@/config/sessionUsers';
+import { readSelectedSub, writeSelectedSub } from '@/config/selectedSub';
+import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
 
 interface SubTargetContextValue {
   selectedSub: SubTargetName;
   setSelectedSub: (sub: SubTargetName) => void;
+  applySubFromSync: (sub: SubTargetName) => void;
   isDialogOpen: boolean;
   openDialog: () => void;
   closeDialog: () => void;
@@ -19,8 +22,22 @@ interface SubTargetContextValue {
 const SubTargetContext = createContext<SubTargetContextValue | null>(null);
 
 export function SubTargetProvider({ children }: { children: ReactNode }) {
-  const [selectedSub, setSelectedSub] = useState<SubTargetName>(DEFAULT_SUB_TARGET);
+  const [selectedSub, setSelectedSubState] = useState<SubTargetName>(() => readSelectedSub());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  const applySubFromSync = useCallback((sub: SubTargetName) => {
+    setSelectedSubState(sub);
+    writeSelectedSub(sub);
+  }, []);
+
+  const setSelectedSub = useCallback((sub: SubTargetName) => {
+    setSelectedSubState(sub);
+    writeSelectedSub(sub);
+
+    if (shouldBroadcastLocalChange()) {
+      postTabSync({ type: 'sub', tabId: getTabId(), subTarget: sub });
+    }
+  }, []);
 
   const openDialog = useCallback(() => {
     setIsDialogOpen(true);
@@ -34,11 +51,12 @@ export function SubTargetProvider({ children }: { children: ReactNode }) {
     () => ({
       selectedSub,
       setSelectedSub,
+      applySubFromSync,
       isDialogOpen,
       openDialog,
       closeDialog,
     }),
-    [selectedSub, isDialogOpen, openDialog, closeDialog],
+    [selectedSub, setSelectedSub, applySubFromSync, isDialogOpen, openDialog, closeDialog],
   );
 
   return <SubTargetContext.Provider value={value}>{children}</SubTargetContext.Provider>;

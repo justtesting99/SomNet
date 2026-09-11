@@ -2,12 +2,18 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { startSession as startSessionApi, endSession as endSessionApi, updateSession as updateSessionApi } from '@/api/sessions';
+import {
+  fetchActiveSession,
+  startSession as startSessionApi,
+  endSession as endSessionApi,
+  updateSession as updateSessionApi,
+} from '@/api/sessions';
 import { useAuth } from '@/context/AuthProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import type { SubTargetName } from '@/config/sessionUsers';
@@ -21,6 +27,8 @@ import {
 import type { AutomaticResultJson } from '@/utils/automaticResultJson';
 import type { SessionHistoryEntry } from '@/types/sessionHistory';
 import { parseManualInProgressSummary } from '@/utils/manualSessionRehydrate';
+import { isRehydratableManualSession } from '@/utils/sessionProgress';
+import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
 
 interface ActiveSessionState {
   id: string;
@@ -49,6 +57,7 @@ interface SessionContextValue {
   ) => Promise<void>;
   endActiveSessionIfNeeded: (reason: ManualSessionEndReason | string) => Promise<void>;
   rehydrateSession: (entry: SessionHistoryEntry) => void;
+  syncSessionFromRemote: (entry: SessionHistoryEntry | null) => void;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -83,6 +92,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [buildManualSummary],
   );
 
+  const buildSessionFromEntry = useCallback((entry: SessionHistoryEntry): ActiveSessionState => {
+    const manualProgress =
+      entry.mode === 'manual' ? parseManualInProgressSummary(entry.summary) : null;
+
+    return {
+      id: entry.id,
+      startedAt: entry.startedAt,
+      mode: entry.mode,
+      subTarget: entry.subTarget,
+      events: manualProgress?.events ?? [],
+      abortCount: manualProgress?.abortCount ?? 0,
+    };
+  }, []);
+
   const ensureManualSession = useCallback(async () => {
     if (activeSessionRef.current || startingRef.current || !domTarget) {
       return;
@@ -91,6 +114,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     startingRef.current = true;
 
     try {
+      const existing = await fetchActiveSession(selectedSub);
+      if (existing && isRehydratableManualSession(existing)) {
+        const nextSession = buildSessionFromEntry(existing);
+        activeSessionRef.current = nextSession;
+        setActiveSession(nextSession);
+        return;
+      }
+
       const entry = await startSessionApi(selectedSub, 'manual');
       const nextSession: ActiveSessionState = {
         id: entry.id,
@@ -105,7 +136,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     } finally {
       startingRef.current = false;
     }
-  }, [domTarget, selectedSub]);
+  }, [buildSessionFromEntry, domTarget, selectedSub]);
 
   const finalizeSession = useCallback(async (summary: string) => {
     const current = activeSessionRef.current;
@@ -241,25 +272,58 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [finalizeSession],
   );
 
-  const rehydrateSession = useCallback((entry: SessionHistoryEntry) => {
-    if (activeSessionRef.current || startingRef.current) {
+  const rehydrateSession = useCallback(
+    (entry: SessionHistoryEntry) => {
+      if (activeSessionRef.current || startingRef.current) {
+        return;
+      }
+
+      const nextSession = buildSessionFromEntry(entry);
+      activeSessionRef.current = nextSession;
+      setActiveSession(nextSession);
+    },
+    [buildSessionFromEntry],
+  );
+
+  const syncSessionFromRemote = useCallback(
+    (entry: SessionHistoryEntry | null) => {
+      if (entry === null) {
+        activeSessionRef.current = null;
+        setActiveSession(null);
+        return;
+      }
+
+      const nextSession = buildSessionFromEntry(entry);
+      if (activeSessionRef.current?.id === entry.id) {
+        activeSessionRef.current = nextSession;
+        setActiveSession(nextSession);
+        return;
+      }
+
+      activeSessionRef.current = nextSession;
+      setActiveSession(nextSession);
+    },
+    [buildSessionFromEntry],
+  );
+
+  useEffect(() => {
+    if (!shouldBroadcastLocalChange()) {
       return;
     }
 
-    const manualProgress =
-      entry.mode === 'manual' ? parseManualInProgressSummary(entry.summary) : null;
-
-    const nextSession: ActiveSessionState = {
-      id: entry.id,
-      startedAt: entry.startedAt,
-      mode: entry.mode,
-      subTarget: entry.subTarget,
-      events: manualProgress?.events ?? [],
-      abortCount: manualProgress?.abortCount ?? 0,
-    };
-    activeSessionRef.current = nextSession;
-    setActiveSession(nextSession);
-  }, []);
+    postTabSync({
+      type: 'session',
+      tabId: getTabId(),
+      session: activeSession
+        ? {
+            id: activeSession.id,
+            startedAt: activeSession.startedAt,
+            mode: activeSession.mode,
+            subTarget: activeSession.subTarget,
+          }
+        : null,
+    });
+  }, [activeSession]);
 
   const endActiveSessionIfNeeded = useCallback(
     async (reason: ManualSessionEndReason | string) => {
@@ -298,6 +362,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       endAutomaticSession,
       endActiveSessionIfNeeded,
       rehydrateSession,
+      syncSessionFromRemote,
     }),
     [
       activeSession,
@@ -306,6 +371,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       endAutomaticSession,
       endManualSession,
       rehydrateSession,
+      syncSessionFromRemote,
       recordManualBurst,
       recordManualStroke,
       recordManualAbort,

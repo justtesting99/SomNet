@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { useAuth } from '@/context/AuthProvider';
 import { useMode } from '@/context/ModeProvider';
 import { Button } from '@/components/ui/Button';
@@ -15,6 +15,8 @@ import { useOptions } from '@/context/OptionsProvider';
 import { useHardwareDialog } from '@/context/HardwareProvider';
 import { useNotify } from '@/context/NotifyProvider';
 import { useLiveSession } from '@/context/SessionProvider';
+import { useSubTarget } from '@/context/SubTargetProvider';
+import { stopAutomaticForModeSwitch } from '@/utils/stopAutomaticForModeSwitch';
 
 interface AppShellProps {
   children: ReactNode;
@@ -28,15 +30,34 @@ export function AppShell({ children, wide = false }: AppShellProps) {
   const { openDialog: openOptions } = useOptions();
   const { openDialog: openHardware } = useHardwareDialog();
   const { openDialog: openNotify } = useNotify();
-  const { endActiveSessionIfNeeded } = useLiveSession();
+  const { activeSession, endActiveSessionIfNeeded, endAutomaticSession } = useLiveSession();
+  const { selectedSub } = useSubTarget();
+  const { settings, setAutomaticRunningLocal } = useOptions();
+  const activeSessionRef = useRef(activeSession);
+
+  activeSessionRef.current = activeSession;
+
+  async function leaveAutomaticSessionIfNeeded(reason: 'mode-switch' | 'sign-out') {
+    if (activeSessionRef.current?.mode === 'automatic' || settings.automatic.running) {
+      await stopAutomaticForModeSwitch(selectedSub, settings.automatic, {
+        endAutomaticSession: (endReason, deviceResult) =>
+          endAutomaticSession(endReason || reason, deviceResult),
+        setAutomaticRunningLocal,
+        isAutomaticSessionActive: () => activeSessionRef.current?.mode === 'automatic',
+      });
+    }
+
+    await endActiveSessionIfNeeded(reason);
+    setAutomaticRunningLocal(false);
+  }
 
   async function handleSwitchMode() {
-    await endActiveSessionIfNeeded('mode-switch');
+    await leaveAutomaticSessionIfNeeded('mode-switch');
     setMode(null);
   }
 
   async function handleSignOut() {
-    await endActiveSessionIfNeeded('sign-out');
+    await leaveAutomaticSessionIfNeeded('sign-out');
     setMode(null);
     logout();
   }

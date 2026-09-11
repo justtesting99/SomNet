@@ -275,13 +275,30 @@ Video expand behavior is controlled by `appOptions.autoExpandVideoOnMobile` and 
 | Settings | Server (`DomSubSettings` table); loaded on mount; saved only after user edit |
 | Active session (after refresh) | Restored from server via `GET /api/sessions/active` (automatic: + device probe; manual: parse PATCH summary) |
 | Session history | Server (`Sessions` table) |
-| Selected sub | React state (defaults to `Slv66`; not persisted across refresh) |
+| Selected sub | `localStorage` (`somnet.selectedSub`) + cross-tab broadcast |
 | `settings.automatic.running` | Local React state only — never persisted to server |
+
+## Multi-Tab Sync
+
+See [12-UI-Multi-Tab-Sync-Checklist.md](./12-UI-Multi-Tab-Sync-Checklist.md).
+
+```text
+First browser tab state change (session / running / sub / command pending)
+  → BroadcastChannel post (somnet-tab-sync)
+Second browser tab TabSyncProvider
+  → syncSessionFromRemote / setAutomaticRunningLocal / applySubFromSync
+  → storage events for auth + mode (localStorage)
+Tab visible (fallback)
+  → GET /api/sessions/active reconcile (no automatic-update probe on peer sync)
+Manual stroke in second tab
+  → ensureManualSession adopts GET /api/sessions/active before POST
+```
+
+**Soft command lock:** `CommandButton` disabled in Tab B while Tab A has a pending hardware command.
 
 ## Known Gaps
 
 1. `options.ts` API module is orphaned from pre-refactor MockDataStore era
-2. **Multi-tab sync** — two browser tabs do not coordinate live session or settings state
 
 ## Future Enhancements
 

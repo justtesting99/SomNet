@@ -18,6 +18,7 @@ import { DEFAULT_PAIRING_SETTINGS, type PairingSettings } from '@/types/pairingS
 import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
 import { normalizeStrokeMsPair } from '@/utils/strokeMsLimits';
 import { normalizeAutomaticControlState } from '@/utils/automaticFieldRules';
+import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
 
 interface OptionsContextValue {
   settings: PairingSettings;
@@ -176,6 +177,18 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  useEffect(() => {
+    if (!shouldBroadcastLocalChange()) {
+      return;
+    }
+
+    postTabSync({
+      type: 'running',
+      tabId: getTabId(),
+      running: settings.automatic.running,
+    });
+  }, [settings.automatic.running]);
+
   const applySettings = useCallback(
     (nextSettings: PairingSettings, persistImmediately = false, skipPersist = false) => {
       setSettings(nextSettings);
@@ -256,6 +269,10 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
   const setAutomaticRunningLocal = useCallback(
     (running: boolean) => {
+      if (settingsRef.current.automatic.running === running) {
+        return;
+      }
+
       applySettings(
         {
           ...settingsRef.current,

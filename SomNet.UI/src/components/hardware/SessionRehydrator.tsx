@@ -1,33 +1,27 @@
 import { useEffect, useRef } from 'react';
-import { endSession, fetchActiveSession } from '@/api/sessions';
 import { useAuth } from '@/context/AuthProvider';
 import { useMode } from '@/context/ModeProvider';
 import { useOptions } from '@/context/OptionsProvider';
 import { useLiveSession } from '@/context/SessionProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
-import {
-  probeDeviceAutomaticSessionActive,
-  STALE_AUTOMATIC_SESSION_SUMMARY,
-} from '@/utils/automaticSessionReconcile';
-import {
-  isRehydratableAutomaticSession,
-  isRehydratableManualSession,
-} from '@/utils/sessionProgress';
+import { reconcileActiveSessionForMode } from '@/utils/sessionReconcile';
 
 /**
- * Restores SessionProvider after browser refresh when the server still has an
- * in-progress session (automatic: P13-D1–D8; manual: P14-D1–D4).
+ * Restores SessionProvider when entering a mode or after browser refresh (P13/P14).
+ * Re-runs when returning to Manual mode or Automatic mode from Choose operation mode.
  */
 export function SessionRehydrator() {
   const { user } = useAuth();
+  const { mode } = useMode();
   const { selectedSub } = useSubTarget();
-  const { setMode } = useMode();
   const { isLoading, settingsLoaded, settings, setAutomaticRunningLocal } = useOptions();
   const { activeSession, rehydrateSession } = useLiveSession();
   const settingsRef = useRef(settings);
+  const activeSessionRef = useRef(activeSession);
   const attemptedRehydrationKeyRef = useRef<string | null>(null);
 
   settingsRef.current = settings;
+  activeSessionRef.current = activeSession;
 
   const domTarget = user?.displayName ?? user?.username ?? '';
 
@@ -36,68 +30,52 @@ export function SessionRehydrator() {
       return;
     }
 
-    const rehydrationKey = `${domTarget}:${selectedSub}`;
+    if (mode === null) {
+      attemptedRehydrationKeyRef.current = null;
+      return;
+    }
+
+    const rehydrationKey = `${domTarget}:${selectedSub}:${mode}`;
     if (attemptedRehydrationKeyRef.current === rehydrationKey) {
       return;
     }
 
-    attemptedRehydrationKeyRef.current = rehydrationKey;
-
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const entry = await fetchActiveSession(selectedSub);
-        if (cancelled || !entry) {
-          return;
-        }
-
-        if (isRehydratableManualSession(entry)) {
-          rehydrateSession(entry);
-          setMode('manual');
-          return;
-        }
-
-        if (!isRehydratableAutomaticSession(entry)) {
-          return;
-        }
-
-        const deviceActive = await probeDeviceAutomaticSessionActive(
-          selectedSub,
-          settingsRef.current.automatic,
-        );
-
-        if (cancelled) {
-          return;
-        }
-
-        if (deviceActive === false) {
-          await endSession(entry.id, STALE_AUTOMATIC_SESSION_SUMMARY);
-          return;
-        }
-
-        rehydrateSession(entry);
-        setMode('automatic');
-
-        if (!settingsRef.current.automatic.running) {
-          setAutomaticRunningLocal(true);
-        }
-      } catch {
-        // Leave UI in default idle state.
+    // Let TabSyncProvider answer request-sync before cold probe (avoids automatic-update storm).
+    const timer = window.setTimeout(() => {
+      if (activeSessionRef.current) {
+        attemptedRehydrationKeyRef.current = rehydrationKey;
+        return;
       }
-    })();
+
+      void reconcileActiveSessionForMode({
+        mode,
+        selectedSub,
+        automaticSettings: settingsRef.current.automatic,
+        rehydrateSession,
+        setAutomaticRunningLocal,
+        probeDevice: true,
+      })
+        .catch(() => {
+          // Leave UI in default idle state.
+        })
+        .finally(() => {
+          if (!activeSessionRef.current) {
+            attemptedRehydrationKeyRef.current = rehydrationKey;
+          }
+        });
+    }, 400);
 
     return () => {
-      cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [
     activeSession,
     domTarget,
     isLoading,
+    mode,
     rehydrateSession,
     selectedSub,
     setAutomaticRunningLocal,
-    setMode,
     settingsLoaded,
   ]);
 
