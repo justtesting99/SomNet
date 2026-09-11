@@ -239,22 +239,27 @@ Historical subs from sessions/notifications appear in the subs list even without
 | Completed sessions | Server (`Sessions` table) |
 | In-progress summary | Manual: client builds, server stores latest PATCH. Automatic: `"In progress"` until end |
 | Selected sub | Client state; triggers settings reload |
-| Active automatic session after refresh | Restored via `GET /api/sessions/active` + device probe (see below) |
+| Active session after refresh | Restored via `GET /api/sessions/active` (automatic: + device probe; manual: parse PATCH summary) |
 
-### Automatic session rehydration (browser refresh)
+### Session rehydration (browser refresh)
 
-When the operator reloads the page during an **automatic** session:
+When the operator reloads the page during an active session, `SessionRehydrator` calls **`GET /api/sessions/active?subTarget=`** after settings load.
 
-1. `OptionsProvider` loads pairing settings (`running` forced false in API).
-2. `AutomaticSessionRehydrator` calls **`GET /api/sessions/active?subTarget=`** — latest session whose summary is in progress (`SessionProgressHelper.IsInProgress` on server; exact `"In progress"` required for automatic rehydrate on client).
-3. If found, the UI probes the device with **`automatic-update`** (accept = session still running; idle message = stale server record → `POST /end` and skip rehydrate).
-4. On success: `SessionProvider.rehydrateSession(entry)` restores `activeSession` without a new POST; local `settings.automatic.running` set true (not persisted); mode switches to automatic.
+**Manual:**
+
+1. If `mode === 'manual'` and summary is in progress (`"In progress"` or `"In progress: …"`), parse the aggregated summary with `parseManualInProgressSummary` into `{ events, abortCount }`.
+2. `SessionProvider.rehydrateSession(entry)` restores `activeSession` without a new POST; mode switches to manual.
+3. No device probe — manual abort would interrupt hardware mid-burst.
+
+**Automatic:**
+
+1. Exact summary `"In progress"` required on client (automatic never PATCHes mid-run).
+2. UI probes device with **`automatic-update`** (accept = still running; idle → stale server record → `POST /end`, skip rehydrate).
+3. On success: `rehydrateSession` + local `settings.automatic.running` true (not persisted) + mode automatic.
 
 Hub finalize (`AutomaticSessionHubListener`) gates on **`activeSession?.mode === 'automatic'`**, not the `running` flag.
 
-See [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md).
-
-On page refresh during an active **manual** session, the in-progress session may exist server-side with the last PATCHed summary, but the local event log is lost. The UI does not resume editing an in-progress manual session after refresh.
+See [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md) and [11-UI-Manual-Session-Rehydration-Checklist.md](./11-UI-Manual-Session-Rehydration-Checklist.md).
 
 ---
 
@@ -275,8 +280,6 @@ All methods are async and handle API errors internally (logged, not always surfa
 ---
 
 ## Future Enhancements
-
-- Resume in-progress session after page reload
 - Server-side automatic stroke engine with live progress updates
 - **Session timeline / graph** — visual representation of a planned or completed automatic session (main strokes, bursts, gaps, relative power). Placement TBD: Automatic mode page, session history detail, or both. See [Phase 10 checklist §8](./09-ESP32-Phase-10-Checklist.md#8-relationship-to-other-future-work).
 - Session export (CSV/PDF)

@@ -294,13 +294,13 @@ When the operator enables **Allow automatic mode overrides** in SomNet **Options
 - Default behavior remains **locked settings** while running (overrides option off).
 - **`burstPercent`** controls how **often** burst events occur, not burst pulse power.
 - **Browser refresh during automatic** — supported (2026-09-10). The web app re-queries the server and device and restores **Stop / Abort** when an automatic session is still running. Idle refreshes do not change saved settings.
+- **Browser refresh during manual** — supported (2026-09-10). The web app restores the in-progress session from the server summary so strokes continue on the same session row.
 
 ### Not yet available
 
 | Feature | When |
 |---------|------|
 | **Session timeline / graph** | Future — visual plan or replay of automatic session (main strokes, bursts, gaps); Automatic page and/or session history — TBD |
-| **Manual session rehydration after browser refresh** | Future — restore in-progress manual event log after reload |
 
 ## Relay timing validation (oscilloscope)
 

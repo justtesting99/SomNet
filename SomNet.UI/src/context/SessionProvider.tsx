@@ -20,6 +20,7 @@ import {
 } from '@/utils/sessionSummary';
 import type { AutomaticResultJson } from '@/utils/automaticResultJson';
 import type { SessionHistoryEntry } from '@/types/sessionHistory';
+import { parseManualInProgressSummary } from '@/utils/manualSessionRehydrate';
 
 interface ActiveSessionState {
   id: string;
@@ -245,13 +246,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    const manualProgress =
+      entry.mode === 'manual' ? parseManualInProgressSummary(entry.summary) : null;
+
     const nextSession: ActiveSessionState = {
       id: entry.id,
       startedAt: entry.startedAt,
       mode: entry.mode,
       subTarget: entry.subTarget,
-      events: [],
-      abortCount: 0,
+      events: manualProgress?.events ?? [],
+      abortCount: manualProgress?.abortCount ?? 0,
     };
     activeSessionRef.current = nextSession;
     setActiveSession(nextSession);

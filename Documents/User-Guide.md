@@ -182,7 +182,7 @@ To adjust power, timing, program mode, end-session rules, or burst settings **du
 
 A helper banner explains that changes apply after the current stroke. **Delay before start** stays locked once a session has begun.
 
-**Browser refresh:** If you reload the page during an automatic session, the app restores **Stop / Abort** when the device is still running (server + device probe). After the session ends, a refresh shows **Start** as normal.
+**Browser refresh:** If you reload during an **automatic** session, the app restores **Stop / Abort** when the device is still running (server + device probe). After the session ends, a refresh shows **Start** as normal. During a **manual** session, refresh restores your in-progress session so the next stroke continues on the same history row.
 
 A **visual session timeline or graph** (preview before start or replay in history) is planned for a future release — not available yet.
 

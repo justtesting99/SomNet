@@ -12,7 +12,7 @@
 
 **Goal:** After a browser refresh during an **automatic** session, restore **Stop / Abort**, hub finalize path, and server session linkage so the operator is not stuck with **Start** enabled while the device continues.
 
-**Explicitly out of scope (this phase):** Session timeline graph; OTA; firmware changes; full manual-session event log rehydration; multi-tab sync.
+**Explicitly out of scope (this phase):** Session timeline graph; OTA; firmware changes; manual sessions (see [11-UI-Manual-Session-Rehydration-Checklist.md](./11-UI-Manual-Session-Rehydration-Checklist.md)); multi-tab sync.
 
 ---
 
@@ -57,7 +57,7 @@
 
 - [x] `fetchActiveSession` + `sessionProgress` helpers
 - [x] `SessionProvider.rehydrateSession(entry)` — restore `activeSession` without POST
-- [x] `AutomaticSessionRehydrator` — on load / sub change, query active + rehydrate
+- [x] `SessionRehydrator` (was `AutomaticSessionRehydrator`) — on load / sub change, query active + rehydrate automatic path
 - [x] `AutomaticSessionHubListener` — gate on `activeSession`, not `running`
 - [x] `applyAutomaticDeviceComplete` — accept rehydrated sessions
 - [x] Stale cleanup on Stop/Abort when device rejects (P13-D7)
@@ -88,7 +88,7 @@
 ```text
 Page load
   → OptionsProvider fetch settings (running: false)
-  → AutomaticSessionRehydrator
+  → SessionRehydrator (automatic branch)
        → GET /api/sessions/active?subTarget=
        → if automatic + "In progress":
             probe device (automatic-update accept/reject)

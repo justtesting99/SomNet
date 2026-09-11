@@ -17,7 +17,7 @@ import { ModeSelector } from '@/components/modes/ModeSelector';
 import { ManualControls } from '@/components/modes/ManualControls';
 import { AutomaticControls } from '@/components/modes/AutomaticControls';
 import { AutomaticSessionHubListener } from '@/components/hardware/AutomaticSessionHubListener';
-import { AutomaticSessionRehydrator } from '@/components/hardware/AutomaticSessionRehydrator';
+import { SessionRehydrator } from '@/components/hardware/SessionRehydrator';
 
 export function App() {
   const { isAuthenticated, isRestoring } = useAuth();
@@ -43,7 +43,7 @@ export function App() {
             <OptionsProvider>
               <NotifyProvider>
                 <AutomaticSessionHubListener />
-                <AutomaticSessionRehydrator />
+                <SessionRehydrator />
                 <HistoryProvider>
                   <SystemStatusProvider enabled>
                     <AppShell wide={mode !== null}>

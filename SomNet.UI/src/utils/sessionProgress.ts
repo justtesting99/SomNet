@@ -13,6 +13,11 @@ export function isRehydratableAutomaticSession(entry: SessionHistoryEntry): bool
   return entry.mode === 'automatic' && entry.summary.trim().toLowerCase() === 'in progress';
 }
 
+/** Manual sessions PATCH aggregated progress into the summary while in progress. */
+export function isRehydratableManualSession(entry: SessionHistoryEntry): boolean {
+  return entry.mode === 'manual' && isSessionInProgress(entry.summary);
+}
+
 export function normalizeSessionMode(mode: string): SessionHistoryEntry['mode'] {
   return mode.toLowerCase() === 'automatic' ? 'automatic' : 'manual';
 }

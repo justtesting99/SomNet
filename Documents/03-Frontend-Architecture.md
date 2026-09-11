@@ -228,19 +228,21 @@ User edits automatic setting while session running (overrides enabled)
   → POST /api/devices/commands { commandKey: automatic-update, payloadJson: full snapshot }
 ```
 
-## Automatic Session Rehydration (Browser Refresh)
+## Session Rehydration (Browser Refresh)
 
-See [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md).
+See [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md) (automatic) and [11-UI-Manual-Session-Rehydration-Checklist.md](./11-UI-Manual-Session-Rehydration-Checklist.md) (manual).
 
 ```text
 Page load (authenticated; last mode may restore from localStorage)
   → OptionsProvider: GET /api/settings + stroke limits (running forced false in API response)
-  → AutomaticSessionRehydrator (after settingsLoaded):
+  → SessionRehydrator (after settingsLoaded):
        GET /api/sessions/active?subTarget=
-       if automatic + summary === "In progress":
+       if manual + summary starts with "In progress":
+            parseManualInProgressSummary → rehydrateSession + setMode('manual')
+       else if automatic + summary === "In progress":
             probe device (automatic-update)
             if device idle → POST /end (stale server record); skip rehydrate
-            else → rehydrateSession(entry) + setAutomaticRunningLocal(true) + setMode('automatic')
+            else → rehydrateSession + setAutomaticRunningLocal(true) + setMode('automatic')
   → AutomaticSessionHubListener: finalize when hub ack + activeSession.mode === 'automatic'
 ```
 
@@ -271,16 +273,15 @@ Video expand behavior is controlled by `appOptions.autoExpandVideoOnMobile` and 
 | Auth token + user | `localStorage` (`somnet-auth`) |
 | Last operation mode | `localStorage` (`somnet.operationMode`) — manual or automatic |
 | Settings | Server (`DomSubSettings` table); loaded on mount; saved only after user edit |
-| Active automatic session (after refresh) | Restored from server via `GET /api/sessions/active` + device probe |
+| Active session (after refresh) | Restored from server via `GET /api/sessions/active` (automatic: + device probe; manual: parse PATCH summary) |
 | Session history | Server (`Sessions` table) |
 | Selected sub | React state (defaults to `Slv66`; not persisted across refresh) |
 | `settings.automatic.running` | Local React state only — never persisted to server |
 
 ## Known Gaps
 
-1. **Manual session rehydration on browser refresh** — in-progress manual sessions may exist server-side, but the local event log is not restored; operator must continue without full mid-session UI state.
-2. `options.ts` API module is orphaned from pre-refactor MockDataStore era
-3. **Multi-tab sync** — two browser tabs do not coordinate live session or settings state
+1. `options.ts` API module is orphaned from pre-refactor MockDataStore era
+2. **Multi-tab sync** — two browser tabs do not coordinate live session or settings state
 
 ## Future Enhancements
 

@@ -14,7 +14,7 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 **End-user / installer documentation:** [Hardware User Guide](./Hardware-User-Guide.md) — provisioning, Wi‑Fi recovery (10 s button hold), Device ID, relay operation.
 
-**Implementation progress (2026-09-10):** Phases **0–12 signed off**. Current firmware **`0.13.0-network`** — manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On**; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; network hardening (Phase 12); **`resultJson`** end-to-end. SomNet UI: automatic session rehydration on browser refresh — [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md). See §10.
+**Implementation progress (2026-09-10):** Phases **0–12 signed off**. Current firmware **`0.13.0-network`** — manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On**; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; network hardening (Phase 12); **`resultJson`** end-to-end. SomNet UI: session rehydration on browser refresh (automatic + manual) — [10](./10-UI-Session-Rehydration-Checklist.md) / [11](./11-UI-Manual-Session-Rehydration-Checklist.md). See §10.
 
 **Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 12 (network hardening) signed off (2026-09-10).** SomNet API/UI integration complete for manual and automatic commands (Phases 8–12 UI follow-up).
 
@@ -1679,12 +1679,11 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 **Phase 12:** [Network reliability hardening](./09-ESP32-Phase-12-Network-Hardening-Checklist.md) — **signed off** 2026-09-10 on firmware **`0.13.0-network`**.
 
-**UI session rehydration:** [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md) — **signed off** 2026-09-10 (automatic sessions only; no firmware change).
+**UI session rehydration:** [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md) (automatic, signed off) and [11-UI-Manual-Session-Rehydration-Checklist.md](./11-UI-Manual-Session-Rehydration-Checklist.md) (manual, 2026-09-10) — no firmware change.
 
 **Known follow-ups (post–Phase 12 / UI rehydration):**
 
 - **Session timeline visualization** — graph or timeline of a planned or completed automatic session (main strokes, burst events, gaps, relative power). Placement TBD: Automatic mode page (pre-start preview or live), session history detail, or both.
-- **Manual session rehydration on browser refresh** — automatic rehydration is done; manual in-progress event log still not restored after reload.
 
 ---
 

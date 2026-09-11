@@ -338,7 +338,7 @@ Idle ──start──► StartDelay ──► WaitingGap ⇄ Pulse
 |------|----------------|
 | **Phase 10 bursts** | Update must handle `BurstPulse` / `BurstGap`; recompute burst slots (§3, P11-D6) |
 | **Session timeline graph** | Independent future work — richer `resultJson` would help replay |
-| **UI session rehydration on refresh** | **Done (2026-09-10)** — [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md). Automatic sessions: `GET /api/sessions/active`, device probe, restore Stop/Abort + hub finalize. Manual sessions: still not rehydrated. |
+| **UI session rehydration on refresh** | **Done (2026-09-10)** — automatic [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md); manual [11-UI-Manual-Session-Rehydration-Checklist.md](./11-UI-Manual-Session-Rehydration-Checklist.md). |
 | **OTA** | Out of scope |
 | **Part 2 §9** | Design absorbed here; do not implement from Part 2 doc alone |
 | **Network reliability (`0.13.0-network`)** | Designed separately — hub/HTTP cooperative-loop wedge; see [09-ESP32-Network-Spec.md](./09-ESP32-Network-Spec.md). Workaround: power-cycle + start API before device. |

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isRehydratableAutomaticSession,
+  isRehydratableManualSession,
   isSessionInProgress,
 } from '@/utils/sessionProgress';
 import type { SessionHistoryEntry } from '@/types/sessionHistory';
@@ -44,6 +45,28 @@ describe('isRehydratableAutomaticSession', () => {
       isRehydratableAutomaticSession({
         ...baseEntry,
         summary: 'In progress: partial',
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('isRehydratableManualSession', () => {
+  it('accepts manual session with prefixed progress summary', () => {
+    expect(
+      isRehydratableManualSession({
+        ...baseEntry,
+        mode: 'manual',
+        summary: 'In progress: 2 strokes at 60%.',
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects completed manual session', () => {
+    expect(
+      isRehydratableManualSession({
+        ...baseEntry,
+        mode: 'manual',
+        summary: '2 strokes at 60%.',
       }),
     ).toBe(false);
   });
