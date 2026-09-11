@@ -35,13 +35,17 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [UI Manual Session Rehydration](./11-UI-Manual-Session-Rehydration-Checklist.md) | Developers | Restore manual event log after browser refresh — **signed off** (2026-09-11) |
 | [UI Multi-Tab Sync](./12-UI-Multi-Tab-Sync-Checklist.md) | Developers | Coordinate live session/mode/sub across browser tabs — **signed off** (2026-09-11) |
 | [Video & Camera Architecture](./13-Video-And-Camera-Architecture.md) | Developers / installers | Session-scoped streams, edge gateway (Pi), webcam/IP cameras, snapshots — **design** |
-| [Video Implementation Plan](./14-Video-Implementation-Plan.md) | Developers | Phases 1–8 roadmap — **Phase 1 not started** |
-| [Video Phase 1 — Edge bench](./14-Video-Phase-1-Edge-Bench-Checklist.md) | Developers | go2rtc on PC, HLS in browser — **active** |
-| [Video Phase 2 — UI embed](./15-Video-Phase-2-UI-Embed-Checklist.md) | Developers | Dashboard iframes — **in progress** |
-| [Video Phase 3 — Session tokens](./16-Video-Phase-3-Session-Tokens-Checklist.md) | Developers | API session-scoped tokens — blocked |
+| [Video Implementation Plan](./14-Video-Implementation-Plan.md) | Developers | Phases 1–8 roadmap — **A-dev 2× webcam active; IP on hold; Phase 3 next** |
+| [Video Phase 1 — Edge bench](./14-Video-Phase-1-Edge-Bench-Checklist.md) | Developers | go2rtc on PC — **partial sign-off** (Layout A-dev: 2× USB webcam) |
+| [Video Phase 1c — Thingino G7 flash](./14-Video-Phase-1c-Thingino-G7-Flash-Checklist.md) | Developers | IP rear camera — **on hold** (V1-D9) |
+| [Video Phase 1b — Galayou G7 setup](./14-Video-Phase-1b-Galayou-G7-Setup.md) | Developers | go2rtc rear wiring — **on hold** |
+| [Video Phase 1c — Thingino G2 flash](./14-Video-Phase-1c-Thingino-G2-Flash-Checklist.md) | Developers | G2 pan/tilt fleet — **on hold** |
+| [Video Phase 1b — Galayou G2 setup](./14-Video-Phase-1b-Galayou-G2-Setup.md) | Developers | G2 reference — **on hold** |
+| [Video Phase 2 — UI embed](./15-Video-Phase-2-UI-Embed-Checklist.md) | Developers | Dashboard iframes — **complete** |
+| [Video Phase 3 — Session tokens](./16-Video-Phase-3-Session-Tokens-Checklist.md) | Developers | API session-scoped tokens — **ready** |
 | [Video Phase 4 — Action snapshots](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | Developers | Stills on ack (local storage) — blocked |
 | [Video Phase 5 — Edge agent](./18-Video-Phase-5-Edge-Agent-Checklist.md) | Developers | Session lifecycle on gateway — blocked |
 | [Video Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) | Developers | Remote operator without Azure — blocked |
-| [Video Phase 7 — Pi production](./20-Video-Phase-7-Pi-Production-Checklist.md) | Developers | Pi 4/5 + ESP32 E2E — blocked |
+| [Video Phase 7 — Pi production](./20-Video-Phase-7-Pi-Production-Checklist.md) | Developers | Pi 4/5 + 2× USB webcam (A-dev) E2E — blocked |
 | [Video Phase 8 — Azure cutover](./21-Video-Phase-8-Azure-Cutover-Checklist.md) | Developers | App Service + SQL + Blob — blocked |
 | [ESP32 Network Spec](./09-ESP32-Network-Spec.md) | Developers | **Wi‑Fi / HTTP / hub architecture** — signed off **`0.12.0-network`** (2026-09-09); S3–S6 verified |

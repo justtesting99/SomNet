@@ -58,12 +58,19 @@ for ($i = 0; $i -lt $videoNames.Count; $i++) {
 
 $recommended = 0
 Write-Host ''
-Write-Host 'Suggested go2rtc.yaml front entry (index 0 = first camera above):'
+Write-Host 'Suggested go2rtc.yaml (index 0 = front; index 1 = rear for Layout A-dev):'
 Write-Host "  front:"
 Write-Host "    - ffmpeg:device?video=$recommended#video=h264"
+if ($videoNames.Count -ge 2) {
+    Write-Host '  rear:'
+    Write-Host ('    - exec:ffmpeg ... -f dshow -i "video=' + $videoNames[1] + '" ... libx264 ...')
+    Write-Host ('  (Second camera [1]: ' + $videoNames[1] + ' - use exec libx264; see go2rtc.yaml.example)')
+} else {
+    Write-Host '  rear: restream front or IP RTSP (only one DirectShow camera detected)'
+}
 Write-Host '  (Add video_size/framerate only if ffmpeg test confirms the camera supports them.)'
 Write-Host ''
-Write-Host "Your camera appears to be: $($videoNames[$recommended])"
+Write-Host "Primary camera [0]: $($videoNames[$recommended])"
 Write-Host 'Edit: D:\SomNet.Edge\go2rtc.yaml  then restart start-go2rtc-windows.ps1'
 
 if ($audioNames.Count -gt 0) {

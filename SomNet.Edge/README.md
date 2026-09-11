@@ -38,25 +38,30 @@ notepad D:\SomNet.Edge\go2rtc.yaml
 
 **Remove old C: install (if created earlier):** delete `%LOCALAPPDATA%\SomNet.Edge` after confirming D: works.
 
-### Phase 1a (webcam first)
+### Layout A-dev (active — 2× USB webcam)
 
-1. Configure **`front`** only with USB webcam (`video=0`).
-2. On **Windows**, **`rear`** restreams **`front`** until IP camera RTSP is configured (do not use Linux `lavfi` test patterns).
-3. Open `http://localhost:1984/stream.html?src=front` — confirm webcam picture.
-4. Open `src=rear` — should mirror front until Phase 1b IP camera is added.
+**All remaining video development** uses two USB webcams (V1-D10). **IP cameras on hold** (V1-D9).
 
-### Phase 1b (IP camera)
+1. Run `list-camera-devices.ps1` — note DirectShow names for front and rear.
+2. Configure **`front`** and **`rear`** in `go2rtc.yaml` — use `exec` libx264 on Windows if WebRTC shows MP4V-ES errors (see `config/go2rtc.yaml.example`).
+3. Open `http://localhost:1984/stream.html?src=front` and `src=rear` — confirm **distinct** feeds.
+4. Set `VITE_VIDEO_FRONT_URL` / `VITE_VIDEO_REAR_URL` in UI env; rebuild for SomNet dashboard embed.
 
-1. Test RTSP in VLC.
-2. Replace `rear` in `%LOCALAPPDATA%\SomNet.Edge\go2rtc.yaml` with RTSP URL.
-3. Restart go2rtc; confirm real rear feed — required for Phase 1 sign-off.
+**Production target (V1-D11):** Raspberry Pi 4/5 + 2× USB webcam — validate dual V4L2 soak in [Phase 7](../Documents/20-Video-Phase-7-Pi-Production-Checklist.md). No vendor cloud; outbound video only via SomNet session tunnel.
+
+### Phase 1b (IP camera) — **on hold** (V1-D9)
+
+Stock Wansview app and Thingino G7 flash both failed on bench hardware. Do **not** block Phases 3–8.
+
+**When resumed:** [Phase 1c G7 flash](../Documents/14-Video-Phase-1c-Thingino-G7-Flash-Checklist.md) → [Phase 1b G7 setup](../Documents/14-Video-Phase-1b-Galayou-G7-Setup.md). G2 fleet: [G2 flash](../Documents/14-Video-Phase-1c-Thingino-G2-Flash-Checklist.md).
 
 ## Supported camera layouts
 
-| Layout | Front | Rear |
-|--------|-------|------|
-| **A** *(default)* | USB webcam | IP camera (RTSP) |
-| **B** | IP camera | IP camera |
+| Layout | Front | Rear | Status |
+|--------|-------|------|--------|
+| **A-dev** | USB webcam | USB webcam | **Active** — dev + preferred interim production |
+| **A** | USB webcam | IP camera (RTSP) | On hold |
+| **B** | IP camera | IP camera | On hold |
 
 Use **1080p H.264** for live; **2K** frame grab for action stills (later phases).
 

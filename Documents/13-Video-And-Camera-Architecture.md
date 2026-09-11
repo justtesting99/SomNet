@@ -129,16 +129,35 @@ The permanent record is **photos per action**, not a continuous stream archive (
 | **Historical stills** | Private Blob; reads via JWT-checked API or short-lived SAS scoped to dom/sub/session |
 | **Camera credentials** | Edge gateway only — never in React or operator-visible config |
 | **Camera LAN** | Private network / VLAN; no port-forward of camera admin UI |
-| **Tunnel** | Transport layer; optional Cloudflare Access or Tailscale ACLs for defense in depth |
+| **Vendor cloud / P2P** | **Block outbound** from IP cameras to vendor servers where possible; SomNet uses **LAN RTSP only** into edge (same model as Blue Iris) |
+| **Tunnel** | **Operator-controlled** transport (Cloudflare / Tailscale on **Pi edge**) — not vendor app tunnels |
 | **ESP32 / commands** | Unchanged — separate SignalR path; video failure does not block control |
 
 **Residual risks:** a valid operator session can view what that account is authorized to see; leaked token works only until expiry or session end. Mitigate with short TTL, per-session tokens, and no long-lived stream URLs in settings.
+
+### Vendor camera cloud tunnels (Galayou / Wansview and similar)
+
+Many consumer IP cameras (including **Galayou G2** via **Wansview Cloud**) maintain **persistent outbound connections** to vendor cloud infrastructure for app remote viewing — independent of RTSP. That path can carry video outside the LAN even when you intend local-only use.
+
+**SomNet site policy (Layout A/B):**
+
+| Layer | Policy |
+|-------|--------|
+| **Camera → internet** | **Block at router/firewall** (VLAN or egress rules) after one-time app setup; allow **LAN only** (RTSP to Pi/PC edge) |
+| **Camera → edge** | **RTSP on LAN** — go2rtc on Pi ingests; credentials stay on edge |
+| **Edge → operator** | **Session-scoped** HTTPS via **your** tunnel (Phase 6) — not vendor cloud |
+| **Wansview app** | Setup tool only (Wi‑Fi, local account, enable RTSP); **not** the production video path |
+
+Bench note (2026-09-11): operator blocked vendor tunnel URLs at router after Wireshark observation; RTSP to local go2rtc remains the intended feed path — aligns with prior **Blue Iris** LAN-only deployment.
+
+**Preferred mitigation (Galayou IP cameras):** flash **[Thingino](https://thingino.com/)** — when IP path resumes. **Active (V1-D9–D11):** **IP on hold**; use **Layout A-dev** (2× USB webcam) — no vendor cloud; Pi 4 edge if dual-stream soak passes ([Phase 1](./14-Video-Phase-1-Edge-Bench-Checklist.md)).
 
 ### What we avoid (cost + security)
 
 - Proxying live video through SomNet.API (Azure egress).
 - Embedding camera passwords or permanent stream URLs in the UI bundle.
 - Always-on streams without session binding.
+- Relying on vendor mobile-app cloud tunnels for operator video.
 
 ---
 
@@ -234,7 +253,7 @@ Running cost is the primary sort key. Development complexity is noted but second
 
 | Layer | Suggested choice | Notes |
 |-------|------------------|-------|
-| Cameras | **Layout A:** 1× webcam + 1× IP — **Layout B:** 2× IP | See §8 working setup; 1080p live / 2K stills |
+| Cameras | **A-dev (active):** 2× USB webcam — **A/B on hold:** webcam + IP or 2× IP | See §8; 720p–1080p live; 2K stills when IP resumes |
 | Edge hardware | **Raspberry Pi 4/5** (8 GB OK for dev/prod test) | No Blue Iris or extra server; laptop prototype only |
 | Ingest / restream | [go2rtc](https://github.com/AlexxIT/go2rtc) or MediaMTX | RTSP → HLS; optional WebRTC later |
 | Remote HTTPS | Cloudflare Tunnel or Tailscale Funnel | No port-forward; not billed as Azure egress |
@@ -271,10 +290,11 @@ Video at the device-user location is **separate from the ESP32** but part of the
 
 | Layout | Front (expression) | Rear (tool result) | When to use |
 |--------|--------------------|--------------------|-------------|
-| **A** *(default)* | **1× USB webcam** on Pi | **1× IP camera** (RTSP) | Lower cost; webcam suited to close-up face |
-| **B** | **1× IP camera** (RTSP) | **1× IP camera** (RTSP) | Uniform PoE install; flexible mounting both ends |
+| **A-dev** *(active)* | **1× USB webcam** | **1× USB webcam** | **Current dev + preferred interim production** while IP on hold (V1-D9). No vendor cloud; Pi 4/5 if dual V4L2 soak passes (V1-D11). |
+| **A** *(on hold)* | **1× USB webcam** on Pi | **1× IP camera** (RTSP) | Resume when Galayou/Thingino path works |
+| **B** *(on hold)* | **1× IP camera** (RTSP) | **1× IP camera** (RTSP) | Uniform PoE; vendor cloud risk unless Thingino + WAN block |
 
-**Not a supported production layout:** two USB webcams only (rear tool view usually needs IP reach/mounting).
+**Security note (A-dev):** USB webcams have **no vendor cloud tunnel** — video stays LAN → Pi edge → SomNet session-scoped tunnel. This is why **Pi 4 + 2× USB** is preferred over blocked consumer IP cameras until a clean LAN-only path exists ([§5 vendor tunnels](#vendor-camera-cloud-tunnels-galayou--wansview-and-similar)).
 
 **Resolution:** 2K-capable IP cameras are sufficient. Use **1080p H.264** for live HLS on the Pi; capture **2K stills** on action ack where the source allows (main stream or ONVIF snapshot).
 
@@ -284,7 +304,7 @@ Video at the device-user location is **separate from the ESP32** but part of the
 
 | Stage | Machine | Notes |
 |-------|---------|-------|
-| **Initial development / integration** | **Windows or Linux PC** | **Pi not required.** Install go2rtc, connect USB webcam + IP camera (or two IP cams), run tunnel client. Validate HLS, snapshots, and SomNet API/UI hooks. |
+| **Initial development / integration** | **Windows or Linux PC** | **Layout A-dev:** 2× USB webcam + go2rtc (active). IP cameras on hold. |
 | **Bench test with ESP32** | PC or Pi | Same LAN as cameras and ESP32; proves end-to-end session → ack → snapshot. |
 | **Production / tool-site install** | **Raspberry Pi 4/5** | Target deployment; match Pi before calling video signed off. |
 
@@ -295,10 +315,10 @@ Video at the device-user location is **separate from the ESP32** but part of the
 ```
   [ESP32] ── Wi‑Fi ──► Azure (commands)
 
-  Layout A                         Layout B
-  [USB webcam]──►┐                 [IP front]──RTSP──►┐
-  [IP rear]──RTSP┼──► [Pi 4/5] ── tunnel ──► operator browser
-                 ┘                 [IP rear]──RTSP──►┘
+  Layout A-dev (active)            Layout A / B (on hold)
+  [USB front]──►┐                  [IP or USB mix]──RTSP──►┐
+  [USB rear]───►┼──► [Pi 4/5] ── tunnel ──► operator browser
+                ┘                  [IP rear]──────────────►┘
 ```
 
 ### Edge computer: Raspberry Pi vs PC
@@ -318,16 +338,23 @@ Video at the device-user location is **separate from the ESP32** but part of the
 
 Both supported layouts feed the **same** go2rtc → HLS → session-token pipeline.
 
-#### Layout A — USB webcam + IP camera *(default)*
+#### Layout A-dev — Two USB webcams *(active)*
+
+| Feed | Camera | Notes |
+|------|--------|-------|
+| Front | USB webcam | Close-up expression; 720p live |
+| Rear | USB webcam | Tool / bench view; mount with USB reach (~3 m hub if needed) |
+
+go2rtc ingests **two V4L2** devices on Pi (or DirectShow on Windows dev PC). **No RTSP, no vendor cloud.**
+
+#### Layout A — USB webcam + IP camera *(on hold)*
 
 | Feed | Camera | Notes |
 |------|--------|-------|
 | Front | USB webcam on Pi | Close-up expression; 720p–1080p live |
-| Rear | IP camera (RTSP / ONVIF) | Tool result; 1080p live, 2K still on ack |
+| Rear | IP camera (RTSP / ONVIF) | Resume when V1-D9 unblocked |
 
-Webcam near Pi (~3 m USB practical). go2rtc ingests **V4L2 (USB)** and **RTSP** in one config.
-
-#### Layout B — Two IP cameras
+#### Layout B — Two IP cameras *(on hold)*
 
 | Feed | Camera | Notes |
 |------|--------|-------|
@@ -503,7 +530,7 @@ Light coupling only — no new firmware phase.
 
 | Area | Change |
 |------|--------|
-| **Pairing settings** | Edge tunnel base URL, `videoMode` (`stream` \| `snapshot`); no static stream secrets in UI |
+| **Pairing settings** | Edge tunnel base URL, `videoMode` (`stream` \| `snapshot`); no static stream secrets in remote UI. **Future:** **Site installer** configures cameras/edge via **ESP32 local UI** (`/config`) and/or edge setup → **API/database**; **remote operator** SomNet web only **consumes** stored URLs/tokens ([14 plan — Future enhancements](./14-Video-Implementation-Plan.md#future-enhancements-todo)). Today bench: env + local `go2rtc.yaml`. |
 | **Session start/end** | Hook existing lifecycle → notify edge; mint / revoke stream tokens |
 | **API** | `POST /api/video/sessions/{sessionId}/tokens` (operator JWT); webhook or hub notify to edge on start/end/ack |
 | **Session events** | `frontImageUrl`, `rearImageUrl`, `capturedAt`, optional Blob path per stroke/burst |
@@ -534,6 +561,8 @@ See [07-Session-And-History.md](./07-Session-And-History.md) for event model whe
 | H5 | Laptop as production gateway | **Avoid** | Prototype / bench only |
 | H6 | Initial dev / integration host | **PC OK** | Pi required for production sign-off, not first dev |
 | D1 | Azure before camera / full system ready | **No** | Local API/UI until end-to-end dev complete |
+| V10 | IP camera path (Galayou) | **On hold** (V1-D9); Thingino if resumed | Vendor cloud tunnel risk |
+| V11 | Active camera layout | **A-dev** 2× USB webcam; **Pi 4/5** production target while IP on hold | No vendor egress; SomNet session tunnel only |
 
 ---
 
@@ -592,7 +621,7 @@ Phase 2 — Local + tunnel (still no Azure hosting)
   · Tunnel to dev PC for remote operator + video testing
 
 Phase 3 — Tool-site hardware
-  · Move go2rtc + tunnel to Raspberry Pi (Layout A or B)
+  · Move go2rtc + tunnel to Raspberry Pi (Layout A-dev; A/B when IP resumes)
   · ESP32 + Pi at install location; API still local or Azure depending on readiness
 
 Phase 4 — Azure production (when fully developed)

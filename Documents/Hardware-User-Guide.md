@@ -35,10 +35,14 @@ When a stroke command runs, the relay energizes for the requested duration (mill
 Remote camera feeds for the operator are **not** handled by the ESP32. The supported tool-site video setup is:
 
 - **Raspberry Pi 4/5** — edge gateway (streams + snapshots)
-- **Layout A:** 1× USB webcam (front) + 1× IP camera (rear) — default
-- **Layout B:** 2× IP cameras (front + rear)
+- **Layout A-dev** *(active):* 2× USB webcam (front expression + rear tool view) — **preferred while IP cameras are on hold**
+- **Layout A / B** *(on hold):* USB + IP or 2× IP — resume when Galayou/Thingino path works
 
 No Blue Iris, Windows NVR, or extra PC server is required for SomNet video. Full design: [13-Video-And-Camera-Architecture.md](./13-Video-And-Camera-Architecture.md).
+
+**Future (developers):** Remote SomNet operators are not the same people who install cameras on site. Planned flow: **installer** uses ESP32 **`/config`** (and/or edge setup UI) to enter edge gateway + camera settings → **API/database** → edge Pi applies go2rtc config; operators only view feeds during sessions. See [14-Video-Implementation-Plan.md — Future enhancements](./14-Video-Implementation-Plan.md#future-enhancements-todo).
+
+**Vendor cloud / privacy:** Stock Galayou / Wansview IP cameras may phone home to vendor servers. **Active path (2026-09-11):** **2× USB webcam** on dev PC; **Pi 4 + 2× USB** preferred for production if soak test passes — **no vendor cloud egress**; video leaves the site only via SomNet session-scoped tunnel. **IP cameras on hold** (V1-D9) after Wansview app and Thingino flash failed on bench hardware. If IP resumes: **[Thingino](https://thingino.com/)** + LAN RTSP only ([13 §5](./13-Video-And-Camera-Architecture.md#vendor-camera-cloud-tunnels-galayou--wansview-and-similar)).
 
 ---
 

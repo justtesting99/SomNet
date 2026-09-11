@@ -1,6 +1,10 @@
 # Video — Phase 1 Edge bench (go2rtc on PC)
 
-**Status:** **In progress** — Phase 1a **front pass** (2026-09-11); Phase 1b IP rear + full sign-off pending
+**Status:** **Partial sign-off (Layout A-dev + Phase 2)** — 2026-09-11; **IP cameras on hold**
+
+> **Active path (V1-D10 + V1-D11):** **2× USB webcams** for all remaining video dev — front + rear distinct feeds ([§4.4 Layout A-dev](#44-stream-mapping)). Verified on PC: **HD User Facing** + **Anker PowerConf C200**.
+>
+> **IP cameras on hold (V1-D9):** Galayou G2/G7 — stock Wansview app unusable; Thingino flash failed. Do **not** block Phases 3–8. Resume [1b/1c](./14-Video-Phase-1c-Thingino-G7-Flash-Checklist.md) only if/until a provisioning path works.
 
 | Related | Link |
 |---------|------|
@@ -23,9 +27,9 @@
 |------|--------|
 | **Host** | Windows or Linux **PC** (Pi not required) |
 | **Gateway software** | [go2rtc](https://github.com/AlexxIT/go2rtc) |
-| **Camera layout** | **Layout A** (webcam + IP) *or* **Layout B** (2× IP) — record which |
-| **Live protocol** | HLS from go2rtc |
-| **Blocks** | Phase 2 (UI embed) until exit criteria met |
+| **Camera layout** | **Layout A-dev** (2× USB webcam) — active; Layout A/B + IP **on hold** |
+| **Live protocol** | HLS / MSE from go2rtc |
+| **Blocks** | IP-camera full sign-off on hold; **Phases 3–8 active** with dual webcam |
 
 ---
 
@@ -41,10 +45,15 @@ SomNet UI has **VideoFeed** placeholders but no live sources. Before API tokens 
 |----|----------|--------|------|
 | **V1-D1** | Gateway software | **go2rtc** | 2026-09-11 |
 | **V1-D2** | Dev host | **PC** (not Pi) | 2026-09-11 |
-| **V1-D3** | Camera layout | **A** webcam+IP / **B** 2× IP — record in §8 on sign-off | 2026-09-11 |
+| **V1-D3** | Camera layout | **A-dev** 2× USB (active); **A** webcam+IP / **B** 2× IP on hold | 2026-09-11 |
 | **V1-D4** | Live resolution | **1080p H.264** substream for IP; **720p–1080p** for webcam | 2026-09-11 |
 | **V1-D5** | Azure / SomNet API | **Not used** this phase | 2026-09-11 |
 | **V1-D6** | Sample config location | **`SomNet.Edge/`** in repo | 2026-09-11 |
+| **V1-D7** | IP camera internet egress | **Block vendor cloud** after setup; **LAN RTSP → edge only** (Blue Iris–style) | 2026-09-11 |
+| **V1-D8** | IP camera firmware | **Thingino** (production intent); bench path **paused** — see **V1-D9** | 2026-09-11 |
+| **V1-D9** | IP cameras (Galayou) | **On hold** — stock app dead; Thingino G7 flash failed; not blocking dev | 2026-09-11 |
+| **V1-D10** | Active camera layout | **Layout A-dev** — 2× USB webcam for all remaining video phases | 2026-09-11 |
+| **V1-D11** | Production edge (while IP on hold) | **Pi 4/5 + 2× USB webcam** preferred if soak proves capacity — no vendor cloud egress; egress only via SomNet tunnel + session tokens | 2026-09-11 |
 
 ---
 
@@ -52,9 +61,8 @@ SomNet UI has **VideoFeed** placeholders but no live sources. Before API tokens 
 
 ### Environment
 
-- [ ] Development PC on same LAN as IP camera(s) *(required for Phase 1b rear)*
-- [ ] USB webcam available *(Layout A)* or second IP camera *(Layout B)*
-- [ ] IP camera RTSP URL and credentials known (test in VLC first) — **Phase 1b**
+- [x] **2× USB webcams** on dev PC *(Layout A-dev — active)*
+- [ ] ~~IP camera~~ — **on hold** (V1-D9); resume Phase 1b when unblocked
 - [x] go2rtc release for OS installed or runnable — v1.9.14 → **`D:\SomNet.Edge\bin`** (override: `SOMNET_EDGE_HOME`)
 - [ ] VLC or ffplay for RTSP sanity check — **Phase 1b**
 
@@ -72,12 +80,9 @@ SomNet UI has **VideoFeed** placeholders but no live sources. Before API tokens 
 
 ## 4. Implementation checklist
 
-### 4.1 IP camera sanity (rear, or both for Layout B)
+### 4.1 IP camera sanity *(on hold — skip until V1-D9 unblocked)*
 
-- [ ] Ping / open camera web UI on LAN
-- [ ] Confirm **H.264** stream available (prefer **1080p substream** for 2K cameras)
-- [ ] VLC: `rtsp://user:pass@camera-ip:554/...` plays
-- [ ] Record RTSP URL(s) in local notes (do **not** commit credentials)
+- [ ] ~~Ping / RTSP / VLC~~ — see [Phase 1b G7](./14-Video-Phase-1b-Galayou-G7-Setup.md) when resumed
 
 ### 4.2 Webcam sanity *(Layout A only — Phase 1a)*
 
@@ -88,15 +93,22 @@ SomNet UI has **VideoFeed** placeholders but no live sources. Before API tokens 
 
 - [x] Install go2rtc on PC — `SomNet.Edge/scripts/install-go2rtc-windows.ps1` or manual download
 - [x] Enable HLS in config (`api` + `hls` listeners per example)
-- [x] Define streams `front` and `rear` in `go2rtc.yaml` (rear = **restream front** on Windows until IP camera)
+- [x] Define streams `front` and `rear` in `go2rtc.yaml` — **Layout A-dev:** two `exec` libx264 devices
 - [x] Start go2rtc — `SomNet.Edge/scripts/start-go2rtc-windows.ps1`; web UI `http://localhost:1984`
 
 ### 4.4 Stream mapping
 
-**Layout A — webcam front + IP rear:**
+**Layout A — webcam front + IP rear** *(production; 1b deferred):*
 
-- [x] `front` → USB device (`ffmpeg:device?video=0#video=h264`) — **operator confirms picture (2026-09-11)**
-- [ ] `rear` → RTSP URL — **Phase 1b** (restream front active for Phase 1a)
+- [x] `front` → USB device — **operator confirms picture (2026-09-11)**
+- [ ] `rear` → RTSP URL — when IP camera path unblocks
+
+**Layout A-dev — two USB webcams** *(active — V1-D10):*
+
+- [x] Run `list-camera-devices.ps1` — **`[0]` HD User Facing**, **`[1]` Anker PowerConf C200**
+- [x] `front` → first webcam; `rear` → second (`exec:` libx264 in `D:\SomNet.Edge\go2rtc.yaml`)
+- [x] `VITE_VIDEO_REAR_URL=...src=rear` (not `src=front`)
+- [x] Browser + SomNet dashboard: **different** front/rear pictures
 
 **Layout B — two IP cameras:**
 
@@ -106,7 +118,7 @@ SomNet UI has **VideoFeed** placeholders but no live sources. Before API tokens 
 ### 4.5 HLS verification
 
 - [x] Browser: `http://localhost:1984/stream.html?src=front` plays **webcam** video — **V1-T1 pass (2026-09-11)**
-- [x] Browser: `http://localhost:1984/stream.html?src=rear` plays video (mirrors front) — **V1-T2 pass (2026-09-11)**
+- [x] Browser: `http://localhost:1984/stream.html?src=rear` plays video — **V1-T2 pass** (A-dev: distinct rear)
 - [ ] Both streams play **simultaneously** in two tabs for ≥2 minutes
 - [ ] Observe delay (~3–10 s HLS) — acceptable per architecture
 - [ ] **Phase 1b:** replace rear with IP RTSP; rear shows real camera (required for sign-off)
@@ -130,7 +142,7 @@ SomNet UI has **VideoFeed** placeholders but no live sources. Before API tokens 
 | # | Steps | Pass criteria | Result |
 |---|-------|---------------|--------|
 | **V1-T1** | Start go2rtc; open front HLS viewer | Front video visible; no constant stall/rebuffer | ☑ **2026-09-11** |
-| **V1-T2** | Open rear HLS viewer | Rear video visible | ☑ **2026-09-11** (mirrors front) |
+| **V1-T2** | Open rear HLS viewer | Rear video visible (distinct from front — A-dev) | ☑ **2026-09-11** |
 | **V1-T3** | Both streams open ≥10 min | No go2rtc crash; CPU acceptable on PC | ☐ |
 | **V1-T4** | Stop rear RTSP (disconnect cam or bad URL) | Front still works; rear fails gracefully | ☐ |
 | **V1-T5** | Restart go2rtc | Streams recover within 30 s | ☐ |
@@ -140,24 +152,33 @@ SomNet UI has **VideoFeed** placeholders but no live sources. Before API tokens 
 
 ## 6. Exit criteria (sign-off)
 
-Phase 1 is **signed off** when:
+### Partial sign-off *(current — V1-D9)*
 
-1. **V1-T1–T6** pass on the dev PC.
-2. Layout **A or B** documented with stream names `front` / `rear`.
-3. `SomNet.Edge/` example config matches bench (no credentials committed).
-4. Operator can open two browser tabs with live HLS for front and rear.
+**Signed off for Phases 3–8 dev** when:
 
-**Then:** Start [15-Video-Phase-2-UI-Embed-Checklist.md](./15-Video-Phase-2-UI-Embed-Checklist.md) (SomNet dashboard iframes).
+1. **V1-T1–T2** pass (front live; rear live — **distinct** feeds, Layout A-dev).
+2. [Phase 2 UI embed](./15-Video-Phase-2-UI-Embed-Checklist.md) complete.
+3. Layout **A-dev** documented (2× USB webcam); IP layouts **on hold**.
+
+**Then:** Start [Phase 3 — Session tokens](./16-Video-Phase-3-Session-Tokens-Checklist.md). Token logic applies to **both** feeds (A-dev: distinct front + rear).
+
+### Full sign-off *(when IP rear available)*
+
+Phase 1 **fully** signed off when:
+
+1. **V1-T1–T6** pass — including **V1-T5** real IP camera on `rear` (not mirror).
+2. Layout documented; `SomNet.Edge/` example updated (no credentials committed).
+3. [Phase 1b](./14-Video-Phase-1b-Galayou-G7-Setup.md) complete.
 
 ---
 
 ## 7. Architecture (this phase)
 
 ```text
-[Webcam or IP front] ──► go2rtc stream "front" ──► HLS ──► browser tab
-[IP rear]            ──► go2rtc stream "rear"  ──► HLS ──► browser tab
+[USB webcam front] ──► go2rtc "front" ──► MSE ──► browser / SomNet UI
+[USB webcam rear]  ──► go2rtc "rear"  ──► MSE ──► browser / SomNet UI
                               ▲
-                         Dev PC (local only)
+                    Dev PC now; Pi 4 target (V1-D11)
 ```
 
 No tunnel, no SomNet, no Azure.
@@ -171,10 +192,10 @@ No tunnel, no SomNet, no Azure.
 | Date | 2026-09-11 (Phase 1a started) |
 | PC OS | Windows |
 | go2rtc version | v1.9.14 |
-| Layout | **A** (webcam front; IP rear pending) |
-| Front source | `ffmpeg:device?video=0#video=h264` — device **HD User Facing** |
-| Rear source | **Restream** `rtsp://127.0.0.1:8554/front` until IP RTSP Phase 1b |
-| Live resolution (front / rear) | Native ~1280x720 @ 30 fps (no forced size/fps); rear mirrors front |
+| Layout | **A-dev** (2× USB webcam) — IP on hold |
+| Front source | `exec` dshow **HD User Facing** → libx264 |
+| Rear source | `exec` dshow **Anker PowerConf C200** → libx264 |
+| Live resolution (front / rear) | Native ~720p @ 30 fps; distinct feeds |
 | Local config | `D:\SomNet.Edge\go2rtc.yaml` |
 | Notes | V1-T1 pass; forced 1280x720@15 fails on this camera; D: install; stop script before restart |
 
@@ -182,8 +203,10 @@ No tunnel, no SomNet, no Azure.
 
 | Milestone | Hardware | Pass |
 |-----------|----------|------|
-| **1a** *(now)* | Webcam only (+ rear mirrors front on Windows) | ☑ **V1-T1 pass** — front live; pipeline proven |
-| **1b** *(when IP cam available)* | Webcam + IP rear RTSP | V1-T2 rear live; **full Phase 1 sign-off** |
+| **1a** | Webcam front | ☑ pass |
+| **A-dev** *(active)* | 2× USB webcam front + rear | ☑ pass — browser + SomNet UI |
+| **1b / 1c** *(on hold)* | IP / Thingino | Paused (V1-D9) — [G7](./14-Video-Phase-1c-Thingino-G7-Flash-Checklist.md) · [G2](./14-Video-Phase-1c-Thingino-G2-Flash-Checklist.md) |
+| **Pi 4 A-dev** *(next hardware)* | Move 2× USB to Pi edge | Phase 7 — validate V1-D11 |
 
 ---
 
@@ -199,7 +222,7 @@ No tunnel, no SomNet, no Azure.
 | `Error opening output file 0` / mjpeg decode errors on **front** | Wrong device index or camera in use | Run `list-camera-devices.ps1`; close Zoom/Teams/Camera app |
 | **`bind: Only one usage of each socket address`** | go2rtc already running (duplicate start) | `.\SomNet.Edge\scripts\stop-go2rtc-windows.ps1` or close other PowerShell window |
 | HLS errors on **rear** with `lavfi` / `testsrc` | Linux-only test source on **go2rtc win32** build | Use `rtsp://127.0.0.1:8554/front` for Phase 1a |
-| `Output file does not contain any stream` on rear | Front not running — rear mirrors front | Fix front first |
+| `Output file does not contain any stream` on rear | Wrong device index or front not running | Run `list-camera-devices.ps1`; fix rear device name/index |
 | Installed on C: by mistake | Earlier script used `%LOCALAPPDATA%` | Use **D:\SomNet.Edge**; delete old `%LOCALAPPDATA%\SomNet.Edge` |
 
 ---
@@ -212,3 +235,8 @@ No tunnel, no SomNet, no Azure.
 | 2026-09-11 | D: install path; Windows rear = restream front; troubleshooting §9 |
 | 2026-09-11 | **V1-T1 pass** — HD User Facing front feed in browser |
 | 2026-09-11 | **V1-T2 pass** — rear mirrors front (Phase 1a) |
+| 2026-09-11 | **Checkpoint** — 1b/sign-off blocked pending Phase 1c Thingino G2 flash |
+| 2026-09-11 | **Pivot to G7** — 1c G7 active; G2 deferred; stock app abandoned |
+| 2026-09-11 | **V1-D9** — IP camera deferred; partial sign-off; Phases 3–8 unblocked (rear mirrors front) |
+| 2026-09-11 | **V1-D10** — Layout A-dev: 2× USB webcam bench alternative |
+| 2026-09-11 | **A-dev verified** — HD User Facing + Anker; IP on hold; V1-D11 Pi target |

@@ -1,6 +1,6 @@
 # Video — Phase 3 Session-scoped stream tokens
 
-**Status:** **Blocked** — complete [Phase 2](./15-Video-Phase-2-UI-Embed-Checklist.md) first
+**Status:** **Ready** — [Phase 1 partial sign-off](./14-Video-Phase-1-Edge-Bench-Checklist.md#6-exit-criteria-sign-off) (Layout A-dev: 2× USB webcam) + Phase 2 complete. **IP cameras on hold** (V1-D9); remaining video dev uses dual webcam until Pi 4 production validation (V1-D11).
 
 | Related | Link |
 |---------|------|

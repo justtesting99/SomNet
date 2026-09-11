@@ -1,4 +1,5 @@
-# SomNet Edge — go2rtc example (Phase 1 bench)
+# SomNet Edge — go2rtc example (Layout A-dev: 2× USB webcam — active)
+# IP camera rear (Phase 1b) on hold (V1-D9).
 # Copy to D:\SomNet.Edge\go2rtc.yaml (or SOMNET_EDGE_HOME) — never commit credentials.
 
 log:
@@ -22,12 +23,18 @@ streams:
   # Or explicit transcode, e.g.:
   # - 'exec:ffmpeg -hide_banner -f dshow -i "video=HD User Facing" -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 25 -an -f mpegts -'
 
-  # Phase 1a: SomNet UI uses src=front for BOTH panels (no rear stream here)
-
-  # --- Phase 1b: IP rear (Layout A or B front+rear) ---
+  # --- Layout A-dev (bench): two USB webcams — V1-D10 ---
+  # Run list-camera-devices.ps1; replace device names below.
+  # Use exec libx264 on both (same fix as front MP4V-ES / WebRTC issues).
   # rear:
-  #   - rtsp://USER:PASS@192.168.1.102:554/stream1
-  # 2K cameras: prefer 1080p substream URL for live HLS
+  #   - 'exec:ffmpeg -hide_banner -f dshow -i "video=SECOND CAM NAME" -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 25 -an -f mpegts -'
+
+  # --- Phase 1b: IP rear (Layout A production) — Galayou G7 / G2 ---
+  # Enable RTSP in Wansview Cloud → Settings → Local application (see Documents/14-Video-Phase-1b-Galayou-G2-Setup.md)
+  # Test first: .\SomNet.Edge\scripts\test-rtsp.ps1 -Url 'rtsp://USER:PASS@192.168.1.50:554/live/ch1'
+  # rear:
+  #   - rtsp://USER:PASS@192.168.1.50:554/live/ch1#rtsp_transport=tcp
+  # Main stream: /live/ch0 — sub stream (preferred for live): /live/ch1
 
   # --- Layout B: both IP ---
   # front:

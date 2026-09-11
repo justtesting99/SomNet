@@ -1,6 +1,8 @@
 # Video — Phase 2 UI embed (dashboard iframes)
 
-**Status:** **Complete** — V2-T1–T4 pass (2026-09-11)
+**Status:** **Complete** — V2-T1–T4 pass (2026-09-11); **Layout A-dev** — distinct front + rear USB webcams verified in browser and SomNet UI
+
+> **Note:** UI embed and `/go2rtc` proxy are done. **Active path:** 2× USB webcam (V1-D10). **IP cameras on hold** (V1-D9). **Phase 3+ unblocked.**
 
 | Related | Link |
 |---------|------|
@@ -76,3 +78,5 @@
 | 2026-09-11 | Fix — iframe embed blank/camera flash → same-origin `/go2rtc` API proxy (YARP) |
 | 2026-09-11 | Fix — go2rtc `api.origin: "*"` for proxied WebSocket |
 | 2026-09-11 | **V2-T1–T4 pass** — Phase 2 sign-off |
+| 2026-09-11 | V1-D9 — IP camera on hold |
+| 2026-09-11 | **A-dev verified** — distinct front/rear feeds; Phase 3+ unblocked |
