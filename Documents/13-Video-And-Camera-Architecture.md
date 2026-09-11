@@ -1,6 +1,6 @@
 # Video & Camera Architecture
 
-**Status:** Design — separate from ESP32 firmware and API/UI implementation checklists
+**Status:** Design — implementation tracked in [14-Video-Implementation-Plan.md](./14-Video-Implementation-Plan.md) (Phase 1 not started)
 
 | Related | Link |
 |---------|------|
@@ -613,21 +613,25 @@ See [08-Development-Guide.md](./08-Development-Guide.md) for local ports and ESP
 
 ---
 
-## 16. What remains (not in this design doc)
+## 16. Implementation checklists
 
-Architecture and hardware choices are captured here. **Not yet specified or built** — expect separate docs or checklists when implementation starts:
+Architecture and hardware choices live in this document. **Phased implementation** is tracked separately:
 
-| Area | Status |
-|------|--------|
-| go2rtc / tunnel **installer runbook** (Pi image, services, autostart) | Not written |
-| **Edge agent** (session start/end listener, snapshot on ack, Blob upload) | Design only — §9, §13 |
-| **SomNet API + UI** (tokens, event image URLs, `videoSources` wiring) | Design only — §13 |
-| **Azure Blob** container, lifecycle, SAS policy | Not configured |
-| **Edge registration** (bind gateway to dom/sub / site id in pairing settings) | Implied, not detailed |
-| **Minimum upload bandwidth** at tool site | Not quantified (rough estimates in §11) |
-| **Implementation checklist** | Intentionally separate from ESP32/API phase lists |
+| Doc | Phase | Status |
+|-----|-------|--------|
+| [14-Video-Implementation-Plan.md](./14-Video-Implementation-Plan.md) | Roadmap | Active |
+| [14-Video-Phase-1-Edge-Bench-Checklist.md](./14-Video-Phase-1-Edge-Bench-Checklist.md) | 1 — go2rtc on PC | **Not started** |
+| [15-Video-Phase-2-UI-Embed-Checklist.md](./15-Video-Phase-2-UI-Embed-Checklist.md) | 2 — dashboard iframes | Blocked |
+| [16-Video-Phase-3-Session-Tokens-Checklist.md](./16-Video-Phase-3-Session-Tokens-Checklist.md) | 3 — API tokens | Blocked |
+| [17-Video-Phase-4-Action-Snapshots-Checklist.md](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | 4 — snapshots (local) | Blocked |
+| [18-Video-Phase-5-Edge-Agent-Checklist.md](./18-Video-Phase-5-Edge-Agent-Checklist.md) | 5 — edge agent | Blocked |
+| [19-Video-Phase-6-Tunnel-Checklist.md](./19-Video-Phase-6-Tunnel-Checklist.md) | 6 — remote operator | Blocked |
+| [20-Video-Phase-7-Pi-Production-Checklist.md](./20-Video-Phase-7-Pi-Production-Checklist.md) | 7 — Pi + ESP32 E2E | Blocked |
+| [21-Video-Phase-8-Azure-Cutover-Checklist.md](./21-Video-Phase-8-Azure-Cutover-Checklist.md) | 8 — Azure deploy | Blocked |
 
-Nothing above blocks starting **PC-based dev** of go2rtc + cameras + manual iframe embed.
+Sample edge config: [`SomNet.Edge/`](../SomNet.Edge/README.md).
+
+Start with **Phase 1** — no SomNet code changes required.
 
 ---
 

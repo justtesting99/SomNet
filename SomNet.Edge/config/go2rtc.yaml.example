@@ -1,0 +1,35 @@
+# SomNet Edge — go2rtc example (Phase 1 bench)
+# Copy to D:\SomNet.Edge\go2rtc.yaml (or SOMNET_EDGE_HOME) — never commit credentials.
+
+log:
+  level: info
+
+api:
+  listen: ":1984"
+
+rtsp:
+  listen: ":8554"
+
+streams:
+  # --- Windows (Phase 1a) ---
+  # Run list-camera-devices.ps1 — use video=0, video=1, ... (DirectShow index)
+  # Do NOT use Linux-only lavfi/testsrc for rear on Windows go2rtc builds.
+  front:
+    - ffmpeg:device?video=0#video=h264
+  # Optional if camera supports it (test with ffmpeg dshow first):
+  # - ffmpeg:device?video=0&video_size=1280x720&framerate=15#video=h264
+
+  # Phase 1a placeholder: restream front until IP camera configured
+  rear:
+    - rtsp://127.0.0.1:8554/front
+
+  # --- Phase 1b: IP rear (Layout A or B front+rear) ---
+  # rear:
+  #   - rtsp://USER:PASS@192.168.1.102:554/stream1
+  # 2K cameras: prefer 1080p substream URL for live HLS
+
+  # --- Layout B: both IP ---
+  # front:
+  #   - rtsp://USER:PASS@192.168.1.101:554/stream1
+  # rear:
+  #   - rtsp://USER:PASS@192.168.1.102:554/stream1
