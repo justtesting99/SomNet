@@ -1,6 +1,6 @@
 # Video — Phase 2 UI embed (dashboard iframes)
 
-**Status:** **In progress** — implementation complete; operator smoke tests pending
+**Status:** **Complete** — V2-T1–T4 pass (2026-09-11)
 
 | Related | Link |
 |---------|------|
@@ -50,10 +50,10 @@
 
 | # | Steps | Pass criteria | Result |
 |---|-------|---------------|--------|
-| **V2-T1** | Manual mode; both env URLs set | Front + rear play in dashboard monitors | ☐ |
-| **V2-T2** | Mobile viewport | Feeds visible; expand overlay works | ☐ |
-| **V2-T3** | Unset rear URL | Front plays; rear shows placeholder | ☐ |
-| **V2-T4** | Stroke command (ESP32 optional) | Video unaffected; controls work | ☐ |
+| **V2-T1** | Manual mode; both env URLs set | Front + rear play in dashboard monitors | ☑ |
+| **V2-T2** | Mobile viewport | Feeds visible; expand overlay works | ☑ |
+| **V2-T3** | Unset rear URL | Front plays; rear shows placeholder | ☑ |
+| **V2-T4** | Stroke command (ESP32 optional) | Video unaffected; controls work | ☑ |
 
 ---
 
@@ -74,3 +74,5 @@
 | 2026-09-11 | Fix — MP4V-ES/WebRTC mismatch → exec libx264 transcode in go2rtc.yaml |
 | 2026-09-11 | Fix — blank page on `mode=hls` in Chrome → default viewer `mse` |
 | 2026-09-11 | Fix — iframe embed blank/camera flash → same-origin `/go2rtc` API proxy (YARP) |
+| 2026-09-11 | Fix — go2rtc `api.origin: "*"` for proxied WebSocket |
+| 2026-09-11 | **V2-T1–T4 pass** — Phase 2 sign-off |
