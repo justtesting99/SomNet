@@ -55,3 +55,24 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
   return (await response.json()) as T;
 }
+
+export async function apiFetchBlob(path: string): Promise<Blob> {
+  const headers = new Headers({ Accept: 'image/jpeg' });
+
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
+  }
+
+  const response = await fetch(path, { headers });
+
+  if (response.status === 401 && unauthorizedHandler) {
+    unauthorizedHandler();
+  }
+
+  if (!response.ok) {
+    const message = (await response.text()) || response.statusText;
+    throw new ApiError(message, response.status);
+  }
+
+  return response.blob();
+}

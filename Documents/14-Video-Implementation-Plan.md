@@ -15,8 +15,8 @@ Video work is **separate from ESP32 firmware phases** and **separate from UI reh
 | **1c** | [Phase 1c — Thingino G7 flash](./14-Video-Phase-1c-Thingino-G7-Flash-Checklist.md) | IP rear (Galayou) | PC | No — **on hold** (V1-D9) |
 | **1c′** | [Phase 1c — Thingino G2 flash](./14-Video-Phase-1c-Thingino-G2-Flash-Checklist.md) | IP fleet | PC | No — **on hold** |
 | **2** | [Phase 2 — UI embed](./15-Video-Phase-2-UI-Embed-Checklist.md) | `VideoFeed` iframes in dashboard (LAN URLs) | PC | UI — **complete** |
-| **3** | [Phase 3 — Session tokens](./16-Video-Phase-3-Session-Tokens-Checklist.md) | API mints session-scoped stream tokens; UI fetches on session start | PC + local API | API + UI — **next** |
-| **4** | [Phase 4 — Action snapshots](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | Capture on device ack; local disk or Azurite; link to session events | PC + local API | API + edge script |
+| **3** | [Phase 3 — Session tokens](./16-Video-Phase-3-Session-Tokens-Checklist.md) | API mints session-scoped stream tokens; UI fetches on session start | PC + local API | API + UI — **complete** |
+| **4** | [Phase 4 — Action snapshots](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | Capture on device ack; local disk or Azurite; link to session events | PC + local API | API + UI — **in progress** |
 | **5** | [Phase 5 — Edge agent](./18-Video-Phase-5-Edge-Agent-Checklist.md) | Session start/end → enable streams; token validation at gateway | PC | API + edge agent |
 | **6** | [Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) | Remote operator without Azure (tunnel to PC/Pi) | PC | Config |
 | **7** | [Phase 7 — Pi production bench](./20-Video-Phase-7-Pi-Production-Checklist.md) | Move edge to Pi 4/5; **Layout A-dev** (2× USB); E2E with ESP32 on LAN | **Pi** + local API | Config + docs |

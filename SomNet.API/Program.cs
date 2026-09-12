@@ -68,6 +68,12 @@ builder.Services
     .Bind(builder.Configuration.GetSection(VideoStreamSettings.SectionName));
 
 builder.Services
+    .AddOptions<VideoSnapshotSettings>()
+    .Bind(builder.Configuration.GetSection(VideoSnapshotSettings.SectionName));
+
+builder.Services.AddVideoSnapshotServices();
+
+builder.Services
     .AddOptions<JwtSettings>()
     .Bind(builder.Configuration.GetSection(JwtSettings.SectionName))
     .Validate(settings => !string.IsNullOrWhiteSpace(settings.Key), "Jwt:Key is required.")

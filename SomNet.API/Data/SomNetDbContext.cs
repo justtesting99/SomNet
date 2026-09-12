@@ -24,6 +24,8 @@ public sealed class SomNetDbContext : DbContext
 
     public DbSet<SubDeviceRegistration> SubDeviceRegistrations => Set<SubDeviceRegistration>();
 
+    public DbSet<SessionActionSnapshot> SessionActionSnapshots => Set<SessionActionSnapshot>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<SessionHistoryEntry>(entity =>
@@ -92,6 +94,21 @@ public sealed class SomNetDbContext : DbContext
             entity.Property(registration => registration.AccessToken).HasMaxLength(2048);
             entity.Property(registration => registration.TokenJti).HasMaxLength(64);
             entity.HasIndex(registration => registration.DeviceId);
+        });
+
+        modelBuilder.Entity<SessionActionSnapshot>(entity =>
+        {
+            entity.ToTable("SessionActionSnapshots");
+            entity.HasKey(snapshot => snapshot.Id);
+            entity.Property(snapshot => snapshot.SessionId).HasMaxLength(32);
+            entity.Property(snapshot => snapshot.DomTarget).HasMaxLength(128);
+            entity.Property(snapshot => snapshot.Feed).HasMaxLength(16);
+            entity.Property(snapshot => snapshot.RelativePath).HasMaxLength(512);
+            entity.Property(snapshot => snapshot.CommandKey).HasMaxLength(64);
+            entity.Property(snapshot => snapshot.CorrelationId).HasMaxLength(64);
+            entity.HasIndex(snapshot => new { snapshot.SessionId, snapshot.ActionIndex, snapshot.Feed })
+                .IsUnique();
+            entity.HasIndex(snapshot => new { snapshot.DomTarget, snapshot.SessionId });
         });
     }
 }

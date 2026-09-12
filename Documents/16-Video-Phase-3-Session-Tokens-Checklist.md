@@ -1,6 +1,6 @@
 # Video — Phase 3 Session-scoped stream tokens
 
-**Status:** **Sign-off pending** — all smoke tests pass except **V3-T4 deferred**; ready for Phase 4 when T4 is accepted or waived
+**Status:** **Signed off** (2026-09-11) — V3-T4 deferred; Phase 4 started
 
 > **Manual mode note:** There is no **End session** button — one server session accumulates strokes until **Abort** (still in progress), **Switch mode**, **Sub change**, or **Sign out** ([07 § lifecycle](./07-Session-And-History.md#when-sessions-end)). Video: **no feeds until first stroke** → both feeds load with tokens → **feeds stay up** for subsequent strokes in the same session. Test **V3-T2** (clear feeds) via **Switch mode** or **Sub change**, not a manual End button.
 

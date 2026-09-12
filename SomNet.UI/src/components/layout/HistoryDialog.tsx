@@ -12,6 +12,7 @@ import { useSubTarget } from '@/context/SubTargetProvider';
 import type { HistoryTimelineEntry } from '@/types/sessionHistory';
 import { Button } from '@/components/ui/Button';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
+import { SessionSnapshotGallery } from '@/components/video/SessionSnapshotGallery';
 
 export function HistoryDialog() {
   const { isDialogOpen, closeDialog } = useHistory();
@@ -168,6 +169,7 @@ export function HistoryDialog() {
                       <p className="mt-2 text-sm leading-relaxed text-slate-400">
                         {session.summary}
                       </p>
+                      <SessionSnapshotGallery sessionId={session.id} />
                     </li>
                   );
                 }
