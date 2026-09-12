@@ -191,6 +191,12 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
     try {
       const entry = await fetchActiveSession(selectedSubRef.current);
       if (!entry) {
+        // Manual sessions are client-authoritative while in progress; a transient 404 on
+        // /api/sessions/active must not clear local state (that unmounts video iframes).
+        if (activeSessionRef.current?.mode === 'manual') {
+          return;
+        }
+
         if (activeSessionRef.current) {
           withRemoteSyncApply(() => {
             syncSessionFromRemote(null);

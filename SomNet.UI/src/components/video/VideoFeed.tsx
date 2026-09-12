@@ -29,10 +29,12 @@ export function VideoFeed({
       return;
     }
     if (loadDelayMs <= 0) {
-      setIframeSrc(src);
+      setIframeSrc((current) => (current === src ? current : src));
       return;
     }
-    const timer = window.setTimeout(() => setIframeSrc(src), loadDelayMs);
+    const timer = window.setTimeout(() => {
+      setIframeSrc((current) => (current === src ? current : src));
+    }, loadDelayMs);
     return () => window.clearTimeout(timer);
   }, [src, loadDelayMs]);
 

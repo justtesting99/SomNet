@@ -1,19 +1,34 @@
 import type { SubTargetName } from '@/config/sessionUsers';
 import type { PairingSettings } from '@/types/pairingSettings';
+import { DEFAULT_VIDEO_SETTINGS } from '@/types/pairingSettings';
+import { DEFAULT_APP_OPTIONS, type AppOptions } from '@/types/options';
 import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
+import { clampVideoFeedTimeoutSeconds } from '@/utils/videoFeedTimeout';
 import { apiFetch } from '@/api/client';
 
 interface PairingSettingsResponse {
   appOptions: PairingSettings['appOptions'];
   manual: PairingSettings['manual'];
   automatic: PairingSettings['automatic'];
+  video?: PairingSettings['video'];
+}
+
+function normalizeAppOptions(appOptions: PairingSettingsResponse['appOptions']): AppOptions {
+  return {
+    ...DEFAULT_APP_OPTIONS,
+    ...appOptions,
+    videoFeedTimeoutSeconds: clampVideoFeedTimeoutSeconds(
+      appOptions.videoFeedTimeoutSeconds ?? DEFAULT_APP_OPTIONS.videoFeedTimeoutSeconds,
+    ),
+  };
 }
 
 function normalizeSettings(response: PairingSettingsResponse): PairingSettings {
   return {
-    appOptions: response.appOptions,
+    appOptions: normalizeAppOptions(response.appOptions),
     manual: response.manual,
     automatic: { ...response.automatic, running: false },
+    video: response.video ?? DEFAULT_VIDEO_SETTINGS,
   };
 }
 
@@ -38,6 +53,7 @@ export async function savePairingSettings(
       appOptions: settings.appOptions,
       manual: settings.manual,
       automatic: { ...settings.automatic, running: false },
+      video: settings.video,
     }),
   });
   return normalizeSettings(response);

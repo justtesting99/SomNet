@@ -4,14 +4,24 @@ import { useIsMobileViewport } from '@/hooks/useIsMobileViewport';
 import { VideoMonitor } from '@/components/video/VideoMonitor';
 import { VideoMaximizeOverlay } from '@/components/video/VideoMaximizeOverlay';
 import { Button } from '@/components/ui/Button';
+import { VideoFeedStartPanel } from '@/components/video/VideoFeedStartPanel';
 import { REAR_VIDEO_LOAD_DELAY_MS } from '@/config/videoSources';
+import type { VideoPreviewControls } from '@/hooks/useSessionVideoSources';
+import type { OperationMode } from '@/types/modes';
 
 interface DashboardLayoutProps {
   controls: ReactNode;
   videoSources?: [string?, string?];
+  mode: OperationMode;
+  videoPreview?: VideoPreviewControls;
 }
 
-export function DashboardLayout({ controls, videoSources = [] }: DashboardLayoutProps) {
+export function DashboardLayout({
+  controls,
+  videoSources = [],
+  mode,
+  videoPreview,
+}: DashboardLayoutProps) {
   const isMobile = useIsMobileViewport();
   const { setExpandMode } = useVideoDisplay();
   const sources: [string?, string?] = [videoSources[0], videoSources[1]];
@@ -25,6 +35,8 @@ export function DashboardLayout({ controls, videoSources = [] }: DashboardLayout
           className="flex w-full min-w-0 flex-col gap-4 lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:self-start"
           aria-label="Video monitors"
         >
+          {videoPreview ? <VideoFeedStartPanel mode={mode} preview={videoPreview} /> : null}
+
           {isMobile ? (
             <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-2">
               <p className="text-xs text-slate-400">

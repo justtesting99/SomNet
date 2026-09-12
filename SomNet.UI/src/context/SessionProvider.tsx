@@ -28,6 +28,7 @@ import type { AutomaticResultJson } from '@/utils/automaticResultJson';
 import type { SessionHistoryEntry } from '@/types/sessionHistory';
 import { parseManualInProgressSummary } from '@/utils/manualSessionRehydrate';
 import { isRehydratableManualSession } from '@/utils/sessionProgress';
+import { markManualVideoCommandComplete } from '@/utils/manualVideoCommandNotify';
 import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
 
 interface ActiveSessionState {
@@ -41,6 +42,8 @@ interface ActiveSessionState {
 
 interface SessionContextValue {
   activeSession: ActiveSessionState | null;
+  /** Incremented when a manual stroke/burst/abort completes or manual session rehydrates (video idle timer). */
+  manualVideoActivitySeq: number;
   beginAutomaticSession: () => Promise<void>;
   recordManualStroke: (powerPercent: number, actualStrokeMs?: number) => Promise<void>;
   recordManualAbort: () => Promise<void>;
@@ -58,6 +61,10 @@ interface SessionContextValue {
   endActiveSessionIfNeeded: (reason: ManualSessionEndReason | string) => Promise<void>;
   rehydrateSession: (entry: SessionHistoryEntry) => void;
   syncSessionFromRemote: (entry: SessionHistoryEntry | null) => void;
+  /** Ensures an in-progress manual session exists (for video preview before first stroke). */
+  prepareManualSession: () => Promise<void>;
+  /** Ensures an in-progress automatic session record exists (for video preview before Start). */
+  prepareAutomaticSession: () => Promise<void>;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -66,10 +73,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { selectedSub } = useSubTarget();
   const [activeSession, setActiveSession] = useState<ActiveSessionState | null>(null);
+  const [manualVideoActivitySeq, setManualVideoActivitySeq] = useState(0);
   const activeSessionRef = useRef<ActiveSessionState | null>(null);
   const startingRef = useRef(false);
 
   activeSessionRef.current = activeSession;
+
+  const bumpManualVideoActivity = useCallback(() => {
+    setManualVideoActivitySeq((seq) => seq + 1);
+  }, []);
 
   const domTarget = user?.displayName ?? user?.username ?? '';
 
@@ -192,9 +204,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       };
       activeSessionRef.current = nextSession;
       setActiveSession(nextSession);
+      bumpManualVideoActivity();
+      markManualVideoCommandComplete();
       await persistManualProgress(nextSession);
     },
-    [ensureManualSession, persistManualProgress],
+    [bumpManualVideoActivity, ensureManualSession, persistManualProgress],
   );
 
   const recordManualAbort = useCallback(async () => {
@@ -211,8 +225,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     };
     activeSessionRef.current = nextSession;
     setActiveSession(nextSession);
+    bumpManualVideoActivity();
+    markManualVideoCommandComplete();
     await persistManualProgress(nextSession);
-  }, [ensureManualSession, persistManualProgress]);
+  }, [bumpManualVideoActivity, ensureManualSession, persistManualProgress]);
 
   const recordManualBurst = useCallback(
     async (
@@ -239,9 +255,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       };
       activeSessionRef.current = nextSession;
       setActiveSession(nextSession);
+      bumpManualVideoActivity();
+      markManualVideoCommandComplete();
       await persistManualProgress(nextSession);
     },
-    [ensureManualSession, persistManualProgress],
+    [bumpManualVideoActivity, ensureManualSession, persistManualProgress],
   );
 
   const endManualSession = useCallback(
@@ -281,8 +299,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const nextSession = buildSessionFromEntry(entry);
       activeSessionRef.current = nextSession;
       setActiveSession(nextSession);
+      if (isRehydratableManualSession(entry)) {
+        bumpManualVideoActivity();
+      }
     },
-    [buildSessionFromEntry],
+    [buildSessionFromEntry, bumpManualVideoActivity],
   );
 
   const syncSessionFromRemote = useCallback(
@@ -354,6 +375,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       activeSession,
+      manualVideoActivitySeq,
       beginAutomaticSession,
       recordManualStroke,
       recordManualAbort,
@@ -363,13 +385,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       endActiveSessionIfNeeded,
       rehydrateSession,
       syncSessionFromRemote,
+      prepareManualSession: ensureManualSession,
+      prepareAutomaticSession: beginAutomaticSession,
     }),
     [
       activeSession,
+      manualVideoActivitySeq,
       beginAutomaticSession,
       endActiveSessionIfNeeded,
       endAutomaticSession,
       endManualSession,
+      ensureManualSession,
       rehydrateSession,
       syncSessionFromRemote,
       recordManualBurst,

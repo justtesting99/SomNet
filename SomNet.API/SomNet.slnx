@@ -5,4 +5,5 @@
     <Deploy />
   </Project>
   <Project Path="SomNet.API.csproj" />
+  <Project Path="../SomNet.API.Tests/SomNet.API.Tests.csproj" />
 </Solution>

@@ -10,4 +10,6 @@ public sealed class PairingSettingsDto
     public ManualControlStateDto Manual { get; init; } = ControlStateDefaults.Manual;
 
     public AutomaticControlStateDto Automatic { get; init; } = ControlStateDefaults.Automatic;
+
+    public VideoSettingsDto Video { get; init; } = VideoSettingsDefaults.Value;
 }

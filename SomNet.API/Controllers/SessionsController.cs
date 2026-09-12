@@ -13,10 +13,14 @@ namespace SomNet.API.Controllers;
 public class SessionsController : ControllerBase
 {
     private readonly ISomNetDataStore _dataStore;
+    private readonly IVideoStreamTokenService _videoStreamTokenService;
 
-    public SessionsController(ISomNetDataStore dataStore)
+    public SessionsController(
+        ISomNetDataStore dataStore,
+        IVideoStreamTokenService videoStreamTokenService)
     {
         _dataStore = dataStore;
+        _videoStreamTokenService = videoStreamTokenService;
     }
 
     [HttpGet("active")]
@@ -105,7 +109,9 @@ public class SessionsController : ControllerBase
 
         try
         {
-            return Ok(_dataStore.EndSession(domTarget, sessionId, request));
+            var ended = _dataStore.EndSession(domTarget, sessionId, request);
+            _videoStreamTokenService.RevokeSession(sessionId);
+            return Ok(ended);
         }
         catch (ArgumentException ex)
         {

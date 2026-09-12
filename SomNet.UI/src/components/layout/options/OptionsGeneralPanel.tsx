@@ -52,6 +52,17 @@ export function OptionsGeneralPanel({ pendingOptions, onUpdate }: OptionsGeneral
           max={120}
           onChange={(event) => onUpdate('reconnectIntervalSeconds', Number(event.target.value))}
         />
+        <NumberField
+          label="Video feed timeout (seconds)"
+          value={pendingOptions.videoFeedTimeoutSeconds}
+          min={5}
+          max={600}
+          onChange={(event) => onUpdate('videoFeedTimeoutSeconds', Number(event.target.value))}
+        />
+        <p className="text-xs leading-relaxed text-slate-500">
+          Manual: hide live feeds this long after each stroke or burst (bursts stay visible until
+          complete). Automatic: keep feeds this long after Stop or Abort before hiding.
+        </p>
       </section>
 
       <section className="space-y-3">

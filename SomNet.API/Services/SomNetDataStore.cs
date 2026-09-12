@@ -237,6 +237,32 @@ public sealed class SomNetDataStore : ISomNetDataStore
         return session is null ? null : ToDto(session);
     }
 
+    public SessionHistoryEntryDto GetSession(string domTarget, string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(domTarget))
+        {
+            throw new ArgumentException("DomTarget is required.", nameof(domTarget));
+        }
+
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new ArgumentException("Session id is required.", nameof(sessionId));
+        }
+
+        var session = _db.Sessions
+            .AsNoTracking()
+            .SingleOrDefault(entry =>
+                entry.Id == sessionId.Trim() &&
+                entry.DomTarget == domTarget.Trim());
+
+        if (session is null)
+        {
+            throw new KeyNotFoundException($"Session '{sessionId}' was not found for this operator.");
+        }
+
+        return ToDto(session);
+    }
+
     public SessionHistoryEntryDto StartSession(string domTarget, StartSessionRequestDto request)
     {
         if (string.IsNullOrWhiteSpace(domTarget))

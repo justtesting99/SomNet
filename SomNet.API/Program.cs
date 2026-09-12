@@ -43,6 +43,7 @@ builder.Services.AddDbContext<SomNetDbContext>(options =>
 });
 
 builder.Services.AddScoped<ISomNetDataStore, SomNetDataStore>();
+builder.Services.AddSingleton<IVideoStreamTokenService, VideoStreamTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddSingleton<IDeviceConnectionRegistry, DeviceConnectionRegistry>();
 builder.Services.AddScoped<IDeviceTokenService, DeviceTokenService>();
@@ -61,6 +62,10 @@ if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddHostedService<DeviceReachabilityBackgroundService>();
 }
+
+builder.Services
+    .AddOptions<VideoStreamSettings>()
+    .Bind(builder.Configuration.GetSection(VideoStreamSettings.SectionName));
 
 builder.Services
     .AddOptions<JwtSettings>()

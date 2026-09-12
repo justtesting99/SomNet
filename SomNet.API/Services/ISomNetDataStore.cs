@@ -20,6 +20,8 @@ public interface ISomNetDataStore
 
     SessionHistoryEntryDto? GetActiveSession(string domTarget, string subTarget);
 
+    SessionHistoryEntryDto GetSession(string domTarget, string sessionId);
+
     SessionHistoryEntryDto StartSession(string domTarget, StartSessionRequestDto request);
 
     SessionHistoryEntryDto UpdateSession(string domTarget, string sessionId, UpdateSessionRequestDto request);

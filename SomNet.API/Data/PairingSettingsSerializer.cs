@@ -1,6 +1,7 @@
 using System.Text.Json;
 using SomNet.API.Configuration;
 using SomNet.API.Services;
+using SomNet.Shared.DTO.Options;
 using SomNet.Shared.DTO.Settings;
 using SomNet.Shared.Enums;
 using SomNet.Shared.Serialization;
@@ -46,7 +47,8 @@ public static class PairingSettingsSerializer
 
         return new PairingSettingsDto
         {
-            AppOptions = settings.AppOptions,
+            AppOptions = NormalizeAppOptions(settings.AppOptions),
+            Video = NormalizeVideo(settings.Video),
             Manual = manual,
             Automatic = new()
             {
@@ -112,6 +114,41 @@ public static class PairingSettingsSerializer
 
         var clamped = Math.Clamp(ms, min, max);
         return (int)Math.Round((clamped - min) * 100.0 / (max - min));
+    }
+
+    private static AppOptionsDto NormalizeAppOptions(AppOptionsDto? options)
+    {
+        var source = options ?? AppOptionsDefaults.Value;
+        var timeout = source.VideoFeedTimeoutSeconds;
+        if (timeout <= 0)
+        {
+            timeout = AppOptionsDefaults.Value.VideoFeedTimeoutSeconds;
+        }
+
+        return new AppOptionsDto
+        {
+            EnableSoundAlerts = source.EnableSoundAlerts,
+            ConfirmBeforeCommands = source.ConfirmBeforeCommands,
+            AllowAutomaticModeOverrides = source.AllowAutomaticModeOverrides,
+            AutoExpandVideoOnMobile = source.AutoExpandVideoOnMobile,
+            MobileVideoExpandDefault = source.MobileVideoExpandDefault,
+            ShowSessionTimestamps = source.ShowSessionTimestamps,
+            OperatorDisplayName = source.OperatorDisplayName?.Trim() ?? string.Empty,
+            DefaultNotesPrefix = string.IsNullOrWhiteSpace(source.DefaultNotesPrefix)
+                ? AppOptionsDefaults.Value.DefaultNotesPrefix
+                : source.DefaultNotesPrefix.Trim(),
+            ReconnectIntervalSeconds = Math.Clamp(source.ReconnectIntervalSeconds, 5, 120),
+            VideoFeedTimeoutSeconds = Math.Clamp(timeout, 5, 600),
+        };
+    }
+
+    private static VideoSettingsDto NormalizeVideo(VideoSettingsDto? video)
+    {
+        var tunnelBaseUrl = video?.TunnelBaseUrl?.Trim() ?? string.Empty;
+        return new VideoSettingsDto
+        {
+            TunnelBaseUrl = tunnelBaseUrl,
+        };
     }
 
     private static JsonSerializerOptions CreateOptions()

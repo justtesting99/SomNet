@@ -21,4 +21,9 @@ public sealed class AppOptionsDto
     public string DefaultNotesPrefix { get; init; } = "Session";
 
     public int ReconnectIntervalSeconds { get; init; } = 10;
+
+    /// <summary>
+    /// Seconds to keep live video visible after manual stroke/burst idle, or after automatic session end.
+    /// </summary>
+    public int VideoFeedTimeoutSeconds { get; init; } = 30;
 }

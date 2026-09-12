@@ -15,5 +15,6 @@ public static class AppOptionsDefaults
         OperatorDisplayName = string.Empty,
         DefaultNotesPrefix = "Session",
         ReconnectIntervalSeconds = 10,
+        VideoFeedTimeoutSeconds = 30,
     };
 }

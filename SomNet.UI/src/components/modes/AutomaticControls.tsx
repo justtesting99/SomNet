@@ -93,7 +93,8 @@ export function AutomaticControls() {
   );
 
   const automaticSessionActive = activeSession?.mode === 'automatic';
-  const sessionRunning = automaticSessionActive;
+  /** Device session running — not merely a server row (e.g. video preview creates session only). */
+  const sessionRunning = state.running;
   const allowLiveOverrides = options.allowAutomaticModeOverrides;
   const liveOverridesActive = sessionRunning && allowLiveOverrides;
   const configLocked = sessionRunning && !allowLiveOverrides;

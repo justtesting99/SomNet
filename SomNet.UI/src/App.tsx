@@ -20,12 +20,34 @@ import { AutomaticSessionHubListener } from '@/components/hardware/AutomaticSess
 import { SessionRehydrator } from '@/components/hardware/SessionRehydrator';
 import { TabSyncProvider } from '@/context/TabSyncProvider';
 import { TabSyncBanner } from '@/components/layout/TabSyncBanner';
-import { getDashboardVideoSources } from '@/config/videoSources';
+import { useSessionVideoSources } from '@/hooks/useSessionVideoSources';
+
+function DashboardLayoutWithSessionVideo({ mode }: { mode: 'manual' | 'automatic' }) {
+  const { sources, videoPreview } = useSessionVideoSources();
+
+  return (
+    <DashboardLayout
+      controls={mode === 'manual' ? <ManualControls /> : <AutomaticControls />}
+      videoSources={sources}
+      mode={mode}
+      videoPreview={videoPreview}
+    />
+  );
+}
+
+function DashboardWithVideo({ mode }: { mode: 'manual' | 'automatic' }) {
+  return (
+    <VideoDisplayProvider>
+      <HardwareCommandProvider>
+        <DashboardLayoutWithSessionVideo mode={mode} />
+      </HardwareCommandProvider>
+    </VideoDisplayProvider>
+  );
+}
 
 export function App() {
   const { isAuthenticated, isRestoring } = useAuth();
   const { mode } = useMode();
-  const videoSources = getDashboardVideoSources();
 
   if (isRestoring) {
     return (
@@ -56,16 +78,7 @@ export function App() {
                         {!mode ? (
                           <ModeSelector />
                         ) : (
-                          <VideoDisplayProvider>
-                            <HardwareCommandProvider>
-                              <DashboardLayout
-                                controls={
-                                  mode === 'manual' ? <ManualControls /> : <AutomaticControls />
-                                }
-                                videoSources={videoSources}
-                              />
-                            </HardwareCommandProvider>
-                          </VideoDisplayProvider>
+                          <DashboardWithVideo mode={mode} />
                         )}
                       </AppShell>
                     </SystemStatusProvider>

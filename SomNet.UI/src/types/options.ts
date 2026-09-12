@@ -12,6 +12,7 @@ export interface AppOptions {
   operatorDisplayName: string;
   defaultNotesPrefix: string;
   reconnectIntervalSeconds: number;
+  videoFeedTimeoutSeconds: number;
 }
 
 export const MOBILE_VIDEO_EXPAND_OPTIONS: {
@@ -38,6 +39,7 @@ export const DEFAULT_GENERAL_APP_OPTIONS: Pick<
   | 'autoExpandVideoOnMobile'
   | 'mobileVideoExpandDefault'
   | 'reconnectIntervalSeconds'
+  | 'videoFeedTimeoutSeconds'
   | 'operatorDisplayName'
   | 'defaultNotesPrefix'
 > = {
@@ -46,6 +48,7 @@ export const DEFAULT_GENERAL_APP_OPTIONS: Pick<
   autoExpandVideoOnMobile: true,
   mobileVideoExpandDefault: 'both',
   reconnectIntervalSeconds: 10,
+  videoFeedTimeoutSeconds: 30,
   operatorDisplayName: '',
   defaultNotesPrefix: 'Session',
 };
