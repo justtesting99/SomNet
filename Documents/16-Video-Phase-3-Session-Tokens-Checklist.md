@@ -64,7 +64,7 @@
 | **V3-T3b** | Automatic: **Start** → feeds up → **F5 refresh** | Stop/Abort enabled; feeds reload with `token=` | ☑ **2026-09-11** |
 | **V3-T4a** | Token mint after session ended (Switch mode / sub change) | `POST …/tokens` → **403**; UI already cleared iframes (V3-T2) | ☐ **deferred** |
 | **V3-T4b** | Token mint with wrong `subTarget` query | **403** (Swagger or curl with valid operator JWT) | ☐ **deferred** |
-| **V3-T7** | Manual/automatic: **Start feeds** preview | Feeds load; 2× timeout; automatic Start/Stop unchanged until real Start | ☑ **2026-09-11** |
+| **V3-T7** | Manual/automatic: **Start feeds** preview (+ automatic **F5** after preview) | Feeds load; 2× timeout; **Start** enabled until real Start; refresh restores preview feeds | ☑ **2026-09-11** |
 
 ---
 
@@ -101,3 +101,4 @@
 | 2026-09-11 | T3a/Start feeds refresh — `sessionStorage` feed-restore hint (survives provider remount) |
 | 2026-09-11 | Automatic refresh — no rehydrate probe / no duplicate live-override `automatic-update`; feed restore keeps deadline paused |
 | 2026-09-11 | Automatic Start feeds + refresh — device-running hint; preview rehydrate no longer sets `running` |
+| 2026-09-11 | V3-T3a/T7 automatic preview refresh pass — Phase 3 sign-off pending T4 only |
