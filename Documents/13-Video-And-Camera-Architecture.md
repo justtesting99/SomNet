@@ -1,11 +1,11 @@
 # Video & Camera Architecture
 
-**Status:** Design — implementation tracked in [14-Video-Implementation-Plan.md](./14-Video-Implementation-Plan.md) (Phase 1 not started)
+**Status:** Design + **Phases 1–4 implemented** (manual path) — tracked in [14-Video-Implementation-Plan.md](./14-Video-Implementation-Plan.md)
 
 | Related | Link |
 |---------|------|
 | System context | [01-System-Overview.md](./01-System-Overview.md) |
-| Dashboard video UI (placeholders today) | [03-Frontend-Architecture.md](./03-Frontend-Architecture.md) — Video Components |
+| Dashboard video UI | [03-Frontend-Architecture.md](./03-Frontend-Architecture.md) — Video Components |
 | Session events / history | [07-Session-And-History.md](./07-Session-And-History.md) |
 | ESP32 / air-tool control | [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) — **no video path on device** |
 
@@ -524,20 +524,20 @@ Same edge gateway serves both primary and fallback; only delivery policy changes
 
 ---
 
-## 13. SomNet touchpoints (when implemented)
+## 13. SomNet touchpoints
 
 Light coupling only — no new firmware phase.
 
-| Area | Change |
-|------|--------|
-| **Pairing settings** | Edge tunnel base URL, `videoMode` (`stream` \| `snapshot`); no static stream secrets in remote UI. **Future:** **Site installer** configures cameras/edge via **ESP32 local UI** (`/config`) and/or edge setup → **API/database**; **remote operator** SomNet web only **consumes** stored URLs/tokens ([14 plan — Future enhancements](./14-Video-Implementation-Plan.md#future-enhancements-todo)). Today bench: env + local `go2rtc.yaml`. |
-| **Session start/end** | Hook existing lifecycle → notify edge; mint / revoke stream tokens |
-| **API** | `POST /api/video/sessions/{sessionId}/tokens` (operator JWT); webhook or hub notify to edge on start/end/ack |
-| **Session events** | `frontImageUrl`, `rearImageUrl`, `capturedAt`, optional Blob path per stroke/burst |
-| **UI** | On session active: fetch tokens → set `videoSources`; on end: clear iframes; timeline shows historical stills |
-| **Azure** | Blob container + lifecycle rule; no App Service video egress |
+| Area | Status | Detail |
+|------|--------|--------|
+| **Pairing settings** | **Partial** | `tunnelBaseUrl` (`VideoSettingsDto`) per dom/sub; empty → API default embed path. **Future:** site installer config via ESP32/edge UI ([14 plan — Future enhancements](./14-Video-Implementation-Plan.md#future-enhancements-todo)). Bench: `VITE_VIDEO_FRONT_URL` gates video feature; iframe `src` from session tokens. |
+| **Session start/end** | **Partial** | Mint tokens on feed show; revoke on `POST …/end` ([Phase 3](./16-Video-Phase-3-Session-Tokens-Checklist.md)). Edge agent notify on start/end → [Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md). |
+| **API** | **Partial** | `POST /api/video/sessions/{sessionId}/tokens`; snapshot capture/list/image ([Phase 4](./17-Video-Phase-4-Action-Snapshots-Checklist.md)). Edge webhook on ack → Phase 5. |
+| **Action snapshots** | **Done (manual v1)** | `SessionActionSnapshots` table — `sessionId`, `actionIndex`, `feed`, disk path, `capturedAt`. **Not** stored on session event rows. |
+| **UI** | **Partial** | `useSessionVideoSources` — tokens, feed timeouts, Start feeds preview, F5 restore hints. History: `SessionSnapshotGallery`. Automatic snapshots deferred. |
+| **Azure** | **Future** | Blob container + lifecycle rule; no App Service video egress ([Phase 8](./21-Video-Phase-8-Azure-Cutover-Checklist.md)). |
 
-See [07-Session-And-History.md](./07-Session-And-History.md) for event model when extending schema.
+See [07-Session-And-History.md](./07-Session-And-History.md) — history dialog loads snapshots via video API, not session event fields.
 
 ---
 
@@ -648,19 +648,17 @@ Architecture and hardware choices live in this document. **Phased implementation
 
 | Doc | Phase | Status |
 |-----|-------|--------|
-| [14-Video-Implementation-Plan.md](./14-Video-Implementation-Plan.md) | Roadmap | Active |
-| [14-Video-Phase-1-Edge-Bench-Checklist.md](./14-Video-Phase-1-Edge-Bench-Checklist.md) | 1 — go2rtc on PC | **Not started** |
-| [15-Video-Phase-2-UI-Embed-Checklist.md](./15-Video-Phase-2-UI-Embed-Checklist.md) | 2 — dashboard iframes | Blocked |
-| [16-Video-Phase-3-Session-Tokens-Checklist.md](./16-Video-Phase-3-Session-Tokens-Checklist.md) | 3 — API tokens | Blocked |
-| [17-Video-Phase-4-Action-Snapshots-Checklist.md](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | 4 — snapshots (local) | Blocked |
-| [18-Video-Phase-5-Edge-Agent-Checklist.md](./18-Video-Phase-5-Edge-Agent-Checklist.md) | 5 — edge agent | Blocked |
-| [19-Video-Phase-6-Tunnel-Checklist.md](./19-Video-Phase-6-Tunnel-Checklist.md) | 6 — remote operator | Blocked |
-| [20-Video-Phase-7-Pi-Production-Checklist.md](./20-Video-Phase-7-Pi-Production-Checklist.md) | 7 — Pi + ESP32 E2E | Blocked |
-| [21-Video-Phase-8-Azure-Cutover-Checklist.md](./21-Video-Phase-8-Azure-Cutover-Checklist.md) | 8 — Azure deploy | Blocked |
+| [14-Video-Implementation-Plan.md](./14-Video-Implementation-Plan.md) | Roadmap | **Phase 5 next** |
+| [14-Video-Phase-1-Edge-Bench-Checklist.md](./14-Video-Phase-1-Edge-Bench-Checklist.md) | 1 — go2rtc on PC | **Partial sign-off** (Layout A-dev) |
+| [15-Video-Phase-2-UI-Embed-Checklist.md](./15-Video-Phase-2-UI-Embed-Checklist.md) | 2 — dashboard iframes | **Complete** |
+| [16-Video-Phase-3-Session-Tokens-Checklist.md](./16-Video-Phase-3-Session-Tokens-Checklist.md) | 3 — API tokens | **Signed off** (T4 deferred) |
+| [17-Video-Phase-4-Action-Snapshots-Checklist.md](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | 4 — snapshots (local) | **Signed off** (manual v1) |
+| [18-Video-Phase-5-Edge-Agent-Checklist.md](./18-Video-Phase-5-Edge-Agent-Checklist.md) | 5 — edge agent | **Ready** |
+| [19-Video-Phase-6-Tunnel-Checklist.md](./19-Video-Phase-6-Tunnel-Checklist.md) | 6 — remote operator | Blocked (Phase 5) |
+| [20-Video-Phase-7-Pi-Production-Checklist.md](./20-Video-Phase-7-Pi-Production-Checklist.md) | 7 — Pi + ESP32 E2E | Blocked (Phase 6) |
+| [21-Video-Phase-8-Azure-Cutover-Checklist.md](./21-Video-Phase-8-Azure-Cutover-Checklist.md) | 8 — Azure deploy | Blocked (Phase 7) |
 
 Sample edge config: [`SomNet.Edge/`](../SomNet.Edge/README.md).
-
-Start with **Phase 1** — no SomNet code changes required.
 
 ---
 

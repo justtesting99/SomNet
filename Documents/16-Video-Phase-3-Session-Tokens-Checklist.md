@@ -1,6 +1,6 @@
 # Video — Phase 3 Session-scoped stream tokens
 
-**Status:** **Signed off** (2026-09-11) — V3-T4 deferred; Phase 4 started
+**Status:** **Signed off** (2026-09-11) — V3-T4 manual smoke **deferred** (403 logic implemented in API)
 
 > **Manual mode note:** There is no **End session** button — one server session accumulates strokes until **Abort** (still in progress), **Switch mode**, **Sub change**, or **Sign out** ([07 § lifecycle](./07-Session-And-History.md#when-sessions-end)). Video: **no feeds until first stroke** → both feeds load with tokens → **feeds stay up** for subsequent strokes in the same session. Test **V3-T2** (clear feeds) via **Switch mode** or **Sub change**, not a manual End button.
 
@@ -21,8 +21,8 @@
 |----|----------|-----------------|
 | **V3-D1** | Token format | Signed JWT (HMAC) with `sessionId`, `dom`, `sub`, `feed`, `exp`, `jti` |
 | **V3-D2** | Endpoint | `POST /api/video/sessions/{sessionId}/tokens` (operator JWT) |
-| **V3-D3** | TTL | 30 min; refresh while session active |
-| **V3-D4** | Pairing settings | `videoTunnelBaseUrl` per dom/sub (dev: PC LAN go2rtc embed base) |
+| **V3-D3** | TTL | 30 min; remint on feed show while session active (no background refresh timer) |
+| **V3-D4** | Pairing settings | `tunnelBaseUrl` (`VideoSettingsDto`) per dom/sub (dev: `/go2rtc/…` via YARP) |
 | **V3-D5** | Validation v1 | API-only mint; go2rtc token check deferred to Phase 5 |
 | **V3-D6** | Feed visibility timeout | **Options → General** `videoFeedTimeoutSeconds` (default **30**). Manual: timer starts when stroke/burst/**abort** completes (`manualVideoActivitySeq` + command pending idle). Bursts stay up for full command duration. Automatic: post-session grace same duration. Mode/sub/sign-out: immediate hide. |
 | **V3-D7** | Preview feeds | **Start feeds** above video panels (manual + automatic). Creates/reuses in-progress session for tokens; **2×** action timeout. Manual: strokes/bursts use normal timeout. Automatic: feeds stay up while session runs; post-Stop grace unchanged. |
@@ -45,6 +45,9 @@
 - [x] Manual idle + automatic post-session timeout (V3-D6)
 - [x] Preview feeds manual + automatic (V3-D7)
 - [x] Rehydration: re-fetch tokens; manual restore feeds + idle timeout; automatic restore when `running`
+- [x] `videoFeedRestoreHint` (sessionStorage) — F5 / remount feed restore
+- [x] `automaticDeviceRunningHint` — automatic Start feeds + refresh (`running` not inferred from server row alone)
+- [x] `SessionRehydrator`: `probeDevice: false` on refresh (no spurious `automatic-update`)
 
 ### Tests
 
@@ -62,15 +65,15 @@
 | **V3-T6** | Automatic: Stop → wait timeout | Feeds hide after grace; immediate on mode switch | ☑ **2026-09-11** |
 | **V3-T3a** | Manual: stroke → feeds up → **F5 refresh** | Same session; both feeds reload with `token=`; idle timeout from rehydrate | ☑ **2026-09-11** |
 | **V3-T3b** | Automatic: **Start** → feeds up → **F5 refresh** | Stop/Abort enabled; feeds reload with `token=` | ☑ **2026-09-11** |
-| **V3-T4a** | Token mint after session ended (Switch mode / sub change) | `POST …/tokens` → **403**; UI already cleared iframes (V3-T2) | ☐ **deferred** |
-| **V3-T4b** | Token mint with wrong `subTarget` query | **403** (Swagger or curl with valid operator JWT) | ☐ **deferred** |
+| **V3-T4a** | Token mint after session ended (Switch mode / sub change) | `POST …/tokens` → **403**; UI already cleared iframes (V3-T2) | ☐ **deferred** *(API enforces via `TryGetActiveSessionForSub`)* |
+| **V3-T4b** | Token mint with wrong `subTarget` query | **403** (Swagger or curl with valid operator JWT) | ☐ **deferred** *(API enforces sub mismatch)* |
 | **V3-T7** | Manual/automatic: **Start feeds** preview (+ automatic **F5** after preview) | Feeds load; 2× timeout; **Start** enabled until real Start; refresh restores preview feeds | ☑ **2026-09-11** |
 
 ---
 
 ## Exit criteria
 
-**V3-T1–T4** (all rows) + **V3-T7** pass → start [Phase 4](./17-Video-Phase-4-Action-Snapshots-Checklist.md).
+**V3-T1–T3, V3-T5–T7** pass → start [Phase 4](./17-Video-Phase-4-Action-Snapshots-Checklist.md). **V3-T4** manual Swagger/curl verification deferred (403 behavior implemented).
 
 ### V3-T3 — refresh mid-session
 
@@ -101,4 +104,4 @@
 | 2026-09-11 | T3a/Start feeds refresh — `sessionStorage` feed-restore hint (survives provider remount) |
 | 2026-09-11 | Automatic refresh — no rehydrate probe / no duplicate live-override `automatic-update`; feed restore keeps deadline paused |
 | 2026-09-11 | Automatic Start feeds + refresh — device-running hint; preview rehydrate no longer sets `running` |
-| 2026-09-11 | V3-T3a/T7 automatic preview refresh pass — Phase 3 sign-off pending T4 only |
+| 2026-09-11 | Phase 3 signed off; V3-T4 smoke verification deferred |

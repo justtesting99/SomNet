@@ -255,12 +255,14 @@ Page load (authenticated; last mode may restore from localStorage)
 `components/video/`:
 
 - **VideoMonitor** — Embedded video feed area in dashboard
-- **VideoFeed** — Feed display
+- **VideoFeed** — Feed display (iframe `src` from session tokens when active)
+- **VideoFeedStartPanel** — Start feeds / preview controls (Phase 3)
 - **VideoMaximizeOverlay** — Full-screen overlay on mobile when `expandOnAction` triggers
+- **SessionSnapshotGallery** / **AuthenticatedSnapshotImage** — action stills in history (Phase 4)
 
 Video expand behavior is controlled by `appOptions.autoExpandVideoOnMobile` and `appOptions.mobileVideoExpandDefault` (`None`, `Monitor1`, `Monitor2`, `Both`).
 
-**Feed mapping (Phase 2):** Dashboard labels **Front** / **Rear** (`monitor1` / `monitor2` internally). URLs from `getDashboardVideoSources()` reading `VITE_VIDEO_FRONT_URL` and `VITE_VIDEO_REAR_URL` (see [08-Development-Guide.md](./08-Development-Guide.md)). Unset env → placeholder panel. Session-scoped tokens in Phase 3. Architecture: [13-Video-And-Camera-Architecture.md](./13-Video-And-Camera-Architecture.md).
+**Feed lifecycle (Phase 3+):** `hooks/useSessionVideoSources.ts` mints tokens via `POST /api/video/sessions/{id}/tokens`, manages feed visibility/timeouts, and restores state after refresh (`videoFeedRestoreHint`, `automaticDeviceRunningHint`). **`VITE_VIDEO_FRONT_URL`** (see [08-Development-Guide.md](./08-Development-Guide.md)) is the **feature gate** only (`isVideoConfigured()`); iframe URLs come from API token response, not static env. Unset env → video disabled (placeholder). Dashboard labels **Front** / **Rear** (`monitor1` / `monitor2`). Architecture: [13-Video-And-Camera-Architecture.md](./13-Video-And-Camera-Architecture.md).
 
 ## Styling
 
@@ -305,4 +307,4 @@ Manual stroke in second tab
 ## Future Enhancements
 
 - **Session timeline / graph** — visual plan or replay of an automatic session (main strokes, burst clusters, gaps, power envelope). Placement TBD: Automatic page (pre-start preview or live), session history detail, or both. See [Phase 10 checklist §8](./09-ESP32-Phase-10-Checklist.md#8-relationship-to-other-future-work).
-- **Video / edge settings — site installer vs remote operator** — SomNet web users (Dom/operators) are **not** the people who wire cameras at the tool site. **Target:** extend **ESP32 local setup UI** (`/config` or status flow) and/or **edge gateway local UI** so the **on-site installer** enters edge URL, camera layout, RTSP paths/credentials; device or edge **posts to API → database** (scoped to Sub/pairing). Remote SomNet UI **reads** stored settings (Phase 3+ tokens/URLs) — no manual `VITE_VIDEO_*` or `go2rtc.yaml` for operators. Edge agent (Phase 5+) pulls from API and applies go2rtc config. Video still runs on Pi/PC edge, not ESP32; ESP32 is the likely **installer config entry point** alongside Wi‑Fi/server pairing. Phase 2–3 bench: env + yaml only. See [13 §13](./13-Video-And-Camera-Architecture.md#13-somnet-touchpoints-when-implemented) · [14 plan — Future enhancements](./14-Video-Implementation-Plan.md#future-enhancements-todo) · [Hardware User Guide — Video](./Hardware-User-Guide.md).
+- **Video / edge settings — site installer vs remote operator** — SomNet web users (Dom/operators) are **not** the people who wire cameras at the tool site. **Target:** extend **ESP32 local setup UI** (`/config` or status flow) and/or **edge gateway local UI** so the **on-site installer** enters edge URL, camera layout, RTSP paths/credentials; device or edge **posts to API → database** (scoped to Sub/pairing). Remote SomNet UI **reads** stored settings (Phase 3+ tokens/URLs) — no manual `VITE_VIDEO_*` or `go2rtc.yaml` for operators. Edge agent (Phase 5+) pulls from API and applies go2rtc config. Video still runs on Pi/PC edge, not ESP32; ESP32 is the likely **installer config entry point** alongside Wi‑Fi/server pairing. Phase 2–3 bench: env + yaml only. See [13 §13](./13-Video-And-Camera-Architecture.md#13-somnet-touchpoints) · [14 plan — Future enhancements](./14-Video-Implementation-Plan.md#future-enhancements-todo) · [Hardware User Guide — Video](./Hardware-User-Guide.md).

@@ -21,7 +21,7 @@
 
 | ID | Decision | Choice | Date |
 |----|----------|--------|------|
-| **V2-D1** | URL source v1 | `VITE_VIDEO_FRONT_URL` / `VITE_VIDEO_REAR_URL` | 2026-09-11 |
+| **V2-D1** | URL source v1 | `VITE_VIDEO_FRONT_URL` / `VITE_VIDEO_REAR_URL` (Phase 3+: feature gate only; tokens supply iframe `src`) | 2026-09-11 |
 | **V2-D2** | Feed mapping | Monitor 1 = **Front**, Monitor 2 = **Rear** | 2026-09-11 |
 | **V2-D3** | Auth | None on iframe URL (LAN bench); tokens in Phase 3 | 2026-09-11 |
 | **V2-D4** | CSP / mixed content | localhost SomNet + localhost go2rtc for v1 | 2026-09-11 |

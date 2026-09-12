@@ -1,6 +1,6 @@
 # Video — Phase 4 Action snapshots (local storage)
 
-**Status:** **Sign-off pending** — V4-T1/T2/T3 pass (manual); automatic snapshots deferred
+**Status:** **Signed off** (2026-09-11) — manual v1 complete; automatic snapshots deferred
 
 > **Phase 3:** Signed off (V3-T4 deferred).
 
@@ -42,12 +42,12 @@
 ### UI
 
 - [x] Fire-and-forget capture after manual stroke/burst ack (`SessionProvider`)
-- [x] History dialog — stills per session (V4-T2 UI; smoke test open)
+- [x] History dialog — `SessionSnapshotGallery` stills per session (`AuthenticatedSnapshotImage` + JWT blob fetch)
 - [ ] Automatic mode snapshots (post–Phase 5 or later slice)
 
 ### Tests
 
-- [x] Unit tests — path building, rear delay ordering (mock HttpClient)
+- [x] Unit tests — `BuildRelativePath`, `SanitizePathSegment` (`VideoSnapshotServiceTests.cs`; rear delay not unit-tested)
 
 ---
 
@@ -71,3 +71,4 @@
 | 2026-09-11 | Phase 3 complete; v1 decisions; API + manual capture hook |
 | 2026-09-11 | Fix — add missing `AddSessionActionSnapshots.Designer.cs` so EF applies migration |
 | 2026-09-11 | V4-T1/T2/T3 pass — JPEGs on disk + history gallery; rear settle ~1 s |
+| 2026-09-12 | Manual v1 signed off; doc sync (tests wording, gallery component names) |

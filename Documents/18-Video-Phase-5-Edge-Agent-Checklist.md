@@ -1,6 +1,6 @@
 # Video — Phase 5 Edge agent (session lifecycle + gateway)
 
-**Status:** **Blocked** — complete [Phase 4](./17-Video-Phase-4-Action-Snapshots-Checklist.md) first
+**Status:** **Ready** — [Phase 4](./17-Video-Phase-4-Action-Snapshots-Checklist.md) signed off (manual v1); **next software phase**
 
 **Goal:** Small **edge agent** on PC: `session_started` / `session_ended` from API; enable/disable go2rtc pull; validate stream tokens; trigger snapshot capture on ack (replace UI callback).
 

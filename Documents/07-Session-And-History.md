@@ -184,6 +184,8 @@ Timeline items are discriminated by `type`:
 
 **UI:** `HistoryDialog.tsx` — opened from header "History" button.
 
+**Action snapshots (Phase 4):** When video is configured, expanding a session shows `SessionSnapshotGallery` — front/rear JPEGs per action from `GET /api/video/sessions/{sessionId}/snapshots` (not stored on session event rows). See [17-Video-Phase-4-Action-Snapshots-Checklist.md](./17-Video-Phase-4-Action-Snapshots-Checklist.md).
+
 ### Dom Sessions Dialog (cross-Sub)
 
 **API:** `GET /api/history/sessions?domTarget={dom}` with optional `subTarget` filter

@@ -260,7 +260,7 @@ Phase 1c is **signed off** when:
 3. Phase 1 **V1-T3–T6** can be completed ([Phase 1 checklist](./14-Video-Phase-1-Edge-Bench-Checklist.md)).
 4. Rollout plan for remaining **10** cameras documented (reuse §3–6 notes).
 
-**Then:** Mark Phase 1 signed off → unblock [Phase 3](./16-Video-Phase-3-Session-Tokens-Checklist.md) when ready.
+**Then:** Mark Phase 1 **full IP sign-off** (optional — [Phase 3+](./16-Video-Phase-3-Session-Tokens-Checklist.md) already complete via **Layout A-dev**, V1-D10).
 
 ---
 

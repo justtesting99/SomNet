@@ -132,7 +132,7 @@ SomNet UI has **VideoFeed** placeholders but no live sources. Before API tokens 
 
 ### 4.7 Docs
 
-- [ ] Update [14-Video-Implementation-Plan.md](./14-Video-Implementation-Plan.md) — Phase 1 status
+- [x] Update [14-Video-Implementation-Plan.md](./14-Video-Implementation-Plan.md) — Phase 1 status
 - [ ] Update [Documents/README.md](./README.md) index when signed off
 
 ---

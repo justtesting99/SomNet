@@ -119,7 +119,7 @@ Use **`src=front` for both panels** until the IP rear camera is configured — o
 
 After changing env files, rebuild UI (`npm run build`) for integrated API hosting. Omit a URL to show the placeholder for that monitor.
 
-**Note:** go2rtc must be running before opening Manual/Automatic mode. Session tokens (Phase 3) replace static env URLs later.
+**Note:** go2rtc must be running before opening Manual/Automatic mode. **`VITE_VIDEO_FRONT_URL`** enables the video feature; iframe `src` values come from **session tokens** (Phase 3+) via `useSessionVideoSources`, not from these env URLs directly.
 
 ---
 
