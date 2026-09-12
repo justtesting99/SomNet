@@ -14,13 +14,16 @@ public class SessionsController : ControllerBase
 {
     private readonly ISomNetDataStore _dataStore;
     private readonly IVideoStreamTokenService _videoStreamTokenService;
+    private readonly IVideoEdgeNotificationService _videoEdgeNotificationService;
 
     public SessionsController(
         ISomNetDataStore dataStore,
-        IVideoStreamTokenService videoStreamTokenService)
+        IVideoStreamTokenService videoStreamTokenService,
+        IVideoEdgeNotificationService videoEdgeNotificationService)
     {
         _dataStore = dataStore;
         _videoStreamTokenService = videoStreamTokenService;
+        _videoEdgeNotificationService = videoEdgeNotificationService;
     }
 
     [HttpGet("active")]
@@ -61,7 +64,9 @@ public class SessionsController : ControllerBase
 
         try
         {
-            return Ok(_dataStore.StartSession(domTarget, request));
+            var started = _dataStore.StartSession(domTarget, request);
+            _videoEdgeNotificationService.NotifySessionStarted(started);
+            return Ok(started);
         }
         catch (ArgumentException ex)
         {
@@ -111,6 +116,7 @@ public class SessionsController : ControllerBase
         {
             var ended = _dataStore.EndSession(domTarget, sessionId, request);
             _videoStreamTokenService.RevokeSession(sessionId);
+            _videoEdgeNotificationService.NotifySessionEnded(ended.Id, ended.DomTarget, ended.SubTarget);
             return Ok(ended);
         }
         catch (ArgumentException ex)

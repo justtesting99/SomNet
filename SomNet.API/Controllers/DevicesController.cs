@@ -15,15 +15,18 @@ public class DevicesController : ControllerBase
     private readonly IDeviceTokenService _deviceTokenService;
     private readonly IHardwareCommandDispatcher _commandDispatcher;
     private readonly IDeviceConnectionRegistry _connectionRegistry;
+    private readonly IVideoActionSnapshotTrigger _videoActionSnapshotTrigger;
 
     public DevicesController(
         IDeviceTokenService deviceTokenService,
         IHardwareCommandDispatcher commandDispatcher,
-        IDeviceConnectionRegistry connectionRegistry)
+        IDeviceConnectionRegistry connectionRegistry,
+        IVideoActionSnapshotTrigger videoActionSnapshotTrigger)
     {
         _deviceTokenService = deviceTokenService;
         _commandDispatcher = commandDispatcher;
         _connectionRegistry = connectionRegistry;
+        _videoActionSnapshotTrigger = videoActionSnapshotTrigger;
     }
 
     [HttpGet("status")]
@@ -139,6 +142,16 @@ public class DevicesController : ControllerBase
             request.CommandKey,
             request.PayloadJson,
             cancellationToken);
+
+        if (response.Acknowledged && response.Success)
+        {
+            _videoActionSnapshotTrigger.TryCaptureAfterAckAsync(
+                domTarget,
+                request.SubTarget,
+                request.CommandKey,
+                request.SnapshotActionIndex,
+                cancellationToken);
+        }
 
         return Ok(response);
     }

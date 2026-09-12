@@ -38,7 +38,8 @@ export function ManualControls() {
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { selectedSub } = useSubTarget();
   const { expandOnAction } = useVideoDisplay();
-  const { recordManualStroke, recordManualBurst, recordManualAbort } = useLiveSession();
+  const { prepareManualSession, recordManualStroke, recordManualBurst, recordManualAbort } =
+    useLiveSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
   const [commandError, setCommandError] = useState('');
@@ -112,7 +113,13 @@ export function ManualControls() {
     });
 
     try {
-      const response = await sendHardwareCommand(selectedSub, 'stroke', payloadJson);
+      const snapshotActionIndex = await prepareManualSession();
+      const response = await sendHardwareCommand(
+        selectedSub,
+        'stroke',
+        payloadJson,
+        snapshotActionIndex,
+      );
       const parsed = parseStrokeResultJson(response.resultJson);
       await recordManualStroke(state.powerPercent, parsed?.actualStrokeMs);
     } catch (error) {
@@ -138,7 +145,13 @@ export function ManualControls() {
     });
 
     try {
-      const response = await sendHardwareCommand(selectedSub, 'burst', payloadJson);
+      const snapshotActionIndex = await prepareManualSession();
+      const response = await sendHardwareCommand(
+        selectedSub,
+        'burst',
+        payloadJson,
+        snapshotActionIndex,
+      );
       const parsed = parseBurstResultJson(response.resultJson);
       await recordManualBurst(
         state.powerPercent,

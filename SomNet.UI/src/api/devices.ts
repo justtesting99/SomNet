@@ -38,6 +38,7 @@ export async function sendHardwareCommand(
   subTarget: SubTargetName,
   commandKey: string,
   payloadJson: string,
+  snapshotActionIndex?: number,
 ): Promise<SendHardwareCommandResponse> {
   return apiFetch<SendHardwareCommandResponse>('/api/devices/commands', {
     method: 'POST',
@@ -45,6 +46,7 @@ export async function sendHardwareCommand(
       subTarget,
       commandKey,
       payloadJson,
+      snapshotActionIndex,
     }),
   });
 }

@@ -159,9 +159,17 @@ export function HistoryDialog() {
                       className="rounded-xl border border-slate-700 bg-slate-900/60 px-4 py-3"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
-                        <p className="text-sm font-semibold text-white">
-                          {formatSessionDateTime(session.startedAt)}
-                        </p>
+                        <div>
+                          <p className="text-sm font-semibold text-white">
+                            {formatSessionDateTime(session.lastActivityAt ?? session.startedAt)}
+                          </p>
+                          {session.lastActivityAt &&
+                          session.lastActivityAt !== session.startedAt ? (
+                            <p className="text-xs text-slate-500">
+                              Started {formatSessionDateTime(session.startedAt)}
+                            </p>
+                          ) : null}
+                        </div>
                         <span className="rounded-md bg-slate-800 px-2 py-0.5 text-xs font-medium capitalize text-slate-300">
                           {session.mode}
                         </span>

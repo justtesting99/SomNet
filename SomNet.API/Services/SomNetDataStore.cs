@@ -47,8 +47,13 @@ public sealed class SomNetDataStore : ISomNetDataStore
             throw new ArgumentException("FromDate must be on or before ToDate.");
         }
 
-        var sessions = GetSessionsForDom(query.DomTarget, query.SubTarget)
-            .Select(session => (HistoryTimelineItemDto)new SessionHistoryTimelineItemDto { Entry = session });
+        var sessionEntries = GetSessionsForDom(query.DomTarget, query.SubTarget);
+        var lastSnapshotAt = GetLastSnapshotTimes(sessionEntries.Select(session => session.Id));
+        var sessions = sessionEntries
+            .Select(session => (HistoryTimelineItemDto)new SessionHistoryTimelineItemDto
+            {
+                Entry = EnrichSessionActivity(session, lastSnapshotAt),
+            });
 
         var normalizedSub = SubTargetValidation.Normalize(query.SubTarget);
         var notifications = _db.Notifications
@@ -449,6 +454,47 @@ public sealed class SomNetDataStore : ISomNetDataStore
         return int.TryParse(id["sess-".Length..], out var sequence) ? sequence : 0;
     }
 
+    private Dictionary<string, DateTimeOffset> GetLastSnapshotTimes(IEnumerable<string> sessionIds)
+    {
+        var ids = sessionIds.Distinct(StringComparer.Ordinal).ToArray();
+        if (ids.Length == 0)
+        {
+            return new Dictionary<string, DateTimeOffset>(StringComparer.Ordinal);
+        }
+
+        return _db.SessionActionSnapshots
+            .AsNoTracking()
+            .Where(snapshot => ids.Contains(snapshot.SessionId))
+            .GroupBy(snapshot => snapshot.SessionId)
+            .Select(group => new
+            {
+                SessionId = group.Key,
+                LastCapturedAt = group.Max(snapshot => snapshot.CapturedAt),
+            })
+            .ToDictionary(entry => entry.SessionId, entry => entry.LastCapturedAt, StringComparer.Ordinal);
+    }
+
+    private static SessionHistoryEntryDto EnrichSessionActivity(
+        SessionHistoryEntryDto session,
+        IReadOnlyDictionary<string, DateTimeOffset> lastSnapshotAt)
+    {
+        if (!lastSnapshotAt.TryGetValue(session.Id, out var capturedAt) || capturedAt <= session.StartedAt)
+        {
+            return session;
+        }
+
+        return new SessionHistoryEntryDto
+        {
+            Id = session.Id,
+            StartedAt = session.StartedAt,
+            LastActivityAt = capturedAt,
+            DomTarget = session.DomTarget,
+            SubTarget = session.SubTarget,
+            Mode = session.Mode,
+            Summary = session.Summary,
+        };
+    }
+
     private static SessionHistoryEntryDto ToDto(SessionHistoryEntry session) => new()
     {
         Id = session.Id,
@@ -495,7 +541,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
 
     private static DateTimeOffset GetTimelineSortTime(HistoryTimelineItemDto item) => item switch
     {
-        SessionHistoryTimelineItemDto session => session.Entry.StartedAt,
+        SessionHistoryTimelineItemDto session => session.Entry.LastActivityAt ?? session.Entry.StartedAt,
         NotificationHistoryTimelineItemDto notification => notification.Entry.SentAt,
         _ => throw new InvalidOperationException("Unknown timeline item type."),
     };

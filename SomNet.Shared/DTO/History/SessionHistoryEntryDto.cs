@@ -8,6 +8,9 @@ public sealed class SessionHistoryEntryDto
 
     public required DateTimeOffset StartedAt { get; init; }
 
+    /// <summary>Latest snapshot or session start — used for history sort/display.</summary>
+    public DateTimeOffset? LastActivityAt { get; init; }
+
     public required string DomTarget { get; init; }
 
     public required string SubTarget { get; init; }

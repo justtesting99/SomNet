@@ -30,9 +30,6 @@ import { parseManualInProgressSummary } from '@/utils/manualSessionRehydrate';
 import { isRehydratableManualSession } from '@/utils/sessionProgress';
 import { markManualVideoCommandComplete } from '@/utils/manualVideoCommandNotify';
 import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
-import { queueCaptureActionSnapshots } from '@/api/videoSnapshots';
-import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
-
 interface ActiveSessionState {
   id: string;
   startedAt: string;
@@ -66,7 +63,8 @@ interface SessionContextValue {
   rehydrateSession: (entry: SessionHistoryEntry) => void;
   syncSessionFromRemote: (entry: SessionHistoryEntry | null) => void;
   /** Ensures an in-progress manual session exists (for video preview before first stroke). */
-  prepareManualSession: () => Promise<void>;
+  /** Returns the action index to use for the next manual stroke/burst snapshot. */
+  prepareManualSession: () => Promise<number>;
   /** Ensures an in-progress automatic session record exists (for video preview before Start). */
   prepareAutomaticSession: () => Promise<void>;
 }
@@ -159,6 +157,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }, [buildSessionFromEntry, domTarget, selectedSub]);
 
+  const prepareManualSession = useCallback(async (): Promise<number> => {
+    await ensureManualSession();
+    return activeSessionRef.current?.events.length ?? 0;
+  }, [ensureManualSession]);
+
   const finalizeSession = useCallback(async (summary: string) => {
     const current = activeSessionRef.current;
     if (!current) {
@@ -216,14 +219,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       bumpManualVideoActivity();
       markManualVideoCommandComplete();
       await persistManualProgress(nextSession);
-      queueCaptureActionSnapshots({
-        sessionId: nextSession.id,
-        subTarget: selectedSub,
-        actionIndex: nextSession.events.length - 1,
-        commandKey: HARDWARE_COMMAND_KEYS.manualStroke,
-      });
     },
-    [bumpManualVideoActivity, ensureManualSession, persistManualProgress, selectedSub],
+    [bumpManualVideoActivity, ensureManualSession, persistManualProgress],
   );
 
   const recordManualAbort = useCallback(async () => {
@@ -273,14 +270,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       bumpManualVideoActivity();
       markManualVideoCommandComplete();
       await persistManualProgress(nextSession);
-      queueCaptureActionSnapshots({
-        sessionId: nextSession.id,
-        subTarget: selectedSub,
-        actionIndex: nextSession.events.length - 1,
-        commandKey: HARDWARE_COMMAND_KEYS.manualBurst,
-      });
     },
-    [bumpManualVideoActivity, ensureManualSession, persistManualProgress, selectedSub],
+    [bumpManualVideoActivity, ensureManualSession, persistManualProgress],
   );
 
   const endManualSession = useCallback(
@@ -416,7 +407,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       endActiveSessionIfNeeded,
       rehydrateSession,
       syncSessionFromRemote,
-      prepareManualSession: ensureManualSession,
+      prepareManualSession,
       prepareAutomaticSession: beginAutomaticSession,
     }),
     [
@@ -427,7 +418,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       endActiveSessionIfNeeded,
       endAutomaticSession,
       endManualSession,
-      ensureManualSession,
+      prepareManualSession,
       rehydrateSession,
       syncSessionFromRemote,
       recordManualBurst,

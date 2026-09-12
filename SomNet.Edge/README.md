@@ -11,7 +11,7 @@ On-premises **video edge** for SomNet — separate from `SomNet.Device` (ESP32).
 |-----------|-----------|
 | go2rtc (RTSP / USB → HLS) | PC (dev) → Raspberry Pi 4/5 (production) |
 | Tunnel client | Same host |
-| Edge agent (session hooks, snapshots) | Phase 5+ |
+| Edge agent (session hooks, token gateway) | **`SomNet.Edge.Agent`** — Phase 5 |
 
 ESP32 does **not** handle video.
 
@@ -65,6 +65,17 @@ Stock Wansview app and Thingino G7 flash both failed on bench hardware. Do **not
 
 Use **1080p H.264** for live; **2K** frame grab for action stills (later phases).
 
+## Phase 5 — edge agent
+
+```powershell
+# After go2rtc is running:
+.\SomNet.Edge\scripts\start-edge-agent.ps1
+```
+
+Listens on **http://localhost:5190**. SomNet API notifies the agent on session start/end (`Video:Edge` in `appsettings.Development.json`). Token validation for live feeds runs in the API `/go2rtc` proxy middleware (dev bench).
+
+See [Phase 5 checklist](../Documents/18-Video-Phase-5-Edge-Agent-Checklist.md).
+
 ## Folder layout
 
 ```
@@ -73,6 +84,10 @@ SomNet.Edge/
   config/
     go2rtc.yaml.example   # Template — copy locally
   embed/                  # Custom iframe pages (Phase 2+)
+  scripts/
+    start-edge-agent.ps1  # Phase 5 edge agent
+
+SomNet.Edge.Agent/        # Phase 5 — session lifecycle service
 ```
 
 ## Local-first

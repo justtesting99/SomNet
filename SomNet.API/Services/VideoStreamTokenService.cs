@@ -81,7 +81,7 @@ public sealed class VideoStreamTokenService : IVideoStreamTokenService
 
         try
         {
-            var principal = _tokenHandler.ValidateToken(
+            _tokenHandler.ValidateToken(
                 token,
                 CreateValidationParameters(),
                 out var validatedToken);
@@ -91,16 +91,17 @@ public sealed class VideoStreamTokenService : IVideoStreamTokenService
                 return false;
             }
 
-            var jwtId = principal.FindFirstValue(JwtRegisteredClaimNames.Jti);
+            var jwtId = jwtToken.Id;
             if (string.IsNullOrWhiteSpace(jwtId) || _revokedJwtIds.ContainsKey(jwtId))
             {
                 return false;
             }
 
-            var sessionId = principal.FindFirstValue(ClaimNames.SessionId);
-            var dom = principal.FindFirstValue(ClaimNames.Dom);
-            var sub = principal.FindFirstValue(ClaimNames.Sub);
-            var feed = principal.FindFirstValue(ClaimNames.Feed);
+            // Read from JWT payload — ClaimsPrincipal maps "sub"/"jti" away from literal types.
+            var sessionId = GetJwtClaim(jwtToken, ClaimNames.SessionId);
+            var dom = GetJwtClaim(jwtToken, ClaimNames.Dom);
+            var sub = GetJwtClaim(jwtToken, ClaimNames.Sub);
+            var feed = GetJwtClaim(jwtToken, ClaimNames.Feed);
 
             if (string.IsNullOrWhiteSpace(sessionId) ||
                 string.IsNullOrWhiteSpace(dom) ||
@@ -186,6 +187,9 @@ public sealed class VideoStreamTokenService : IVideoStreamTokenService
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Key)),
             ClockSkew = TimeSpan.FromMinutes(1),
         };
+
+    private static string? GetJwtClaim(JwtSecurityToken jwtToken, string claimType) =>
+        jwtToken.Claims.FirstOrDefault(claim => claim.Type == claimType)?.Value;
 
     internal static string AppendToken(string embedPath, string token)
     {

@@ -1,6 +1,6 @@
 # Video — Phase 6 Tunnel (remote operator, no Azure)
 
-**Status:** **Blocked** — complete [Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md) first
+**Status:** **Ready** — [Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md) signed off (2026-09-12)
 
 **Goal:** **Cloudflare Tunnel** or **Tailscale Funnel** to dev PC (go2rtc + optional SomNet LAN API); remote browser sees dashboard feeds; session tokens still required.
 

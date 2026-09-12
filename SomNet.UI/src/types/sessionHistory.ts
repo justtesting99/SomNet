@@ -3,6 +3,7 @@ import type { SubTargetName } from '@/config/sessionUsers';
 export interface SessionHistoryEntry {
   id: string;
   startedAt: string;
+  lastActivityAt?: string;
   domTarget: string;
   subTarget: SubTargetName;
   mode: 'manual' | 'automatic';

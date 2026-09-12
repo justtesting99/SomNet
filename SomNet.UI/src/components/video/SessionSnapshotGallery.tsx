@@ -49,7 +49,11 @@ export function SessionSnapshotGallery({ sessionId }: SessionSnapshotGalleryProp
 
   const groups = useMemo(() => groupSnapshotsByAction(snapshots), [snapshots]);
 
-  if (!loaded || groups.length === 0) {
+  if (!loaded) {
+    return <p className="mt-3 text-xs text-slate-500">Loading action stills…</p>;
+  }
+
+  if (groups.length === 0) {
     return null;
   }
 

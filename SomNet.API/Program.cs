@@ -9,6 +9,7 @@ using Microsoft.OpenApi;
 using SomNet.API.Configuration;
 using SomNet.API.Data;
 using SomNet.API.Hubs;
+using SomNet.API.Middleware;
 using SomNet.API.Services;
 using SomNet.Shared.Serialization;
 
@@ -72,6 +73,14 @@ builder.Services
     .Bind(builder.Configuration.GetSection(VideoSnapshotSettings.SectionName));
 
 builder.Services.AddVideoSnapshotServices();
+
+builder.Services
+    .AddOptions<VideoEdgeSettings>()
+    .Bind(builder.Configuration.GetSection(VideoEdgeSettings.SectionName));
+
+builder.Services.AddVideoEdgeServices();
+builder.Services.AddVideoActionSnapshotTrigger();
+builder.Services.AddMemoryCache();
 
 builder.Services
     .AddOptions<JwtSettings>()
@@ -253,6 +262,8 @@ else if (app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseMiddleware<VideoStreamGatewayMiddleware>();
 
 app.MapControllers();
 app.MapHub<HardwareHub>("/hubs/hardware");

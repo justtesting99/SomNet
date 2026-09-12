@@ -16,8 +16,14 @@ export async function sendHardwareCommand(
   subTarget: SubTargetName,
   commandKey: string,
   payloadJson: string,
+  snapshotActionIndex?: number,
 ): Promise<SendHardwareCommandResponse> {
-  const response = await sendHardwareCommandApi(subTarget, commandKey, payloadJson);
+  const response = await sendHardwareCommandApi(
+    subTarget,
+    commandKey,
+    payloadJson,
+    snapshotActionIndex,
+  );
 
   if (!response.delivered) {
     throw new HardwareCommandError(

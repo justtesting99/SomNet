@@ -89,6 +89,9 @@ public sealed class SendHardwareCommandRequestDto
     public required string CommandKey { get; init; }
 
     public string PayloadJson { get; init; } = "{}";
+
+    /// <summary>When set, action snapshot capture uses this index (manual stroke/burst).</summary>
+    public int? SnapshotActionIndex { get; init; }
 }
 
 public sealed class SendHardwareCommandResponseDto

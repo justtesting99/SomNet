@@ -6,7 +6,7 @@ namespace SomNet.API.Tests;
 
 public class VideoStreamTokenServiceTests
 {
-    private static VideoStreamTokenService CreateService()
+    internal static VideoStreamTokenService CreateService()
     {
         var jwtSettings = Options.Create(new JwtSettings
         {

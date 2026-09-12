@@ -121,6 +121,8 @@ After changing env files, rebuild UI (`npm run build`) for integrated API hostin
 
 **Note:** go2rtc must be running before opening Manual/Automatic mode. **`VITE_VIDEO_FRONT_URL`** enables the video feature; iframe `src` values come from **session tokens** (Phase 3+) via `useSessionVideoSources`, not from these env URLs directly.
 
+**Phase 5 (edge agent):** also run `.\SomNet.Edge\scripts\start-edge-agent.ps1` (port **5190**) so session start/end hooks reach go2rtc. Live `/go2rtc` embeds require a valid session **token** query param (API gateway middleware).
+
 ---
 
 ## Ports and Launch Profiles
