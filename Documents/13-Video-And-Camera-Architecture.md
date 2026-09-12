@@ -126,7 +126,7 @@ The permanent record is **photos per action**, not a continuous stream archive (
 | Asset | Protection |
 |-------|------------|
 | **Live HLS** | HTTPS tunnel; **session-scoped signed tokens** (sessionId, dom, sub, feed, exp); revoked on session end |
-| **Historical stills** | Private Blob; reads via JWT-checked API or short-lived SAS scoped to dom/sub/session |
+| **Historical stills** | Private Blob; reads via JWT-checked API or short-lived SAS scoped to dom/sub/session. **Today (dev):** plain JPEG on disk + path metadata in SQL — **not encrypted at rest** ([future: snapshot encryption](#future-snapshot-encryption-at-rest)) |
 | **Camera credentials** | Edge gateway only — never in React or operator-visible config |
 | **Camera LAN** | Private network / VLAN; no port-forward of camera admin UI |
 | **Vendor cloud / P2P** | **Block outbound** from IP cameras to vendor servers where possible; SomNet uses **LAN RTSP only** into edge (same model as Blue Iris) |
@@ -134,6 +134,20 @@ The permanent record is **photos per action**, not a continuous stream archive (
 | **ESP32 / commands** | Unchanged — separate SignalR path; video failure does not block control |
 
 **Residual risks:** a valid operator session can view what that account is authorized to see; leaked token works only until expiry or session end. Mitigate with short TTL, per-session tokens, and no long-lived stream URLs in settings.
+
+### Future: snapshot encryption at rest
+
+**Current (Phases 4–5, dev):** Action stills are **plain JPEG files** on disk (`data/snapshots/…`). SQL stores **metadata only** (`SessionActionSnapshots.RelativePath`, etc.) — **not** image blobs. Neither disk files nor DB rows are application-encrypted today. Access control is via SomNet JWT on `GET /api/video/snapshots/{id}/image`.
+
+**Future requirement:** Add **encryption at rest** before production sign-off or as an early Phase 8 item so sensitive session imagery is not stored in plaintext:
+
+| Layer | Target |
+|-------|--------|
+| **Files** | Encrypt JPEG/WebP on disk (dev) and in **Azure Blob** (production) — e.g. client-side envelope encryption before write, or platform SSE with customer-managed keys |
+| **Database** | Keep blobs out of SQL where possible; if paths/keys remain in SQL, treat as sensitive metadata (TDE / Always Encrypted / encrypted key references) |
+| **API** | Decrypt only when serving an authenticated, authorized request; no long-lived public URLs |
+
+See [14 plan — Future enhancements](./14-Video-Implementation-Plan.md#future-enhancements-todo) · [Phase 4](./17-Video-Phase-4-Action-Snapshots-Checklist.md) · [Phase 8](./21-Video-Phase-8-Azure-Cutover-Checklist.md).
 
 ### Vendor camera cloud tunnels (Galayou / Wansview and similar)
 

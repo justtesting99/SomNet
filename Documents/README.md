@@ -45,7 +45,7 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Video Phase 3 — Session tokens](./16-Video-Phase-3-Session-Tokens-Checklist.md) | Developers | API session-scoped tokens — **signed off** (T4 deferred) |
 | [Video Phase 4 — Action snapshots](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | Developers | Stills on ack (local storage) — **signed off** (manual v1) |
 | [Video Phase 5 — Edge agent](./18-Video-Phase-5-Edge-Agent-Checklist.md) | Developers | Session lifecycle on gateway — **signed off** (2026-09-12) |
-| [Video Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) | Developers | Remote operator without Azure — **ready** |
+| [Video Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) | Developers | **Cloudflare Tunnel** to dev PC API — **ready** |
 | [Video Phase 7 — Pi production](./20-Video-Phase-7-Pi-Production-Checklist.md) | Developers | Pi 4/5 + 2× USB webcam (A-dev) E2E — blocked |
 | [Video Phase 8 — Azure cutover](./21-Video-Phase-8-Azure-Cutover-Checklist.md) | Developers | App Service + SQL + Blob — blocked |
 | [ESP32 Network Spec](./09-ESP32-Network-Spec.md) | Developers | **Wi‑Fi / HTTP / hub architecture** — signed off **`0.12.0-network`** (2026-09-09); S3–S6 verified |

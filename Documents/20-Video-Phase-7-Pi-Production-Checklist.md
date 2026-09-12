@@ -52,7 +52,7 @@
 ### Edge agent + tunnel
 
 - [ ] Edge agent (Phase 5) on Pi — session hooks, token validation when enabled
-- [ ] Tunnel client points remote operator at Pi embed base URL
+- [ ] **Cloudflare Tunnel** on Pi — same pattern as [Phase 6](./19-Video-Phase-6-Tunnel-Checklist.md) (tunnel API or site hostname per Phase 8 split)
 
 ### E2E
 

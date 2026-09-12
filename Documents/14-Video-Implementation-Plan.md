@@ -18,7 +18,7 @@ Video work is **separate from ESP32 firmware phases** and **separate from UI reh
 | **3** | [Phase 3 — Session tokens](./16-Video-Phase-3-Session-Tokens-Checklist.md) | API mints session-scoped stream tokens; UI fetches on session start | PC + local API | API + UI — **complete** |
 | **4** | [Phase 4 — Action snapshots](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | Capture on device ack; local disk; `SessionActionSnapshots` + history gallery | PC + local API | API + UI — **complete** (manual v1) |
 | **5** | [Phase 5 — Edge agent](./18-Video-Phase-5-Edge-Agent-Checklist.md) | Session start/end → enable streams; token validation at gateway | PC | API + edge agent — **complete** |
-| **6** | [Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) | Remote operator without Azure (tunnel to PC/Pi) | PC | Config |
+| **6** | [Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) | Remote operator without Azure (**Cloudflare Tunnel** to PC API) | PC | Config + scripts |
 | **7** | [Phase 7 — Pi production bench](./20-Video-Phase-7-Pi-Production-Checklist.md) | Move edge to Pi 4/5; **Layout A-dev** (2× USB); E2E with ESP32 on LAN | **Pi** + local API | Config + docs |
 | **8** | [Phase 8 — Azure cutover](./21-Video-Phase-8-Azure-Cutover-Checklist.md) | App Service + SQL + Blob; production URLs | Azure | Deploy |
 
@@ -31,6 +31,7 @@ Phases **2–6** may overlap partially after Phase 1 sign-off; order above is th
 | **Cameras** | **Layout A-dev** — **2× USB webcam** (front expression + rear tool view). Verified on PC. |
 | **IP cameras** | **On hold** (V1-D9) — Galayou stock app + Thingino failed; 1b/1c not on critical path. |
 | **Production edge** | **Pi 4/5 + 2× USB webcam** preferred while IP on hold (V1-D11) — no vendor cloud; outbound video only via SomNet session tunnel. Validate in [Phase 7](./20-Video-Phase-7-Pi-Production-Checklist.md). |
+| **Production operators** | ~**10 users** initial; Cloudflare Tunnel **$0** at this scale; optional Access free to **50** — see [Phase 6 — client advisory](./19-Video-Phase-6-Tunnel-Checklist.md#production-scale--client-advisory) |
 | **Next software phase** | [Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) |
 
 ---
@@ -94,6 +95,12 @@ Site installer → ESP32 /config (and/or edge setup UI)
 
 Related: [03 — Future Enhancements](./03-Frontend-Architecture.md#future-enhancements) · [13 §13](./13-Video-And-Camera-Architecture.md#13-somnet-touchpoints) · [09 Device plan — pairing](./09-ESP32-Device-Plan.md).
 
+### Snapshot encryption at rest (future)
+
+**Today:** Action stills are **unencrypted plain JPEGs** on local disk; SQL holds **path metadata only** (not image blobs). Acceptable for dev bench only.
+
+**Later:** Encrypt snapshot **files** (local disk → Azure Blob) and protect any **storage keys/paths in SQL** so session imagery is not readable from raw disk or database access alone. Implement before production/client deployment or as a Phase 8 gate. Details: [13 — Future snapshot encryption](./13-Video-And-Camera-Architecture.md#future-snapshot-encryption-at-rest).
+
 ---
 
 ## Document history
@@ -110,3 +117,5 @@ Related: [03 — Future Enhancements](./03-Frontend-Architecture.md#future-enhan
 | 2026-09-12 | Phases 3–4 complete (manual); Phase 5 next; doc sync with codebase |
 | 2026-09-12 | Phase 5 signed off (edge agent, token gateway, API snapshot trigger) |
 | 2026-09-12 | Action snapshot feed option — `appOptions.actionSnapshotFeeds` (`both` \| `rear`) in Options → General |
+| 2026-09-12 | Phase 6 checklist expanded — Cloudflare Tunnel v1, cost/licensing, smoke tests |
+| 2026-09-12 | Future — snapshot encryption at rest (disk + SQL metadata) |
