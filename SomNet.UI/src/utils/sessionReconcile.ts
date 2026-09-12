@@ -10,6 +10,7 @@ import {
   isRehydratableAutomaticSession,
   isRehydratableManualSession,
 } from '@/utils/sessionProgress';
+import { shouldRestoreAutomaticDeviceRunning } from '@/utils/automaticDeviceRunningHint';
 import type { OperationMode } from '@/types/modes';
 
 export interface ReconcileActiveSessionOptions {
@@ -58,7 +59,10 @@ export async function reconcileActiveSessionForMode(
 
   options.rehydrateSession(entry);
 
-  if (!options.automaticSettings.running) {
+  if (
+    !options.automaticSettings.running &&
+    shouldRestoreAutomaticDeviceRunning(entry.id, options.selectedSub)
+  ) {
     options.setAutomaticRunningLocal(true);
   }
 }

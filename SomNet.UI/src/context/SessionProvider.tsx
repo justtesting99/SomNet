@@ -44,6 +44,8 @@ interface SessionContextValue {
   activeSession: ActiveSessionState | null;
   /** Incremented when a manual stroke/burst/abort completes or manual session rehydrates (video idle timer). */
   manualVideoActivitySeq: number;
+  /** Incremented on manual session rehydrate (refresh / tab sync); survives hook remount. */
+  manualVideoRehydrateSeq: number;
   beginAutomaticSession: () => Promise<void>;
   recordManualStroke: (powerPercent: number, actualStrokeMs?: number) => Promise<void>;
   recordManualAbort: () => Promise<void>;
@@ -74,6 +76,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const { selectedSub } = useSubTarget();
   const [activeSession, setActiveSession] = useState<ActiveSessionState | null>(null);
   const [manualVideoActivitySeq, setManualVideoActivitySeq] = useState(0);
+  const [manualVideoRehydrateSeq, setManualVideoRehydrateSeq] = useState(0);
   const activeSessionRef = useRef<ActiveSessionState | null>(null);
   const startingRef = useRef(false);
 
@@ -81,6 +84,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const bumpManualVideoActivity = useCallback(() => {
     setManualVideoActivitySeq((seq) => seq + 1);
+  }, []);
+
+  const bumpManualVideoRehydrate = useCallback(() => {
+    setManualVideoRehydrateSeq((seq) => seq + 1);
   }, []);
 
   const domTarget = user?.displayName ?? user?.username ?? '';
@@ -301,9 +308,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setActiveSession(nextSession);
       if (isRehydratableManualSession(entry)) {
         bumpManualVideoActivity();
+        bumpManualVideoRehydrate();
       }
     },
-    [buildSessionFromEntry, bumpManualVideoActivity],
+    [buildSessionFromEntry, bumpManualVideoActivity, bumpManualVideoRehydrate],
   );
 
   const syncSessionFromRemote = useCallback(
@@ -321,10 +329,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (
+        entry !== null &&
+        isRehydratableManualSession(entry) &&
+        !activeSessionRef.current
+      ) {
+        bumpManualVideoRehydrate();
+      }
+
       activeSessionRef.current = nextSession;
       setActiveSession(nextSession);
     },
-    [buildSessionFromEntry],
+    [buildSessionFromEntry, bumpManualVideoRehydrate],
   );
 
   useEffect(() => {
@@ -376,6 +392,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     () => ({
       activeSession,
       manualVideoActivitySeq,
+      manualVideoRehydrateSeq,
       beginAutomaticSession,
       recordManualStroke,
       recordManualAbort,
@@ -391,6 +408,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [
       activeSession,
       manualVideoActivitySeq,
+      manualVideoRehydrateSeq,
       beginAutomaticSession,
       endActiveSessionIfNeeded,
       endAutomaticSession,

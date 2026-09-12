@@ -19,6 +19,7 @@ import {
   isRehydratableAutomaticSession,
   isRehydratableManualSession,
 } from '@/utils/sessionProgress';
+import { shouldRestoreAutomaticDeviceRunning } from '@/utils/automaticDeviceRunningHint';
 import {
   getTabId,
   postTabSync,
@@ -162,7 +163,11 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
           syncSessionFromRemote(entry);
           setMode(entry.mode);
 
-          if (entry.mode === 'automatic' && !settingsRef.current.automatic.running) {
+          if (
+            entry.mode === 'automatic' &&
+            !settingsRef.current.automatic.running &&
+            shouldRestoreAutomaticDeviceRunning(entry.id, entry.subTarget)
+          ) {
             setAutomaticRunningLocal(true);
           }
         });

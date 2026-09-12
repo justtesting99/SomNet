@@ -1,15 +1,19 @@
-/** Set when a manual stroke/burst/abort was recorded; consumed when hardware pending clears. */
-let pendingNotify = false;
+let commandCompletePending = false;
 
 export function markManualVideoCommandComplete(): void {
-  pendingNotify = true;
+  commandCompletePending = true;
 }
 
-export function consumeManualVideoCommandComplete(): boolean {
-  if (!pendingNotify) {
+export function consumeManualVideoPendingNotify(): boolean {
+  if (!commandCompletePending) {
     return false;
   }
 
-  pendingNotify = false;
+  commandCompletePending = false;
   return true;
+}
+
+/** @deprecated Use consumeManualVideoPendingNotify */
+export function consumeManualVideoCommandComplete(): boolean {
+  return consumeManualVideoPendingNotify();
 }

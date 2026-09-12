@@ -7,7 +7,7 @@ import { useOptions } from '@/context/OptionsProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useMode } from '@/context/ModeProvider';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
-import { consumeManualVideoCommandComplete } from '@/utils/manualVideoCommandNotify';
+import { consumeManualVideoPendingNotify } from '@/utils/manualVideoCommandNotify';
 import { logVideoEvent } from '@/utils/videoDebug';
 import {
   clampVideoFeedTimeoutSeconds,
@@ -18,6 +18,12 @@ import {
   FEED_HIDE_CHECK_INTERVAL_MS,
   shouldHideFeedsAt,
 } from '@/utils/videoFeedVisibility';
+import {
+  clearVideoFeedRestoreHint,
+  matchesVideoFeedRestoreHint,
+  readVideoFeedRestoreHint,
+  writeVideoFeedRestoreHint,
+} from '@/utils/videoFeedRestoreHint';
 
 function toViewerUrls(response: { front: { url: string }; rear: { url: string } }): VideoSourcePair {
   return [
@@ -48,6 +54,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
   const {
     activeSession,
     manualVideoActivitySeq,
+    manualVideoRehydrateSeq,
     prepareManualSession,
     prepareAutomaticSession,
   } = useLiveSession();
@@ -86,6 +93,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
   const prevSessionModeRef = useRef(activeSession?.mode);
   const prevSessionSubRef = useRef(activeSession?.subTarget);
   const tokensLoadedSessionRef = useRef<string | null>(null);
+  const restoredManualRehydrateSeqRef = useRef(0);
 
   const sessionId = activeSession?.id;
   const sessionMode = activeSession?.mode;
@@ -106,6 +114,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
       stopHideWatch();
       postSessionGraceRef.current = false;
       tokensLoadedSessionRef.current = null;
+      clearVideoFeedRestoreHint();
       setPreviewActive(false);
       setFeedVisible(false);
       setSources([undefined, undefined]);
@@ -247,7 +256,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
       return;
     }
 
-    if (!consumeManualVideoCommandComplete()) {
+    if (!consumeManualVideoPendingNotify()) {
       return;
     }
 
@@ -262,6 +271,75 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     manualVideoActivitySeq,
     pauseHideDeadline,
     scheduleHideAfter,
+  ]);
+
+  useEffect(() => {
+    if (!feedVisible || !sessionId || !sessionMode || sessionSub !== selectedSub) {
+      return;
+    }
+
+    writeVideoFeedRestoreHint({
+      sessionId,
+      subTarget: selectedSub,
+      mode: sessionMode,
+      preview: previewActive,
+    });
+  }, [feedVisible, previewActive, sessionId, sessionMode, sessionSub, selectedSub]);
+
+  useEffect(() => {
+    if (feedVisible || !sessionId || !sessionMode || sessionSub !== selectedSub) {
+      return;
+    }
+
+    const hint = readVideoFeedRestoreHint();
+    const hintMatches =
+      hint !== null && matchesVideoFeedRestoreHint(hint, sessionId, selectedSub, sessionMode);
+    const shouldRestoreFromRehydrate =
+      sessionMode === 'manual' &&
+      manualVideoRehydrateSeq > restoredManualRehydrateSeqRef.current;
+
+    if (!hintMatches && !shouldRestoreFromRehydrate) {
+      return;
+    }
+
+    if (shouldRestoreFromRehydrate) {
+      restoredManualRehydrateSeqRef.current = manualVideoRehydrateSeq;
+    }
+
+    const restorePreview = hintMatches ? hint.preview : false;
+    setFeedVisible(true);
+
+    if (restorePreview) {
+      setPreviewActive(true);
+      scheduleHideAfter(`${sessionMode}-preview-restore`, previewTimeoutSeconds);
+      return;
+    }
+
+    setPreviewActive(false);
+
+    if (sessionMode === 'manual' && manualCommandPending) {
+      pauseHideDeadline();
+      return;
+    }
+
+    if (sessionMode === 'automatic' && (automaticRunning || hintMatches)) {
+      pauseHideDeadline();
+      return;
+    }
+
+    scheduleHideAfter(`${sessionMode}-refresh-restore`);
+  }, [
+    automaticRunning,
+    feedVisible,
+    manualCommandPending,
+    manualVideoRehydrateSeq,
+    pauseHideDeadline,
+    previewTimeoutSeconds,
+    scheduleHideAfter,
+    sessionId,
+    sessionMode,
+    sessionSub,
+    selectedSub,
   ]);
 
   useEffect(() => {

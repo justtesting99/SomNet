@@ -18,6 +18,7 @@ import { DEFAULT_PAIRING_SETTINGS, type PairingSettings } from '@/types/pairingS
 import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
 import { normalizeStrokeMsPair } from '@/utils/strokeMsLimits';
 import { normalizeAutomaticControlState } from '@/utils/automaticFieldRules';
+import { clearAutomaticDeviceRunningHint } from '@/utils/automaticDeviceRunningHint';
 import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
 
 interface OptionsContextValue {
@@ -269,6 +270,10 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
   const setAutomaticRunningLocal = useCallback(
     (running: boolean) => {
+      if (!running) {
+        clearAutomaticDeviceRunningHint();
+      }
+
       if (settingsRef.current.automatic.running === running) {
         return;
       }

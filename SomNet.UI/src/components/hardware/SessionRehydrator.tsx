@@ -53,7 +53,8 @@ export function SessionRehydrator() {
         automaticSettings: settingsRef.current.automatic,
         rehydrateSession,
         setAutomaticRunningLocal,
-        probeDevice: true,
+        // Trust server row on refresh (same as TabSync) — probing sends automatic-update.
+        probeDevice: false,
       })
         .catch(() => {
           // Leave UI in default idle state.

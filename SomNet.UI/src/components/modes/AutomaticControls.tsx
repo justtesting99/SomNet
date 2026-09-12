@@ -45,6 +45,7 @@ import { buildAutomaticStartPayload } from '@/utils/automaticStartPayload';
 import { parseAutomaticResultJson } from '@/utils/automaticResultJson';
 import { waitForAutomaticHubFinalize, computeAutomaticStopGraceMs } from '@/utils/automaticSessionFinalize';
 import { isDeviceAutomaticIdleMessage } from '@/utils/automaticSessionReconcile';
+import { writeAutomaticDeviceRunningHint } from '@/utils/automaticDeviceRunningHint';
 import { ApiError } from '@/api/client';
 
 const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
@@ -137,6 +138,12 @@ export function AutomaticControls() {
     }
 
     const payload = buildAutomaticStartPayload(state);
+    if (lastPushedUpdateRef.current === null) {
+      // Rehydrate / refresh: device already has this config — skip duplicate update.
+      lastPushedUpdateRef.current = payload;
+      return;
+    }
+
     if (payload === lastPushedUpdateRef.current) {
       return;
     }
@@ -262,6 +269,10 @@ export function AutomaticControls() {
         payloadJson,
       );
       await beginAutomaticSession();
+      const sessionId = activeSessionRef.current?.id;
+      if (sessionId) {
+        writeAutomaticDeviceRunningHint({ sessionId, subTarget: selectedSub });
+      }
       lastPushedUpdateRef.current = payloadJson;
       update('running', true);
     } catch (error) {

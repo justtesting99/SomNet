@@ -1,6 +1,6 @@
 # Video — Phase 3 Session-scoped stream tokens
 
-**Status:** **In progress** — implementation landed; manual-mode smoke pass reported (2026-09-11)
+**Status:** **Sign-off pending** — all smoke tests pass except **V3-T4 deferred**; ready for Phase 4 when T4 is accepted or waived
 
 > **Manual mode note:** There is no **End session** button — one server session accumulates strokes until **Abort** (still in progress), **Switch mode**, **Sub change**, or **Sign out** ([07 § lifecycle](./07-Session-And-History.md#when-sessions-end)). Video: **no feeds until first stroke** → both feeds load with tokens → **feeds stay up** for subsequent strokes in the same session. Test **V3-T2** (clear feeds) via **Switch mode** or **Sub change**, not a manual End button.
 
@@ -33,21 +33,22 @@
 
 ### API
 
-- [ ] DTOs + signing key in config (dev `appsettings.Development.json`)
-- [ ] Token endpoint; verify session belongs to dom/sub
-- [ ] Hook session start (manual first action / automatic start) — UI calls token endpoint
-- [ ] Hook session end — revoke `jti` / session id (in-memory list v1)
+- [x] DTOs + signing key in config (dev `appsettings.Development.json`)
+- [x] Token endpoint; verify session belongs to dom/sub
+- [x] UI mints on feed show (stroke, preview, rehydrate) — not on bare session POST
+- [x] Hook session end — `RevokeSession` on `/api/sessions/{id}/end` (remint does not revoke — V3-D5 v1)
 
 ### UI
 
-- [ ] On `activeSession` set → fetch tokens → update `videoSources`
+- [x] On feed show + active session → fetch tokens → update `videoSources`
 - [x] On mode switch / sub change / sign-out → clear iframe src immediately
 - [x] Manual idle + automatic post-session timeout (V3-D6)
-- [ ] Rehydration: re-fetch tokens if session still active
+- [x] Preview feeds manual + automatic (V3-D7)
+- [x] Rehydration: re-fetch tokens; manual restore feeds + idle timeout; automatic restore when `running`
 
 ### Tests
 
-- [ ] Unit tests — token claims, expiry, revoke
+- [x] Unit tests — `VideoStreamTokenServiceTests` (claims, revoke, remint)
 
 ---
 
@@ -59,14 +60,29 @@
 | **V3-T2** | Clear feeds: **Switch mode** or **Sub change** (manual has no End button) | iframes cleared; re-mint after end returns 403 | ☑ **2026-09-11** |
 | **V3-T5** | Manual: stroke/burst → wait timeout (Options; tested 10s and 30s) | Feeds hide after timeout from **command complete** (Burst/Stroke button re-enabled); next action restores | ☑ **2026-09-11** |
 | **V3-T6** | Automatic: Stop → wait timeout | Feeds hide after grace; immediate on mode switch | ☑ **2026-09-11** |
-| **V3-T3** | Refresh mid-session | Rehydration restores feeds | ☐ |
-| **V3-T4** | Wrong dom/sub JWT | Token endpoint 403 | ☐ |
+| **V3-T3a** | Manual: stroke → feeds up → **F5 refresh** | Same session; both feeds reload with `token=`; idle timeout from rehydrate | ☑ **2026-09-11** |
+| **V3-T3b** | Automatic: **Start** → feeds up → **F5 refresh** | Stop/Abort enabled; feeds reload with `token=` | ☑ **2026-09-11** |
+| **V3-T4a** | Token mint after session ended (Switch mode / sub change) | `POST …/tokens` → **403**; UI already cleared iframes (V3-T2) | ☐ **deferred** |
+| **V3-T4b** | Token mint with wrong `subTarget` query | **403** (Swagger or curl with valid operator JWT) | ☐ **deferred** |
+| **V3-T7** | Manual/automatic: **Start feeds** preview | Feeds load; 2× timeout; automatic Start/Stop unchanged until real Start | ☑ **2026-09-11** |
 
 ---
 
 ## Exit criteria
 
-**V3-T1–T4** pass → start [Phase 4](./17-Video-Phase-4-Action-Snapshots-Checklist.md).
+**V3-T1–T4** (all rows) + **V3-T7** pass → start [Phase 4](./17-Video-Phase-4-Action-Snapshots-Checklist.md).
+
+### V3-T3 — refresh mid-session
+
+1. Get feeds visible (stroke, Start session, or **Start feeds**).
+2. **F5** refresh (stay in same mode / sub).
+3. Pass: feeds return without another stroke; browser Network shows new `POST /api/video/sessions/{id}/tokens`; iframes have `token=`.
+
+### V3-T4 — token rejected
+
+**T4a (ended session):** Complete V3-T2 (Switch mode or Sub change). In Swagger (`/swagger`), `POST /api/video/sessions/{oldSessionId}/tokens?subTarget=…` with operator JWT → **403**.
+
+**T4b (wrong sub):** Use a valid in-progress `sessionId` for Sub A but `subTarget=SubB` → **403**.
 
 ---
 
@@ -79,3 +95,9 @@
 | 2026-09-11 | **V3-D6** — configurable feed timeout (General options); V3-T1/T2 pass |
 | 2026-09-11 | Fix — manual idle timer starts on command **end** (activity seq), not stroke start |
 | 2026-09-11 | V3-T5/T6 pass — idle/post-session timeout; measure from button re-enabled (hardware pending cleared) |
+| 2026-09-11 | V3-D7 preview feeds; automatic controls fix (`sessionRunning` = `state.running`) |
+| 2026-09-11 | Manual rehydrate restores video feeds (V3-T3a support); sign-off procedures for T3/T4/T7 |
+| 2026-09-11 | V3-T3b/T7 pass; T3-T4 deferred; T3a fail → `manualVideoRehydrateSeq` (Strict Mode–safe restore) |
+| 2026-09-11 | T3a/Start feeds refresh — `sessionStorage` feed-restore hint (survives provider remount) |
+| 2026-09-11 | Automatic refresh — no rehydrate probe / no duplicate live-override `automatic-update`; feed restore keeps deadline paused |
+| 2026-09-11 | Automatic Start feeds + refresh — device-running hint; preview rehydrate no longer sets `running` |
