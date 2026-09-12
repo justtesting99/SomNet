@@ -139,6 +139,9 @@ public static class PairingSettingsSerializer
                 : source.DefaultNotesPrefix.Trim(),
             ReconnectIntervalSeconds = Math.Clamp(source.ReconnectIntervalSeconds, 5, 120),
             VideoFeedTimeoutSeconds = Math.Clamp(timeout, 5, 600),
+            ActionSnapshotFeeds = Enum.IsDefined(source.ActionSnapshotFeeds)
+                ? source.ActionSnapshotFeeds
+                : ActionSnapshotFeeds.Both,
         };
     }
 

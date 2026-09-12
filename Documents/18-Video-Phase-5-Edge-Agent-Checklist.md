@@ -23,7 +23,7 @@
 | **V5-D1** | Edge process | `SomNet.Edge.Agent` — HTTP on **5190** |
 | **V5-D2** | API → edge notify | Fire-and-forget `POST /api/edge/session-started\|session-ended` + `X-SomNet-Edge-Key` |
 | **V5-D3** | Token gateway (dev) | API middleware on `/go2rtc/*` — validate `token` query; cookie for follow-on WS/HLS |
-| **V5-D4** | Snapshot trigger | API after successful hardware ack (`manual:stroke`, `manual:burst`) — **UI callback removed** |
+| **V5-D4** | Snapshot trigger | API after successful hardware ack (`stroke` / `burst`) — **UI callback removed**; feeds from `appOptions.actionSnapshotFeeds` |
 | **V5-D5** | USB stream disable | Token revocation gates access; go2rtc yaml streams stay loaded (RTSP pull stop → Phase 7) |
 | **V5-D6** | Config | `Video:Edge` in API; `EdgeAgent` in agent `appsettings.json` |
 
@@ -98,3 +98,4 @@ dotnet run --project SomNet.API
 | 2026-09-12 | V5-T1–T4 pass via API; V5-T5 pending UI stroke with device connected |
 | 2026-09-12 | Fix — history sort/display uses `LastActivityAt` from latest snapshot |
 | 2026-09-12 | V5-T5 pass; Phase 5 signed off → Phase 6 |
+| 2026-09-12 | **Action snapshot feeds** — Options `actionSnapshotFeeds` (`both` \| `rear`); `VideoSnapshotService` skips front when `rear` |

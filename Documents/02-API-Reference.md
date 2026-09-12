@@ -180,7 +180,9 @@ Per Dom+Sub pairing settings stored as JSON.
     "showSessionTimestamps": true,
     "operatorDisplayName": "",
     "defaultNotesPrefix": "Session",
-    "reconnectIntervalSeconds": 10
+    "reconnectIntervalSeconds": 10,
+    "videoFeedTimeoutSeconds": 30,
+    "actionSnapshotFeeds": "both"
   },
   "manual": { /* ManualControlStateDto */ },
   "automatic": { /* AutomaticControlStateDto */ }
@@ -188,6 +190,10 @@ Per Dom+Sub pairing settings stored as JSON.
 ```
 
 **`allowAutomaticModeOverrides`** (default `false`) — when `true`, Automatic mode settings stay editable during a session and the UI sends **`automatic-update`** to the device (debounced). Persisted in `appOptions`; stripped from device command payloads (`running` is also UI-only and omitted on send).
+
+**`videoFeedTimeoutSeconds`** (default `30`, range 5–600) — seconds to keep live video visible after manual stroke/burst idle or after automatic session end. See [16-Video-Phase-3-Session-Tokens-Checklist.md](./16-Video-Phase-3-Session-Tokens-Checklist.md).
+
+**`actionSnapshotFeeds`** (default `"both"`) — which camera stills to capture after each manual stroke/burst ack: `"both"` (front + rear) or `"rear"` (rear only). Read by `VideoSnapshotService` from saved pairing settings when the API fires capture on hardware ack. Optional override on `POST /api/video/sessions/{sessionId}/snapshots` body field `feeds`.
 
 Defaults are applied server-side when no record exists. Legacy millisecond-based power values are migrated to 0–100% on read via `PairingSettingsSerializer`.
 

@@ -399,20 +399,18 @@ Snapshots should align with **device command acknowledgment** (stroke/burst comp
 ```
 Operator sends command → ESP32 executes → device ack → API updates session
                                               │
-                                              └── edge (or API webhook) triggers:
-                                                    · front JPEG (immediate)
-                                                    · rear JPEG (+1–2 s settle, optional)
-                                                    · upload to Blob
-                                                    · PATCH session event with image URLs
+                                              └── API ack hook triggers (Phase 5):
+                                                    · front JPEG (immediate) — **optional** (`appOptions.actionSnapshotFeeds`: `both` default, `rear` skips front)
+                                                    · rear JPEG (+1–2 s settle, optional; always when rear-only mode)
+                                                    · upload to Blob (production) / local disk (dev)
+                                                    · DB row per feed (`SessionActionSnapshots`)
 ```
 
 **Between actions:** front-only heartbeat (2–5 s) while session is active; rear holds “last result” until next ack.
 
-**Trigger options (simplest first):**
+**Trigger (implemented — Phase 5):** API **`VideoActionSnapshotTrigger`** after successful hardware ack (`POST /api/devices/commands`). **Feed selection:** **Options → General** `actionSnapshotFeeds` — `both` (front + rear) or `rear` only (skips front when stream delay makes expression stills less useful). Persisted per dom/sub in pairing `appOptions`.
 
-1. **UI callback** after ack — calls edge capture API over tunnel (quick to prototype)
-2. **API webhook** on command completion — edge listens (cleaner if UI closes)
-3. **Edge SignalR observer** — subscribes to hub for paired dom/sub acks (no UI dependency)
+**Deferred alternatives:** edge SignalR observer (no API dependency if UI closes mid-capture).
 
 ---
 
@@ -530,10 +528,10 @@ Light coupling only — no new firmware phase.
 
 | Area | Status | Detail |
 |------|--------|--------|
-| **Pairing settings** | **Partial** | `tunnelBaseUrl` (`VideoSettingsDto`) per dom/sub; empty → API default embed path. **Future:** site installer config via ESP32/edge UI ([14 plan — Future enhancements](./14-Video-Implementation-Plan.md#future-enhancements-todo)). Bench: `VITE_VIDEO_FRONT_URL` gates video feature; iframe `src` from session tokens. |
+| **Pairing settings** | **Partial** | `tunnelBaseUrl` (`VideoSettingsDto`) per dom/sub; empty → API default embed path. **`appOptions.actionSnapshotFeeds`** (`both` \| `rear`) — which cameras to still-capture on ack. **Future:** site installer config via ESP32/edge UI ([14 plan — Future enhancements](./14-Video-Implementation-Plan.md#future-enhancements-todo)). Bench: `VITE_VIDEO_FRONT_URL` gates video feature; iframe `src` from session tokens. |
 | **Session start/end** | **Partial** | Mint tokens on feed show; revoke on `POST …/end` ([Phase 3](./16-Video-Phase-3-Session-Tokens-Checklist.md)). Edge agent notify on start/end → [Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md). |
 | **API** | **Partial** | `POST /api/video/sessions/{sessionId}/tokens`; snapshot capture/list/image ([Phase 4](./17-Video-Phase-4-Action-Snapshots-Checklist.md)). Edge webhook on ack → Phase 5. |
-| **Action snapshots** | **Done (manual v1)** | `SessionActionSnapshots` table — `sessionId`, `actionIndex`, `feed`, disk path, `capturedAt`. **Not** stored on session event rows. |
+| **Action snapshots** | **Done (manual v1)** | `SessionActionSnapshots` table — `sessionId`, `actionIndex`, `feed`, disk path, `capturedAt`. Configurable feeds via `actionSnapshotFeeds`. **Not** stored on session event rows. |
 | **UI** | **Partial** | `useSessionVideoSources` — tokens, feed timeouts, Start feeds preview, F5 restore hints. History: `SessionSnapshotGallery`. Automatic snapshots deferred. |
 | **Azure** | **Future** | Blob container + lifecycle rule; no App Service video egress ([Phase 8](./21-Video-Phase-8-Azure-Cutover-Checklist.md)). |
 
@@ -563,6 +561,7 @@ See [07-Session-And-History.md](./07-Session-And-History.md) — history dialog 
 | D1 | Azure before camera / full system ready | **No** | Local API/UI until end-to-end dev complete |
 | V10 | IP camera path (Galayou) | **On hold** (V1-D9); Thingino if resumed | Vendor cloud tunnel risk |
 | V11 | Active camera layout | **A-dev** 2× USB webcam; **Pi 4/5** production target while IP on hold | No vendor egress; SomNet session tunnel only |
+| V12 | Action snapshot feeds | **Operator-configurable** (`both` \| `rear`) via `appOptions.actionSnapshotFeeds` | Stream delay makes front stills less useful; rear outcome is primary record |
 
 ---
 

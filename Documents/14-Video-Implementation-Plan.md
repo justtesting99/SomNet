@@ -109,3 +109,4 @@ Related: [03 — Future Enhancements](./03-Frontend-Architecture.md#future-enhan
 | 2026-09-11 | **V1-D10/D11** — A-dev 2× webcam active; Pi 4 preferred production while IP on hold |
 | 2026-09-12 | Phases 3–4 complete (manual); Phase 5 next; doc sync with codebase |
 | 2026-09-12 | Phase 5 signed off (edge agent, token gateway, API snapshot trigger) |
+| 2026-09-12 | Action snapshot feed option — `appOptions.actionSnapshotFeeds` (`both` \| `rear`) in Options → General |

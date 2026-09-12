@@ -16,5 +16,6 @@ public static class AppOptionsDefaults
         DefaultNotesPrefix = "Session",
         ReconnectIntervalSeconds = 10,
         VideoFeedTimeoutSeconds = 30,
+        ActionSnapshotFeeds = ActionSnapshotFeeds.Both,
     };
 }

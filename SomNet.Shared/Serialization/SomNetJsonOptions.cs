@@ -14,6 +14,7 @@ public static class SomNetJsonOptions
         options.Converters.Add(new JsonStringEnumConverter<BurstStyle>(JsonNamingPolicy.CamelCase));
         options.Converters.Add(new JsonStringEnumConverter<AutomaticRunMode>(JsonNamingPolicy.CamelCase));
         options.Converters.Add(new JsonStringEnumConverter<VideoExpandMode>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<ActionSnapshotFeeds>(JsonNamingPolicy.CamelCase));
         options.Converters.Add(new JsonStringEnumConverter<HistoryTimelineEntryType>(JsonNamingPolicy.CamelCase));
     }
 }

@@ -262,6 +262,8 @@ Page load (authenticated; last mode may restore from localStorage)
 
 Video expand behavior is controlled by `appOptions.autoExpandVideoOnMobile` and `appOptions.mobileVideoExpandDefault` (`None`, `Monitor1`, `Monitor2`, `Both`).
 
+**Options → General (video):** `appOptions.videoFeedTimeoutSeconds` — live feed hide delay after manual actions or automatic session end. **`appOptions.actionSnapshotFeeds`** — `both` (front + rear stills per action) or `rear` (rear only; skips front capture when stream delay makes expression stills less useful). Saved via pairing settings; API applies on ack-triggered capture (Phase 5).
+
 **Feed lifecycle (Phase 3+):** `hooks/useSessionVideoSources.ts` mints tokens via `POST /api/video/sessions/{id}/tokens`, manages feed visibility/timeouts, and restores state after refresh (`videoFeedRestoreHint`, `automaticDeviceRunningHint`). **`VITE_VIDEO_FRONT_URL`** (see [08-Development-Guide.md](./08-Development-Guide.md)) is the **feature gate** only (`isVideoConfigured()`); iframe URLs come from API token response, not static env. Unset env → video disabled (placeholder). Dashboard labels **Front** / **Rear** (`monitor1` / `monitor2`). Architecture: [13-Video-And-Camera-Architecture.md](./13-Video-And-Camera-Architecture.md).
 
 ## Styling

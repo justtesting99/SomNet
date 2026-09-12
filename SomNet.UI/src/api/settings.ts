@@ -1,7 +1,11 @@
 import type { SubTargetName } from '@/config/sessionUsers';
 import type { PairingSettings } from '@/types/pairingSettings';
 import { DEFAULT_VIDEO_SETTINGS } from '@/types/pairingSettings';
-import { DEFAULT_APP_OPTIONS, type AppOptions } from '@/types/options';
+import {
+  DEFAULT_APP_OPTIONS,
+  type ActionSnapshotFeeds,
+  type AppOptions,
+} from '@/types/options';
 import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
 import { clampVideoFeedTimeoutSeconds } from '@/utils/videoFeedTimeout';
 import { apiFetch } from '@/api/client';
@@ -13,6 +17,10 @@ interface PairingSettingsResponse {
   video?: PairingSettings['video'];
 }
 
+function normalizeActionSnapshotFeeds(value: unknown): ActionSnapshotFeeds {
+  return value === 'rear' ? 'rear' : 'both';
+}
+
 function normalizeAppOptions(appOptions: PairingSettingsResponse['appOptions']): AppOptions {
   return {
     ...DEFAULT_APP_OPTIONS,
@@ -20,6 +28,7 @@ function normalizeAppOptions(appOptions: PairingSettingsResponse['appOptions']):
     videoFeedTimeoutSeconds: clampVideoFeedTimeoutSeconds(
       appOptions.videoFeedTimeoutSeconds ?? DEFAULT_APP_OPTIONS.videoFeedTimeoutSeconds,
     ),
+    actionSnapshotFeeds: normalizeActionSnapshotFeeds(appOptions.actionSnapshotFeeds),
   };
 }
 

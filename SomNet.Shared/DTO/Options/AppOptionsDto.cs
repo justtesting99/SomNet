@@ -26,4 +26,9 @@ public sealed class AppOptionsDto
     /// Seconds to keep live video visible after manual stroke/burst idle, or after automatic session end.
     /// </summary>
     public int VideoFeedTimeoutSeconds { get; init; } = 30;
+
+    /// <summary>
+    /// Which camera stills to capture after each manual stroke/burst ack.
+    /// </summary>
+    public ActionSnapshotFeeds ActionSnapshotFeeds { get; init; } = ActionSnapshotFeeds.Both;
 }

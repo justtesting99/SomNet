@@ -1,5 +1,10 @@
-import { MOBILE_VIDEO_EXPAND_OPTIONS, type AppOptions } from '@/types/options';
-import type { MobileVideoExpandDefault } from '@/types/options';
+import {
+  ACTION_SNAPSHOT_FEED_OPTIONS,
+  MOBILE_VIDEO_EXPAND_OPTIONS,
+  type ActionSnapshotFeeds,
+  type AppOptions,
+  type MobileVideoExpandDefault,
+} from '@/types/options';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Input } from '@/components/ui/Input';
 import { NumberField } from '@/components/ui/NumberField';
@@ -62,6 +67,18 @@ export function OptionsGeneralPanel({ pendingOptions, onUpdate }: OptionsGeneral
         <p className="text-xs leading-relaxed text-slate-500">
           Manual: hide live feeds this long after each stroke or burst (bursts stay visible until
           complete). Automatic: keep feeds this long after Stop or Abort before hiding.
+        </p>
+        <SelectField
+          label="Action snapshot cameras"
+          value={pendingOptions.actionSnapshotFeeds}
+          options={ACTION_SNAPSHOT_FEED_OPTIONS}
+          onChange={(event) =>
+            onUpdate('actionSnapshotFeeds', event.target.value as ActionSnapshotFeeds)
+          }
+        />
+        <p className="text-xs leading-relaxed text-slate-500">
+          Stills captured after each stroke or burst ack. Rear only skips the front camera when
+          stream delay makes the expression feed less useful for outcome review.
         </p>
       </section>
 

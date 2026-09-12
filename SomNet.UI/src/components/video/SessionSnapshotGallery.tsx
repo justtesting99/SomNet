@@ -64,7 +64,12 @@ export function SessionSnapshotGallery({ sessionId }: SessionSnapshotGalleryProp
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
             Action {actionIndex + 1}
           </p>
-          <div className="grid grid-cols-2 gap-2">
+          <div
+            className={[
+              'grid gap-2',
+              actionSnapshots.length > 1 ? 'grid-cols-2' : 'grid-cols-1',
+            ].join(' ')}
+          >
             {actionSnapshots.map((snapshot) => (
               <figure
                 key={snapshot.id}

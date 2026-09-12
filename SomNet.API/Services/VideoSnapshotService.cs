@@ -5,12 +5,14 @@ using SomNet.API.Data;
 using SomNet.API.Data.Entities;
 using SomNet.Shared.DTO.History;
 using SomNet.Shared.DTO.Video;
+using SomNet.Shared.Enums;
 
 namespace SomNet.API.Services;
 
 public sealed class VideoSnapshotService : IVideoSnapshotService
 {
     private readonly SomNetDbContext _db;
+    private readonly ISomNetDataStore _dataStore;
     private readonly VideoSnapshotSettings _settings;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IWebHostEnvironment _environment;
@@ -18,12 +20,14 @@ public sealed class VideoSnapshotService : IVideoSnapshotService
 
     public VideoSnapshotService(
         SomNetDbContext db,
+        ISomNetDataStore dataStore,
         IOptions<VideoSnapshotSettings> settings,
         IHttpClientFactory httpClientFactory,
         IWebHostEnvironment environment,
         ILogger<VideoSnapshotService> logger)
     {
         _db = db;
+        _dataStore = dataStore;
         _settings = settings.Value;
         _httpClientFactory = httpClientFactory;
         _environment = environment;
@@ -46,23 +50,37 @@ public sealed class VideoSnapshotService : IVideoSnapshotService
             throw new ArgumentOutOfRangeException(nameof(request), "ActionIndex must be non-negative.");
         }
 
-        var snapshots = new List<SessionActionSnapshotDto>();
-        var front = await CaptureFeedAsync(
-            domTarget,
-            session,
-            request,
-            _settings.FrontStreamName,
-            "front",
-            cancellationToken);
+        var feeds = request.Feeds ??
+            _dataStore.GetPairingSettings(domTarget, session.SubTarget).AppOptions.ActionSnapshotFeeds;
+        var captureFront = ShouldCaptureFeed(feeds, "front");
+        var captureRear = ShouldCaptureFeed(feeds, "rear");
 
-        if (front is not null)
+        var snapshots = new List<SessionActionSnapshotDto>();
+
+        if (captureFront)
         {
-            snapshots.Add(front);
+            var front = await CaptureFeedAsync(
+                domTarget,
+                session,
+                request,
+                _settings.FrontStreamName,
+                "front",
+                cancellationToken);
+
+            if (front is not null)
+            {
+                snapshots.Add(front);
+            }
         }
 
-        if (_settings.RearSettleDelayMs > 0)
+        if (captureRear && _settings.RearSettleDelayMs > 0)
         {
             await Task.Delay(_settings.RearSettleDelayMs, cancellationToken);
+        }
+
+        if (!captureRear)
+        {
+            return new CaptureSessionSnapshotsResponseDto { Snapshots = snapshots };
         }
 
         var rear = await CaptureFeedAsync(
@@ -200,6 +218,10 @@ public sealed class VideoSnapshotService : IVideoSnapshotService
 
         return await response.Content.ReadAsByteArrayAsync(cancellationToken);
     }
+
+    internal static bool ShouldCaptureFeed(ActionSnapshotFeeds feeds, string feed) =>
+        feeds == ActionSnapshotFeeds.Both ||
+        string.Equals(feed, "rear", StringComparison.OrdinalIgnoreCase);
 
     internal static string BuildRelativePath(
         string domTarget,
