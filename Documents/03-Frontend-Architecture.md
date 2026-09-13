@@ -25,21 +25,26 @@ Before authentication, only `LoginForm` renders. After login, the full provider 
 
 ## Provider Tree (Authenticated)
 
+See `App.tsx` for the authoritative nesting. Simplified:
+
 ```
-SubTargetProvider          ← Selected sub name, sub dialog
-  SessionProvider            ← Live session lifecycle + API sync
-    DomSessionsProvider      ← Dom-wide sessions dialog
-      OptionsProvider        ← Per Dom+Sub settings (debounced save)
-        AutomaticSessionHubListener  ← Hub finalize for automatic session end
-        AutomaticSessionRehydrator   ← Restore session after browser refresh
-        NotifyProvider         ← Notify dialog state
-          HistoryProvider      ← History dialog state
-            SystemStatusProvider ← Polls /api/system/status (10s interval)
-              AppShell
-                ModeSelector | DashboardLayout
-                  VideoDisplayProvider   ← Video expand on action
-                    HardwareCommandProvider ← Command pending/ack state
-                      ManualControls | AutomaticControls
+SubTargetProvider
+  SessionProvider
+    DomSessionsProvider
+      HardwareProvider
+        OptionsProvider
+          TabSyncProvider
+            NotifyProvider
+              SiteUserReadyProvider
+                AutomaticSessionHubListener   ← auto session end + ButtonEventReceived
+                SessionRehydrator
+                HistoryProvider
+                  SystemStatusProvider
+                    AppShell → ModeSelector | DashboardWithVideo
+                      VideoDisplayProvider
+                        HardwareCommandProvider
+                          SiteUserReadyBanner + DashboardLayout
+                            ManualControls | AutomaticControls
 ```
 
 ### Provider Responsibilities
@@ -53,7 +58,10 @@ SubTargetProvider          ← Selected sub name, sub dialog
 | **DomSessionsProvider** | `context/DomSessionsProvider.tsx` | Dom sessions dialog open state |
 | **OptionsProvider** | `context/OptionsProvider.tsx` | Loads/saves `PairingSettingsDto` via `/api/settings`; **persists only after explicit user edit** (`userEditedRef`); 400 ms debounce; `running` never persisted |
 | **AutomaticSessionRehydrator** | `components/hardware/AutomaticSessionRehydrator.tsx` | On load: `GET /api/sessions/active`, device probe, restore `activeSession` + local `running` |
-| **AutomaticSessionHubListener** | `components/hardware/AutomaticSessionHubListener.tsx` | Finalizes automatic sessions on hub `automatic-session-complete`; gates on `activeSession`, not `running` |
+| **AutomaticSessionHubListener** | `components/hardware/AutomaticSessionHubListener.tsx` | Finalizes automatic sessions on hub `automatic-session-complete`; handles `ButtonEventReceived` → `SiteUserReadyProvider` |
+| **SiteUserReadyProvider** | `context/SiteUserReadyProvider.tsx` | Site user double-click ready signal; pairs with `useSiteUserReadyStartFeed` for auto **Start feed** |
+| **TabSyncProvider** | `context/TabSyncProvider.tsx` | Cross-tab session/sub/command sync via `BroadcastChannel` |
+| **HardwareProvider** | `context/HardwareProvider.tsx` | Hardware dialog open state |
 | **NotifyProvider** | `context/NotifyProvider.tsx` | Notify dialog state |
 | **HistoryProvider** | `context/HistoryProvider.tsx` | History dialog state |
 | **SystemStatusProvider** | `context/SystemStatusProvider.tsx` | Polls system status every 10 seconds |
@@ -89,7 +97,7 @@ Active sessions are ended automatically on mode switch, sign-out, or sub change.
 |--------|-----------|---------|
 | Sub selection | `SubSelectionDialog.tsx` | Click Sub name in header |
 | Dom sessions | `DomSessionsDialog.tsx` | Click Dom name in header |
-| History | `HistoryDialog.tsx` | Header "History" |
+| History | `HistoryDialog.tsx` | Header "History" — includes `SessionSnapshotGallery` per session row |
 | Options | `OptionsDialog.tsx` | Header "Options" |
 | Notify | `NotifyDialog.tsx` | Header "Notify" |
 
@@ -173,6 +181,7 @@ Fetch wrappers in `src/api/`:
 | `history.ts` | `/api/history/*` |
 | `settings.ts` | `/api/settings` |
 | `subs.ts` | `/api/subs` |
+| `videoSnapshots.ts` | `/api/video/sessions/{id}/snapshots` |
 | `options.ts` | Legacy — unused; settings moved to `settings.ts` |
 
 All authenticated calls go through a shared `apiFetch` helper that injects the Bearer token.
@@ -258,11 +267,13 @@ Page load (authenticated; last mode may restore from localStorage)
 - **VideoFeed** — Feed display (iframe `src` from session tokens when active)
 - **VideoFeedStartPanel** — **Start feed** / **Start feeds** preview controls (Phase 3; label follows live feed selection)
 - **VideoMaximizeOverlay** — Full-screen overlay on mobile when `expandOnAction` triggers
-- **SessionSnapshotGallery** / **AuthenticatedSnapshotImage** — action stills in history (Phase 4)
+- **SessionSnapshotGallery** / **AuthenticatedSnapshotImage** — action stills in history (Phase 4); JWT blob fetch via `apiFetchBlob` + object URL
+- **SnapshotLightbox** — full-screen still viewer (double-click in gallery; Close / Esc)
+- **SiteUserReadyBanner** — banner when device double-click reports site user ready ([23](./23-Device-Button-Clicks-Checklist.md))
 
 **Live video feeds (Options → General):** `appOptions.mobileVideoExpandDefault` — `"both"` \| `"monitor1"` (front) \| `"monitor2"` (rear). Implemented in `utils/liveVideoFeedPreference.ts` + `useSessionVideoSources` — disabled cameras do not mount iframes or connect to go2rtc (bandwidth/CPU savings on mobile/tunnel). **`actionSnapshotFeeds`** is separate (stills only). On mobile, `appOptions.autoExpandVideoOnMobile` opens the selected feed full screen after commands. Rebuild **`SomNet.UI/dist`** after UI changes when using integrated API hosting.
 
-**Options → General (video):** `appOptions.videoFeedTimeoutSeconds` — live feed hide delay after manual actions or automatic session end. **`appOptions.actionSnapshotFeeds`** — `both` (front + rear stills per action) or `rear` (rear only; skips front capture when stream delay makes expression stills less useful). Saved via pairing settings; API applies on ack-triggered capture (Phase 5).
+**Options → General (video):** `appOptions.videoFeedTimeoutSeconds` — live feed hide delay after manual actions or automatic session end. **`appOptions.actionSnapshotFeeds`** — `both` (front + rear stills per action) or `rear` (rear only). **`appOptions.videoFeedBandwidth`** — `high` \| `medium` \| `low` for live MSE bandwidth hints ([Phase 6 V6-D18](./19-Video-Phase-6-Tunnel-Checklist.md)). Saved via pairing settings; API applies on ack-triggered capture (Phase 5).
 
 **Feed lifecycle (Phase 3+):** `hooks/useSessionVideoSources.ts` mints tokens via `POST /api/video/sessions/{id}/tokens`, manages feed visibility/timeouts, and restores state after refresh (`videoFeedRestoreHint`, `automaticDeviceRunningHint`). **`VITE_VIDEO_FRONT_URL`** (see [08-Development-Guide.md](./08-Development-Guide.md)) is the **feature gate** only (`isVideoConfigured()`); iframe URLs come from API token response, not static env. Unset env → video disabled (placeholder). Dashboard labels **Front** / **Rear** (`monitor1` / `monitor2`). Architecture: [13-Video-And-Camera-Architecture.md](./13-Video-And-Camera-Architecture.md).
 

@@ -196,7 +196,7 @@ Click **Options** in the header to configure preferences and default control val
 
 Settings are organized into tabs:
 
-- **General** — Sound effects, confirmation dialogs, video expand behavior, timestamp display, **allow automatic mode overrides while running**, system status reconnect interval
+- **General** — Sound effects, confirmation dialogs, **live video feeds** (which cameras load), **video feed bandwidth**, **video feed timeout**, **action snapshot cameras**, mobile video auto-expand, timestamp display, **allow automatic mode overrides while running**, system status reconnect interval
 - **Notifications** — Notification preferences
 - **Account** — Operator display name and password
 
@@ -214,6 +214,8 @@ The timeline shows:
 - **Notifications** — Scheduled session announcements
 
 Use the date range picker to filter entries.
+
+When video is configured, each session shows **action stills** (front and/or rear JPEGs captured on each stroke or burst). **Double-click** a still to view it full screen; use **Close** or **Esc** to return to the list.
 
 ### Dom Sessions
 
@@ -235,10 +237,25 @@ The notification appears in the history timeline. Email delivery is planned for 
 
 ## Video Monitor
 
-The dashboard includes a video monitor area. Depending on your app options:
+The dashboard includes a video monitor area (when video is configured for your site).
 
-- Video may expand to full screen on mobile when you perform a stroke or burst
-- Expand target can be configured in Options (none, monitor 1, monitor 2, or both)
+### Start feed
+
+Use **Start feed** or **Start feeds** above the monitors to load live video before or during a session. Live streams require an active session token — they stop when the session ends or after the **video feed timeout** (Options → General).
+
+### Options (video)
+
+| Setting | What it does |
+|---------|--------------|
+| **Live video feeds** | Which cameras load: both, front only, or rear only |
+| **Video feed bandwidth** | Quality hint for live streams (high / medium / low) |
+| **Video feed timeout** | How long feeds stay up after manual actions or automatic session end |
+| **Action snapshot cameras** | Which cameras capture stills on each stroke/burst (both or rear only) |
+| **Auto-expand video on mobile** | Full-screen video overlay after commands on small screens |
+
+### Site user ready (double-click)
+
+When someone at the tool **double-clicks the device button**, your dashboard shows a **site user ready** banner and **Start feed** runs automatically (if video is configured and feeds are not already active). Single click is reserved for future use. See the [Hardware User Guide](./Hardware-User-Guide.md) for installer button gestures.
 
 ---
 

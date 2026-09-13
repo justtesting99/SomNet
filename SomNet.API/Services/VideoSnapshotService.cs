@@ -14,6 +14,7 @@ public sealed class VideoSnapshotService : IVideoSnapshotService
     private readonly SomNetDbContext _db;
     private readonly ISomNetDataStore _dataStore;
     private readonly VideoSnapshotSettings _settings;
+    private readonly ISnapshotFileProtection _fileProtection;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IWebHostEnvironment _environment;
     private readonly ILogger<VideoSnapshotService> _logger;
@@ -22,6 +23,7 @@ public sealed class VideoSnapshotService : IVideoSnapshotService
         SomNetDbContext db,
         ISomNetDataStore dataStore,
         IOptions<VideoSnapshotSettings> settings,
+        ISnapshotFileProtection fileProtection,
         IHttpClientFactory httpClientFactory,
         IWebHostEnvironment environment,
         ILogger<VideoSnapshotService> logger)
@@ -29,6 +31,7 @@ public sealed class VideoSnapshotService : IVideoSnapshotService
         _db = db;
         _dataStore = dataStore;
         _settings = settings.Value;
+        _fileProtection = fileProtection;
         _httpClientFactory = httpClientFactory;
         _environment = environment;
         _logger = logger;
@@ -115,7 +118,7 @@ public sealed class VideoSnapshotService : IVideoSnapshotService
         return rows.Select(ToDto).ToList();
     }
 
-    public async Task<(SessionActionSnapshotDto Metadata, string AbsolutePath)?> GetImageAsync(
+    public async Task<(SessionActionSnapshotDto Metadata, byte[] JpegBytes)?> GetImageAsync(
         string domTarget,
         int snapshotId)
     {
@@ -136,7 +139,23 @@ public sealed class VideoSnapshotService : IVideoSnapshotService
             return null;
         }
 
-        return (ToDto(row), absolutePath);
+        var storedBytes = await File.ReadAllBytesAsync(absolutePath);
+        byte[] jpegBytes;
+        try
+        {
+            jpegBytes = _fileProtection.Unprotect(storedBytes);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Failed to decrypt snapshot {SnapshotId} at {RelativePath}.",
+                snapshotId,
+                row.RelativePath);
+            return null;
+        }
+
+        return (ToDto(row), jpegBytes);
     }
 
     private async Task<SessionActionSnapshotDto?> CaptureFeedAsync(
@@ -161,7 +180,8 @@ public sealed class VideoSnapshotService : IVideoSnapshotService
         var relativePath = BuildRelativePath(domTarget, session.Id, request.ActionIndex, feed);
         var absolutePath = ResolveAbsolutePath(relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
-        await File.WriteAllBytesAsync(absolutePath, jpegBytes, cancellationToken);
+        var storedBytes = _fileProtection.Protect(jpegBytes);
+        await File.WriteAllBytesAsync(absolutePath, storedBytes, cancellationToken);
 
         var existing = await _db.SessionActionSnapshots.SingleOrDefaultAsync(
             snapshot =>
@@ -205,6 +225,11 @@ public sealed class VideoSnapshotService : IVideoSnapshotService
         var baseUrl = _settings.Go2RtcBaseUrl.TrimEnd('/');
         var requestUri =
             $"{baseUrl}/api/frame.jpeg?src={Uri.EscapeDataString(streamName)}";
+
+        if (_settings.FrameCaptureMaxWidth > 0)
+        {
+            requestUri += $"&width={_settings.FrameCaptureMaxWidth}";
+        }
 
         using var response = await client.GetAsync(requestUri, cancellationToken);
         if (!response.IsSuccessStatusCode)
@@ -282,6 +307,7 @@ public static class VideoSnapshotServiceCollectionExtensions
         {
             client.Timeout = TimeSpan.FromSeconds(15);
         });
+        services.AddSingleton<ISnapshotFileProtection, SnapshotFileProtection>();
         services.AddScoped<IVideoSnapshotService, VideoSnapshotService>();
         return services;
     }

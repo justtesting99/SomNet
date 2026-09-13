@@ -16,4 +16,13 @@ public sealed class VideoSnapshotSettings
     public string FrontStreamName { get; init; } = "front";
 
     public string RearStreamName { get; init; } = "rear";
+
+    /// <summary>Max width passed to go2rtc <c>/api/frame.jpeg?width=</c>. 0 = stream native resolution.</summary>
+    public int FrameCaptureMaxWidth { get; init; } = 1920;
+
+    /// <summary>When true, snapshot JPEGs are AES-256-GCM encrypted on disk (SNAP envelope). Legacy plain JPEG files still serve.</summary>
+    public bool EncryptAtRest { get; init; } = true;
+
+    /// <summary>Base64-encoded 32-byte AES-256 key. Required when <see cref="EncryptAtRest"/> is true.</summary>
+    public string? EncryptionKeyBase64 { get; init; }
 }

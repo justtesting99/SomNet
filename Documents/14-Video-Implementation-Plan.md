@@ -104,11 +104,11 @@ Related: [03 — Future Enhancements](./03-Frontend-Architecture.md#future-enhan
 
 **Future (optional):** [Phase 7b draft](./22-Video-Phase-7b-Edge-Intercom-Draft.md) — USB **headset on Pi** for listen-in and/or push-to-talk via a **separate WebRTC audio stream**. **Keep MSE for front/rear video**; latency and tunnel WebRTC must be measured before productizing. Not scheduled until Phase 7 video is signed off on Pi.
 
-### Snapshot encryption at rest (future)
+### Snapshot encryption at rest
 
-**Today:** Action stills are **unencrypted plain JPEGs** on local disk; SQL holds **path metadata only** (not image blobs). Acceptable for dev bench only.
+**Dev (done, 2026-09-13):** Action stills are **AES-256-GCM encrypted** on local disk (`SNAP` v1 envelope); SQL holds **path metadata only** (not image blobs). See [24 — Snapshot encryption checklist](./24-Video-Snapshot-Encryption-Checklist.md) and [13 §Snapshot encryption](./13-Video-And-Camera-Architecture.md#snapshot-encryption-at-rest).
 
-**Later:** Encrypt snapshot **files** (local disk → Azure Blob) and protect any **storage keys/paths in SQL** so session imagery is not readable from raw disk or database access alone. Implement before production/client deployment or as a Phase 8 gate. Details: [13 — Future snapshot encryption](./13-Video-And-Camera-Architecture.md#future-snapshot-encryption-at-rest).
+**Production (Phase 8):** Azure Blob with customer-managed keys + Key Vault; same decrypt-on-serve model.
 
 ---
 
@@ -131,3 +131,4 @@ Related: [03 — Future Enhancements](./03-Frontend-Architecture.md#future-enhan
 | 2026-09-12 | Phase 6 — Cloudflare scripts, live feed gating (V6-D17), PC tunnel smoke; mobile LTE deferred |
 | 2026-09-13 | **Phase 6 signed off** — PC Quick Tunnel; V6-D18 bandwidth + mobile playback; iPhone/LTE deferred |
 | 2026-09-13 | **Phase 7b draft** — optional Pi headset intercom; phone primary; MSE video unchanged |
+| 2026-09-13 | **Snapshot encryption signed off** — dev disk AES-256-GCM ([24](./24-Video-Snapshot-Encryption-Checklist.md)); gallery lightbox UX |

@@ -13,14 +13,15 @@ See [13 §15 — When to deploy to Azure](./13-Video-And-Camera-Architecture.md#
 - Production URLs configured
 - Blob replaces local/Azurite snapshot storage
 - Session tokens + Pi tunnel E2E in production
-- **Snapshot encryption at rest** — encrypted Blob objects; no plaintext JPEGs on disk or unprotected paths in SQL ([13 §Future](./13-Video-And-Camera-Architecture.md#future-snapshot-encryption-at-rest))
+- **Snapshot encryption at rest (Azure)** — encrypted Blob + Key Vault; dev disk encryption done in [Phase 4b / pre-Pi](./24-Video-Snapshot-Encryption-Checklist.md)
 - Video implementation **signed off**
 
 ---
 
 ## Future work (from dev)
 
-- [ ] **Encrypt action snapshot files at rest** — today dev stores plain JPEG under `data/snapshots/`; SQL stores `RelativePath` only. Production must not leave imagery readable from filesystem or DB access alone.
+- [x] **Encrypt action snapshot files at rest (dev disk)** — AES-256-GCM via [24 — Snapshot encryption](./24-Video-Snapshot-Encryption-Checklist.md) (2026-09-13)
+- [ ] **Azure Blob + Key Vault** — production key management; migrate storage from local disk
 - [ ] Key management (Azure Key Vault / CMK for Blob; app envelope encryption for dev parity)
 - [ ] API decrypt-on-serve only; audit access to snapshot endpoints
 

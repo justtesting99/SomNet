@@ -127,6 +127,24 @@ After changing env files, rebuild UI (`npm run build`) for integrated API hostin
 
 **Phase 5 (edge agent):** also run `.\SomNet.Edge\scripts\start-edge-agent.ps1` (port **5190**) so session start/end hooks reach go2rtc. Live `/go2rtc` embeds require a valid session **token** query param (API gateway middleware).
 
+### 5. Remote operator — Cloudflare Quick Tunnel (Phase 6)
+
+Expose the dev PC API (UI + REST + SignalR + `/go2rtc` proxy) to the internet for off-LAN smoke tests:
+
+```powershell
+# Install cloudflared once (optional — or use global install)
+.\SomNet.Edge\scripts\install-cloudflared-windows.ps1
+
+# Start Quick Tunnel (API must be running on :5031)
+.\SomNet.Edge\scripts\start-cloudflare-tunnel.ps1
+```
+
+Copy the printed `https://*.trycloudflare.com` URL. URL changes each run — acceptable for dev. **Do not** expose raw go2rtc `:1984` or edge agent `:5190`.
+
+For **named tunnel** + custom domain, use `SomNet.Edge/config/cloudflared.example.yml` (Phase 7/8). If `cloudflared` logs **`Tunnel not found`**, you are on a stale named-tunnel config — use the Quick Tunnel script instead or recreate the tunnel in Cloudflare Zero Trust.
+
+Full checklist: [19 — Phase 6 Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md).
+
 ---
 
 ## Ports and Launch Profiles

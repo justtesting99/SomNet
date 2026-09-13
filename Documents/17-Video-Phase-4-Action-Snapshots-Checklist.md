@@ -11,7 +11,7 @@
 
 **Goal:** On **device command ack**, capture action stills (front + rear by default, or **rear only** via Options); store on **local disk**; attach metadata to session action (API + DB).
 
-**Out of scope (Phase 4):** Azure Blob production; edge agent auto-trigger ([Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md)); automatic per-stroke snapshots (later); heartbeat front-only between actions; **encryption at rest** for snapshot files or DB metadata ([future](./13-Video-And-Camera-Architecture.md#future-snapshot-encryption-at-rest)).
+**Out of scope (Phase 4):** Azure Blob production; edge agent auto-trigger ([Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md)); automatic per-stroke snapshots (later); heartbeat front-only between actions. **Encryption at rest** moved to [24 — Snapshot encryption](./24-Video-Snapshot-Encryption-Checklist.md) — **signed off 2026-09-13**.
 
 ---
 
@@ -19,7 +19,7 @@
 
 | ID | Decision | Choice |
 |----|----------|--------|
-| **V4-D1** | Trigger | **UI callback** after hardware command ack (manual stroke/burst first) |
+| **V4-D1** | Trigger | **API fire-and-forget** after successful hardware ack (`VideoActionSnapshotTrigger` in `DevicesController`; manual stroke/burst first) |
 | **V4-D2** | Capture source | go2rtc `GET /api/frame.jpeg?src={front\|rear}` (API HttpClient → localhost:1984) |
 | **V4-D3** | Storage | Local disk under `data/snapshots/` (dev); Azurite optional later |
 | **V4-D4** | Rear timing | Front immediate; rear after **1 s** settle (`RearSettleDelayMs`, configurable) |
@@ -76,4 +76,5 @@
 | 2026-09-11 | V4-T1/T2/T3 pass — JPEGs on disk + history gallery; rear settle ~1 s |
 | 2026-09-12 | Manual v1 signed off; doc sync (tests wording, gallery component names) |
 | 2026-09-12 | **V4-D7** — `actionSnapshotFeeds` option (both \| rear); API respects pairing settings on ack capture |
-| 2026-09-12 | Future note — snapshot encryption at rest (disk + SQL metadata); see architecture §Future |
+| 2026-09-12 | Future note — snapshot encryption at rest (disk + SQL metadata) |
+| 2026-09-13 | Encryption moved to [24](./24-Video-Snapshot-Encryption-Checklist.md) — signed off; V4-D1 trigger wording updated (API ack path) |

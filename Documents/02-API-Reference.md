@@ -182,7 +182,8 @@ Per Dom+Sub pairing settings stored as JSON.
     "defaultNotesPrefix": "Session",
     "reconnectIntervalSeconds": 10,
     "videoFeedTimeoutSeconds": 30,
-    "actionSnapshotFeeds": "both"
+    "actionSnapshotFeeds": "both",
+    "videoFeedBandwidth": "high"
   },
   "manual": { /* ManualControlStateDto */ },
   "automatic": { /* AutomaticControlStateDto */ },
@@ -200,6 +201,12 @@ Per Dom+Sub pairing settings stored as JSON.
 
 **`actionSnapshotFeeds`** (default `"both"`) — **Options → Action snapshot cameras**: `"both"` (front + rear stills) or `"rear"` (rear stills only). Read by `VideoSnapshotService` on hardware ack. **Does not** control live video iframes. Optional override on `POST /api/video/sessions/{sessionId}/snapshots` body field `feeds`.
 
+**`videoFeedBandwidth`** (default `"high"`) — **Options → Video feed bandwidth**: `"high"` \| `"medium"` \| `"low"`. Passed to go2rtc embed URLs as bandwidth hints for live MSE streams ([Phase 6 V6-D18](./19-Video-Phase-6-Tunnel-Checklist.md)).
+
+**`Video:Snapshots`** (`appsettings`) — see [Video configuration](#video-configuration-appsettings) below.
+
+**`Video:Edge`** (`appsettings`) — see [Video configuration](#video-configuration-appsettings) below.
+
 **`video.tunnelBaseUrl`** (default empty) — optional split-origin video base for token embed paths; leave empty for same-origin `/go2rtc` through the tunneled API ([Phase 6](./19-Video-Phase-6-Tunnel-Checklist.md)).
 
 ### Video stream gateway — `/go2rtc/*`
@@ -207,6 +214,53 @@ Per Dom+Sub pairing settings stored as JSON.
 When `Video:Edge:RequireTokenForGo2Rtc` is enabled (dev bench), requests under `/go2rtc` require a valid session stream token (`?token=` query or access cookie issued after first valid request). Missing, malformed, expired, or revoked tokens → **HTTP 403** with body *Video stream access requires a valid session token.* Public assets (`.js`, `.css`, etc.) under `/go2rtc` are exempt. See [Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md) · [Phase 6](./19-Video-Phase-6-Tunnel-Checklist.md).
 
 Defaults are applied server-side when no record exists. Legacy millisecond-based power values are migrated to 0–100% on read via `PairingSettingsSerializer`.
+
+### Video configuration (`appsettings`)
+
+**`Video:Snapshots`** (`VideoSnapshotSettings`):
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Enabled` | `true` | Master switch for snapshot capture |
+| `StorageRoot` | `../data/snapshots` | Relative to API content root unless absolute |
+| `Go2RtcBaseUrl` | `http://localhost:1984` | Frame capture source |
+| `RearSettleDelayMs` | `1000` | Delay before rear still after front |
+| `FrontStreamName` / `RearStreamName` | `front` / `rear` | go2rtc stream names |
+| `FrameCaptureMaxWidth` | `1920` | Passed to `frame.jpeg?width=`; `0` = native resolution |
+| `EncryptAtRest` | `true` | AES-256-GCM on disk (`SNAP` v1 envelope) |
+| `EncryptionKeyBase64` | — | Required when `EncryptAtRest` is true (32-byte key, Base64) |
+
+Dev bench supplies the key in `appsettings.Development.json`. Base `appsettings.json` sets `EncryptAtRest: true` with an empty key — **`ValidateOnStart` fails** unless Development overrides or you set a key. Legacy plain JPEG files on disk still serve. See [24 — Snapshot encryption](./24-Video-Snapshot-Encryption-Checklist.md).
+
+**`Video:Edge`** (`VideoEdgeSettings`):
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `Enabled` | `false` | Notify edge agent on session start/end |
+| `AgentBaseUrl` | `http://localhost:5190` | Edge agent webhook base |
+| `ApiKey` | — | Shared secret for agent callbacks |
+| `RequireTokenForGo2Rtc` | `false` | When `true`, `/go2rtc/*` requires session stream token |
+
+Dev bench typically sets `Enabled: true` and `RequireTokenForGo2Rtc: true` in `appsettings.Development.json`. YARP reverse proxy routes `/go2rtc` → localhost:1984.
+
+---
+
+## Video — `/api/video`
+
+All routes require operator JWT. Session-scoped routes validate Dom ownership and (where noted) active session + Sub match.
+
+| Method | Route | Query / Body | Description |
+|--------|-------|--------------|-------------|
+| POST | `/api/video/sessions/{sessionId}/tokens` | `subTarget` (required) | Mint front/rear stream tokens + embed paths for active session |
+| POST | `/api/video/sessions/{sessionId}/snapshots` | `subTarget`; body: `{ actionIndex, feeds? }` | Capture stills for an action (manual trigger or internal) |
+| GET | `/api/video/sessions/{sessionId}/snapshots` | — | List snapshot metadata for session (includes relative `imageUrl` paths) |
+| GET | `/api/video/snapshots/{snapshotId}/image` | — | Return JPEG bytes (decrypts encrypted files in memory) |
+
+**Token response** includes embed paths respecting `video.tunnelBaseUrl` (empty → same-origin `/go2rtc/…`).
+
+**List response** items include `id`, `sessionId`, `actionIndex`, `feed`, `imageUrl`, `capturedAt`. UI fetches `imageUrl` with JWT via blob fetch — see [03 — Frontend](./03-Frontend-Architecture.md).
+
+**Image endpoint** returns `image/jpeg`. **404** when snapshot not found or Dom mismatch.
 
 ---
 
@@ -280,9 +334,12 @@ Hardware pairing and command dispatch (backend complete).
 {
   "subTarget": "Slv66",
   "commandKey": "stroke",
-  "payloadJson": "{\"powerPercent\":60}"
+  "payloadJson": "{\"powerPercent\":60}",
+  "snapshotActionIndex": 0
 }
 ```
+
+**`snapshotActionIndex`** (optional) — zero-based action index for action still alignment. Manual controls pass this on stroke/burst so snapshots group correctly in history. When omitted, the API assigns the next index for the session.
 
 **Response (`SendHardwareCommandResponseDto`):**
 
@@ -329,7 +386,7 @@ ws://localhost:5031/hubs/hardware?deviceId=esp32-abc123
 # Paired device
 ws://localhost:5031/hubs/hardware?access_token=<device-jwt>
 
-# Operator (optional future use)
+# Operator (automatic session sync, device button events)
 ws://localhost:5031/hubs/hardware?access_token=<operator-jwt>
 ```
 
@@ -360,6 +417,11 @@ Controllers delegate to scoped services:
 | `IDeviceTokenService` | Device JWT creation and registration persistence |
 | `IDeviceConnectionRegistry` | In-memory SignalR connection tracking (singleton) |
 | `IHardwareCommandDispatcher` | Command delivery and ack correlation |
+| `IVideoStreamTokenService` | Session-scoped stream token mint/revoke |
+| `IVideoSnapshotService` | Action still capture, list, encrypted disk I/O |
+| `ISnapshotFileProtection` | AES-256-GCM envelope for snapshot files |
+| `IVideoActionSnapshotTrigger` | Fire-and-forget snapshot capture after hardware ack |
+| `IVideoEdgeNotificationService` | Session start/end webhooks to edge agent |
 
 ---
 

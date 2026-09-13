@@ -4,11 +4,17 @@ import { apiFetchBlob } from '@/api/client';
 interface AuthenticatedSnapshotImageProps {
   imageUrl: string;
   alt: string;
+  className?: string;
+  onDoubleClick?: () => void;
 }
+
+const defaultImageClassName = 'mx-auto max-h-72 w-auto max-w-full object-contain';
 
 export function AuthenticatedSnapshotImage({
   imageUrl,
   alt,
+  className = defaultImageClassName,
+  onDoubleClick,
 }: AuthenticatedSnapshotImageProps) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
 
@@ -44,6 +50,13 @@ export function AuthenticatedSnapshotImage({
   }
 
   return (
-    <img src={objectUrl} alt={alt} className="aspect-video w-full object-cover" loading="lazy" />
+    <img
+      src={objectUrl}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      title={onDoubleClick ? 'Double-click to enlarge' : undefined}
+      onDoubleClick={onDoubleClick}
+    />
   );
 }

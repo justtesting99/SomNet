@@ -126,7 +126,7 @@ The permanent record is **photos per action**, not a continuous stream archive (
 | Asset | Protection |
 |-------|------------|
 | **Live HLS** | HTTPS tunnel; **session-scoped signed tokens** (sessionId, dom, sub, feed, exp); revoked on session end |
-| **Historical stills** | Private Blob; reads via JWT-checked API or short-lived SAS scoped to dom/sub/session. **Today (dev):** plain JPEG on disk + path metadata in SQL — **not encrypted at rest** ([future: snapshot encryption](#future-snapshot-encryption-at-rest)) |
+| **Historical stills** | Private Blob (production); reads via JWT-checked API. **Today (dev):** AES-256-GCM encrypted files on disk ([24 — Snapshot encryption](./24-Video-Snapshot-Encryption-Checklist.md)); legacy plain JPEG still served; SQL metadata only |
 | **Camera credentials** | Edge gateway only — never in React or operator-visible config |
 | **Camera LAN** | Private network / VLAN; no port-forward of camera admin UI |
 | **Vendor cloud / P2P** | **Block outbound** from IP cameras to vendor servers where possible; SomNet uses **LAN RTSP only** into edge (same model as Blue Iris) |
@@ -135,11 +135,11 @@ The permanent record is **photos per action**, not a continuous stream archive (
 
 **Residual risks:** a valid operator session can view what that account is authorized to see; leaked token works only until expiry or session end. Mitigate with short TTL, per-session tokens, and no long-lived stream URLs in settings.
 
-### Future: snapshot encryption at rest
+### Snapshot encryption at rest
 
-**Current (Phases 4–5, dev):** Action stills are **plain JPEG files** on disk (`data/snapshots/…`). SQL stores **metadata only** (`SessionActionSnapshots.RelativePath`, etc.) — **not** image blobs. Neither disk files nor DB rows are application-encrypted today. Access control is via SomNet JWT on `GET /api/video/snapshots/{id}/image`.
+**Dev (done, 2026-09-13):** New action stills are **AES-256-GCM encrypted** on disk (`SNAP` v1 envelope) — see [24 — Snapshot encryption](./24-Video-Snapshot-Encryption-Checklist.md). **Legacy plain JPEG** files from earlier Phase 4 captures still serve. SQL stores **metadata only** (`SessionActionSnapshots.RelativePath`) — not image blobs. Access control remains SomNet JWT on `GET /api/video/snapshots/{id}/image`; API decrypts in memory only. Capture uses go2rtc `frame.jpeg?width=` (`FrameCaptureMaxWidth`, default 1920).
 
-**Future requirement:** Add **encryption at rest** before production sign-off or as an early Phase 8 item so sensitive session imagery is not stored in plaintext:
+**Production (Phase 8):** Move to **encrypted Azure Blob** + Key Vault; same decrypt-on-serve model:
 
 | Layer | Target |
 |-------|--------|
@@ -543,10 +543,10 @@ Light coupling only — no new firmware phase.
 | Area | Status | Detail |
 |------|--------|--------|
 | **Pairing settings** | **Partial** | `video.tunnelBaseUrl` per dom/sub (empty → same-origin `/go2rtc`). **`appOptions.mobileVideoExpandDefault`** (`both` \| `monitor1` \| `monitor2`) — **live** iframe gating ([Phase 6 V6-D17](./19-Video-Phase-6-Tunnel-Checklist.md)). **`appOptions.actionSnapshotFeeds`** (`both` \| `rear`) — **stills** on ack only. **Future:** installer config via ESP32/edge UI ([14 plan — Future enhancements](./14-Video-Implementation-Plan.md#future-enhancements-todo)). Bench: `VITE_VIDEO_FRONT_URL` gates video feature; iframe `src` from session tokens. |
-| **Session start/end** | **Partial** | Mint tokens on feed show; revoke on `POST …/end` ([Phase 3](./16-Video-Phase-3-Session-Tokens-Checklist.md)). Edge agent notify on start/end → [Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md). |
-| **API** | **Partial** | `POST /api/video/sessions/{sessionId}/tokens`; snapshot capture/list/image ([Phase 4](./17-Video-Phase-4-Action-Snapshots-Checklist.md)). Edge webhook on ack → Phase 5. |
-| **Action snapshots** | **Done (manual v1)** | `SessionActionSnapshots` table — `sessionId`, `actionIndex`, `feed`, disk path, `capturedAt`. Configurable feeds via `actionSnapshotFeeds`. **Not** stored on session event rows. |
-| **UI** | **Partial** | `useSessionVideoSources` — tokens, feed timeouts, live feed gating, Start feed(s) preview, F5 restore hints. History: `SessionSnapshotGallery`. Automatic snapshots deferred. |
+| **Session start/end** | **Done (dev)** | Mint tokens on feed show; revoke on `POST …/end` ([Phase 3](./16-Video-Phase-3-Session-Tokens-Checklist.md)). Edge agent notify on start/end ([Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md)). |
+| **API** | **Done (manual v1)** | `POST/GET /api/video/sessions/{sessionId}/tokens|snapshots`; `GET /api/video/snapshots/{id}/image` ([Phase 4](./17-Video-Phase-4-Action-Snapshots-Checklist.md)). Snapshots triggered on hardware ack via `VideoActionSnapshotTrigger` ([Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md)). Encrypted disk ([24](./24-Video-Snapshot-Encryption-Checklist.md)). |
+| **Action snapshots** | **Done (manual v1)** | `SessionActionSnapshots` table — `sessionId`, `actionIndex`, `feed`, disk path, `capturedAt`. Configurable feeds via `actionSnapshotFeeds`. AES-256-GCM on disk (dev). **Not** stored on session event rows. |
+| **UI** | **Partial** | `useSessionVideoSources` — tokens, feed timeouts, live feed gating, Start feed(s) preview, F5 restore hints. History: `SessionSnapshotGallery` + `SnapshotLightbox` (double-click enlarge). Automatic per-stroke snapshots deferred. |
 | **Azure** | **Future** | Blob container + lifecycle rule; no App Service video egress ([Phase 8](./21-Video-Phase-8-Azure-Cutover-Checklist.md)). |
 
 See [07-Session-And-History.md](./07-Session-And-History.md) — history dialog loads snapshots via video API, not session event fields.

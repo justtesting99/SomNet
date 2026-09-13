@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchSessionSnapshots, type SessionActionSnapshot } from '@/api/videoSnapshots';
 import { AuthenticatedSnapshotImage } from '@/components/video/AuthenticatedSnapshotImage';
+import { SnapshotLightbox } from '@/components/video/SnapshotLightbox';
 
 interface SessionSnapshotGalleryProps {
   sessionId: string;
@@ -21,6 +22,9 @@ function groupSnapshotsByAction(snapshots: SessionActionSnapshot[]) {
 export function SessionSnapshotGallery({ sessionId }: SessionSnapshotGalleryProps) {
   const [snapshots, setSnapshots] = useState<SessionActionSnapshot[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [expandedSnapshot, setExpandedSnapshot] = useState<SessionActionSnapshot | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -58,7 +62,17 @@ export function SessionSnapshotGallery({ sessionId }: SessionSnapshotGalleryProp
   }
 
   return (
-    <div className="mt-3 space-y-3">
+    <>
+      {expandedSnapshot ? (
+        <SnapshotLightbox
+          imageUrl={expandedSnapshot.imageUrl}
+          alt={`${expandedSnapshot.feed} snapshot`}
+          caption={`Action ${expandedSnapshot.actionIndex + 1} · ${expandedSnapshot.feed}`}
+          onClose={() => setExpandedSnapshot(null)}
+        />
+      ) : null}
+
+      <div className="mt-3 space-y-3">
       {groups.map(([actionIndex, actionSnapshots]) => (
         <div key={actionIndex} className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -78,6 +92,8 @@ export function SessionSnapshotGallery({ sessionId }: SessionSnapshotGalleryProp
                 <AuthenticatedSnapshotImage
                   imageUrl={snapshot.imageUrl}
                   alt={`${snapshot.feed} snapshot`}
+                  className="mx-auto max-h-72 w-auto max-w-full cursor-zoom-in object-contain"
+                  onDoubleClick={() => setExpandedSnapshot(snapshot)}
                 />
                 <figcaption className="px-2 py-1 text-xs capitalize text-slate-400">
                   {snapshot.feed}
@@ -87,6 +103,7 @@ export function SessionSnapshotGallery({ sessionId }: SessionSnapshotGalleryProp
           </div>
         </div>
       ))}
-    </div>
+      </div>
+    </>
   );
 }

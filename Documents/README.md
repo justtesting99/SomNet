@@ -11,12 +11,12 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Frontend Architecture](./03-Frontend-Architecture.md) | Developers | React provider tree, UI modes, dialogs, and client-side state |
 | [Database Schema](./04-Database-Schema.md) | Developers | Entities, relationships, migrations, and seed data |
 | [Authentication & Security](./05-Authentication-And-Security.md) | Developers | Operator JWT, device tokens, and authorization model |
-| [SignalR & Hardware](./06-SignalR-And-Hardware.md) | Developers | Hub protocol, pairing, command dispatch, firmware/UI status (synced 2026-09-10) |
+| [SignalR & Hardware](./06-SignalR-And-Hardware.md) | Developers | Hub protocol, pairing, command dispatch, button events, firmware/UI status (synced 2026-09-13) |
 | [Session & History](./07-Session-And-History.md) | Developers | Live session lifecycle, summaries, and timeline aggregation |
 | [Development Guide](./08-Development-Guide.md) | Developers | Local setup, ports, build pipeline, and common tasks |
 | [User Guide](./User-Guide.md) | Operators | How to use the web application day to day |
 | [Hardware User Guide](./Hardware-User-Guide.md) | Installers / owners | ESP32 setup, Wi‑Fi provisioning, pairing, relay status (updated 2026-09-10) |
-| [ESP32 Device Plan](./09-ESP32-Device-Plan.md) | Developers | **Source of truth** — firmware plan (Phases 0–12 signed off; firmware **`0.13.0-network`**) |
+| [ESP32 Device Plan](./09-ESP32-Device-Plan.md) | Developers | **Source of truth** — firmware plan (Phases 0–12 + button clicks signed off; firmware **`0.14.0-button-clicks`**) |
 | [ESP32 Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | Developers | Protocol capture — **Complete** (2026-09-05) |
 | [ESP32 Phase 1 Checklist](./09-ESP32-Phase-1-Checklist.md) | Developers | PlatformIO scaffold — **Complete** (2026-09-05) |
 | [ESP32 Phase 2 Checklist](./09-ESP32-Phase-2-Checklist.md) | Developers | NVS + MAC device identity — **Complete** (2026-09-05) |
@@ -49,5 +49,6 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Video Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) | Developers | **Cloudflare Tunnel** to dev PC API — **signed off** (2026-09-13; iPhone/LTE follow-up optional) |
 | [Video Phase 7 — Pi production](./20-Video-Phase-7-Pi-Production-Checklist.md) | Developers | Pi edge (go2rtc + tunnel + token gate); split-origin `tunnelBaseUrl`; API on PC → Azure in Phase 8 — **next** |
 | [Video Phase 7b — Edge intercom (draft)](./22-Video-Phase-7b-Edge-Intercom-Draft.md) | Developers | Optional Pi headset audio — **draft**; phone primary; after Phase 7 video |
+| [Video Snapshot encryption (dev)](./24-Video-Snapshot-Encryption-Checklist.md) | Developers | AES-256-GCM on disk before Pi — **signed off** (2026-09-13) |
 | [Video Phase 8 — Azure cutover](./21-Video-Phase-8-Azure-Cutover-Checklist.md) | Developers | App Service + SQL + Blob — blocked |
 | [ESP32 Network Spec](./09-ESP32-Network-Spec.md) | Developers | **Wi‑Fi / HTTP / hub architecture** — signed off **`0.12.0-network`** (2026-09-09); S3–S6 verified |

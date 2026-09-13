@@ -14,12 +14,12 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 **End-user / installer documentation:** [Hardware User Guide](./Hardware-User-Guide.md) — provisioning, Wi‑Fi recovery (10 s button hold), Device ID, relay operation.
 
-**Implementation progress (2026-09-10):** Phases **0–12 signed off**. Current firmware **`0.13.0-network`** — manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On**; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; network hardening (Phase 12); **`resultJson`** end-to-end. SomNet UI: session rehydration [10](./10-UI-Session-Rehydration-Checklist.md) / [11](./11-UI-Manual-Session-Rehydration-Checklist.md) + multi-tab sync [12](./12-UI-Multi-Tab-Sync-Checklist.md) — all signed off. See §10.
+**Implementation progress (2026-09-13):** Phases **0–12 + device button clicks signed off**. Current firmware **`0.14.0-button-clicks`** — manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On**; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; network hardening (Phase 12); GPIO **single/double click** + 10 s hold reset ([23](./23-Device-Button-Clicks-Checklist.md)); **`resultJson`** end-to-end. SomNet UI: session rehydration [10](./10-UI-Session-Rehydration-Checklist.md) / [11](./11-UI-Manual-Session-Rehydration-Checklist.md) + multi-tab sync [12](./12-UI-Multi-Tab-Sync-Checklist.md) — all signed off. See §10.
 
-**Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 12 (network hardening) signed off (2026-09-10).** SomNet API/UI integration complete for manual and automatic commands (Phases 8–12 UI follow-up).
+**Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 12 + button clicks signed off (2026-09-13).** SomNet API/UI integration complete for manual and automatic commands.
 
-**Related docs:** [Hardware User Guide](./Hardware-User-Guide.md), [SignalR & Hardware](./06-SignalR-And-Hardware.md), [Authentication & Security](./05-Authentication-And-Security.md), [API Reference](./02-API-Reference.md), [SomNet.Device/README](../SomNet.Device/README.md), [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md)  
-**Phase checklists (0–11):** [0](./09-ESP32-Phase-0-Checklist.md) · [1](./09-ESP32-Phase-1-Checklist.md) · [2](./09-ESP32-Phase-2-Checklist.md) · [3](./09-ESP32-Phase-3-Checklist.md) · [4](./09-ESP32-Phase-4-Checklist.md) · [5](./09-ESP32-Phase-5-Checklist.md) · [6](./09-ESP32-Phase-6-Checklist.md) · [7](./09-ESP32-Phase-7-Checklist.md) · [8](./09-ESP32-Phase-8-Checklist.md) · [9](./09-ESP32-Phase-9-Checklist.md) · [10](./09-ESP32-Phase-10-Checklist.md) · [11](./09-ESP32-Phase-11-Checklist.md)
+**Related docs:** [Hardware User Guide](./Hardware-User-Guide.md), [SignalR & Hardware](./06-SignalR-And-Hardware.md), [Device button clicks](./23-Device-Button-Clicks-Checklist.md), [Authentication & Security](./05-Authentication-And-Security.md), [API Reference](./02-API-Reference.md), [SomNet.Device/README](../SomNet.Device/README.md), [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md)  
+**Phase checklists (0–12 + button clicks):** [0](./09-ESP32-Phase-0-Checklist.md) · [1](./09-ESP32-Phase-1-Checklist.md) · [2](./09-ESP32-Phase-2-Checklist.md) · [3](./09-ESP32-Phase-3-Checklist.md) · [4](./09-ESP32-Phase-4-Checklist.md) · [5](./09-ESP32-Phase-5-Checklist.md) · [6](./09-ESP32-Phase-6-Checklist.md) · [7](./09-ESP32-Phase-7-Checklist.md) · [8](./09-ESP32-Phase-8-Checklist.md) · [9](./09-ESP32-Phase-9-Checklist.md) · [10](./09-ESP32-Phase-10-Checklist.md) · [11](./09-ESP32-Phase-11-Checklist.md) · [12](./09-ESP32-Phase-12-Network-Hardening-Checklist.md) · [Button clicks](./23-Device-Button-Clicks-Checklist.md)
 
 ---
 
@@ -1858,9 +1858,9 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 - [x] On-device config web UI requirements and SignalR coexistence documented
 - [x] Implementation phases with exit criteria listed
 
-**Implementation through Phase 11 (2026-09-10):**
+**Implementation through Phase 12 + button clicks (2026-09-13):**
 
-- [x] Phases 0–11 signed off — firmware **`0.12.2-phase11`**
+- [x] Phases 0–12 + button clicks signed off — current firmware **`0.14.0-button-clicks`**
 - [x] PlatformIO project `SomNet.Device/` with module tree per §12
 - [x] Pairing + manual **stroke**, **burst**, **abort** E2E from SomNet UI on hardware (`esp32-84CCA85C36B4` / Sub `Slv66`)
 - [x] Automatic **Start/Stop/Abort** E2E from SomNet UI; **Bursts On** during automatic; live **`automatic-update`**; auto-end / abort / cooperative stop via hub; session from device `resultJson`
@@ -1873,5 +1873,7 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 - [x] Phase 9 Part 2 automatic mode — **signed off** 2026-09-07
 - [x] Phase 10 burst-in-automatic — **signed off** 2026-09-07 (`0.10.0-phase10`)
 - [x] Phase 11 live automatic settings — **signed off** 2026-09-10 (`0.12.2-phase11`)
+- [x] Phase 12 network hardening — **signed off** 2026-09-10 (`0.13.0-network`)
+- [x] Device button single/double click — **signed off** 2026-09-13 (`0.14.0-button-clicks`) — [23](./23-Device-Button-Clicks-Checklist.md)
 - [x] Oscilloscope timing validation on D4 — initial complete 2026-09-06; no incoming `strokeMs` offset ([Phase 6 post sign-off](./09-ESP32-Phase-6-Checklist.md#post-sign-off--timing-calibration))
 - [ ] Explicit approval only if pursuing two-phase ack API change

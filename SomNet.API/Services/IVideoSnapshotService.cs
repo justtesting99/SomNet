@@ -15,7 +15,7 @@ public interface IVideoSnapshotService
         string domTarget,
         string sessionId);
 
-    Task<(SessionActionSnapshotDto Metadata, string AbsolutePath)?> GetImageAsync(
+    Task<(SessionActionSnapshotDto Metadata, byte[] JpegBytes)?> GetImageAsync(
         string domTarget,
         int snapshotId);
 }

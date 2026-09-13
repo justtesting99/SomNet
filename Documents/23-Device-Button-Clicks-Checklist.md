@@ -45,9 +45,9 @@ Air-tool user (D33)
   → signalr_client: ReportButtonEvent (paired hub only)
   → API HardwareHub: validate device JWT + dom/sub
   → SignalR → operator:{dom}  ButtonEventReceived
-  → UI SiteUserReadyListener:
-        · toast / banner “Air tool user ready”
-        · if same Sub + canStart → startPreview()  (Start feed)
+  → UI AutomaticSessionHubListener + SiteUserReadyProvider:
+        · SiteUserReadyBanner “Air tool user ready”
+        · useSiteUserReadyStartFeed → if same Sub + canStart → startPreview()  (Start feed)
 ```
 
 **Explicitly out of scope (v1):**
@@ -269,5 +269,5 @@ When `clickType === "double"` and filters pass:
 | Date | Change |
 |------|--------|
 | 2026-09-13 | Initial supplementary checklist — single (future), double (site ready + Start feed), timing, protocol, UI/API/firmware tasks |
-| 2026-09-13 | Implemented — firmware **`0.14.0-button-clicks`**, API hub, UI banner + auto Start feed; bench smoke BTN-T1–T10 pending |
+| 2026-09-13 | Implemented — firmware **`0.14.0-button-clicks`**, API hub, UI banner + auto Start feed |
 | 2026-09-13 | **Signed off** — BTN-T1–T10; hub readiness + enum JSON fixes documented in sign-off notes |

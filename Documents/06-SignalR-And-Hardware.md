@@ -2,11 +2,11 @@
 
 SomNet provides real-time communication between the API and ESP32 hardware devices through a SignalR hub.
 
-| Layer | Status (2026-09-10) |
+| Layer | Status (2026-09-13) |
 |-------|------------------------|
-| **API + hub** | Complete — pairing, dispatch, ack registry, per-command ack timeouts |
-| **ESP32 firmware** | **Phases 0–11 signed off** — stroke/burst/abort/automatic + **`automatic-update`**; firmware **`0.12.2-phase11`** |
-| **React UI** | **Complete** — Hardware dialog pairing; REST command dispatch; operator hub listener for automatic session end |
+| **API + hub** | Complete — pairing, dispatch, ack registry, per-command ack timeouts, **`ReportButtonEvent`** |
+| **ESP32 firmware** | **Phases 0–12 + button clicks signed off** — firmware **`0.14.0-button-clicks`** |
+| **React UI** | **Complete** — Hardware dialog pairing; REST command dispatch; operator hub for automatic session end + **device button events** |
 
 **Related docs:** [ESP32 Device Plan](./09-ESP32-Device-Plan.md) (source of truth) · [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md) (wire capture) · [Hardware User Guide](./Hardware-User-Guide.md) · [SomNet.Device/README](../SomNet.Device/README.md)
 
@@ -58,12 +58,14 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 | `PairDevice` | `PairDeviceMessageDto` | Unpaired or paired device group | Deliver JWT after pairing |
 | `ExecuteCommand` | `HardwareCommandMessageDto` | `paired:{dom}:{sub}` | Send stroke/burst/etc. to device |
 | `CommandAcknowledged` | `HardwareCommandAckDto` | `operator:{dom}` | Forward device ack to operator UI |
+| `ButtonEventReceived` | `DeviceButtonEventDto` | `operator:{dom}` | Device button single/double click ([23](./23-Device-Button-Clicks-Checklist.md)) |
 
 ### Client → Server
 
 | Method | Payload | Sender | Purpose |
 |--------|---------|--------|---------|
 | `AckCommand` | `HardwareCommandAckDto` | Paired device | Confirm command execution |
+| `ReportButtonEvent` | `DeviceButtonEventDto` | Paired device | Report GPIO button click (single/double) |
 
 **DTO note:** `HardwareCommandAckDto` includes `correlationId`, `success`, `message`, and optional **`resultJson`** (string containing JSON). REST `POST /api/devices/commands` forwards `resultJson` to the UI; `CommandAcknowledged` hub events include it for operator UI sync (`correlationId=automatic-session-complete` for auto-end, abort, and cooperative manual stop).
 
@@ -200,7 +202,7 @@ Example — device rejected missing `strokeMs`:
 
 ## Command Keys
 
-Aligned with UI constants (`types/hardwareCommand.ts`). **Firmware status** as of **`0.12.2-phase11`**:
+Aligned with UI constants (`types/hardwareCommand.ts`). **Firmware status** as of **`0.14.0-button-clicks`**:
 
 | Key | Trigger | Typical Payload | Firmware |
 |-----|---------|-----------------|----------|

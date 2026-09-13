@@ -71,7 +71,13 @@ builder.Services
 
 builder.Services
     .AddOptions<VideoSnapshotSettings>()
-    .Bind(builder.Configuration.GetSection(VideoSnapshotSettings.SectionName));
+    .Bind(builder.Configuration.GetSection(VideoSnapshotSettings.SectionName))
+    .Validate(
+        settings =>
+            !settings.EncryptAtRest ||
+            SnapshotFileProtection.TryParseKey(settings.EncryptionKeyBase64, out _),
+        "Video:Snapshots:EncryptionKeyBase64 must decode to 32 bytes when EncryptAtRest is true.")
+    .ValidateOnStart();
 
 builder.Services.AddVideoSnapshotServices();
 

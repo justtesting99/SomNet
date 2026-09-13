@@ -154,7 +154,7 @@ public class VideoController : ControllerBase
             return NotFound();
         }
 
-        return PhysicalFile(result.Value.AbsolutePath, "image/jpeg");
+        return File(result.Value.JpegBytes, "image/jpeg");
     }
 
     private ActionResult? TryGetActiveSessionForSub(

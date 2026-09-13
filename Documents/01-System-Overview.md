@@ -93,7 +93,7 @@ Settings load when a Sub is selected and save automatically (debounced) when cha
 
 ESP32 devices connect to the SignalR hub at `/hubs/hardware`. Pairing binds a physical device to a specific Dom+Sub pair via a long-lived device JWT. Commands are dispatched through the hub and acknowledged by the device.
 
-> **Note:** The backend hardware pipeline and React UI command dispatch are complete (Phases 8–12). Manual and automatic commands call **`POST /api/devices/commands`**; **`AutomaticSessionHubListener`** subscribes to operator hub events for automatic session completion. Browser refresh rehydration ([10](./10-UI-Session-Rehydration-Checklist.md) · [11](./11-UI-Manual-Session-Rehydration-Checklist.md)) and multi-tab sync ([12](./12-UI-Multi-Tab-Sync-Checklist.md)) are signed off (2026-09-11).
+> **Note:** The backend hardware pipeline and React UI command dispatch are complete (Phases 8–12 + device button clicks). Manual and automatic commands call **`POST /api/devices/commands`**; **`AutomaticSessionHubListener`** subscribes to operator hub events for automatic session completion and **device button clicks** ([23](./23-Device-Button-Clicks-Checklist.md)). Browser refresh rehydration ([10](./10-UI-Session-Rehydration-Checklist.md) · [11](./11-UI-Manual-Session-Rehydration-Checklist.md)) and multi-tab sync ([12](./12-UI-Multi-Tab-Sync-Checklist.md)) are signed off (2026-09-11). **Video (Phases 2–6 + snapshot encryption):** dev PC bench with go2rtc, session tokens, Cloudflare Quick Tunnel, AES-256-GCM action stills ([13](./13-Video-And-Camera-Architecture.md) · [24](./24-Video-Snapshot-Encryption-Checklist.md)).
 
 ## Request Flow Examples
 
@@ -168,5 +168,7 @@ For deeper coverage:
 - ESP32 protocol → [SignalR & Hardware](./06-SignalR-And-Hardware.md)
 - Session summaries → [Session & History](./07-Session-And-History.md)
 - Local dev → [Development Guide](./08-Development-Guide.md)
-- Video / cameras → [Video & Camera Architecture](./13-Video-And-Camera-Architecture.md)
+- Video / cameras → [Video & Camera Architecture](./13-Video-And-Camera-Architecture.md) · [Implementation plan](./14-Video-Implementation-Plan.md)
+- Device button clicks → [23 — Device button clicks](./23-Device-Button-Clicks-Checklist.md)
+- Snapshot encryption (dev) → [24 — Snapshot encryption](./24-Video-Snapshot-Encryption-Checklist.md)
 - Operator usage → [User Guide](./User-Guide.md)

@@ -10,7 +10,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 | Video at tool site | [Video & Camera Architecture](./13-Video-And-Camera-Architecture.md) — Pi + cameras (separate from ESP32) |
 
-**Firmware status (2026-09-10):** Phases **0–11** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app, including **Bursts On** during automatic sessions and live **`automatic-update`** mid-session replan. Firmware **`0.12.2-phase11`**. See [Phase 11 checklist](./09-ESP32-Phase-11-Checklist.md).
+**Firmware status (2026-09-13):** Phases **0–12 + device button clicks** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app, including **Bursts On**, live **`automatic-update`**, network hardening, and GPIO **single/double click** on D33. Current firmware **`0.14.0-button-clicks`**. See [Device button clicks](./23-Device-Button-Clicks-Checklist.md) · [Phase 12 checklist](./09-ESP32-Phase-12-Network-Hardening-Checklist.md).
 
 ---
 
