@@ -79,6 +79,12 @@ public sealed class VideoStreamTokenService : IVideoStreamTokenService
             return false;
         }
 
+        token = token.Trim();
+        if (!LooksLikeJwt(token))
+        {
+            return false;
+        }
+
         try
         {
             _tokenHandler.ValidateToken(
@@ -122,10 +128,16 @@ public sealed class VideoStreamTokenService : IVideoStreamTokenService
 
             return true;
         }
-        catch (SecurityTokenException)
+        catch (Exception ex) when (ex is SecurityTokenException or ArgumentException or FormatException)
         {
             return false;
         }
+    }
+
+    private static bool LooksLikeJwt(string token)
+    {
+        var segments = token.Split('.');
+        return segments.Length is 3 or 5;
     }
 
     private VideoStreamFeedTokenDto MintFeedToken(

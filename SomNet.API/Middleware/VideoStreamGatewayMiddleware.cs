@@ -56,7 +56,7 @@ public sealed class VideoStreamGatewayMiddleware
     {
         validation = null;
 
-        var token = context.Request.Query["token"].ToString();
+        var token = context.Request.Query["token"].ToString().Trim();
         if (!string.IsNullOrWhiteSpace(token) &&
             tokenService.TryValidateToken(token, out validation) &&
             FeedMatchesRequest(context, validation!.Feed))

@@ -76,16 +76,60 @@ Listens on **http://localhost:5190**. SomNet API notifies the agent on session s
 
 See [Phase 5 checklist](../Documents/18-Video-Phase-5-Edge-Agent-Checklist.md).
 
+## Phase 6 — Cloudflare Tunnel (remote operator)
+
+Expose the dev PC SomNet stack over HTTPS for remote operators. Tunnel **SomNet API only** (`5031`) — UI, SignalR, and `/go2rtc` token gateway. Do **not** expose go2rtc `:1984` or edge agent `:5190`.
+
+See [Phase 6 checklist](../Documents/19-Video-Phase-6-Tunnel-Checklist.md).
+
+### One-time install
+
+```powershell
+# From repo root — installs to D:\SomNet.Edge\bin (or SOMNET_EDGE_HOME)
+.\SomNet.Edge\scripts\install-cloudflared-windows.ps1
+```
+
+Or install `cloudflared` globally and ensure it is on `PATH`.
+
+### Dev startup (four terminals)
+
+```powershell
+# Terminal 1 — go2rtc
+.\SomNet.Edge\scripts\start-go2rtc-windows.ps1
+
+# Terminal 2 — edge agent
+.\SomNet.Edge\scripts\start-edge-agent.ps1
+
+# Terminal 3 — API (serves UI dist)
+dotnet run --project SomNet.API
+
+# Terminal 4 — Cloudflare Quick Tunnel
+.\SomNet.Edge\scripts\start-cloudflare-tunnel.ps1
+```
+
+Copy the **`https://….trycloudflare.com`** URL printed by the tunnel script. Remote operators use that URL — not `localhost`. The URL **changes each run** (Quick Tunnel); custom domain + named tunnel → [Phase 7](../Documents/20-Video-Phase-7-Pi-Production-Checklist.md) / [Phase 8](../Documents/21-Video-Phase-8-Azure-Cutover-Checklist.md).
+
+| Setting | Phase 6 value |
+|---------|----------------|
+| Pairing `video.tunnelBaseUrl` | **Empty** — same-origin `/go2rtc` through tunneled API |
+| ESP32 `server_url` | **LAN API** (e.g. `http://192.168.x.x:5031`) — not the tunnel URL |
+| Viewer mode | **`mse`** (`VITE_VIDEO_VIEWER_MODE=mse`) |
+
+**Named tunnel template (later):** copy [`config/cloudflared.example.yml`](config/cloudflared.example.yml) to `D:\SomNet.Edge\cloudflared.yml` and add dashboard credentials locally.
+
 ## Folder layout
 
 ```
 SomNet.Edge/
   README.md
   config/
-    go2rtc.yaml.example   # Template — copy locally
-  embed/                  # Custom iframe pages (Phase 2+)
+    go2rtc.yaml.example       # Template — copy locally
+    cloudflared.example.yml   # Named tunnel template (Phase 7/8)
+  embed/                      # Custom iframe pages (Phase 2+)
   scripts/
-    start-edge-agent.ps1  # Phase 5 edge agent
+    install-cloudflared-windows.ps1
+    start-cloudflare-tunnel.ps1  # Phase 6 Quick Tunnel
+    start-edge-agent.ps1         # Phase 5 edge agent
 
 SomNet.Edge.Agent/        # Phase 5 — session lifecycle service
 ```

@@ -1,0 +1,20 @@
+# Named Cloudflare Tunnel config — Phase 7/8 (custom hostname).
+# Copy to D:\SomNet.Edge\cloudflared.yml and fill in tunnel id + credentials path.
+# Live credentials (*.json) stay in D:\SomNet.Edge\ — never commit.
+#
+# Create tunnel: cloudflared tunnel create somnet-dev
+# Route DNS:     cloudflared tunnel route dns somnet-dev somnet-dev.example.com
+# Run:           cloudflared tunnel --config D:\SomNet.Edge\cloudflared.yml run somnet-dev
+#
+# Phase 6 dev uses Quick Tunnel instead:
+#   .\SomNet.Edge\scripts\start-cloudflare-tunnel.ps1
+
+tunnel: <TUNNEL_ID>
+credentials-file: D:\SomNet.Edge\<TUNNEL_ID>.json
+
+ingress:
+  # SomNet API only — UI, REST, SignalR, and /go2rtc token gateway (Phase 5).
+  # Do not route go2rtc :1984 or edge agent :5190 to the internet.
+  - hostname: somnet-dev.example.com
+    service: http://localhost:5031
+  - service: http_status:404

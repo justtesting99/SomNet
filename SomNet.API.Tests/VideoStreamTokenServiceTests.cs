@@ -110,4 +110,15 @@ public class VideoStreamTokenServiceTests
 
         Assert.Equal("/go2rtc/stream.html?src=front&token=abc.def", url);
     }
+
+    [Fact]
+    public void TryValidateToken_returns_false_for_malformed_token_without_throwing()
+    {
+        var service = CreateService();
+
+        Assert.False(service.TryValidateToken("…", out _));
+        Assert.False(service.TryValidateToken("not-a-jwt", out _));
+        Assert.False(service.TryValidateToken("only.two", out _));
+        Assert.False(service.TryValidateToken(string.Empty, out _));
+    }
 }

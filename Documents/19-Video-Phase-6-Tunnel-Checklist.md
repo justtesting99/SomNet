@@ -159,9 +159,10 @@ Cloudflare edge ── cloudflared ──► localhost:5031  SomNet API + UI + /
 
 ### Scripts & config (repo)
 
-- [ ] `SomNet.Edge/scripts/start-cloudflare-tunnel.ps1` — wraps `cloudflared tunnel --url http://localhost:5031`
-- [ ] `SomNet.Edge/config/cloudflared.example.yml` — template for **future** named tunnel (Phase 7/8); gitignored live creds in `D:\SomNet.Edge\`
-- [ ] Update [`SomNet.Edge/README.md`](../SomNet.Edge/README.md) — Phase 6 quick start
+- [x] `SomNet.Edge/scripts/start-cloudflare-tunnel.ps1` — wraps `cloudflared tunnel --url http://localhost:5031`
+- [x] `SomNet.Edge/scripts/install-cloudflared-windows.ps1` — download to `D:\SomNet.Edge\bin\`
+- [x] `SomNet.Edge/config/cloudflared.example.yml` — template for **future** named tunnel (Phase 7/8); gitignored live creds in `D:\SomNet.Edge\`
+- [x] Update [`SomNet.Edge/README.md`](../SomNet.Edge/README.md) — Phase 6 quick start
 
 ### Firewall / exposure
 
