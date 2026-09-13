@@ -84,7 +84,7 @@ public sealed class VideoStreamGatewayMiddleware
             return true;
         }
 
-        return string.Equals(requestedFeed.Trim(), feed.Trim(), StringComparison.OrdinalIgnoreCase);
+        return VideoStreamFeedNames.FeedMatchesRequest(feed, requestedFeed);
     }
 
     private void IssueAccessCookie(HttpContext context, VideoStreamTokenValidationResult validation)

@@ -1,9 +1,11 @@
 import {
   ACTION_SNAPSHOT_FEED_OPTIONS,
   MOBILE_VIDEO_EXPAND_OPTIONS,
+  VIDEO_FEED_BANDWIDTH_OPTIONS,
   type ActionSnapshotFeeds,
   type AppOptions,
   type MobileVideoExpandDefault,
+  type VideoFeedBandwidth,
 } from '@/types/options';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Input } from '@/components/ui/Input';
@@ -47,6 +49,18 @@ export function OptionsGeneralPanel({ pendingOptions, onUpdate }: OptionsGeneral
         <p className="text-xs leading-relaxed text-slate-500">
           Only selected cameras load during a session (saves bandwidth and edge CPU on poor mobile
           or tunnel links). Change to a single feed when one stream is enough.
+        </p>
+        <SelectField
+          label="Video feed bandwidth"
+          value={pendingOptions.videoFeedBandwidth}
+          options={VIDEO_FEED_BANDWIDTH_OPTIONS}
+          onChange={(event) =>
+            onUpdate('videoFeedBandwidth', event.target.value as VideoFeedBandwidth)
+          }
+        />
+        <p className="text-xs leading-relaxed text-slate-500">
+          Medium and low use ffmpeg transcoded go2rtc streams (see SomNet.Edge go2rtc.yaml). Helpful
+          on LTE or Cloudflare tunnel links. Snapshots stay full quality.
         </p>
         <Checkbox
           label="Auto-expand video feeds on mobile when commands run"

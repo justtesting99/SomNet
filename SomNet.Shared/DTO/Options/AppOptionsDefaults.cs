@@ -17,5 +17,6 @@ public static class AppOptionsDefaults
         ReconnectIntervalSeconds = 10,
         VideoFeedTimeoutSeconds = 30,
         ActionSnapshotFeeds = ActionSnapshotFeeds.Both,
+        VideoFeedBandwidth = VideoFeedBandwidth.High,
     };
 }

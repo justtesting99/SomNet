@@ -24,10 +24,23 @@ streams:
   # - 'exec:ffmpeg -hide_banner -f dshow -i "video=HD User Facing" -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 25 -an -f mpegts -'
 
   # --- Layout A-dev (bench): two USB webcams — V1-D10 ---
-  # Run list-camera-devices.ps1; replace device names below.
-  # Use exec libx264 on both (same fix as front MP4V-ES / WebRTC issues).
+  # Run list-camera-devices.ps1; use video=0 (front) and video=1 (rear).
+  rear:
+    - ffmpeg:device?video=1#video=h264
+  # Or exec libx264 if WebRTC shows MP4V-ES codec errors:
   # rear:
   #   - 'exec:ffmpeg -hide_banner -f dshow -i "video=SECOND CAM NAME" -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 25 -an -f mpegts -'
+
+  # --- Options → Video feed bandwidth (Phase 6 follow-up) ---
+  # Medium/low re-transcode from front/rear. Requires ffmpeg on PATH.
+  front_medium:
+    - ffmpeg:front#video=h264#width=1280#bitrate=1500k
+  rear_medium:
+    - ffmpeg:rear#video=h264#width=1280#bitrate=1500k
+  front_low:
+    - ffmpeg:front#video=h264#width=640#bitrate=500k
+  rear_low:
+    - ffmpeg:rear#video=h264#width=640#bitrate=500k
 
   # --- Phase 1b: IP rear (Layout A production) — Galayou G7 / G2 ---
   # Enable RTSP in Wansview Cloud → Settings → Local application (see Documents/14-Video-Phase-1b-Galayou-G2-Setup.md)

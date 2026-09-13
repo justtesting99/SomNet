@@ -22,12 +22,15 @@ export function VideoFeed({
   const [iframeSrc, setIframeSrc] = useState<string | undefined>(
     loadDelayMs > 0 ? undefined : src,
   );
+  const [iframeInteractive, setIframeInteractive] = useState(false);
 
   useEffect(() => {
     if (!src) {
       setIframeSrc(undefined);
+      setIframeInteractive(false);
       return;
     }
+    setIframeInteractive(false);
     if (loadDelayMs <= 0) {
       setIframeSrc((current) => (current === src ? current : src));
       return;
@@ -37,6 +40,13 @@ export function VideoFeed({
     }, loadDelayMs);
     return () => window.clearTimeout(timer);
   }, [src, loadDelayMs]);
+
+  const showPlayOverlay =
+    Boolean(src && iframeSrc && isExpandable && !iframeInteractive);
+
+  const enableIframeInteraction = () => {
+    setIframeInteractive(true);
+  };
 
   return (
     <div
@@ -65,15 +75,39 @@ export function VideoFeed({
     >
       {src ? (
         iframeSrc ? (
-          <iframe
-            src={iframeSrc}
-            title={label}
-            className={[
-              'absolute inset-0 h-full w-full border-0',
-              isExpandable ? 'pointer-events-none' : '',
-            ].join(' ')}
-            allow="autoplay; encrypted-media; picture-in-picture"
-          />
+          <>
+            <iframe
+              src={iframeSrc}
+              title={label}
+              className={[
+                'absolute inset-0 h-full w-full border-0',
+                isExpandable && !iframeInteractive ? 'pointer-events-none' : '',
+              ].join(' ')}
+              allow="autoplay; encrypted-media; picture-in-picture"
+            />
+            {showPlayOverlay ? (
+              <button
+                type="button"
+                className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/55 px-4 text-center text-white transition hover:bg-black/65"
+                aria-label={`Tap to play ${label} video`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  enableIframeInteraction();
+                }}
+                onTouchEnd={(event) => {
+                  event.stopPropagation();
+                  enableIframeInteraction();
+                }}
+              >
+                <span className="rounded-full border border-white/40 bg-black/40 px-4 py-2 text-sm font-medium">
+                  Tap to play
+                </span>
+                <span className="text-xs text-slate-300">
+                  Double-tap the feed to expand full screen
+                </span>
+              </button>
+            ) : null}
+          </>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-slate-500">
             Loading feed…

@@ -142,6 +142,9 @@ public static class PairingSettingsSerializer
             ActionSnapshotFeeds = Enum.IsDefined(source.ActionSnapshotFeeds)
                 ? source.ActionSnapshotFeeds
                 : ActionSnapshotFeeds.Both,
+            VideoFeedBandwidth = Enum.IsDefined(source.VideoFeedBandwidth)
+                ? source.VideoFeedBandwidth
+                : VideoFeedBandwidth.High,
         };
     }
 

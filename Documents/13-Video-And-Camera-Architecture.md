@@ -662,7 +662,7 @@ Architecture and hardware choices live in this document. **Phased implementation
 
 | Doc | Phase | Status |
 |-----|-------|--------|
-| [14-Video-Implementation-Plan.md](./14-Video-Implementation-Plan.md) | Roadmap | **Phase 6 in progress** |
+| [14-Video-Implementation-Plan.md](./14-Video-Implementation-Plan.md) | Roadmap | **Phase 6 signed off** (2026-09-13); Phase 7 next |
 | [14-Video-Phase-1-Edge-Bench-Checklist.md](./14-Video-Phase-1-Edge-Bench-Checklist.md) | 1 — go2rtc on PC | **Partial sign-off** (Layout A-dev) |
 | [15-Video-Phase-2-UI-Embed-Checklist.md](./15-Video-Phase-2-UI-Embed-Checklist.md) | 2 — dashboard iframes | **Complete** |
 | [16-Video-Phase-3-Session-Tokens-Checklist.md](./16-Video-Phase-3-Session-Tokens-Checklist.md) | 3 — API tokens | **Signed off** (T4 deferred) |

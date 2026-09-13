@@ -4,6 +4,8 @@ export type MobileVideoExpandDefault = Exclude<VideoExpandMode, 'none'>;
 
 export type ActionSnapshotFeeds = 'both' | 'rear';
 
+export type VideoFeedBandwidth = 'high' | 'medium' | 'low';
+
 export interface AppOptions {
   enableSoundAlerts: boolean;
   confirmBeforeCommands: boolean;
@@ -16,6 +18,7 @@ export interface AppOptions {
   reconnectIntervalSeconds: number;
   videoFeedTimeoutSeconds: number;
   actionSnapshotFeeds: ActionSnapshotFeeds;
+  videoFeedBandwidth: VideoFeedBandwidth;
 }
 
 export const MOBILE_VIDEO_EXPAND_OPTIONS: {
@@ -35,6 +38,8 @@ export const ACTION_SNAPSHOT_FEED_OPTIONS: {
   { value: 'rear', label: 'Rear only' },
 ];
 
+export { VIDEO_FEED_BANDWIDTH_OPTIONS } from '@/utils/videoFeedBandwidth';
+
 export const DEFAULT_NOTIFICATIONS_APP_OPTIONS: Pick<
   AppOptions,
   'enableSoundAlerts' | 'showSessionTimestamps'
@@ -52,6 +57,7 @@ export const DEFAULT_GENERAL_APP_OPTIONS: Pick<
   | 'reconnectIntervalSeconds'
   | 'videoFeedTimeoutSeconds'
   | 'actionSnapshotFeeds'
+  | 'videoFeedBandwidth'
   | 'operatorDisplayName'
   | 'defaultNotesPrefix'
 > = {
@@ -62,6 +68,7 @@ export const DEFAULT_GENERAL_APP_OPTIONS: Pick<
   reconnectIntervalSeconds: 10,
   videoFeedTimeoutSeconds: 30,
   actionSnapshotFeeds: 'both',
+  videoFeedBandwidth: 'high',
   operatorDisplayName: '',
   defaultNotesPrefix: 'Session',
 };

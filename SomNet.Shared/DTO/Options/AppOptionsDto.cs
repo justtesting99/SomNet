@@ -31,4 +31,9 @@ public sealed class AppOptionsDto
     /// Which camera stills to capture after each manual stroke/burst ack.
     /// </summary>
     public ActionSnapshotFeeds ActionSnapshotFeeds { get; init; } = ActionSnapshotFeeds.Both;
+
+    /// <summary>
+    /// Live viewer stream quality (maps to go2rtc stream names: front/rear, front_medium, etc.).
+    /// </summary>
+    public VideoFeedBandwidth VideoFeedBandwidth { get; init; } = VideoFeedBandwidth.High;
 }

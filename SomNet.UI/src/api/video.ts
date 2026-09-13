@@ -40,7 +40,7 @@ export async function fetchSessionVideoTokensSafe(
   try {
     return await fetchSessionVideoTokens(sessionId, subTarget);
   } catch (error) {
-    if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+    if (error instanceof ApiError) {
       return null;
     }
 

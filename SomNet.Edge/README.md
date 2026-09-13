@@ -113,6 +113,7 @@ Copy the **`https://….trycloudflare.com`** URL printed by the tunnel script. R
 |---------|----------------|
 | Pairing `video.tunnelBaseUrl` | **Empty** — same-origin `/go2rtc` through tunneled API |
 | Options **Live video feeds** | `both` / front / rear — gates which iframes load ([V6-D17](../Documents/19-Video-Phase-6-Tunnel-Checklist.md)) |
+| Options **Video feed bandwidth** | `high` / `medium` / `low` — requires `front_medium`, `rear_low`, etc. in `go2rtc.yaml` ([V6-D18](../Documents/19-Video-Phase-6-Tunnel-Checklist.md)) |
 | Options **Action snapshot cameras** | Stills only — does **not** gate live video |
 | ESP32 `server_url` | **LAN API** (e.g. `http://192.168.x.x:5031`) — not the tunnel URL |
 | Viewer mode | **`mse`** (`VITE_VIDEO_VIEWER_MODE=mse`) |

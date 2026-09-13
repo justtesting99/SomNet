@@ -9,6 +9,7 @@ import {
 import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
 import { clampVideoFeedTimeoutSeconds } from '@/utils/videoFeedTimeout';
 import { normalizeMobileVideoExpandDefault } from '@/utils/liveVideoFeedPreference';
+import { normalizeVideoFeedBandwidth } from '@/utils/videoFeedBandwidth';
 import { apiFetch } from '@/api/client';
 
 interface PairingSettingsResponse {
@@ -33,6 +34,7 @@ function normalizeAppOptions(appOptions: PairingSettingsResponse['appOptions']):
     mobileVideoExpandDefault: normalizeMobileVideoExpandDefault(
       appOptions.mobileVideoExpandDefault,
     ),
+    videoFeedBandwidth: normalizeVideoFeedBandwidth(appOptions.videoFeedBandwidth),
   };
 }
 

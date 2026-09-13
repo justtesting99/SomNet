@@ -19,7 +19,12 @@ export function VideoFeedStartPanel({ mode, preview }: VideoFeedStartPanelProps)
   );
 
   if (!preview.available) {
-    return null;
+    return (
+      <div className="rounded-xl border border-amber-900/50 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/90">
+        Live video is not configured — set <code className="text-amber-100">VITE_VIDEO_FRONT_URL</code>{' '}
+        and run <code className="text-amber-100">npm run build</code> in SomNet.UI.
+      </div>
+    );
   }
 
   const hint =

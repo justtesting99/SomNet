@@ -10,11 +10,14 @@ import {
 import { useOptions } from '@/context/OptionsProvider';
 import type { VideoExpandMode } from '@/types/videoDisplay';
 import { isMobileViewport } from '@/hooks/useIsMobileViewport';
+import { isSafariBrowser } from '@/utils/safariVideo';
 
 interface VideoDisplayContextValue {
   expandMode: VideoExpandMode;
   setExpandMode: (mode: VideoExpandMode) => void;
   expandOnAction: () => void;
+  /** Open fullscreen feeds after Start feed on mobile/Safari (MSE play gesture). */
+  expandForPlaybackStart: () => void;
   closeExpanded: () => void;
 }
 
@@ -34,6 +37,13 @@ export function VideoDisplayProvider({ children }: { children: ReactNode }) {
     }
     setExpandMode(options.mobileVideoExpandDefault);
   }, [options.autoExpandVideoOnMobile, options.mobileVideoExpandDefault]);
+
+  const expandForPlaybackStart = useCallback(() => {
+    if (!isMobileViewport() && !isSafariBrowser()) {
+      return;
+    }
+    setExpandMode(options.mobileVideoExpandDefault);
+  }, [options.mobileVideoExpandDefault]);
 
   useEffect(() => {
     const preference = options.mobileVideoExpandDefault;
@@ -76,9 +86,10 @@ export function VideoDisplayProvider({ children }: { children: ReactNode }) {
       expandMode,
       setExpandMode,
       expandOnAction,
+      expandForPlaybackStart,
       closeExpanded,
     }),
-    [expandMode, expandOnAction, closeExpanded],
+    [expandMode, expandOnAction, expandForPlaybackStart, closeExpanded],
   );
 
   return (

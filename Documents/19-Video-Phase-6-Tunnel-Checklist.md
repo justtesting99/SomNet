@@ -1,6 +1,6 @@
 # Video — Phase 6 Tunnel (remote operator, no Azure)
 
-**Status:** **In progress** — [Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md) signed off (2026-09-12); **PC tunnel smoke largely complete**; mobile **LTE** polish deferred
+**Status:** **Signed off** (2026-09-13) — **dev PC / Quick Tunnel** (V6-D16). **iPhone / 4G–5G** is a **secondary** requirement; further mobile polish **deferred** until real cellular testing (see [Sign-off notes](#sign-off-notes-2026-09-13)).
 
 > **Phase 5:** Signed off (Layout A-dev manual v1).
 
@@ -135,6 +135,7 @@ Cloudflare edge ── cloudflared ──► localhost:5031  SomNet API + UI + /
 | **V6-D15** | Proxy/cookie fixes | **Only if V6-T2/T5 fail** — e.g. `Secure` cookie, forwarded headers (no proactive API change) |
 | **V6-D16** | Sign-off scope | **Dev PC only** (Layout A-dev) — Pi tunnel repeated in [Phase 7](./20-Video-Phase-7-Pi-Production-Checklist.md) |
 | **V6-D17** | Mobile / poor-link live feeds | **Options → General → Live video feeds** — pairing field **`appOptions.mobileVideoExpandDefault`**: `"both"` \| `"monitor1"` (front) \| `"monitor2"` (rear). Gates which iframes mount; disabled camera does not connect to go2rtc. Preview button reads **Start feed** / **Start feeds** accordingly. **Separate** from **Action snapshot cameras** (stills only). UI changes require **`npm run build`** in `SomNet.UI` (API serves `dist/`). |
+| **V6-D18** | Video bandwidth + Safari playback | **Options → General → Video feed bandwidth** (`high` \| `medium` \| `low`) — UI rewrites `src=` to `front_medium` / `front_low` etc.; gateway maps tier back to token feed. **go2rtc.yaml** must define tier streams (see `SomNet.Edge/config/go2rtc.yaml.example`). **Tap to play** on **mobile** inline feeds only (PC iframe fully interactive). **Start feed** auto-opens fullscreen on mobile/Safari. |
 
 ---
 
@@ -155,7 +156,7 @@ Cloudflare edge ── cloudflared ──► localhost:5031  SomNet API + UI + /
 
 - [x] `cloudflared` on PATH (or `D:\SomNet.Edge\bin\`) — `install-cloudflared-windows.ps1`
 - [x] Run **`cloudflared tunnel --url http://localhost:5031`** — copy printed `*.trycloudflare.com` URL for smoke tests
-- [ ] Note: URL **changes each run** — acceptable for Phase 6 dev; named tunnel + custom DNS → Phase 7/8
+- [x] Note: URL **changes each run** — acceptable for Phase 6 dev; named tunnel + custom DNS → Phase 7/8
 - [ ] (Optional later) Dashboard named tunnel + credentials in `D:\SomNet.Edge\` per V6-D7 — not required for first smoke
 
 ### Scripts & config (repo)
@@ -173,17 +174,19 @@ Cloudflare edge ── cloudflared ──► localhost:5031  SomNet API + UI + /
 
 ### SomNet config (minimal code expected — V6-D9)
 
-- [ ] Pairing `video.tunnelBaseUrl` remains **empty** for same-origin v1
-- [ ] Confirm token mint produces `/go2rtc/…` URLs (works relative to tunneled origin)
-- [ ] SignalR hub connects over `wss://` through tunnel (no hardcoded `localhost` in UI)
-- [ ] **`VITE_VIDEO_VIEWER_MODE=mse`** unchanged (V6-D13) — retest with `webrtc` only if feeds fail
+- [x] Pairing `video.tunnelBaseUrl` remains **empty** for same-origin v1
+- [x] Confirm token mint produces `/go2rtc/…` URLs (works relative to tunneled origin)
+- [x] SignalR hub connects over `wss://` through tunnel (no hardcoded `localhost` in UI)
+- [x] **`VITE_VIDEO_VIEWER_MODE=mse`** unchanged (V6-D13) — retest with `webrtc` only if feeds fail
 - [x] **Live video feed gating (V6-D17)** — `mobileVideoExpandDefault` (`both` \| `monitor1` \| `monitor2`) controls which live iframes mount; disabled feed does not open a go2rtc stream
 - [x] **Malformed stream token** — `VideoStreamTokenService.TryValidateToken` returns false (gateway **403** message), not HTTP 500
+- [x] **Video feed bandwidth (V6-D18)** — `appOptions.videoFeedBandwidth`; tier `src=` + gateway feed normalize
+- [x] **Safari / mobile playback polish (V6-D18)** — tap-to-play (mobile inline); Start feed → fullscreen on mobile/Safari; PC no overlay
 
 ### ESP32 (V6-D14)
 
-- [ ] Device **`server_url`** stays **LAN API** (e.g. `http://192.168.x.x:5031`) — do **not** point ESP32 at Quick Tunnel URL
-- [ ] V6-T4: remote operator → tunnel → API → SignalR → ESP32 on LAN
+- [x] Device **`server_url`** stays **LAN API** (e.g. `http://192.168.x.x:5031`) — do **not** point ESP32 at Quick Tunnel URL
+- [x] V6-T4: remote operator → tunnel → API → SignalR → ESP32 on LAN — **PC verified**; phone on weak LTE deferred
 
 ### Fix only if smoke fails (V6-D15)
 
@@ -205,13 +208,45 @@ Run from a device **off LAN** (e.g. phone on cellular). All three local services
 | # | Steps | Pass criteria | Result |
 |---|-------|---------------|--------|
 | **V6-T1** | Open `https://<tunnel-host>/` | SomNet login page loads over HTTPS | ☑ PC + phone |
-| **V6-T2** | Login → Manual → first stroke → feeds | Front + rear play in dashboard | ☑ PC; ☑ phone partial (dual feed on LTE poor — use V6-D17) |
+| **V6-T2** | Login → Manual → first stroke → feeds | Front + rear play in dashboard | ☑ PC; ☑ phone Wi‑Fi (dual feed on poor LTE — use V6-D17 + Low bandwidth) |
 | **V6-T3** | Open `/go2rtc/stream.html?src=front` without token | **403** or body *Video stream access requires a valid session token* | ☑ |
-| **V6-T4** | Remote stroke (ESP32 on LAN) | Ack; snapshot on disk + history gallery | ☑ PC; ☐ phone on weak LTE (Safari timeout — retest on Wi‑Fi / better 4G) |
-| **V6-T5** | Switch mode or Sub change | Feeds clear; old token URL → **403** | ☑ PC; ☑ phone (feeds cleared) |
-| **V6-T6** | Phone: Options → **Live video feeds → Rear only** (or Front only) → stroke / Start feed | Only selected monitor; **Start feed** label; playable on Wi‑Fi; LTE acceptable with single feed (may need Safari **Play** tap) | ☑ Wi‑Fi |
+| **V6-T4** | Remote stroke (ESP32 on LAN) | Ack; snapshot on disk + history gallery | ☑ PC; ☐ phone weak LTE (deferred — not sign-off blocker) |
+| **V6-T5** | Switch mode or Sub change | Feeds clear; old token URL → **403** | ☑ PC; ☑ phone |
+| **V6-T6** | Phone: Options → **Live video feeds → Rear only** (or Front only) → stroke / Start feed | Only selected monitor; **Start feed** label; playable on Wi‑Fi | ☑ Wi‑Fi |
+| **V6-T7** | PC: Options → **Video feed bandwidth** High / Medium / Low → Start feed | Correct `src=` tier in Network tab; feeds play (go2rtc tier streams in yaml) | ☑ PC (2026-09-13) |
 
-**Exit:** V6-T1–T5 on **dev PC** (V6-D16); **V6-T6** recommended for mobile/tunnel — [Phase 7 — Pi production](./20-Video-Phase-7-Pi-Production-Checklist.md).
+**Exit (signed off 2026-09-13):** V6-T1–T5 + **V6-T7** on **dev PC** (V6-D16). **V6-T6** spot-checked on phone Wi‑Fi. **LTE / iPhone** follow-up optional — [Sign-off notes](#sign-off-notes-2026-09-13). Repeat tunnel on [Phase 7 — Pi production](./20-Video-Phase-7-Pi-Production-Checklist.md).
+
+---
+
+## Sign-off notes (2026-09-13)
+
+**Signed off by:** operator bench on **dev PC** (Layout A-dev, 2× USB webcam, Quick Tunnel to API **5031** / **7146** HTTPS profile).
+
+| Area | Result |
+|------|--------|
+| Quick Tunnel + login + MSE feeds | ☑ PC |
+| Token gateway (403 without token) | ☑ |
+| Live feed gating (V6-D17) | ☑ |
+| Bandwidth tiers High / Medium / Low (V6-D18) | ☑ PC — `src=` correct; visual difference subtle on large monitor; **validate bitrate on real 4G/5G later** |
+| Remote stroke → ESP32 on LAN | ☑ PC |
+| go2rtc via API proxy | ☑ (502 if go2rtc not running — operator must start edge stack) |
+
+### iPhone / mobile — deferred (secondary requirement)
+
+Mobile operator UX is **not** on the critical path for Phase 6 sign-off. Spot checks on **iPhone SE** over **Wi‑Fi** were acceptable (Start feed, inline tap-to-play where shown, video often autoplays in fullscreen). **Not** fully validated:
+
+- **Real 4G/5G** (not hotspot/Wi‑Fi) with bandwidth tiers
+- **Weak LTE** dual-feed vs single-feed + Low (V6-T4 phone, V6-T2 LTE)
+- Older **Safari / small screen** edge cases (iPhone SE is a harsh test device)
+
+**Future tweaks (when cellular testing is available):** bandwidth preset defaults for mobile, optional auto **Low** on poor links, Safari MSE/autoplay polish, LTE smoke re-run for V6-T2/T4/T6. Track as follow-up — not blocking Phase 7 Pi bench.
+
+### Carry-forward to Phase 7
+
+- Named tunnel + custom domain (V6-D7/D8)
+- Firewall / exposure verification checklist items (router — unchanged from LAN bench)
+- Pi repeat of tunnel smoke (V6-T1–T7)
 
 ---
 
@@ -241,7 +276,8 @@ Remote operator opens the **`https://….trycloudflare.com`** URL printed by `st
 |---------|----------------|
 | Login works; feeds black | WebSocket blocked — check Cloudflare route / `cloudflared` logs |
 | One feed OK, other stuck Loading | Dual MSE on phone — set **Live video feeds** to single camera (V6-D17) |
-| Safari **Play** required on video | iOS autoplay policy for MSE in iframe — operator tap expected on mobile |
+| Safari **Play** required on video | Tap **Tap to play** on inline feed, or use **Start feed** (auto-fullscreen on mobile/Safari) then go2rtc **Play** if needed |
+| Medium/low bandwidth black feed | Add `front_medium`, `rear_medium`, `front_low`, `rear_low` to **go2rtc.yaml** (ffmpeg on PATH) |
 | **Start feeds** on single-feed option | Stale UI `dist/` — run **`npm run build`** in `SomNet.UI`; hard-refresh phone |
 | Safari “Server stopped responding” | Weak **LTE** + dual streams — use Wi‑Fi, single feed, or defer mobile test |
 | iPhone SE horizontal scroll / hidden **Switch mode** | Fixed — mobile header: full-width Switch mode + wrapping nav buttons ([`AppShell.tsx`](../SomNet.UI/src/components/layout/AppShell.tsx)) |
@@ -263,3 +299,5 @@ Remote operator opens the **`https://….trycloudflare.com`** URL printed by `st
 | 2026-09-12 | Locked V6-D12–D16 — Q6a quick tunnel cmd; Q7a mse; Q8a ESP32 LAN; Q9a fix-if-fail; Q10a dev PC sign-off |
 | 2026-09-12 | **V6-D17** + live feed gating — Options **Live video feeds** mounts only selected camera(s); V6-T6 mobile smoke |
 | 2026-09-12 | Smoke results (PC + phone); V6-D9/D17 doc sync; malformed token 403; UI dist rebuild note; LTE/Safari deferrals |
+| 2026-09-12 | **V6-D18** — video bandwidth option (high/medium/low), Safari tap-to-play + Start feed auto-fullscreen |
+| 2026-09-13 | **Phase 6 signed off** — PC dev bench (V6-D16); V6-T7 bandwidth; iPhone/LTE deferred (secondary); tap-to-play PC fix |

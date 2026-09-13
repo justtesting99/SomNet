@@ -6,6 +6,7 @@ import { useLiveSession } from '@/context/SessionProvider';
 import { useOptions } from '@/context/OptionsProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useMode } from '@/context/ModeProvider';
+import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 import { consumeManualVideoPendingNotify } from '@/utils/manualVideoCommandNotify';
 import { logVideoEvent } from '@/utils/videoDebug';
@@ -28,6 +29,10 @@ import {
   applyLiveVideoFeedPreference,
   normalizeMobileVideoExpandDefault,
 } from '@/utils/liveVideoFeedPreference';
+import {
+  applyVideoFeedBandwidthToPair,
+  normalizeVideoFeedBandwidth,
+} from '@/utils/videoFeedBandwidth';
 
 function toViewerUrls(response: { front: { url: string }; rear: { url: string } }): VideoSourcePair {
   return [
@@ -64,7 +69,9 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
   } = useLiveSession();
   const { selectedSub } = useSubTarget();
   const { options, settings } = useOptions();
+  const { expandForPlaybackStart } = useVideoDisplay();
   const { isCommandPending } = useHardwareCommand();
+  const videoFeedBandwidth = normalizeVideoFeedBandwidth(options.videoFeedBandwidth);
 
   const timeoutSeconds = clampVideoFeedTimeoutSeconds(options.videoFeedTimeoutSeconds);
   const previewTimeoutSeconds = computeManualPreviewTimeoutSeconds(timeoutSeconds);
@@ -156,10 +163,11 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
   );
 
   const startPreview = useCallback(async () => {
+    const feedsAlreadyLoaded = Boolean(sources[0] || sources[1]);
     if (
       !isVideoConfigured() ||
       !mode ||
-      feedVisible ||
+      (feedVisible && feedsAlreadyLoaded) ||
       previewStarting ||
       commandPending ||
       (mode === 'automatic' && automaticRunning)
@@ -177,6 +185,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
 
       setFeedVisible(true);
       setPreviewActive(true);
+      expandForPlaybackStart();
       scheduleHideAfter(`${mode}-preview`, previewTimeoutSeconds);
     } finally {
       setPreviewStarting(false);
@@ -191,6 +200,8 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     previewStarting,
     previewTimeoutSeconds,
     scheduleHideAfter,
+    expandForPlaybackStart,
+    sources,
   ]);
 
   const pauseHideDeadline = useCallback(() => {
@@ -364,18 +375,30 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     let cancelled = false;
 
     async function loadTokens() {
-      const tokens = await fetchSessionVideoTokensSafe(activeSessionId, selectedSub);
-      if (cancelled) {
-        return;
-      }
+      try {
+        const tokens = await fetchSessionVideoTokensSafe(activeSessionId, selectedSub);
+        if (cancelled) {
+          return;
+        }
 
-      if (!tokens) {
-        logVideoEvent('[video] token mint failed; keeping prior sources if any');
-        return;
-      }
+        if (!tokens) {
+          logVideoEvent('[video] token mint failed; resetting feed state');
+          hideFeeds('token-mint-failed');
+          return;
+        }
 
-      tokensLoadedSessionRef.current = activeSessionId;
-      setSources(toViewerUrls(tokens));
+        tokensLoadedSessionRef.current = activeSessionId;
+        setSources(toViewerUrls(tokens));
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        logVideoEvent('[video] token mint error; resetting feed state', {
+          message: error instanceof Error ? error.message : String(error),
+        });
+        hideFeeds('token-mint-failed');
+      }
     }
 
     void loadTokens();
@@ -383,7 +406,11 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     return () => {
       cancelled = true;
     };
-  }, [feedVisible, sessionId, sessionSub, selectedSub]);
+  }, [feedVisible, hideFeeds, sessionId, sessionSub, selectedSub]);
+
+  useEffect(() => {
+    tokensLoadedSessionRef.current = null;
+  }, [videoFeedBandwidth]);
 
   useEffect(
     () => () => {
@@ -392,25 +419,32 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     [stopHideWatch],
   );
 
+  const bandwidthSources = useMemo(
+    () => applyVideoFeedBandwidthToPair(sources, videoFeedBandwidth),
+    [sources, videoFeedBandwidth],
+  );
+
   const filteredSources = useMemo(
     () =>
       applyLiveVideoFeedPreference(
-        sources,
+        bandwidthSources,
         normalizeMobileVideoExpandDefault(options.mobileVideoExpandDefault),
       ),
-    [options.mobileVideoExpandDefault, sources],
+    [options.mobileVideoExpandDefault, bandwidthSources],
   );
+
+  const hasLoadedSources = Boolean(filteredSources[0] || filteredSources[1]);
 
   const videoPreview = useMemo(
     (): VideoPreviewControls => ({
       available: mode !== null && isVideoConfigured(),
       canStart:
-        !feedVisible &&
+        (!feedVisible || !hasLoadedSources) &&
         !previewStarting &&
         !commandPending &&
         !(mode === 'automatic' && automaticRunning),
       starting: previewStarting,
-      feedsActive: feedVisible && Boolean(filteredSources[0] || filteredSources[1]),
+      feedsActive: feedVisible && hasLoadedSources,
       previewActive,
       previewTimeoutSeconds,
       start: startPreview,
@@ -419,7 +453,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
       automaticRunning,
       commandPending,
       feedVisible,
-      filteredSources,
+      hasLoadedSources,
       mode,
       previewActive,
       previewStarting,

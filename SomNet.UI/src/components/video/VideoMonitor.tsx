@@ -28,7 +28,12 @@ export function VideoMonitor({
         ) : null}
       </header>
 
-      <VideoFeed label={label} src={src} onExpand={onMaximize} loadDelayMs={loadDelayMs} />
+      <VideoFeed
+        label={label}
+        src={src}
+        onExpand={showMaximize ? onMaximize : undefined}
+        loadDelayMs={loadDelayMs}
+      />
     </section>
   );
 }
