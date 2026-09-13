@@ -244,6 +244,7 @@ Remote operator opens the **`https://….trycloudflare.com`** URL printed by `st
 | Safari **Play** required on video | iOS autoplay policy for MSE in iframe — operator tap expected on mobile |
 | **Start feeds** on single-feed option | Stale UI `dist/` — run **`npm run build`** in `SomNet.UI`; hard-refresh phone |
 | Safari “Server stopped responding” | Weak **LTE** + dual streams — use Wi‑Fi, single feed, or defer mobile test |
+| iPhone SE horizontal scroll / hidden **Switch mode** | Fixed — mobile header: full-width Switch mode + wrapping nav buttons ([`AppShell.tsx`](../SomNet.UI/src/components/layout/AppShell.tsx)) |
 | SignalR disconnected | Tunnel WebSocket support; mixed content if URL not HTTPS |
 | Video 403 with token | Token gateway OK on LAN? Retest locally before blaming tunnel |
 | Commands fail remotely | ESP32 must reach **LAN** API; tunnel only carries operator browser traffic |

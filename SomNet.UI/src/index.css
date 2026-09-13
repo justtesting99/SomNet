@@ -4,13 +4,19 @@
 
 html {
   color-scheme: dark;
+  overflow-x: hidden;
 }
 
 body {
   margin: 0;
   min-width: 320px;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  overflow-x: hidden;
 }
 
 input[type='range']::-webkit-slider-thumb {

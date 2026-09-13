@@ -63,23 +63,36 @@ export function AppShell({ children, wide = false }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-dvh bg-slate-950 text-slate-100">
+    <div className="min-h-dvh overflow-x-hidden bg-slate-950 text-slate-100">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,_rgba(79,70,229,0.18),_transparent_45%)]" />
 
       <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
         <div
           className={[
-            'mx-auto px-4 py-3 sm:px-6',
+            'mx-auto min-w-0 px-4 py-3 sm:px-6',
             wide ? 'max-w-[1600px]' : 'max-w-5xl',
           ].join(' ')}
         >
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <SessionUsers
-              controllerName={user?.displayName ?? 'Unknown'}
-              modeLabel={
-                mode ? `${mode === 'manual' ? 'Manual' : 'Automatic'} mode` : undefined
-              }
-            />
+            <div className="min-w-0 space-y-2">
+              <SessionUsers
+                controllerName={user?.displayName ?? 'Unknown'}
+                modeLabel={
+                  mode ? `${mode === 'manual' ? 'Manual' : 'Automatic'} mode` : undefined
+                }
+              />
+              {mode ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  fullWidth
+                  className="lg:hidden"
+                  onClick={handleSwitchMode}
+                >
+                  Switch mode
+                </Button>
+              ) : null}
+            </div>
 
             <div className="flex min-w-0 items-center gap-2 lg:flex-1 lg:px-2">
               <Button variant="ghost" size="sm" className="shrink-0" onClick={openNotify}>
@@ -90,31 +103,29 @@ export function AppShell({ children, wide = false }: AppShellProps) {
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center self-end lg:self-auto">
+            <div className="flex min-w-0 w-full flex-wrap items-center gap-2 lg:w-auto lg:shrink-0 lg:justify-end">
               {mode ? (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="mr-4 sm:mr-6"
+                  className="hidden shrink-0 lg:inline-flex"
                   onClick={handleSwitchMode}
                 >
                   Switch mode
                 </Button>
               ) : null}
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={openHardware}>
-                  Hardware
-                </Button>
-                <Button variant="ghost" size="sm" onClick={openHistory}>
-                  History
-                </Button>
-                <Button variant="ghost" size="sm" onClick={openOptions}>
-                  Options
-                </Button>
-                <Button variant="secondary" size="sm" onClick={handleSignOut}>
-                  Sign out
-                </Button>
-              </div>
+              <Button variant="ghost" size="sm" className="shrink-0" onClick={openHardware}>
+                Hardware
+              </Button>
+              <Button variant="ghost" size="sm" className="shrink-0" onClick={openHistory}>
+                History
+              </Button>
+              <Button variant="ghost" size="sm" className="shrink-0" onClick={openOptions}>
+                Options
+              </Button>
+              <Button variant="secondary" size="sm" className="shrink-0" onClick={handleSignOut}>
+                Sign out
+              </Button>
             </div>
           </div>
         </div>
@@ -122,7 +133,7 @@ export function AppShell({ children, wide = false }: AppShellProps) {
 
       <main
         className={[
-          'relative mx-auto px-4 py-6 sm:px-6 sm:py-8',
+          'relative mx-auto min-w-0 px-4 py-6 sm:px-6 sm:py-8',
           wide ? 'max-w-[1600px]' : 'max-w-5xl',
         ].join(' ')}
       >
