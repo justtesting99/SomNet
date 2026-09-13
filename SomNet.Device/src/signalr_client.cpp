@@ -1692,3 +1692,57 @@ bool SignalRClient::sendAckCommand(
     Serial.println(F("[HUB] AckCommand sent"));
     return true;
 }
+
+bool SignalRClient::sendReportButtonEvent(const char* clickType) {
+    if (clickType == nullptr || clickType[0] == '\0') {
+        return false;
+    }
+    if (nvs_ == nullptr || identity_ == nullptr || !nvs_->isPaired()) {
+        Serial.println(F("[HUB] ReportButtonEvent skipped - not paired"));
+        return false;
+    }
+    // Same readiness gate as AckCommand — do not require state_ == Paired; poll() may
+    // leave state_ at Backoff while SNTP/boot settle even though the hub is live.
+    handshakeComplete_ = gHandshakeComplete;
+    if (!gWs.isConnected() || !handshakeComplete_) {
+        Serial.println(F("[HUB] ReportButtonEvent skipped - hub not ready"));
+        return false;
+    }
+
+    char deviceId[NvsStore::kDeviceIdLen] = {};
+    char subTarget[NvsStore::kMaxStringLen] = {};
+    if (!identity_->deviceId()[0] || !nvs_->getSubTarget(subTarget, sizeof(subTarget))) {
+        Serial.println(F("[HUB] ReportButtonEvent skipped - missing identity"));
+        return false;
+    }
+    strncpy(deviceId, identity_->deviceId(), sizeof(deviceId) - 1);
+
+    ++gAckInvocationCounter;
+    char invocationId[12];
+    snprintf(invocationId, sizeof(invocationId), "%lu", static_cast<unsigned long>(gAckInvocationCounter));
+
+    StaticJsonDocument<384> doc;
+    doc["type"] = 1;
+    doc["target"] = "ReportButtonEvent";
+    doc["invocationId"] = invocationId;
+
+    JsonArray args = doc["arguments"].to<JsonArray>();
+    JsonObject payload = args.add<JsonObject>();
+    payload["clickType"] = clickType;
+    payload["deviceId"] = deviceId;
+    payload["subTarget"] = subTarget;
+
+    char buffer[384];
+    const size_t jsonLen = serializeJson(doc, buffer, sizeof(buffer) - 2);
+    if (jsonLen == 0 || jsonLen >= sizeof(buffer) - 2) {
+        Serial.println(F("[HUB] ReportButtonEvent JSON too large"));
+        return false;
+    }
+
+    buffer[jsonLen] = kRecordSeparator;
+    buffer[jsonLen + 1] = '\0';
+    gWs.sendTXT(buffer);
+
+    Serial.println(F("[HUB] ReportButtonEvent sent"));
+    return true;
+}

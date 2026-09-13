@@ -6,11 +6,13 @@ import {
   AUTOMATIC_SESSION_COMPLETE_CORRELATION_ID,
   type HardwareCommandAck,
 } from '@/types/hardwareHub';
+import { useSiteUserReady } from '@/context/SiteUserReadyProvider';
 import {
   createOperatorHardwareHub,
   startOperatorHardwareHub,
   stopOperatorHardwareHub,
 } from '@/services/hardwareHub';
+import type { DeviceButtonEvent } from '@/types/deviceButtonEvent';
 import {
   isAutomaticStopResultJson,
   parseAutomaticResultJson,
@@ -29,48 +31,70 @@ function shouldHandleAutomaticSessionComplete(ack: HardwareCommandAck): boolean 
  * Listens for device-initiated automatic session completion (end-rule, abort, manual stop)
  * via SignalR CommandAcknowledged (P9-D4 / P10-D3).
  */
+function handleDeviceButtonEvent(
+  event: DeviceButtonEvent,
+  notifySiteUserReady: (subTarget: string, requestStartFeed: boolean) => void,
+) {
+  if (event.clickType === 'double') {
+    notifySiteUserReady(event.subTarget, true);
+    return;
+  }
+
+  if (event.clickType === 'single' && import.meta.env.DEV) {
+    console.info('[SomNet] Device button single click', event);
+  }
+}
+
 export function AutomaticSessionHubListener() {
   const { isAuthenticated } = useAuth();
   const { settings, setAutomaticRunningLocal } = useOptions();
   const { activeSession, endAutomaticSession } = useLiveSession();
+  const { notifySiteUserReady } = useSiteUserReady();
   const automaticRef = useRef(settings.automatic);
   const activeSessionRef = useRef(activeSession);
   const endAutomaticSessionRef = useRef(endAutomaticSession);
   const clearAutomaticRunningRef = useRef<() => void>(() => setAutomaticRunningLocal(false));
+  const notifySiteUserReadyRef = useRef(notifySiteUserReady);
 
   automaticRef.current = settings.automatic;
   activeSessionRef.current = activeSession;
   endAutomaticSessionRef.current = endAutomaticSession;
   clearAutomaticRunningRef.current = () => setAutomaticRunningLocal(false);
+  notifySiteUserReadyRef.current = notifySiteUserReady;
 
   useEffect(() => {
     if (!isAuthenticated) {
       return;
     }
 
-    const connection = createOperatorHardwareHub((ack) => {
-      if (!shouldHandleAutomaticSessionComplete(ack)) {
-        return;
-      }
+    const connection = createOperatorHardwareHub({
+      onAck: (ack) => {
+        if (!shouldHandleAutomaticSessionComplete(ack)) {
+          return;
+        }
 
-      const automatic = automaticRef.current;
-      const sessionActive = activeSessionRef.current?.mode === 'automatic';
-      if (!automatic.running && !sessionActive) {
-        return;
-      }
+        const automatic = automaticRef.current;
+        const sessionActive = activeSessionRef.current?.mode === 'automatic';
+        if (!automatic.running && !sessionActive) {
+          return;
+        }
 
-      const parsed = parseAutomaticResultJson(ack.resultJson);
-      if (!parsed) {
-        return;
-      }
+        const parsed = parseAutomaticResultJson(ack.resultJson);
+        if (!parsed) {
+          return;
+        }
 
-      void applyAutomaticDeviceComplete(
-        automatic,
-        parsed,
-        clearAutomaticRunningRef.current,
-        endAutomaticSessionRef.current,
-        sessionActive,
-      );
+        void applyAutomaticDeviceComplete(
+          automatic,
+          parsed,
+          clearAutomaticRunningRef.current,
+          endAutomaticSessionRef.current,
+          sessionActive,
+        );
+      },
+      onButtonEvent: (event) => {
+        handleDeviceButtonEvent(event, notifySiteUserReadyRef.current);
+      },
     });
 
     let cancelled = false;

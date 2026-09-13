@@ -36,4 +36,8 @@ public static class HardwareHubMethods
     public const string AckCommand = "AckCommand";
 
     public const string RevokePairing = "RevokePairing";
+
+    public const string ReportButtonEvent = "ReportButtonEvent";
+
+    public const string ButtonEventReceived = "ButtonEventReceived";
 }

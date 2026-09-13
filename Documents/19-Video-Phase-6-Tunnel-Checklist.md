@@ -195,7 +195,7 @@ Cloudflare edge ── cloudflared ──► localhost:5031  SomNet API + UI + /
 ### Optional (defer)
 
 - [ ] Cloudflare Access policy in front of SomNet
-- [ ] Split-origin `tunnelBaseUrl` (separate video hostname)
+- [ ] ~~Split-origin `tunnelBaseUrl`~~ → **[Phase 7](./20-Video-Phase-7-Pi-Production-Checklist.md)** (Pi tunnel + `tunnelBaseUrl`)
 - [ ] Options UI editor for `tunnelBaseUrl`
 - [ ] Custom domain + named tunnel route (Phase 7/8)
 

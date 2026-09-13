@@ -47,6 +47,7 @@ builder.Services.AddScoped<ISomNetDataStore, SomNetDataStore>();
 builder.Services.AddSingleton<IVideoStreamTokenService, VideoStreamTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddSingleton<IDeviceConnectionRegistry, DeviceConnectionRegistry>();
+builder.Services.AddSingleton<DeviceButtonEventRateLimiter>();
 builder.Services.AddScoped<IDeviceTokenService, DeviceTokenService>();
 builder.Services.AddScoped<IHardwareCommandDispatcher, HardwareCommandDispatcher>();
 builder.Services.Configure<HardwareReachabilityOptions>(

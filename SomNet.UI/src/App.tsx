@@ -17,21 +17,28 @@ import { ModeSelector } from '@/components/modes/ModeSelector';
 import { ManualControls } from '@/components/modes/ManualControls';
 import { AutomaticControls } from '@/components/modes/AutomaticControls';
 import { AutomaticSessionHubListener } from '@/components/hardware/AutomaticSessionHubListener';
+import { SiteUserReadyBanner } from '@/components/hardware/SiteUserReadyBanner';
 import { SessionRehydrator } from '@/components/hardware/SessionRehydrator';
+import { SiteUserReadyProvider } from '@/context/SiteUserReadyProvider';
+import { useSiteUserReadyStartFeed } from '@/hooks/useSiteUserReadyStartFeed';
 import { TabSyncProvider } from '@/context/TabSyncProvider';
 import { TabSyncBanner } from '@/components/layout/TabSyncBanner';
 import { useSessionVideoSources } from '@/hooks/useSessionVideoSources';
 
 function DashboardLayoutWithSessionVideo({ mode }: { mode: 'manual' | 'automatic' }) {
   const { sources, videoPreview } = useSessionVideoSources();
+  useSiteUserReadyStartFeed(videoPreview);
 
   return (
-    <DashboardLayout
-      controls={mode === 'manual' ? <ManualControls /> : <AutomaticControls />}
-      videoSources={sources}
-      mode={mode}
-      videoPreview={videoPreview}
-    />
+    <>
+      <SiteUserReadyBanner />
+      <DashboardLayout
+        controls={mode === 'manual' ? <ManualControls /> : <AutomaticControls />}
+        videoSources={sources}
+        mode={mode}
+        videoPreview={videoPreview}
+      />
+    </>
   );
 }
 
@@ -69,9 +76,10 @@ export function App() {
             <OptionsProvider>
               <TabSyncProvider>
                 <NotifyProvider>
-                  <AutomaticSessionHubListener />
-                  <SessionRehydrator />
-                  <HistoryProvider>
+                  <SiteUserReadyProvider>
+                    <AutomaticSessionHubListener />
+                    <SessionRehydrator />
+                    <HistoryProvider>
                     <SystemStatusProvider enabled>
                       <AppShell wide={mode !== null}>
                         <TabSyncBanner />
@@ -82,7 +90,8 @@ export function App() {
                         )}
                       </AppShell>
                     </SystemStatusProvider>
-                  </HistoryProvider>
+                    </HistoryProvider>
+                  </SiteUserReadyProvider>
                 </NotifyProvider>
               </TabSyncProvider>
             </OptionsProvider>

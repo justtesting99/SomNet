@@ -1,3 +1,5 @@
+using SomNet.Shared.Models;
+
 namespace SomNet.Shared.DTO.Devices;
 
 public sealed class PairDeviceRequestDto
@@ -114,4 +116,15 @@ public sealed class UnpairedDeviceResponseDto
     public required string DeviceId { get; init; }
 
     public required DateTimeOffset ConnectedAt { get; init; }
+}
+
+public sealed class DeviceButtonEventDto
+{
+    public required DeviceButtonClickType ClickType { get; init; }
+
+    public required string DeviceId { get; init; }
+
+    public required string SubTarget { get; init; }
+
+    public DateTimeOffset? OccurredAtUtc { get; init; }
 }

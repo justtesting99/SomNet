@@ -9,10 +9,20 @@ import {
   HARDWARE_HUB_COMMAND_ACKNOWLEDGED,
   type HardwareCommandAck,
 } from '@/types/hardwareHub';
+import {
+  HARDWARE_HUB_BUTTON_EVENT_RECEIVED,
+  type DeviceButtonEvent,
+} from '@/types/deviceButtonEvent';
 
 export type HardwareCommandAckHandler = (ack: HardwareCommandAck) => void;
+export type DeviceButtonEventHandler = (event: DeviceButtonEvent) => void;
 
-export function createOperatorHardwareHub(onAck: HardwareCommandAckHandler): HubConnection {
+export interface OperatorHardwareHubHandlers {
+  onAck?: HardwareCommandAckHandler;
+  onButtonEvent?: DeviceButtonEventHandler;
+}
+
+export function createOperatorHardwareHub(handlers: OperatorHardwareHubHandlers): HubConnection {
   const connection = new HubConnectionBuilder()
     .withUrl(`${window.location.origin}/hubs/hardware`, {
       accessTokenFactory: () => getAccessToken() ?? '',
@@ -21,9 +31,17 @@ export function createOperatorHardwareHub(onAck: HardwareCommandAckHandler): Hub
     .configureLogging(import.meta.env.DEV ? LogLevel.Information : LogLevel.Warning)
     .build();
 
-  connection.on(HARDWARE_HUB_COMMAND_ACKNOWLEDGED, (ack: HardwareCommandAck) => {
-    onAck(ack);
-  });
+  if (handlers.onAck) {
+    connection.on(HARDWARE_HUB_COMMAND_ACKNOWLEDGED, (ack: HardwareCommandAck) => {
+      handlers.onAck?.(ack);
+    });
+  }
+
+  if (handlers.onButtonEvent) {
+    connection.on(HARDWARE_HUB_BUTTON_EVENT_RECEIVED, (event: DeviceButtonEvent) => {
+      handlers.onButtonEvent?.(event);
+    });
+  }
 
   return connection;
 }

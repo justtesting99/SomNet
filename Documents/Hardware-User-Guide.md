@@ -22,7 +22,7 @@ The SomNet device is a small Wi‑Fi controller that connects **outbound** to yo
 
 | Part | Label | Purpose |
 |------|-------|---------|
-| Setup button | **D33** | Reset Wi‑Fi / server settings (hold 10 seconds) |
+| Setup button | **D33** | Short press: single (reserved) / **double** = air-tool user ready (starts operator video feed). **Hold 10 s:** reset Wi‑Fi / server settings |
 | Relay output | **D4** | Drives the air valve relay — energized during a **stroke** command from SomNet |
 | USB | — | Power and optional service access (developers / support) |
 

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using SomNet.Shared.Enums;
+using SomNet.Shared.Models;
 
 namespace SomNet.Shared.Serialization;
 
@@ -17,5 +18,6 @@ public static class SomNetJsonOptions
         options.Converters.Add(new JsonStringEnumConverter<ActionSnapshotFeeds>(JsonNamingPolicy.CamelCase));
         options.Converters.Add(new JsonStringEnumConverter<VideoFeedBandwidth>(JsonNamingPolicy.CamelCase));
         options.Converters.Add(new JsonStringEnumConverter<HistoryTimelineEntryType>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<DeviceButtonClickType>(JsonNamingPolicy.CamelCase));
     }
 }

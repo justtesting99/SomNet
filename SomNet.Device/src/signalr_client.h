@@ -36,6 +36,7 @@ public:
         bool success,
         const char* message,
         const char* resultJson = nullptr);
+    bool sendReportButtonEvent(const char* clickType);
 
     void onTransportLost(bool immediateRetry = false);
     void markHandshakeComplete();

@@ -356,7 +356,39 @@ Detail: [Phase 10 checklist](../../Documents/09-ESP32-Phase-10-Checklist.md).
 
 ---
 
-## 7. AckCommand (device → server)
+## 7. ReportButtonEvent (device → server)
+
+Physical button **single** / **double** clicks (short press on **D33**) — firmware **`0.14.0-button-clicks`+**. Not a command ack; does not create session history. **10 s hold** credential reset is unchanged and suppresses click events.
+
+Requires **paired** hub connection. Server rate-limits to **5 events / 10 s** per device.
+
+```json
+{
+  "type": 1,
+  "invocationId": "3",
+  "target": "ReportButtonEvent",
+  "arguments": [
+    {
+      "clickType": "double",
+      "deviceId": "esp32-A4C1389F2B01",
+      "subTarget": "Slv66"
+    }
+  ]
+}
+```
+
+Plus **`0x1E`**.
+
+| `clickType` | Operator UI (v1) |
+|-------------|------------------|
+| `single` | API log only — reserved for future use |
+| `double` | Hub event **`ButtonEventReceived`** → banner + auto **Start feed** when video configured |
+
+See [23 — Device button clicks checklist](../../Documents/23-Device-Button-Clicks-Checklist.md).
+
+---
+
+## 8. AckCommand (device → server)
 
 After executing (or rejecting) a command, invoke hub method `AckCommand`:
 
@@ -500,6 +532,8 @@ If ack arrives within the per-command timeout:
 | Event `PairDevice` | `HardwareHubMethods.PairDevice` | `target: "PairDevice"` | Yes |
 | Event `ExecuteCommand` | `HardwareHubMethods.ExecuteCommand` | `target: "ExecuteCommand"` | Yes |
 | Method `AckCommand` | `HardwareHubMethods.AckCommand` | `target: "AckCommand"` | Yes |
+| Method `ReportButtonEvent` | `HardwareHubMethods.ReportButtonEvent` | `target: "ReportButtonEvent"` | Yes |
+| Event `ButtonEventReceived` | `HardwareHubMethods.ButtonEventReceived` | API → `operator:{dom}` | Yes |
 | Query `deviceId` (unpaired) | `HardwareHub.OnConnectedAsync` | Present in WS URL | Yes |
 | Query `access_token` (paired) | `Program.cs` JwtBearerEvents | Present in WS URL | Yes |
 | Framing | SignalR JSON spec | `0x1E` after each frame | Yes |

@@ -82,6 +82,22 @@ void startNetwork() {
     wifiManager.beginStation(ssid, pass);
 }
 
+void onButtonClick(ButtonClickKind kind, void*) {
+    if (bootMode == DeviceBootMode::Provisioning || wifiManager.isSoftAp()) {
+        Serial.println(F("[BTN] click dropped (provisioning)"));
+        return;
+    }
+    if (!nvsStore.isPaired()) {
+        Serial.println(F("[BTN] click dropped (not paired)"));
+        return;
+    }
+
+    const char* clickType = kind == ButtonClickKind::Double ? "double" : "single";
+    if (!signalRClient.sendReportButtonEvent(clickType)) {
+        Serial.println(F("[BTN] click dropped (hub)"));
+    }
+}
+
 void tryWifiRecovery() {
     if (wifiRecoveryAttempted || bootMode == DeviceBootMode::Provisioning || wifiManager.isSoftAp()) {
         return;
@@ -176,6 +192,7 @@ void setup() {
     relayController.begin();
     executionContext.begin(&relayController);
     buttonInput.begin();
+    buttonInput.setClickHandler(onButtonClick, nullptr);
     signalRClient.begin(&nvsStore, &deviceIdentity, &wifiManager);
     signalRClient.setExecutionActiveProbe([]() { return executionContext.isActive(); });
     commandHandler.begin(&executionContext, &nvsStore, &deviceIdentity, &signalRClient);

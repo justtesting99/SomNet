@@ -12,15 +12,18 @@ public sealed class HardwareHub : Hub
 {
     private readonly IDeviceConnectionRegistry _connectionRegistry;
     private readonly IDeviceTokenService _deviceTokenService;
+    private readonly DeviceButtonEventRateLimiter _buttonEventRateLimiter;
     private readonly ILogger<HardwareHub> _logger;
 
     public HardwareHub(
         IDeviceConnectionRegistry connectionRegistry,
         IDeviceTokenService deviceTokenService,
+        DeviceButtonEventRateLimiter buttonEventRateLimiter,
         ILogger<HardwareHub> logger)
     {
         _connectionRegistry = connectionRegistry;
         _deviceTokenService = deviceTokenService;
+        _buttonEventRateLimiter = buttonEventRateLimiter;
         _logger = logger;
     }
 
@@ -114,6 +117,72 @@ public sealed class HardwareHub : Hub
                 .Group(HardwareHubGroups.Operator(domTarget.Trim()))
                 .SendAsync(HardwareHubMethods.CommandAcknowledged, acknowledgement);
         }
+    }
+
+    public async Task ReportButtonEvent(DeviceButtonEventDto buttonEvent)
+    {
+        var role = Context.User?.FindFirstValue(DeviceClaimTypes.Role);
+        if (!string.Equals(role, DeviceClaimTypes.DeviceRole, StringComparison.Ordinal))
+        {
+            _logger.LogWarning("ReportButtonEvent rejected — caller is not a paired device.");
+            return;
+        }
+
+        var claimDeviceId = Context.User?.FindFirstValue(DeviceClaimTypes.DeviceId) ??
+            Context.User?.FindFirstValue(JwtRegisteredClaimNames.Sub);
+        var domTarget = Context.User?.FindFirstValue(DeviceClaimTypes.DomTarget);
+        var subTarget = Context.User?.FindFirstValue(DeviceClaimTypes.SubTarget);
+
+        if (string.IsNullOrWhiteSpace(claimDeviceId) ||
+            string.IsNullOrWhiteSpace(domTarget) ||
+            string.IsNullOrWhiteSpace(subTarget))
+        {
+            _logger.LogWarning("ReportButtonEvent rejected — missing device claims.");
+            return;
+        }
+
+        if (buttonEvent.ClickType is not (DeviceButtonClickType.Single or DeviceButtonClickType.Double))
+        {
+            _logger.LogWarning(
+                "ReportButtonEvent rejected — invalid click type {ClickType}.",
+                buttonEvent.ClickType);
+            return;
+        }
+
+        if (!string.Equals(buttonEvent.DeviceId.Trim(), claimDeviceId.Trim(), StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(buttonEvent.SubTarget.Trim(), subTarget.Trim(), StringComparison.Ordinal))
+        {
+            _logger.LogWarning(
+                "ReportButtonEvent rejected — payload device/sub mismatch for {DeviceId}.",
+                claimDeviceId);
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (!_buttonEventRateLimiter.TryAcquire(claimDeviceId, now))
+        {
+            _logger.LogWarning("ReportButtonEvent rate limited for device {DeviceId}.", claimDeviceId);
+            return;
+        }
+
+        var payload = new DeviceButtonEventDto
+        {
+            ClickType = buttonEvent.ClickType,
+            DeviceId = claimDeviceId.Trim(),
+            SubTarget = subTarget.Trim(),
+            OccurredAtUtc = buttonEvent.OccurredAtUtc ?? now,
+        };
+
+        _logger.LogInformation(
+            "Device button {ClickType} from {DeviceId} for {DomTarget}/{SubTarget}.",
+            payload.ClickType,
+            payload.DeviceId,
+            domTarget,
+            payload.SubTarget);
+
+        await Clients
+            .Group(HardwareHubGroups.Operator(domTarget.Trim()))
+            .SendAsync(HardwareHubMethods.ButtonEventReceived, payload);
     }
 
     private async Task RegisterPairedDeviceAsync(ClaimsPrincipal user)

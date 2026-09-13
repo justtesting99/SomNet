@@ -85,6 +85,10 @@ constexpr unsigned long kMaxBurstDelayMs = 300000UL;
 constexpr unsigned long CREDENTIAL_RESET_HOLD_MS = 10000;
 constexpr unsigned long CREDENTIAL_RESET_WARN_MS = 5000;
 
+constexpr unsigned long BUTTON_DEBOUNCE_MS = 50;
+constexpr unsigned long BUTTON_CLICK_MAX_MS = 500;
+constexpr unsigned long BUTTON_SINGLE_FIRE_MS = 450;
+
 constexpr uint16_t CONFIG_HTTP_PORT = 80;
 
 /** WPA2 password for SomNetSetup-XXXX provisioning AP (required by many phones/Windows). */
