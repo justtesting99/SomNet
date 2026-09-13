@@ -9,9 +9,18 @@
 | Architecture §9 | [13 — Snapshot timing](./13-Video-And-Camera-Architecture.md#9-snapshot-timing-and-session-linkage) |
 | Plan | [14-Video-Implementation-Plan.md](./14-Video-Implementation-Plan.md) |
 
-**Goal:** On **device command ack**, capture action stills (front + rear by default, or **rear only** via Options); store on **local disk**; attach metadata to session action (API + DB).
+**Goal:** Capture action stills on **manual** stroke/burst ack and on **automatic session complete**; store on **local disk**; attach metadata per session action (API + DB).
 
-**Out of scope (Phase 4):** Azure Blob production; edge agent auto-trigger ([Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md)); heartbeat front-only between actions. **Encryption at rest** moved to [24 — Snapshot encryption](./24-Video-Snapshot-Encryption-Checklist.md) — **signed off 2026-09-13**. **Automatic session-end still** (one capture per session — not per stroke) — **locked, not implemented** ([V4-D8](#locked-decisions-v1)).
+**Snapshot policy (locked):**
+
+| Mode | Stills |
+|------|--------|
+| **Manual** | **One per stroke** or **one per whole burst** (on device ack) |
+| **Automatic** | **One per session** only — when Stop/Abort/end-rule completes ([V4-D8](#locked-decisions-v1)) |
+
+**Not in the system:** per-stroke or per-main-stroke stills during automatic runs ([V4-D9](#locked-decisions-v1)). Live video covers the automatic run; history gets a single session-end still.
+
+**Out of scope (Phase 4):** Azure Blob production; edge agent auto-trigger ([Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md)); front heartbeat polling between actions ([13 §6 Option A](./13-Video-And-Camera-Architecture.md#6-viable-approaches-ranked-by-running-cost) — rejected for SomNet v1). **Encryption at rest** — [24](./24-Video-Snapshot-Encryption-Checklist.md) (**signed off** 2026-09-13).
 
 ---
 
@@ -24,9 +33,10 @@
 | **V4-D3** | Storage | Local disk under `data/snapshots/` (dev); Azurite optional later |
 | **V4-D4** | Rear timing | Front immediate; rear after **1 s** settle (`RearSettleDelayMs`, configurable) |
 | **V4-D5** | Linkage | DB row per feed: `sessionId` + `actionIndex` + `feed`; serve via `GET /api/video/snapshots/{id}/image` |
-| **V4-D6** | Scope | Manual stroke/burst first; automatic session-end still deferred to V4-D8 slice |
+| **V4-D6** | Scope | Manual stroke/burst + automatic session-end still ([V4-D8](#locked-decisions-v1)) — **signed off** 2026-09-13 |
 | **V4-D7** | Feed selection | **Options → General** `actionSnapshotFeeds`: `both` (default) or `rear` — persisted in `appOptions`; API reads pairing settings on capture ([2026-09-12](./18-Video-Phase-5-Edge-Agent-Checklist.md) post-sign-off) |
-| **V4-D8** | Automatic timing | **One still per automatic session** when the session completes — same idea as **manual burst** (one capture when the whole sequence finishes, not per relay pulse). Trigger: device hub ack **`correlationId=automatic-session-complete`** (Stop cooperative finish, Abort, or end-session rule) — the moment the UI clears **`running`**, hides Stop/Abort, and re-enables **Start**. **Not** on `automatic-start` accept ack; **not** per main stroke or intra-burst pulse during the run. Uses same `actionSnapshotFeeds` as manual. |
+| **V4-D8** | Automatic timing | **One still per automatic session** when the session completes — same idea as **manual burst** (one capture when the whole sequence finishes). Trigger: hub **`correlationId=automatic-session-complete`**. Uses same `actionSnapshotFeeds` as manual. **Signed off** 2026-09-13. |
+| **V4-D9** | Automatic — rejected | **No per-stroke / per-main-stroke stills** during automatic runs — permanent product decision (2026-09-13). Only **manual** mode gets a separate still per operator action. |
 
 ---
 
@@ -51,6 +61,7 @@
 ### Tests
 
 - [x] Unit tests — `BuildRelativePath`, `SanitizePathSegment`, `ShouldCaptureFeed` (`VideoSnapshotServiceTests.cs`; rear delay not unit-tested)
+- [x] Unit tests — `IsAutomaticSessionEndSnapshotAck` (`HardwareCommandKeysTests.cs`)
 
 ---
 
@@ -62,8 +73,9 @@
 | **V4-T2** | View session history | Stills visible for action | ☑ **2026-09-11** (with T1) |
 | **V4-T3** | Rear settle delay | Rear `capturedAt` ≥ front + ~1 s (if enabled) | ☑ **2026-09-11** |
 | **V4-T4** | Options → rear only → stroke | One rear JPEG per action; no front row/file | ☑ **2026-09-12** |
+| **V4-T5** | Automatic Start → run → Stop / Abort / end-rule | **One** still group in history (not per stroke); Start re-enabled; encrypted disk OK | ☑ **2026-09-13** |
 
-**Exit:** V4-T1–T3 → [Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md). V4-T4 optional post–Phase 5 enhancement.
+**Exit:** V4-T1–T5 → Phase 4 **signed off** (manual + automatic session-end). [Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md) owns edge notify; [24](./24-Video-Snapshot-Encryption-Checklist.md) owns disk encryption.
 
 ---
 
@@ -81,3 +93,5 @@
 | 2026-09-13 | Encryption moved to [24](./24-Video-Snapshot-Encryption-Checklist.md) — signed off; V4-D1 trigger wording updated (API ack path) |
 | 2026-09-13 | **V4-D8** — automatic = one still at session complete (burst-like), not per stroke; trigger = `automatic-session-complete` hub ack |
 | 2026-09-13 | **V4-D8 implemented** — `HardwareHub.AckCommand` + `IsAutomaticSessionEndSnapshotAck` |
+| 2026-09-13 | **V4-T5 pass** — automatic session-end still bench verified; V4-D8 **signed off** |
+| 2026-09-13 | **V4-D9** — per-stroke automatic stills rejected; manual-only per-action stills |

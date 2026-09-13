@@ -16,7 +16,7 @@ Video work is **separate from ESP32 firmware phases** and **separate from UI reh
 | **1c′** | [Phase 1c — Thingino G2 flash](./14-Video-Phase-1c-Thingino-G2-Flash-Checklist.md) | IP fleet | PC | No — **on hold** |
 | **2** | [Phase 2 — UI embed](./15-Video-Phase-2-UI-Embed-Checklist.md) | `VideoFeed` iframes in dashboard (LAN URLs) | PC | UI — **complete** |
 | **3** | [Phase 3 — Session tokens](./16-Video-Phase-3-Session-Tokens-Checklist.md) | API mints session-scoped stream tokens; UI fetches on session start | PC + local API | API + UI — **complete** |
-| **4** | [Phase 4 — Action snapshots](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | Capture on device ack; local disk; `SessionActionSnapshots` + history gallery | PC + local API | API + UI — **complete** (manual v1) |
+| **4** | [Phase 4 — Action snapshots](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | Capture on ack — manual stroke/burst + automatic session-end still (V4-D8); local disk; history gallery | PC + local API | API + UI — **signed off** (2026-09-13) |
 | **5** | [Phase 5 — Edge agent](./18-Video-Phase-5-Edge-Agent-Checklist.md) | Session start/end → enable streams; token validation at gateway | PC | API + edge agent — **complete** |
 | **6** | [Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) | Remote operator without Azure (**Cloudflare Tunnel** to PC API) | PC | Edge scripts + UI feed gating + bandwidth + token gateway — **signed off** (2026-09-13) |
 | **7** | [Phase 7 — Pi production bench](./20-Video-Phase-7-Pi-Production-Checklist.md) | Move edge to Pi 4/5; **Layout A-dev** (2× USB); E2E with ESP32 on LAN | **Pi** + local API | Config + docs |
@@ -132,3 +132,5 @@ Related: [03 — Future Enhancements](./03-Frontend-Architecture.md#future-enhan
 | 2026-09-13 | **Phase 6 signed off** — PC Quick Tunnel; V6-D18 bandwidth + mobile playback; iPhone/LTE deferred |
 | 2026-09-13 | **Phase 7b draft** — optional Pi headset intercom; phone primary; MSE video unchanged |
 | 2026-09-13 | **Snapshot encryption signed off** — dev disk AES-256-GCM ([24](./24-Video-Snapshot-Encryption-Checklist.md)); gallery lightbox UX |
+| 2026-09-13 | **Phase 4 V4-D8 signed off** — automatic session-end still (one capture per session on hub complete) |
+| 2026-09-13 | **V4-D9 locked** — no per-stroke automatic stills; manual-only per-action stills |

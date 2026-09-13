@@ -1820,7 +1820,7 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 | 8 | Config UI access control | Open `/config` on LAN vs button-gated vs time-limited |
 | 9 | Wi-Fi credentials in NVS | Plaintext vs ESP32 flash encryption |
 | 10 | Provisioning UX | Soft-AP captive portal vs BLE vs serial-only for dev |
-| 13 | Automatic stroke reporting | Per-stroke acks vs aggregated summary only on stop |
+| 13 | Automatic stroke reporting / action stills | ☑ **Locked** — hub **`resultJson`** aggregated on stop/abort/end-rule only (P9-D4); **no** per-stroke hub events. **Action stills:** manual per stroke/burst; automatic **one still at session end** only ([V4-D8/V4-D9](./17-Video-Phase-4-Action-Snapshots-Checklist.md)) — no per-stroke automatic stills |
 | 14 | Failed command in UI | Show error only vs write "failed attempt" to session history |
 | 15 | Automatic pulse randomization | Random power→ms vs random ms directly in range (or both per config) |
 | 16 | Burst inside automatic | Nested class vs `AutomaticSessionMode` calling `BurstSequenceMode` |

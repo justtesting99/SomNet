@@ -44,7 +44,7 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Video Phase 1b — Galayou G2 setup](./14-Video-Phase-1b-Galayou-G2-Setup.md) | Developers | G2 reference — **on hold** |
 | [Video Phase 2 — UI embed](./15-Video-Phase-2-UI-Embed-Checklist.md) | Developers | Dashboard iframes — **complete** |
 | [Video Phase 3 — Session tokens](./16-Video-Phase-3-Session-Tokens-Checklist.md) | Developers | API session-scoped tokens — **signed off** (T4 deferred) |
-| [Video Phase 4 — Action snapshots](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | Developers | Stills on ack (local storage) — **signed off** (manual v1) |
+| [Video Phase 4 — Action snapshots](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | Developers | Stills on ack — manual stroke/burst + automatic session-end (V4-D8) — **signed off** (2026-09-13) |
 | [Video Phase 5 — Edge agent](./18-Video-Phase-5-Edge-Agent-Checklist.md) | Developers | Session lifecycle on gateway — **signed off** (2026-09-12) |
 | [Video Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) | Developers | **Cloudflare Tunnel** to dev PC API — **signed off** (2026-09-13; iPhone/LTE follow-up optional) |
 | [Video Phase 7 — Pi production](./20-Video-Phase-7-Pi-Production-Checklist.md) | Developers | Pi edge (go2rtc + tunnel + token gate); split-origin `tunnelBaseUrl`; API on PC → Azure in Phase 8 — **next** |

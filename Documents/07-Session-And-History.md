@@ -184,7 +184,7 @@ Timeline items are discriminated by `type`:
 
 **UI:** `HistoryDialog.tsx` — opened from header "History" button.
 
-**Action snapshots (Phase 4):** When video is configured, each session row shows `SessionSnapshotGallery` — still metadata from `GET /api/video/sessions/{sessionId}/snapshots`; images loaded via authenticated `GET /api/video/snapshots/{id}/image` (JWT blob fetch in `AuthenticatedSnapshotImage`). Front + rear by default, or rear only when **Options → General → Action snapshot cameras** is **Rear only**. **Double-click** a still to open `SnapshotLightbox` (full-screen viewer; Close or Esc). New files are **AES-256-GCM encrypted on disk** ([24 — Snapshot encryption](./24-Video-Snapshot-Encryption-Checklist.md)); legacy plain JPEGs still display. Not stored on session event rows. See [17-Video-Phase-4-Action-Snapshots-Checklist.md](./17-Video-Phase-4-Action-Snapshots-Checklist.md).
+**Action snapshots (Phase 4):** When video is configured, each session row shows `SessionSnapshotGallery`. **Manual sessions:** one still per **stroke** or per **whole burst** (on ack). **Automatic sessions:** **one still per session** when the run completes ([V4-D8](./17-Video-Phase-4-Action-Snapshots-Checklist.md)) — the system does **not** capture per-stroke stills during automatic runs ([V4-D9](./17-Video-Phase-4-Action-Snapshots-Checklist.md)). Images load via `GET /api/video/snapshots/{id}/image` (`AuthenticatedSnapshotImage`). Front + rear by default, or rear only via **Options → Action snapshot cameras**. **Double-click** opens `SnapshotLightbox`. Encrypted on disk ([24](./24-Video-Snapshot-Encryption-Checklist.md)).
 
 ### Dom Sessions Dialog (cross-Sub)
 

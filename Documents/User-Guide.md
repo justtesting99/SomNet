@@ -250,7 +250,7 @@ Use **Start feed** or **Start feeds** above the monitors to load live video befo
 | **Live video feeds** | Which cameras load: both, front only, or rear only |
 | **Video feed bandwidth** | Quality hint for live streams (high / medium / low) |
 | **Video feed timeout** | How long feeds stay up after manual actions or automatic session end |
-| **Action snapshot cameras** | Which cameras capture stills on each stroke/burst (both or rear only) |
+| **Action snapshot cameras** | Which cameras capture stills — **manual:** each stroke/burst; **automatic:** one still when the session ends (both or rear only) |
 | **Auto-expand video on mobile** | Full-screen video overlay after commands on small screens |
 
 ### Site user ready (double-click)

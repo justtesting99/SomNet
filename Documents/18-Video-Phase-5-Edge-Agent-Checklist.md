@@ -12,7 +12,7 @@
 
 **Goal:** Small **edge agent** on PC: `session_started` / `session_ended` from API; go2rtc stream readiness; **token gateway** on `/go2rtc`; **snapshots on device ack** without UI callback.
 
-**Out of scope (Phase 5):** Tunnel (Phase 6); Pi deploy (Phase 7); automatic-mode snapshots; edge SignalR observer (API ack hook used instead).
+**Out of scope (Phase 5):** Tunnel (Phase 6); Pi deploy (Phase 7); automatic session-end stills ([Phase 4 V4-D8](./17-Video-Phase-4-Action-Snapshots-Checklist.md) — signed off 2026-09-13); edge SignalR observer (API ack hook used instead).
 
 ---
 
