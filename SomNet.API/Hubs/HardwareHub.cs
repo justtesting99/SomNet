@@ -13,17 +13,20 @@ public sealed class HardwareHub : Hub
     private readonly IDeviceConnectionRegistry _connectionRegistry;
     private readonly IDeviceTokenService _deviceTokenService;
     private readonly DeviceButtonEventRateLimiter _buttonEventRateLimiter;
+    private readonly IVideoActionSnapshotTrigger _videoActionSnapshotTrigger;
     private readonly ILogger<HardwareHub> _logger;
 
     public HardwareHub(
         IDeviceConnectionRegistry connectionRegistry,
         IDeviceTokenService deviceTokenService,
         DeviceButtonEventRateLimiter buttonEventRateLimiter,
+        IVideoActionSnapshotTrigger videoActionSnapshotTrigger,
         ILogger<HardwareHub> logger)
     {
         _connectionRegistry = connectionRegistry;
         _deviceTokenService = deviceTokenService;
         _buttonEventRateLimiter = buttonEventRateLimiter;
+        _videoActionSnapshotTrigger = videoActionSnapshotTrigger;
         _logger = logger;
     }
 
@@ -111,8 +114,17 @@ public sealed class HardwareHub : Hub
         _connectionRegistry.CompleteAcknowledgement(acknowledgement);
 
         var domTarget = Context.User?.FindFirstValue(DeviceClaimTypes.DomTarget);
+        var subTarget = Context.User?.FindFirstValue(DeviceClaimTypes.SubTarget);
         if (!string.IsNullOrWhiteSpace(domTarget))
         {
+            if (!string.IsNullOrWhiteSpace(subTarget))
+            {
+                _videoActionSnapshotTrigger.TryCaptureAfterAutomaticSessionCompleteAsync(
+                    domTarget.Trim(),
+                    subTarget.Trim(),
+                    acknowledgement);
+            }
+
             await Clients
                 .Group(HardwareHubGroups.Operator(domTarget.Trim()))
                 .SendAsync(HardwareHubMethods.CommandAcknowledged, acknowledgement);

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SomNet.API.Configuration;
 using SomNet.API.Data;
+using SomNet.Shared.DTO.Devices;
 using SomNet.Shared.DTO.Video;
 using SomNet.Shared.Models;
 
@@ -36,14 +37,40 @@ public sealed class VideoActionSnapshotTrigger : IVideoActionSnapshotTrigger
         }
 
         // Fire-and-forget in a fresh scope — request-scoped DbContext is disposed before async capture finishes.
-        _ = CaptureInBackgroundAsync(domTarget, subTarget, commandKey, snapshotActionIndex);
+        _ = CaptureInBackgroundAsync(
+            domTarget,
+            subTarget,
+            commandKey,
+            snapshotActionIndex,
+            correlationId: null);
+    }
+
+    public void TryCaptureAfterAutomaticSessionCompleteAsync(
+        string domTarget,
+        string subTarget,
+        HardwareCommandAckDto acknowledgement,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_settings.Enabled ||
+            !HardwareCommandKeys.IsAutomaticSessionEndSnapshotAck(acknowledgement))
+        {
+            return;
+        }
+
+        _ = CaptureInBackgroundAsync(
+            domTarget,
+            subTarget,
+            HardwareCommandKeys.AutomaticStop,
+            snapshotActionIndex: null,
+            acknowledgement.CorrelationId);
     }
 
     private async Task CaptureInBackgroundAsync(
         string domTarget,
         string subTarget,
         string commandKey,
-        int? snapshotActionIndex)
+        int? snapshotActionIndex,
+        string? correlationId)
     {
         try
         {
@@ -68,6 +95,7 @@ public sealed class VideoActionSnapshotTrigger : IVideoActionSnapshotTrigger
             {
                 ActionIndex = actionIndex,
                 CommandKey = commandKey,
+                CorrelationId = correlationId,
             };
 
             await videoSnapshotService.CaptureForActionAsync(

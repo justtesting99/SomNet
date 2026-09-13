@@ -420,7 +420,7 @@ Controllers delegate to scoped services:
 | `IVideoStreamTokenService` | Session-scoped stream token mint/revoke |
 | `IVideoSnapshotService` | Action still capture, list, encrypted disk I/O |
 | `ISnapshotFileProtection` | AES-256-GCM envelope for snapshot files |
-| `IVideoActionSnapshotTrigger` | Fire-and-forget snapshot capture after hardware ack |
+| `IVideoActionSnapshotTrigger` | Fire-and-forget snapshot capture after manual stroke/burst REST ack; automatic session-end still on hub `automatic-session-complete` |
 | `IVideoEdgeNotificationService` | Session start/end webhooks to edge agent |
 
 ---

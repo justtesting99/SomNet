@@ -1,6 +1,6 @@
 # Video — Phase 4 Action snapshots (local storage)
 
-**Status:** **Signed off** (2026-09-11) — manual v1 complete; automatic snapshots deferred
+**Status:** **Signed off** (2026-09-13) — manual v1 + automatic session-end still (V4-D8)
 
 > **Phase 3:** Signed off (V3-T4 deferred).
 
@@ -11,7 +11,7 @@
 
 **Goal:** On **device command ack**, capture action stills (front + rear by default, or **rear only** via Options); store on **local disk**; attach metadata to session action (API + DB).
 
-**Out of scope (Phase 4):** Azure Blob production; edge agent auto-trigger ([Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md)); automatic per-stroke snapshots (later); heartbeat front-only between actions. **Encryption at rest** moved to [24 — Snapshot encryption](./24-Video-Snapshot-Encryption-Checklist.md) — **signed off 2026-09-13**.
+**Out of scope (Phase 4):** Azure Blob production; edge agent auto-trigger ([Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md)); heartbeat front-only between actions. **Encryption at rest** moved to [24 — Snapshot encryption](./24-Video-Snapshot-Encryption-Checklist.md) — **signed off 2026-09-13**. **Automatic session-end still** (one capture per session — not per stroke) — **locked, not implemented** ([V4-D8](#locked-decisions-v1)).
 
 ---
 
@@ -24,8 +24,9 @@
 | **V4-D3** | Storage | Local disk under `data/snapshots/` (dev); Azurite optional later |
 | **V4-D4** | Rear timing | Front immediate; rear after **1 s** settle (`RearSettleDelayMs`, configurable) |
 | **V4-D5** | Linkage | DB row per feed: `sessionId` + `actionIndex` + `feed`; serve via `GET /api/video/snapshots/{id}/image` |
-| **V4-D6** | Scope | Manual stroke/burst first; automatic snapshots deferred |
+| **V4-D6** | Scope | Manual stroke/burst first; automatic session-end still deferred to V4-D8 slice |
 | **V4-D7** | Feed selection | **Options → General** `actionSnapshotFeeds`: `both` (default) or `rear` — persisted in `appOptions`; API reads pairing settings on capture ([2026-09-12](./18-Video-Phase-5-Edge-Agent-Checklist.md) post-sign-off) |
+| **V4-D8** | Automatic timing | **One still per automatic session** when the session completes — same idea as **manual burst** (one capture when the whole sequence finishes, not per relay pulse). Trigger: device hub ack **`correlationId=automatic-session-complete`** (Stop cooperative finish, Abort, or end-session rule) — the moment the UI clears **`running`**, hides Stop/Abort, and re-enables **Start**. **Not** on `automatic-start` accept ack; **not** per main stroke or intra-burst pulse during the run. Uses same `actionSnapshotFeeds` as manual. |
 
 ---
 
@@ -45,7 +46,7 @@
 - [x] ~~Fire-and-forget capture after manual stroke/burst ack (`SessionProvider`)~~ → **Phase 5:** API `VideoActionSnapshotTrigger` on hardware ack
 - [x] History dialog — `SessionSnapshotGallery` stills per session (`AuthenticatedSnapshotImage` + JWT blob fetch)
 - [x] **Options → General** — **Action snapshot cameras** (`both` \| `rear`); single-column gallery layout when one feed per action
-- [ ] Automatic mode snapshots (post–Phase 5 or later slice)
+- [x] **Automatic session-end still** ([V4-D8](#locked-decisions-v1)) — API capture on hub `automatic-session-complete` in `HardwareHub.AckCommand` via `VideoActionSnapshotTrigger.TryCaptureAfterAutomaticSessionCompleteAsync`
 
 ### Tests
 
@@ -78,3 +79,5 @@
 | 2026-09-12 | **V4-D7** — `actionSnapshotFeeds` option (both \| rear); API respects pairing settings on ack capture |
 | 2026-09-12 | Future note — snapshot encryption at rest (disk + SQL metadata) |
 | 2026-09-13 | Encryption moved to [24](./24-Video-Snapshot-Encryption-Checklist.md) — signed off; V4-D1 trigger wording updated (API ack path) |
+| 2026-09-13 | **V4-D8** — automatic = one still at session complete (burst-like), not per stroke; trigger = `automatic-session-complete` hub ack |
+| 2026-09-13 | **V4-D8 implemented** — `HardwareHub.AckCommand` + `IsAutomaticSessionEndSnapshotAck` |

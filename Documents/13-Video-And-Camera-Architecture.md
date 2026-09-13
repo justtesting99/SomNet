@@ -422,9 +422,13 @@ Operator sends command → ESP32 executes → device ack → API updates session
 
 **Between actions:** front-only heartbeat (2–5 s) while session is active; rear holds “last result” until next ack.
 
-**Trigger (implemented — Phase 5):** API **`VideoActionSnapshotTrigger`** after successful hardware ack (`POST /api/devices/commands`). **Feed selection:** **Options → General** `actionSnapshotFeeds` — `both` (front + rear) or `rear` only (skips front when stream delay makes expression stills less useful). Persisted per dom/sub in pairing `appOptions`.
+**Trigger (implemented — Phase 5, manual):** API **`VideoActionSnapshotTrigger`** after successful **`stroke`** / **`burst`** REST ack (`POST /api/devices/commands`). Manual **burst** = one still when the **entire burst** acks (not per pulse inside the burst).
 
-**Deferred alternatives:** edge SignalR observer (no API dependency if UI closes mid-capture).
+**Trigger (implemented — V4-D8):** **Automatic mode** = **one still per session** when the device sends hub **`automatic-session-complete`** (cooperative Stop finish, Abort, or end-session rule) — same UI moment as Stop/Abort hidden and **Start** re-enabled. **`HardwareHub.AckCommand`** → `VideoActionSnapshotTrigger.TryCaptureAfterAutomaticSessionCompleteAsync`. **Not** per main stroke during the run; **not** on `automatic-start` accept ack.
+
+**Feed selection:** **Options → General** `actionSnapshotFeeds` — `both` (front + rear) or `rear` only. Applies to manual and (when built) automatic session-end capture.
+
+**Deferred alternatives:** edge SignalR observer (no API dependency if UI closes mid-capture); front heartbeat between actions (2–5 s).
 
 ---
 
@@ -546,7 +550,7 @@ Light coupling only — no new firmware phase.
 | **Session start/end** | **Done (dev)** | Mint tokens on feed show; revoke on `POST …/end` ([Phase 3](./16-Video-Phase-3-Session-Tokens-Checklist.md)). Edge agent notify on start/end ([Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md)). |
 | **API** | **Done (manual v1)** | `POST/GET /api/video/sessions/{sessionId}/tokens|snapshots`; `GET /api/video/snapshots/{id}/image` ([Phase 4](./17-Video-Phase-4-Action-Snapshots-Checklist.md)). Snapshots triggered on hardware ack via `VideoActionSnapshotTrigger` ([Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md)). Encrypted disk ([24](./24-Video-Snapshot-Encryption-Checklist.md)). |
 | **Action snapshots** | **Done (manual v1)** | `SessionActionSnapshots` table — `sessionId`, `actionIndex`, `feed`, disk path, `capturedAt`. Configurable feeds via `actionSnapshotFeeds`. AES-256-GCM on disk (dev). **Not** stored on session event rows. |
-| **UI** | **Partial** | `useSessionVideoSources` — tokens, feed timeouts, live feed gating, Start feed(s) preview, F5 restore hints. History: `SessionSnapshotGallery` + `SnapshotLightbox` (double-click enlarge). Automatic per-stroke snapshots deferred. |
+| **UI** | **Partial** | `useSessionVideoSources` — tokens, feed timeouts, live feed gating, Start feed(s) preview, F5 restore hints. History: `SessionSnapshotGallery` + `SnapshotLightbox` (double-click enlarge). Automatic **session-end** still (V4-D8) implemented on API hub path. |
 | **Azure** | **Future** | Blob container + lifecycle rule; no App Service video egress ([Phase 8](./21-Video-Phase-8-Azure-Cutover-Checklist.md)). |
 
 See [07-Session-And-History.md](./07-Session-And-History.md) — history dialog loads snapshots via video API, not session event fields.
