@@ -36,7 +36,7 @@ export function NumberField({
 
   if (inline && label) {
     return (
-      <div className={['flex items-center gap-2', isDisabled ? 'opacity-80' : ''].join(' ')}>
+      <div className="flex items-center gap-2">
         <label htmlFor={inputId} className={['shrink-0 text-sm', labelClass].join(' ')}>
           {label}
         </label>
@@ -46,7 +46,7 @@ export function NumberField({
   }
 
   return (
-    <div className={['space-y-1', isDisabled ? 'opacity-80' : ''].join(' ')}>
+    <div className="space-y-1">
       {label ? (
         <label
           htmlFor={inputId}
@@ -81,6 +81,8 @@ interface MinMaxRowProps {
   minValueMin?: number;
   /** Lower bound for the Max input (defaults to `minLimit`). */
   maxValueMin?: number;
+  /** Optional hint below the row; always reserves one line when set. */
+  hint?: string;
 }
 
 export function MinMaxRow({
@@ -96,6 +98,7 @@ export function MinMaxRow({
   maxLimit = 9999,
   minValueMin,
   maxValueMin,
+  hint,
 }: MinMaxRowProps) {
   const minFieldDisabled = disabled || minDisabled;
   const maxFieldDisabled = disabled || maxDisabled;
@@ -103,7 +106,7 @@ export function MinMaxRow({
   const maxInputMin = maxValueMin ?? minLimit;
 
   return (
-    <div className={disabled ? 'opacity-50' : ''}>
+    <div className="space-y-1">
       <p className="mb-2 text-sm text-slate-400">{label}</p>
       <div className="flex flex-wrap items-center gap-4">
         <NumberField
@@ -125,6 +128,7 @@ export function MinMaxRow({
           onChange={(event) => onMaxChange(Number(event.target.value))}
         />
       </div>
+      {hint ? <p className="min-h-4 text-xs text-slate-500">{hint}</p> : null}
     </div>
   );
 }

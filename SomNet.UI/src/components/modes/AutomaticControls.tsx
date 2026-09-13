@@ -99,6 +99,8 @@ export function AutomaticControls() {
   const allowLiveOverrides = options.allowAutomaticModeOverrides;
   const liveOverridesActive = sessionRunning && allowLiveOverrides;
   const configLocked = sessionRunning && !allowLiveOverrides;
+  /** Master gate for burst sub-controls — Bursts On must be checked (Phase 10). */
+  const burstSettingsDisabled = configLocked || !state.burstsOn;
   const delayStartLocked = sessionRunning;
   const hardwareReady = systemStatus.isReady;
   const lastPushedUpdateRef = useRef<string | null>(null);
@@ -211,6 +213,10 @@ export function AutomaticControls() {
 
     if (key === 'running') {
       setRunningLocal(value as boolean);
+      return;
+    }
+
+    if (key !== 'burstsOn' && !state.burstsOn && String(key).startsWith('burst')) {
       return;
     }
 
@@ -605,7 +611,7 @@ export function AutomaticControls() {
                 value={state.burstPercent}
                 min={0}
                 max={100}
-                disabled={configLocked}
+                disabled={burstSettingsDisabled}
                 onChange={(event) => update('burstPercent', Number(event.target.value))}
               />
             </div>
@@ -613,48 +619,48 @@ export function AutomaticControls() {
             <SelectField
               label="Burst Style"
               value={state.burstStyle}
-              disabled={configLocked}
+              disabled={burstSettingsDisabled}
               options={BURST_STYLE_OPTIONS}
               onChange={(event) =>
                 update('burstStyle', event.target.value as AutomaticControlState['burstStyle'])
               }
             />
 
-            <div className="space-y-1">
-              <MinMaxRow
-                label="Burst Stroke Power in Percent (0 to 100)"
-                min={state.burstStrokePowerMin}
-                max={state.burstStrokePowerMax}
-                minLimit={0}
-                minValueMin={MIN_BURST_STROKE_POWER}
-                maxLimit={100}
-                disabled={configLocked}
-                minDisabled={burstFieldRules.disableBurstStrokePowerMin}
-                onMinChange={(value) => update('burstStrokePowerMin', value)}
-                onMaxChange={(value) => update('burstStrokePowerMax', value)}
-              />
-              {burstFieldRules.disableBurstStrokePowerMin ? (
-                <p className="text-xs text-slate-500">Min not used — device uses maximum power.</p>
-              ) : null}
-            </div>
+            <MinMaxRow
+              label="Burst Stroke Power in Percent (0 to 100)"
+              min={state.burstStrokePowerMin}
+              max={state.burstStrokePowerMax}
+              minLimit={0}
+              minValueMin={MIN_BURST_STROKE_POWER}
+              maxLimit={100}
+              disabled={burstSettingsDisabled}
+              minDisabled={burstFieldRules.disableBurstStrokePowerMin}
+              hint={
+                burstFieldRules.disableBurstStrokePowerMin
+                  ? 'Min not used — device uses maximum power.'
+                  : undefined
+              }
+              onMinChange={(value) => update('burstStrokePowerMin', value)}
+              onMaxChange={(value) => update('burstStrokePowerMax', value)}
+            />
 
-            <div className="space-y-1">
-              <MinMaxRow
-                label="Delay Between Burst Strokes in Seconds"
-                min={state.burstDelayMin}
-                max={state.burstDelayMax}
-                minLimit={0}
-                minValueMin={MIN_BURST_DELAY_SEC}
-                maxLimit={MAX_BURST_DELAY_SEC}
-                disabled={configLocked}
-                minDisabled={burstFieldRules.disableBurstDelayMin}
-                onMinChange={(value) => update('burstDelayMin', value)}
-                onMaxChange={(value) => update('burstDelayMax', value)}
-              />
-              {burstFieldRules.disableBurstDelayMin ? (
-                <p className="text-xs text-slate-500">Min not used — device uses maximum delay.</p>
-              ) : null}
-            </div>
+            <MinMaxRow
+              label="Delay Between Burst Strokes in Seconds"
+              min={state.burstDelayMin}
+              max={state.burstDelayMax}
+              minLimit={0}
+              minValueMin={MIN_BURST_DELAY_SEC}
+              maxLimit={MAX_BURST_DELAY_SEC}
+              disabled={burstSettingsDisabled}
+              minDisabled={burstFieldRules.disableBurstDelayMin}
+              hint={
+                burstFieldRules.disableBurstDelayMin
+                  ? 'Min not used — device uses maximum delay.'
+                  : undefined
+              }
+              onMinChange={(value) => update('burstDelayMin', value)}
+              onMaxChange={(value) => update('burstDelayMax', value)}
+            />
 
             <MinMaxRow
               label="Number of Strokes in Each Burst"
@@ -662,7 +668,7 @@ export function AutomaticControls() {
               max={state.burstStrokesMax}
               minLimit={1}
               maxLimit={MAX_BURST_STROKES}
-              disabled={configLocked}
+              disabled={burstSettingsDisabled}
               onMinChange={(value) => update('burstStrokesMin', value)}
               onMaxChange={(value) => update('burstStrokesMax', value)}
             />
