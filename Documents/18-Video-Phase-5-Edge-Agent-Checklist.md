@@ -22,7 +22,7 @@
 |----|----------|--------|
 | **V5-D1** | Edge process | `SomNet.Edge.Agent` — HTTP on **5190** |
 | **V5-D2** | API → edge notify | Fire-and-forget `POST /api/edge/session-started\|session-ended` + `X-SomNet-Edge-Key` |
-| **V5-D3** | Token gateway (dev) | API middleware on `/go2rtc/*` — validate `token` query; cookie for follow-on WS/HLS |
+| **V5-D3** | Token gateway (dev) | API middleware on `/go2rtc/*` — validate `token` query; cookie for follow-on WS/MSE; missing/malformed token → **403** (not 500) |
 | **V5-D4** | Snapshot trigger | API after successful hardware ack (`stroke` / `burst`) — **UI callback removed**; feeds from `appOptions.actionSnapshotFeeds` |
 | **V5-D5** | USB stream disable | Token revocation gates access; go2rtc yaml streams stay loaded (RTSP pull stop → Phase 7) |
 | **V5-D6** | Config | `Video:Edge` in API; `EdgeAgent` in agent `appsettings.json` |

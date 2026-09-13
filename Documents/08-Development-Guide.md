@@ -100,10 +100,14 @@ Default URLs (Phase 1a webcam bench — **same-origin** via API proxy in Develop
 ```
 VITE_VIDEO_VIEWER_MODE=mse
 VITE_VIDEO_FRONT_URL=/go2rtc/stream.html?src=front
-VITE_VIDEO_REAR_URL=/go2rtc/stream.html?src=front
+VITE_VIDEO_REAR_URL=/go2rtc/stream.html?src=rear
 ```
 
+(Layout A-dev — 2× USB webcam. Phase 1a single-camera bench may set both URLs to `src=front`.)
+
 The API proxies `/go2rtc/*` → `http://localhost:1984/*` (YARP in `appsettings.Development.json`). Do **not** point iframes at `http://localhost:1984` from the SomNet UI — cross-origin embeds block autoplay on Windows (camera on/off, blank panels). Direct `http://localhost:1984/stream.html?...` in a top-level tab is fine for bench checks.
+
+After UI changes, run **`npm run build`** in `SomNet.UI` when testing via **`dotnet run`** on the API (serves `dist/`, not the Vite dev server).
 
 go2rtc must allow proxied WebSocket origins — in `D:\SomNet.Edge\go2rtc.yaml`:
 
@@ -115,7 +119,7 @@ api:
 
 Restart go2rtc after changing that file.
 
-Use **`src=front` for both panels** until the IP rear camera is configured — one camera producer avoids choppy RTSP restream. Phase 1b: set rear to `src=rear` and add RTSP in `D:\SomNet.Edge\go2rtc.yaml`.
+For **Layout A-dev** (2× USB), use **`src=front`** and **`src=rear`** as in `.env.example`. On poor mobile/tunnel links, set **Options → Live video feeds** to a single camera ([Phase 6 V6-D17](./19-Video-Phase-6-Tunnel-Checklist.md)).
 
 After changing env files, rebuild UI (`npm run build`) for integrated API hosting. Omit a URL to show the placeholder for that monitor.
 

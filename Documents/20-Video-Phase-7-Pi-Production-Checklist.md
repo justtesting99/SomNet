@@ -1,6 +1,6 @@
 # Video — Phase 7 Pi production bench
 
-**Status:** **Blocked** — complete [Phase 6](./19-Video-Phase-6-Tunnel-Checklist.md) first
+**Status:** **Blocked** — complete [Phase 6](./19-Video-Phase-6-Tunnel-Checklist.md) sign-off first (PC smoke in progress)
 
 > **Production target while IP on hold (V1-D11):** **Raspberry Pi 4/5 + 2× USB webcam** (Layout A-dev). No vendor cloud egress — video leaves the site only via SomNet session-scoped tunnel. Validate Pi can sustain dual V4L2 → HLS before treating this as the production edge.
 

@@ -1,6 +1,6 @@
 # Video — Phase 6 Tunnel (remote operator, no Azure)
 
-**Status:** **Ready** — [Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md) signed off (2026-09-12)
+**Status:** **In progress** — [Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md) signed off (2026-09-12); **PC tunnel smoke largely complete**; mobile **LTE** polish deferred
 
 > **Phase 5:** Signed off (Layout A-dev manual v1).
 
@@ -126,7 +126,7 @@ Cloudflare edge ── cloudflared ──► localhost:5031  SomNet API + UI + /
 | **V6-D6** | WebSockets | Tunnel route must allow **SignalR** and go2rtc **WebSocket/MSE** (long-lived connections) |
 | **V6-D7** | Tunnel setup | **Dashboard-managed** named tunnel + local `cloudflared` credentials (gitignored) |
 | **V6-D8** | Phase 6 hostname | **Quick Tunnel** (`*.trycloudflare.com`) — custom domain deferred to Phase 7/8 |
-| **V6-D9** | Code scope | **Scripts + docs only** — verify existing same-origin app; no proactive API changes |
+| **V6-D9** | Code scope | **Tunnel scripts + edge docs** primary; **follow-ups:** live feed gating (V6-D17), malformed stream token → **403** (not 500) |
 | **V6-D10** | Local config path | **`D:\SomNet.Edge\`** (alongside `go2rtc.yaml`; `SOMNET_EDGE_HOME` pattern) |
 | **V6-D11** | Extra auth | **SomNet login only** — Cloudflare Access deferred |
 | **V6-D12** | Quick Tunnel command | **`cloudflared tunnel --url http://localhost:5031`** — new `*.trycloudflare.com` URL each run |
@@ -134,7 +134,7 @@ Cloudflare edge ── cloudflared ──► localhost:5031  SomNet API + UI + /
 | **V6-D14** | ESP32 API URL | **Unchanged LAN URL** — remote operator uses tunnel; device stays on local API |
 | **V6-D15** | Proxy/cookie fixes | **Only if V6-T2/T5 fail** — e.g. `Secure` cookie, forwarded headers (no proactive API change) |
 | **V6-D16** | Sign-off scope | **Dev PC only** (Layout A-dev) — Pi tunnel repeated in [Phase 7](./20-Video-Phase-7-Pi-Production-Checklist.md) |
-| **V6-D17** | Mobile / poor-link live feeds | **Options → General → Live video feeds** (`both` \| front \| rear) gates which iframes mount — only selected camera(s) connect to go2rtc (saves tunnel bandwidth + edge CPU). Separate from **Action snapshot cameras** (stills only). |
+| **V6-D17** | Mobile / poor-link live feeds | **Options → General → Live video feeds** — pairing field **`appOptions.mobileVideoExpandDefault`**: `"both"` \| `"monitor1"` (front) \| `"monitor2"` (rear). Gates which iframes mount; disabled camera does not connect to go2rtc. Preview button reads **Start feed** / **Start feeds** accordingly. **Separate** from **Action snapshot cameras** (stills only). UI changes require **`npm run build`** in `SomNet.UI` (API serves `dist/`). |
 
 ---
 
@@ -153,8 +153,8 @@ Cloudflare edge ── cloudflared ──► localhost:5031  SomNet API + UI + /
 
 ### Cloudflare Quick Tunnel (V6-D12)
 
-- [ ] `cloudflared` on PATH (or `D:\SomNet.Edge\bin\`)
-- [ ] Run **`cloudflared tunnel --url http://localhost:5031`** — copy printed `*.trycloudflare.com` URL for smoke tests
+- [x] `cloudflared` on PATH (or `D:\SomNet.Edge\bin\`) — `install-cloudflared-windows.ps1`
+- [x] Run **`cloudflared tunnel --url http://localhost:5031`** — copy printed `*.trycloudflare.com` URL for smoke tests
 - [ ] Note: URL **changes each run** — acceptable for Phase 6 dev; named tunnel + custom DNS → Phase 7/8
 - [ ] (Optional later) Dashboard named tunnel + credentials in `D:\SomNet.Edge\` per V6-D7 — not required for first smoke
 
@@ -177,7 +177,8 @@ Cloudflare edge ── cloudflared ──► localhost:5031  SomNet API + UI + /
 - [ ] Confirm token mint produces `/go2rtc/…` URLs (works relative to tunneled origin)
 - [ ] SignalR hub connects over `wss://` through tunnel (no hardcoded `localhost` in UI)
 - [ ] **`VITE_VIDEO_VIEWER_MODE=mse`** unchanged (V6-D13) — retest with `webrtc` only if feeds fail
-- [x] **Live video feed gating (V6-D17)** — `appOptions.mobileVideoExpandDefault` (`both` \| front \| rear) controls which live iframes mount; disabled feed does not open a go2rtc stream
+- [x] **Live video feed gating (V6-D17)** — `mobileVideoExpandDefault` (`both` \| `monitor1` \| `monitor2`) controls which live iframes mount; disabled feed does not open a go2rtc stream
+- [x] **Malformed stream token** — `VideoStreamTokenService.TryValidateToken` returns false (gateway **403** message), not HTTP 500
 
 ### ESP32 (V6-D14)
 
@@ -203,12 +204,12 @@ Run from a device **off LAN** (e.g. phone on cellular). All three local services
 
 | # | Steps | Pass criteria | Result |
 |---|-------|---------------|--------|
-| **V6-T1** | Open `https://<tunnel-host>/` | SomNet login page loads over HTTPS | ☐ |
-| **V6-T2** | Login → Manual → first stroke → feeds | Front + rear play in dashboard | ☐ |
-| **V6-T3** | Open `/go2rtc/stream.html?src=front` without token | **403** (Phase 5 gateway still enforced) | ☐ |
-| **V6-T4** | Remote stroke (ESP32 on LAN) | Ack; snapshot on disk + history gallery | ☐ |
-| **V6-T5** | Switch mode or Sub change | Feeds clear; old token URL → **403** | ☐ |
-| **V6-T6** | Phone on poor link: Options → **Live video feeds → Rear only** (or Front only) → stroke | Only selected monitor loads; no stuck “Loading feed…” on the disabled camera; stream playable on Wi‑Fi/LTE | ☐ |
+| **V6-T1** | Open `https://<tunnel-host>/` | SomNet login page loads over HTTPS | ☑ PC + phone |
+| **V6-T2** | Login → Manual → first stroke → feeds | Front + rear play in dashboard | ☑ PC; ☑ phone partial (dual feed on LTE poor — use V6-D17) |
+| **V6-T3** | Open `/go2rtc/stream.html?src=front` without token | **403** or body *Video stream access requires a valid session token* | ☑ |
+| **V6-T4** | Remote stroke (ESP32 on LAN) | Ack; snapshot on disk + history gallery | ☑ PC; ☐ phone on weak LTE (Safari timeout — retest on Wi‑Fi / better 4G) |
+| **V6-T5** | Switch mode or Sub change | Feeds clear; old token URL → **403** | ☑ PC; ☑ phone (feeds cleared) |
+| **V6-T6** | Phone: Options → **Live video feeds → Rear only** (or Front only) → stroke / Start feed | Only selected monitor; **Start feed** label; playable on Wi‑Fi; LTE acceptable with single feed (may need Safari **Play** tap) | ☑ Wi‑Fi |
 
 **Exit:** V6-T1–T5 on **dev PC** (V6-D16); **V6-T6** recommended for mobile/tunnel — [Phase 7 — Pi production](./20-Video-Phase-7-Pi-Production-Checklist.md).
 
@@ -240,6 +241,9 @@ Remote operator opens the **`https://….trycloudflare.com`** URL printed by `st
 |---------|----------------|
 | Login works; feeds black | WebSocket blocked — check Cloudflare route / `cloudflared` logs |
 | One feed OK, other stuck Loading | Dual MSE on phone — set **Live video feeds** to single camera (V6-D17) |
+| Safari **Play** required on video | iOS autoplay policy for MSE in iframe — operator tap expected on mobile |
+| **Start feeds** on single-feed option | Stale UI `dist/` — run **`npm run build`** in `SomNet.UI`; hard-refresh phone |
+| Safari “Server stopped responding” | Weak **LTE** + dual streams — use Wi‑Fi, single feed, or defer mobile test |
 | SignalR disconnected | Tunnel WebSocket support; mixed content if URL not HTTPS |
 | Video 403 with token | Token gateway OK on LAN? Retest locally before blaming tunnel |
 | Commands fail remotely | ESP32 must reach **LAN** API; tunnel only carries operator browser traffic |
@@ -257,3 +261,4 @@ Remote operator opens the **`https://….trycloudflare.com`** URL printed by `st
 | 2026-09-12 | Locked V6-D7–D11 — Quick Tunnel for Phase 6; scripts-only; D:\\SomNet.Edge config; SomNet auth only |
 | 2026-09-12 | Locked V6-D12–D16 — Q6a quick tunnel cmd; Q7a mse; Q8a ESP32 LAN; Q9a fix-if-fail; Q10a dev PC sign-off |
 | 2026-09-12 | **V6-D17** + live feed gating — Options **Live video feeds** mounts only selected camera(s); V6-T6 mobile smoke |
+| 2026-09-12 | Smoke results (PC + phone); V6-D9/D17 doc sync; malformed token 403; UI dist rebuild note; LTE/Safari deferrals |

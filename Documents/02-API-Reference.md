@@ -176,7 +176,7 @@ Per Dom+Sub pairing settings stored as JSON.
     "confirmBeforeCommands": false,
     "allowAutomaticModeOverrides": false,
     "autoExpandVideoOnMobile": true,
-    "mobileVideoExpandDefault": "Both",
+    "mobileVideoExpandDefault": "both",
     "showSessionTimestamps": true,
     "operatorDisplayName": "",
     "defaultNotesPrefix": "Session",
@@ -185,7 +185,10 @@ Per Dom+Sub pairing settings stored as JSON.
     "actionSnapshotFeeds": "both"
   },
   "manual": { /* ManualControlStateDto */ },
-  "automatic": { /* AutomaticControlStateDto */ }
+  "automatic": { /* AutomaticControlStateDto */ },
+  "video": {
+    "tunnelBaseUrl": ""
+  }
 }
 ```
 
@@ -193,7 +196,15 @@ Per Dom+Sub pairing settings stored as JSON.
 
 **`videoFeedTimeoutSeconds`** (default `30`, range 5–600) — seconds to keep live video visible after manual stroke/burst idle or after automatic session end. See [16-Video-Phase-3-Session-Tokens-Checklist.md](./16-Video-Phase-3-Session-Tokens-Checklist.md).
 
-**`actionSnapshotFeeds`** (default `"both"`) — which camera stills to capture after each manual stroke/burst ack: `"both"` (front + rear) or `"rear"` (rear only). Read by `VideoSnapshotService` from saved pairing settings when the API fires capture on hardware ack. Optional override on `POST /api/video/sessions/{sessionId}/snapshots` body field `feeds`.
+**`mobileVideoExpandDefault`** (default `"both"`) — **Options → Live video feeds**: `"both"` \| `"monitor1"` (front only) \| `"monitor2"` (rear only). UI gates which session iframes mount; disabled cameras do not open a go2rtc stream ([Phase 6 V6-D17](./19-Video-Phase-6-Tunnel-Checklist.md)). On mobile, works with **`autoExpandVideoOnMobile`** for full-screen expand after commands. JSON uses camelCase enum strings (`VideoExpandMode`).
+
+**`actionSnapshotFeeds`** (default `"both"`) — **Options → Action snapshot cameras**: `"both"` (front + rear stills) or `"rear"` (rear stills only). Read by `VideoSnapshotService` on hardware ack. **Does not** control live video iframes. Optional override on `POST /api/video/sessions/{sessionId}/snapshots` body field `feeds`.
+
+**`video.tunnelBaseUrl`** (default empty) — optional split-origin video base for token embed paths; leave empty for same-origin `/go2rtc` through the tunneled API ([Phase 6](./19-Video-Phase-6-Tunnel-Checklist.md)).
+
+### Video stream gateway — `/go2rtc/*`
+
+When `Video:Edge:RequireTokenForGo2Rtc` is enabled (dev bench), requests under `/go2rtc` require a valid session stream token (`?token=` query or access cookie issued after first valid request). Missing, malformed, expired, or revoked tokens → **HTTP 403** with body *Video stream access requires a valid session token.* Public assets (`.js`, `.css`, etc.) under `/go2rtc` are exempt. See [Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md) · [Phase 6](./19-Video-Phase-6-Tunnel-Checklist.md).
 
 Defaults are applied server-side when no record exists. Legacy millisecond-based power values are migrated to 0–100% on read via `PairingSettingsSerializer`.
 

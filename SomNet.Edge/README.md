@@ -112,8 +112,11 @@ Copy the **`https://….trycloudflare.com`** URL printed by the tunnel script. R
 | Setting | Phase 6 value |
 |---------|----------------|
 | Pairing `video.tunnelBaseUrl` | **Empty** — same-origin `/go2rtc` through tunneled API |
+| Options **Live video feeds** | `both` / front / rear — gates which iframes load ([V6-D17](../Documents/19-Video-Phase-6-Tunnel-Checklist.md)) |
+| Options **Action snapshot cameras** | Stills only — does **not** gate live video |
 | ESP32 `server_url` | **LAN API** (e.g. `http://192.168.x.x:5031`) — not the tunnel URL |
 | Viewer mode | **`mse`** (`VITE_VIDEO_VIEWER_MODE=mse`) |
+| UI after changes | Run **`npm run build`** in `SomNet.UI` — API serves `dist/` |
 
 **Named tunnel template (later):** copy [`config/cloudflared.example.yml`](config/cloudflared.example.yml) to `D:\SomNet.Edge\cloudflared.yml` and add dashboard credentials locally.
 

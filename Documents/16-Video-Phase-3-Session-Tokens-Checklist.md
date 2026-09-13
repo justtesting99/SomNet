@@ -23,9 +23,9 @@
 | **V3-D2** | Endpoint | `POST /api/video/sessions/{sessionId}/tokens` (operator JWT) |
 | **V3-D3** | TTL | 30 min; remint on feed show while session active (no background refresh timer) |
 | **V3-D4** | Pairing settings | `tunnelBaseUrl` (`VideoSettingsDto`) per dom/sub (dev: `/go2rtc/…` via YARP) |
-| **V3-D5** | Validation v1 | API-only mint; go2rtc token check deferred to Phase 5 |
+| **V3-D5** | Validation v1 | API mint; **token gateway on `/go2rtc`** implemented in [Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md) |
 | **V3-D6** | Feed visibility timeout | **Options → General** `videoFeedTimeoutSeconds` (default **30**). Manual: timer starts when stroke/burst/**abort** completes (`manualVideoActivitySeq` + command pending idle). Bursts stay up for full command duration. Automatic: post-session grace same duration. Mode/sub/sign-out: immediate hide. |
-| **V3-D7** | Preview feeds | **Start feeds** above video panels (manual + automatic). Creates/reuses in-progress session for tokens; **2×** action timeout. Manual: strokes/bursts use normal timeout. Automatic: feeds stay up while session runs; post-Stop grace unchanged. |
+| **V3-D7** | Preview feeds | **Start feed(s)** above video panels (manual + automatic). Label singular when **Live video feeds** is single-camera ([Phase 6 V6-D17](./19-Video-Phase-6-Tunnel-Checklist.md)). Creates/reuses in-progress session for tokens; **2×** action timeout. Manual: strokes/bursts use normal timeout. Automatic: feeds stay up while session runs; post-Stop grace unchanged. |
 
 ---
 

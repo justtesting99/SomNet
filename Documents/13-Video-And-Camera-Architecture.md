@@ -542,11 +542,11 @@ Light coupling only — no new firmware phase.
 
 | Area | Status | Detail |
 |------|--------|--------|
-| **Pairing settings** | **Partial** | `tunnelBaseUrl` (`VideoSettingsDto`) per dom/sub; empty → API default embed path. **`appOptions.actionSnapshotFeeds`** (`both` \| `rear`) — which cameras to still-capture on ack. **Future:** site installer config via ESP32/edge UI ([14 plan — Future enhancements](./14-Video-Implementation-Plan.md#future-enhancements-todo)). Bench: `VITE_VIDEO_FRONT_URL` gates video feature; iframe `src` from session tokens. |
+| **Pairing settings** | **Partial** | `video.tunnelBaseUrl` per dom/sub (empty → same-origin `/go2rtc`). **`appOptions.mobileVideoExpandDefault`** (`both` \| `monitor1` \| `monitor2`) — **live** iframe gating ([Phase 6 V6-D17](./19-Video-Phase-6-Tunnel-Checklist.md)). **`appOptions.actionSnapshotFeeds`** (`both` \| `rear`) — **stills** on ack only. **Future:** installer config via ESP32/edge UI ([14 plan — Future enhancements](./14-Video-Implementation-Plan.md#future-enhancements-todo)). Bench: `VITE_VIDEO_FRONT_URL` gates video feature; iframe `src` from session tokens. |
 | **Session start/end** | **Partial** | Mint tokens on feed show; revoke on `POST …/end` ([Phase 3](./16-Video-Phase-3-Session-Tokens-Checklist.md)). Edge agent notify on start/end → [Phase 5](./18-Video-Phase-5-Edge-Agent-Checklist.md). |
 | **API** | **Partial** | `POST /api/video/sessions/{sessionId}/tokens`; snapshot capture/list/image ([Phase 4](./17-Video-Phase-4-Action-Snapshots-Checklist.md)). Edge webhook on ack → Phase 5. |
 | **Action snapshots** | **Done (manual v1)** | `SessionActionSnapshots` table — `sessionId`, `actionIndex`, `feed`, disk path, `capturedAt`. Configurable feeds via `actionSnapshotFeeds`. **Not** stored on session event rows. |
-| **UI** | **Partial** | `useSessionVideoSources` — tokens, feed timeouts, Start feeds preview, F5 restore hints. History: `SessionSnapshotGallery`. Automatic snapshots deferred. |
+| **UI** | **Partial** | `useSessionVideoSources` — tokens, feed timeouts, live feed gating, Start feed(s) preview, F5 restore hints. History: `SessionSnapshotGallery`. Automatic snapshots deferred. |
 | **Azure** | **Future** | Blob container + lifecycle rule; no App Service video egress ([Phase 8](./21-Video-Phase-8-Azure-Cutover-Checklist.md)). |
 
 See [07-Session-And-History.md](./07-Session-And-History.md) — history dialog loads snapshots via video API, not session event fields.
@@ -576,6 +576,7 @@ See [07-Session-And-History.md](./07-Session-And-History.md) — history dialog 
 | V10 | IP camera path (Galayou) | **On hold** (V1-D9); Thingino if resumed | Vendor cloud tunnel risk |
 | V11 | Active camera layout | **A-dev** 2× USB webcam; **Pi 4/5** production target while IP on hold | No vendor egress; SomNet session tunnel only |
 | V12 | Action snapshot feeds | **Operator-configurable** (`both` \| `rear`) via `appOptions.actionSnapshotFeeds` | Stream delay makes front stills less useful; rear outcome is primary record |
+| V13 | Live video feed count | **Operator-configurable** (`both` \| `monitor1` \| `monitor2`) via `appOptions.mobileVideoExpandDefault` | Single feed on poor mobile/tunnel links; separate from snapshot feeds ([Phase 6](./19-Video-Phase-6-Tunnel-Checklist.md)) |
 
 ---
 
@@ -661,13 +662,13 @@ Architecture and hardware choices live in this document. **Phased implementation
 
 | Doc | Phase | Status |
 |-----|-------|--------|
-| [14-Video-Implementation-Plan.md](./14-Video-Implementation-Plan.md) | Roadmap | **Phase 5 next** |
+| [14-Video-Implementation-Plan.md](./14-Video-Implementation-Plan.md) | Roadmap | **Phase 6 in progress** |
 | [14-Video-Phase-1-Edge-Bench-Checklist.md](./14-Video-Phase-1-Edge-Bench-Checklist.md) | 1 — go2rtc on PC | **Partial sign-off** (Layout A-dev) |
 | [15-Video-Phase-2-UI-Embed-Checklist.md](./15-Video-Phase-2-UI-Embed-Checklist.md) | 2 — dashboard iframes | **Complete** |
 | [16-Video-Phase-3-Session-Tokens-Checklist.md](./16-Video-Phase-3-Session-Tokens-Checklist.md) | 3 — API tokens | **Signed off** (T4 deferred) |
 | [17-Video-Phase-4-Action-Snapshots-Checklist.md](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | 4 — snapshots (local) | **Signed off** (manual v1) |
-| [18-Video-Phase-5-Edge-Agent-Checklist.md](./18-Video-Phase-5-Edge-Agent-Checklist.md) | 5 — edge agent | **Ready** |
-| [19-Video-Phase-6-Tunnel-Checklist.md](./19-Video-Phase-6-Tunnel-Checklist.md) | 6 — remote operator | Blocked (Phase 5) |
+| [18-Video-Phase-5-Edge-Agent-Checklist.md](./18-Video-Phase-5-Edge-Agent-Checklist.md) | 5 — edge agent | **Signed off** (2026-09-12) |
+| [19-Video-Phase-6-Tunnel-Checklist.md](./19-Video-Phase-6-Tunnel-Checklist.md) | 6 — remote operator | **In progress** (PC smoke) |
 | [20-Video-Phase-7-Pi-Production-Checklist.md](./20-Video-Phase-7-Pi-Production-Checklist.md) | 7 — Pi + ESP32 E2E | Blocked (Phase 6) |
 | [21-Video-Phase-8-Azure-Cutover-Checklist.md](./21-Video-Phase-8-Azure-Cutover-Checklist.md) | 8 — Azure deploy | Blocked (Phase 7) |
 

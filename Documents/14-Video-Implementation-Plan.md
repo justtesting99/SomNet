@@ -1,6 +1,6 @@
 # Video Implementation Plan
 
-**Status:** Phase 1 **partial sign-off** (Layout A-dev); Phases **2–5 complete** (manual); **Phase 6 next**; IP on hold (V1-D9)  
+**Status:** Phase 1 **partial sign-off** (Layout A-dev); Phases **2–5 complete** (manual); **Phase 6 in progress** (PC tunnel smoke); IP on hold (V1-D9)  
 **Architecture (source of truth):** [13-Video-And-Camera-Architecture.md](./13-Video-And-Camera-Architecture.md)
 
 Video work is **separate from ESP32 firmware phases** and **separate from UI rehydration / multi-tab checklists**. Develop on **local PC + LocalDB** until Phase 8; **no Azure hosting required** until then ([13 §15](./13-Video-And-Camera-Architecture.md#15-deployment-order--local-first-azure-last)).
@@ -18,7 +18,7 @@ Video work is **separate from ESP32 firmware phases** and **separate from UI reh
 | **3** | [Phase 3 — Session tokens](./16-Video-Phase-3-Session-Tokens-Checklist.md) | API mints session-scoped stream tokens; UI fetches on session start | PC + local API | API + UI — **complete** |
 | **4** | [Phase 4 — Action snapshots](./17-Video-Phase-4-Action-Snapshots-Checklist.md) | Capture on device ack; local disk; `SessionActionSnapshots` + history gallery | PC + local API | API + UI — **complete** (manual v1) |
 | **5** | [Phase 5 — Edge agent](./18-Video-Phase-5-Edge-Agent-Checklist.md) | Session start/end → enable streams; token validation at gateway | PC | API + edge agent — **complete** |
-| **6** | [Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) | Remote operator without Azure (**Cloudflare Tunnel** to PC API) | PC | Config + scripts |
+| **6** | [Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) | Remote operator without Azure (**Cloudflare Tunnel** to PC API) | PC | Edge scripts + UI feed gating + token gateway hardening |
 | **7** | [Phase 7 — Pi production bench](./20-Video-Phase-7-Pi-Production-Checklist.md) | Move edge to Pi 4/5; **Layout A-dev** (2× USB); E2E with ESP32 on LAN | **Pi** + local API | Config + docs |
 | **8** | [Phase 8 — Azure cutover](./21-Video-Phase-8-Azure-Cutover-Checklist.md) | App Service + SQL + Blob; production URLs | Azure | Deploy |
 
@@ -32,7 +32,7 @@ Phases **2–6** may overlap partially after Phase 1 sign-off; order above is th
 | **IP cameras** | **On hold** (V1-D9) — Galayou stock app + Thingino failed; 1b/1c not on critical path. |
 | **Production edge** | **Pi 4/5 + 2× USB webcam** preferred while IP on hold (V1-D11) — no vendor cloud; outbound video only via SomNet session tunnel. Validate in [Phase 7](./20-Video-Phase-7-Pi-Production-Checklist.md). |
 | **Production operators** | ~**10 users** initial; Cloudflare Tunnel **$0** at this scale; optional Access free to **50** — see [Phase 6 — client advisory](./19-Video-Phase-6-Tunnel-Checklist.md#production-scale--client-advisory) |
-| **Next software phase** | [Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) |
+| **Next software phase** | [Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) sign-off → [Phase 7 — Pi](./20-Video-Phase-7-Pi-Production-Checklist.md) |
 
 ---
 
@@ -55,7 +55,9 @@ Phase 1–6 use a **PC** as edge; Phase 7 validates the **Pi** config before Azu
 |------|---------|
 | `SomNet.Edge/` | Sample go2rtc config, scripts; edge agent (Phase 5+) |
 | `SomNet.UI/src/hooks/useSessionVideoSources.ts` | Feed lifecycle, tokens, timeouts, preview (Phase 3+) |
-| `SomNet.UI/src/components/video/` | Monitors, **Start feeds**, snapshot gallery (Phase 2–4) |
+| `SomNet.UI/src/components/video/` | Monitors, **Start feed(s)** preview, snapshot gallery (Phase 2–4) |
+| `SomNet.UI/src/utils/liveVideoFeedPreference.ts` | Live feed gating by `mobileVideoExpandDefault` (Phase 6) |
+| `SomNet.Edge/scripts/start-cloudflare-tunnel.ps1` | Quick Tunnel to API :5031 (Phase 6) |
 | `SomNet.UI/src/api/video.ts`, `videoSnapshots.ts` | Token + snapshot API clients |
 | `SomNet.API/Controllers/VideoController.cs` | Token mint + snapshot capture/serve |
 | `SomNet.API/Services/VideoStreamTokenService.cs` | JWT mint/revoke (Phase 3) |
@@ -114,8 +116,9 @@ Related: [03 — Future Enhancements](./03-Frontend-Architecture.md#future-enhan
 | 2026-09-11 | Pivot to G7 SD installer for bench; G2 1c deferred |
 | 2026-09-11 | **V1-D9** — IP camera deferred; partial Phase 1 sign-off; Phase 3+ active |
 | 2026-09-11 | **V1-D10/D11** — A-dev 2× webcam active; Pi 4 preferred production while IP on hold |
-| 2026-09-12 | Phases 3–4 complete (manual); Phase 5 next; doc sync with codebase |
+| 2026-09-12 | Phases 3–4 complete (manual); Phase 5 signed off; doc sync with codebase |
 | 2026-09-12 | Phase 5 signed off (edge agent, token gateway, API snapshot trigger) |
 | 2026-09-12 | Action snapshot feed option — `appOptions.actionSnapshotFeeds` (`both` \| `rear`) in Options → General |
 | 2026-09-12 | Phase 6 checklist expanded — Cloudflare Tunnel v1, cost/licensing, smoke tests |
 | 2026-09-12 | Future — snapshot encryption at rest (disk + SQL metadata) |
+| 2026-09-12 | Phase 6 — Cloudflare scripts, live feed gating (V6-D17), PC tunnel smoke; mobile LTE deferred |

@@ -256,11 +256,11 @@ Page load (authenticated; last mode may restore from localStorage)
 
 - **VideoMonitor** — Embedded video feed area in dashboard
 - **VideoFeed** — Feed display (iframe `src` from session tokens when active)
-- **VideoFeedStartPanel** — Start feeds / preview controls (Phase 3)
+- **VideoFeedStartPanel** — **Start feed** / **Start feeds** preview controls (Phase 3; label follows live feed selection)
 - **VideoMaximizeOverlay** — Full-screen overlay on mobile when `expandOnAction` triggers
 - **SessionSnapshotGallery** / **AuthenticatedSnapshotImage** — action stills in history (Phase 4)
 
-**Live video feeds:** `appOptions.mobileVideoExpandDefault` (`both` \| front \| rear) gates which session iframes mount — disabled cameras do not connect to go2rtc (bandwidth/CPU savings on mobile/tunnel). On mobile, `appOptions.autoExpandVideoOnMobile` opens the selected feed full screen after commands.
+**Live video feeds (Options → General):** `appOptions.mobileVideoExpandDefault` — `"both"` \| `"monitor1"` (front) \| `"monitor2"` (rear). Implemented in `utils/liveVideoFeedPreference.ts` + `useSessionVideoSources` — disabled cameras do not mount iframes or connect to go2rtc (bandwidth/CPU savings on mobile/tunnel). **`actionSnapshotFeeds`** is separate (stills only). On mobile, `appOptions.autoExpandVideoOnMobile` opens the selected feed full screen after commands. Rebuild **`SomNet.UI/dist`** after UI changes when using integrated API hosting.
 
 **Options → General (video):** `appOptions.videoFeedTimeoutSeconds` — live feed hide delay after manual actions or automatic session end. **`appOptions.actionSnapshotFeeds`** — `both` (front + rear stills per action) or `rear` (rear only; skips front capture when stream delay makes expression stills less useful). Saved via pairing settings; API applies on ack-triggered capture (Phase 5).
 
