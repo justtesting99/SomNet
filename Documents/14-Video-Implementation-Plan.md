@@ -21,8 +21,9 @@ Video work is **separate from ESP32 firmware phases** and **separate from UI reh
 | **6** | [Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) | Remote operator without Azure (**Cloudflare Tunnel** to PC API) | PC | Edge scripts + UI feed gating + bandwidth + token gateway — **signed off** (2026-09-13) |
 | **7** | [Phase 7 — Pi production bench](./20-Video-Phase-7-Pi-Production-Checklist.md) | Move edge to Pi 4/5; **Layout A-dev** (2× USB); E2E with ESP32 on LAN | **Pi** + local API | Config + docs |
 | **8** | [Phase 8 — Azure cutover](./21-Video-Phase-8-Azure-Cutover-Checklist.md) | App Service + SQL + Blob; production URLs | Azure | Deploy |
+| **7b** | [Phase 7b — Edge intercom (draft)](./22-Video-Phase-7b-Edge-Intercom-Draft.md) | Optional Pi headset audio (listen-in / PTT) — **phone remains primary** | Pi | **Draft only** — after Phase 7 video |
 
-Phases **2–6** may overlap partially after Phase 1 sign-off; order above is the recommended sequence.
+Phases **2–6** may overlap partially after Phase 1 sign-off; order above is the recommended sequence. **Phase 7b** is optional and must **not** change MSE camera feeds.
 
 ### Active development path (2026-09-11)
 
@@ -97,6 +98,12 @@ Site installer → ESP32 /config (and/or edge setup UI)
 
 Related: [03 — Future Enhancements](./03-Frontend-Architecture.md#future-enhancements) · [13 §13](./13-Video-And-Camera-Architecture.md#13-somnet-touchpoints) · [09 Device plan — pairing](./09-ESP32-Device-Plan.md).
 
+### Edge intercom — optional audio on Pi (draft)
+
+**Today:** Live feeds are **video-only** (`-an` in go2rtc exec / V4L2). Voice coordination is expected on a **normal phone call**.
+
+**Future (optional):** [Phase 7b draft](./22-Video-Phase-7b-Edge-Intercom-Draft.md) — USB **headset on Pi** for listen-in and/or push-to-talk via a **separate WebRTC audio stream**. **Keep MSE for front/rear video**; latency and tunnel WebRTC must be measured before productizing. Not scheduled until Phase 7 video is signed off on Pi.
+
 ### Snapshot encryption at rest (future)
 
 **Today:** Action stills are **unencrypted plain JPEGs** on local disk; SQL holds **path metadata only** (not image blobs). Acceptable for dev bench only.
@@ -123,3 +130,4 @@ Related: [03 — Future Enhancements](./03-Frontend-Architecture.md#future-enhan
 | 2026-09-12 | Future — snapshot encryption at rest (disk + SQL metadata) |
 | 2026-09-12 | Phase 6 — Cloudflare scripts, live feed gating (V6-D17), PC tunnel smoke; mobile LTE deferred |
 | 2026-09-13 | **Phase 6 signed off** — PC Quick Tunnel; V6-D18 bandwidth + mobile playback; iPhone/LTE deferred |
+| 2026-09-13 | **Phase 7b draft** — optional Pi headset intercom; phone primary; MSE video unchanged |

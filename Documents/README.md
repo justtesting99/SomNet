@@ -47,5 +47,6 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Video Phase 5 — Edge agent](./18-Video-Phase-5-Edge-Agent-Checklist.md) | Developers | Session lifecycle on gateway — **signed off** (2026-09-12) |
 | [Video Phase 6 — Tunnel](./19-Video-Phase-6-Tunnel-Checklist.md) | Developers | **Cloudflare Tunnel** to dev PC API — **signed off** (2026-09-13; iPhone/LTE follow-up optional) |
 | [Video Phase 7 — Pi production](./20-Video-Phase-7-Pi-Production-Checklist.md) | Developers | Pi 4/5 + 2× USB webcam (A-dev) E2E — **next** |
+| [Video Phase 7b — Edge intercom (draft)](./22-Video-Phase-7b-Edge-Intercom-Draft.md) | Developers | Optional Pi headset audio — **draft**; phone primary; after Phase 7 video |
 | [Video Phase 8 — Azure cutover](./21-Video-Phase-8-Azure-Cutover-Checklist.md) | Developers | App Service + SQL + Blob — blocked |
 | [ESP32 Network Spec](./09-ESP32-Network-Spec.md) | Developers | **Wi‑Fi / HTTP / hub architecture** — signed off **`0.12.0-network`** (2026-09-09); S3–S6 verified |

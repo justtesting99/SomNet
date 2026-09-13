@@ -577,6 +577,7 @@ See [07-Session-And-History.md](./07-Session-And-History.md) — history dialog 
 | V11 | Active camera layout | **A-dev** 2× USB webcam; **Pi 4/5** production target while IP on hold | No vendor egress; SomNet session tunnel only |
 | V12 | Action snapshot feeds | **Operator-configurable** (`both` \| `rear`) via `appOptions.actionSnapshotFeeds` | Stream delay makes front stills less useful; rear outcome is primary record |
 | V13 | Live video feed count | **Operator-configurable** (`both` \| `monitor1` \| `monitor2`) via `appOptions.mobileVideoExpandDefault` | Single feed on poor mobile/tunnel links; separate from snapshot feeds ([Phase 6](./19-Video-Phase-6-Tunnel-Checklist.md)) |
+| V14 | Edge intercom (voice) | **Defer** — phone call primary; optional Pi headset via go2rtc WebRTC **after Phase 7** ([Phase 7b draft](./22-Video-Phase-7b-Edge-Intercom-Draft.md)) | Do not replace MSE video; latency + tunnel WebRTC are main risks |
 
 ---
 
