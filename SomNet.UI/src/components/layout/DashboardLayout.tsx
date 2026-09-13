@@ -8,6 +8,12 @@ import { VideoFeedStartPanel } from '@/components/video/VideoFeedStartPanel';
 import { REAR_VIDEO_LOAD_DELAY_MS } from '@/config/videoSources';
 import type { VideoPreviewControls } from '@/hooks/useSessionVideoSources';
 import type { OperationMode } from '@/types/modes';
+import { useOptions } from '@/context/OptionsProvider';
+import {
+  isFrontLiveFeedEnabled,
+  isRearLiveFeedEnabled,
+  normalizeMobileVideoExpandDefault,
+} from '@/utils/liveVideoFeedPreference';
 
 interface DashboardLayoutProps {
   controls: ReactNode;
@@ -24,7 +30,15 @@ export function DashboardLayout({
 }: DashboardLayoutProps) {
   const isMobile = useIsMobileViewport();
   const { setExpandMode } = useVideoDisplay();
+  const { options } = useOptions();
+  const liveFeedPreference = normalizeMobileVideoExpandDefault(
+    options.mobileVideoExpandDefault,
+  );
+  const showFrontMonitor = isFrontLiveFeedEnabled(liveFeedPreference);
+  const showRearMonitor = isRearLiveFeedEnabled(liveFeedPreference);
   const sources: [string?, string?] = [videoSources[0], videoSources[1]];
+  const rearLoadDelayMs =
+    sources[0] && sources[1] ? REAR_VIDEO_LOAD_DELAY_MS : 0;
 
   return (
     <>
@@ -37,7 +51,7 @@ export function DashboardLayout({
         >
           {videoPreview ? <VideoFeedStartPanel mode={mode} preview={videoPreview} /> : null}
 
-          {isMobile ? (
+          {isMobile && liveFeedPreference === 'both' ? (
             <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-2">
               <p className="text-xs text-slate-400">
                 Double-tap a feed to expand, or use Both
@@ -48,20 +62,24 @@ export function DashboardLayout({
             </div>
           ) : null}
 
-          <VideoMonitor
-            label="Front"
-            src={sources[0]}
-            showMaximize={isMobile}
-            onMaximize={() => setExpandMode('monitor1')}
-            loadDelayMs={0}
-          />
-          <VideoMonitor
-            label="Rear"
-            src={sources[1]}
-            showMaximize={isMobile}
-            onMaximize={() => setExpandMode('monitor2')}
-            loadDelayMs={sources[0] && sources[1] ? REAR_VIDEO_LOAD_DELAY_MS : 0}
-          />
+          {showFrontMonitor ? (
+            <VideoMonitor
+              label="Front"
+              src={sources[0]}
+              showMaximize={isMobile}
+              onMaximize={() => setExpandMode('monitor1')}
+              loadDelayMs={0}
+            />
+          ) : null}
+          {showRearMonitor ? (
+            <VideoMonitor
+              label="Rear"
+              src={sources[1]}
+              showMaximize={isMobile}
+              onMaximize={() => setExpandMode('monitor2')}
+              loadDelayMs={rearLoadDelayMs}
+            />
+          ) : null}
         </aside>
       </div>
 

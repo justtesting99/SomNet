@@ -36,20 +36,27 @@ export function OptionsGeneralPanel({ pendingOptions, onUpdate }: OptionsGeneral
           When enabled, automatic settings stay editable during a session and changes are sent to
           the device after the current stroke. When disabled, settings lock until Stop or Abort.
         </p>
-        <Checkbox
-          label="Auto-expand video feeds on mobile when commands run"
-          checked={pendingOptions.autoExpandVideoOnMobile}
-          onChange={(event) => onUpdate('autoExpandVideoOnMobile', event.target.checked)}
-        />
         <SelectField
-          label="Default mobile video feed on command"
+          label="Live video feeds"
           value={pendingOptions.mobileVideoExpandDefault}
-          disabled={!pendingOptions.autoExpandVideoOnMobile}
           options={MOBILE_VIDEO_EXPAND_OPTIONS}
           onChange={(event) =>
             onUpdate('mobileVideoExpandDefault', event.target.value as MobileVideoExpandDefault)
           }
         />
+        <p className="text-xs leading-relaxed text-slate-500">
+          Only selected cameras load during a session (saves bandwidth and edge CPU on poor mobile
+          or tunnel links). Change to a single feed when one stream is enough.
+        </p>
+        <Checkbox
+          label="Auto-expand video feeds on mobile when commands run"
+          checked={pendingOptions.autoExpandVideoOnMobile}
+          onChange={(event) => onUpdate('autoExpandVideoOnMobile', event.target.checked)}
+        />
+        <p className="text-xs leading-relaxed text-slate-500">
+          On mobile, opens the live feed selection above full screen after each command (when
+          enabled).
+        </p>
         <NumberField
           label="System status reconnect interval (seconds)"
           value={pendingOptions.reconnectIntervalSeconds}

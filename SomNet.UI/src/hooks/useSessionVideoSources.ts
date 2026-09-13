@@ -24,6 +24,10 @@ import {
   readVideoFeedRestoreHint,
   writeVideoFeedRestoreHint,
 } from '@/utils/videoFeedRestoreHint';
+import {
+  applyLiveVideoFeedPreference,
+  normalizeMobileVideoExpandDefault,
+} from '@/utils/liveVideoFeedPreference';
 
 function toViewerUrls(response: { front: { url: string }; rear: { url: string } }): VideoSourcePair {
   return [
@@ -388,6 +392,15 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     [stopHideWatch],
   );
 
+  const filteredSources = useMemo(
+    () =>
+      applyLiveVideoFeedPreference(
+        sources,
+        normalizeMobileVideoExpandDefault(options.mobileVideoExpandDefault),
+      ),
+    [options.mobileVideoExpandDefault, sources],
+  );
+
   const videoPreview = useMemo(
     (): VideoPreviewControls => ({
       available: mode !== null && isVideoConfigured(),
@@ -397,7 +410,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
         !commandPending &&
         !(mode === 'automatic' && automaticRunning),
       starting: previewStarting,
-      feedsActive: feedVisible && Boolean(sources[0] || sources[1]),
+      feedsActive: feedVisible && Boolean(filteredSources[0] || filteredSources[1]),
       previewActive,
       previewTimeoutSeconds,
       start: startPreview,
@@ -406,14 +419,14 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
       automaticRunning,
       commandPending,
       feedVisible,
+      filteredSources,
       mode,
       previewActive,
       previewStarting,
       previewTimeoutSeconds,
-      sources,
       startPreview,
     ],
   );
 
-  return { sources, videoPreview };
+  return { sources: filteredSources, videoPreview };
 }

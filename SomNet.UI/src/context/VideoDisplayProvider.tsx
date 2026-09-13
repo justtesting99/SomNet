@@ -36,6 +36,21 @@ export function VideoDisplayProvider({ children }: { children: ReactNode }) {
   }, [options.autoExpandVideoOnMobile, options.mobileVideoExpandDefault]);
 
   useEffect(() => {
+    const preference = options.mobileVideoExpandDefault;
+    if (expandMode === 'both' && preference !== 'both') {
+      setExpandMode(preference);
+      return;
+    }
+    if (expandMode === 'monitor1' && preference === 'monitor2') {
+      setExpandMode('monitor2');
+      return;
+    }
+    if (expandMode === 'monitor2' && preference === 'monitor1') {
+      setExpandMode('monitor1');
+    }
+  }, [expandMode, options.mobileVideoExpandDefault]);
+
+  useEffect(() => {
     if (expandMode === 'none') {
       return;
     }

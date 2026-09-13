@@ -1,6 +1,11 @@
 import { Button } from '@/components/ui/Button';
+import { useOptions } from '@/context/OptionsProvider';
 import type { OperationMode } from '@/types/modes';
 import type { VideoPreviewControls } from '@/hooks/useSessionVideoSources';
+import {
+  normalizeMobileVideoExpandDefault,
+  usesSingleLiveFeed,
+} from '@/utils/liveVideoFeedPreference';
 
 interface VideoFeedStartPanelProps {
   mode: OperationMode;
@@ -8,6 +13,11 @@ interface VideoFeedStartPanelProps {
 }
 
 export function VideoFeedStartPanel({ mode, preview }: VideoFeedStartPanelProps) {
+  const { options } = useOptions();
+  const singleFeed = usesSingleLiveFeed(
+    normalizeMobileVideoExpandDefault(options.mobileVideoExpandDefault),
+  );
+
   if (!preview.available) {
     return null;
   }
@@ -15,7 +25,9 @@ export function VideoFeedStartPanel({ mode, preview }: VideoFeedStartPanelProps)
   const hint =
     mode === 'manual'
       ? 'Monitor the air tool before stroking. Strokes and bursts use the normal timeout.'
-      : 'Monitor the air tool before starting the session. Feeds stay up while automatic runs.';
+      : singleFeed
+        ? 'Monitor the air tool before starting the session. The feed stays up while automatic runs.'
+        : 'Monitor the air tool before starting the session. Feeds stay up while automatic runs.';
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-3">
@@ -27,7 +39,13 @@ export function VideoFeedStartPanel({ mode, preview }: VideoFeedStartPanelProps)
           aria-busy={preview.starting}
           onClick={() => void preview.start()}
         >
-          {preview.starting ? 'Starting feeds…' : 'Start feeds'}
+          {preview.starting
+            ? singleFeed
+              ? 'Starting feed…'
+              : 'Starting feeds…'
+            : singleFeed
+              ? 'Start feed'
+              : 'Start feeds'}
         </Button>
         {preview.previewActive ? (
           <span className="text-xs text-emerald-400/90" role="status">

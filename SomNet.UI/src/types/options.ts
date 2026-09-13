@@ -22,9 +22,9 @@ export const MOBILE_VIDEO_EXPAND_OPTIONS: {
   value: MobileVideoExpandDefault;
   label: string;
 }[] = [
-  { value: 'both', label: 'Both feeds' },
-  { value: 'monitor1', label: 'Feed 1' },
-  { value: 'monitor2', label: 'Feed 2' },
+  { value: 'both', label: 'Both (front + rear)' },
+  { value: 'monitor1', label: 'Front only' },
+  { value: 'monitor2', label: 'Rear only' },
 ];
 
 export const ACTION_SNAPSHOT_FEED_OPTIONS: {

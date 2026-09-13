@@ -260,7 +260,7 @@ Page load (authenticated; last mode may restore from localStorage)
 - **VideoMaximizeOverlay** — Full-screen overlay on mobile when `expandOnAction` triggers
 - **SessionSnapshotGallery** / **AuthenticatedSnapshotImage** — action stills in history (Phase 4)
 
-Video expand behavior is controlled by `appOptions.autoExpandVideoOnMobile` and `appOptions.mobileVideoExpandDefault` (`None`, `Monitor1`, `Monitor2`, `Both`).
+**Live video feeds:** `appOptions.mobileVideoExpandDefault` (`both` \| front \| rear) gates which session iframes mount — disabled cameras do not connect to go2rtc (bandwidth/CPU savings on mobile/tunnel). On mobile, `appOptions.autoExpandVideoOnMobile` opens the selected feed full screen after commands.
 
 **Options → General (video):** `appOptions.videoFeedTimeoutSeconds` — live feed hide delay after manual actions or automatic session end. **`appOptions.actionSnapshotFeeds`** — `both` (front + rear stills per action) or `rear` (rear only; skips front capture when stream delay makes expression stills less useful). Saved via pairing settings; API applies on ack-triggered capture (Phase 5).
 

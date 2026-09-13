@@ -13,8 +13,10 @@ export function VideoMaximizeOverlay({ sources }: VideoMaximizeOverlayProps) {
     return null;
   }
 
-  const showMonitor1 = expandMode === 'monitor1' || expandMode === 'both';
-  const showMonitor2 = expandMode === 'monitor2' || expandMode === 'both';
+  const showMonitor1 =
+    Boolean(sources[0]) && (expandMode === 'monitor1' || expandMode === 'both');
+  const showMonitor2 =
+    Boolean(sources[1]) && (expandMode === 'monitor2' || expandMode === 'both');
   const isSingle = expandMode === 'monitor1' || expandMode === 'monitor2';
 
   return (

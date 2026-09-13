@@ -8,6 +8,7 @@ import {
 } from '@/types/options';
 import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
 import { clampVideoFeedTimeoutSeconds } from '@/utils/videoFeedTimeout';
+import { normalizeMobileVideoExpandDefault } from '@/utils/liveVideoFeedPreference';
 import { apiFetch } from '@/api/client';
 
 interface PairingSettingsResponse {
@@ -29,6 +30,9 @@ function normalizeAppOptions(appOptions: PairingSettingsResponse['appOptions']):
       appOptions.videoFeedTimeoutSeconds ?? DEFAULT_APP_OPTIONS.videoFeedTimeoutSeconds,
     ),
     actionSnapshotFeeds: normalizeActionSnapshotFeeds(appOptions.actionSnapshotFeeds),
+    mobileVideoExpandDefault: normalizeMobileVideoExpandDefault(
+      appOptions.mobileVideoExpandDefault,
+    ),
   };
 }
 

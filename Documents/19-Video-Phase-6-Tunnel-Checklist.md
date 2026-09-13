@@ -134,6 +134,7 @@ Cloudflare edge ── cloudflared ──► localhost:5031  SomNet API + UI + /
 | **V6-D14** | ESP32 API URL | **Unchanged LAN URL** — remote operator uses tunnel; device stays on local API |
 | **V6-D15** | Proxy/cookie fixes | **Only if V6-T2/T5 fail** — e.g. `Secure` cookie, forwarded headers (no proactive API change) |
 | **V6-D16** | Sign-off scope | **Dev PC only** (Layout A-dev) — Pi tunnel repeated in [Phase 7](./20-Video-Phase-7-Pi-Production-Checklist.md) |
+| **V6-D17** | Mobile / poor-link live feeds | **Options → General → Live video feeds** (`both` \| front \| rear) gates which iframes mount — only selected camera(s) connect to go2rtc (saves tunnel bandwidth + edge CPU). Separate from **Action snapshot cameras** (stills only). |
 
 ---
 
@@ -176,6 +177,7 @@ Cloudflare edge ── cloudflared ──► localhost:5031  SomNet API + UI + /
 - [ ] Confirm token mint produces `/go2rtc/…` URLs (works relative to tunneled origin)
 - [ ] SignalR hub connects over `wss://` through tunnel (no hardcoded `localhost` in UI)
 - [ ] **`VITE_VIDEO_VIEWER_MODE=mse`** unchanged (V6-D13) — retest with `webrtc` only if feeds fail
+- [x] **Live video feed gating (V6-D17)** — `appOptions.mobileVideoExpandDefault` (`both` \| front \| rear) controls which live iframes mount; disabled feed does not open a go2rtc stream
 
 ### ESP32 (V6-D14)
 
@@ -206,8 +208,9 @@ Run from a device **off LAN** (e.g. phone on cellular). All three local services
 | **V6-T3** | Open `/go2rtc/stream.html?src=front` without token | **403** (Phase 5 gateway still enforced) | ☐ |
 | **V6-T4** | Remote stroke (ESP32 on LAN) | Ack; snapshot on disk + history gallery | ☐ |
 | **V6-T5** | Switch mode or Sub change | Feeds clear; old token URL → **403** | ☐ |
+| **V6-T6** | Phone on poor link: Options → **Live video feeds → Rear only** (or Front only) → stroke | Only selected monitor loads; no stuck “Loading feed…” on the disabled camera; stream playable on Wi‑Fi/LTE | ☐ |
 
-**Exit:** V6-T1–T5 on **dev PC** (V6-D16) → [Phase 7 — Pi production](./20-Video-Phase-7-Pi-Production-Checklist.md).
+**Exit:** V6-T1–T5 on **dev PC** (V6-D16); **V6-T6** recommended for mobile/tunnel — [Phase 7 — Pi production](./20-Video-Phase-7-Pi-Production-Checklist.md).
 
 ---
 
@@ -236,6 +239,7 @@ Remote operator opens the **`https://….trycloudflare.com`** URL printed by `st
 | Symptom | Likely cause |
 |---------|----------------|
 | Login works; feeds black | WebSocket blocked — check Cloudflare route / `cloudflared` logs |
+| One feed OK, other stuck Loading | Dual MSE on phone — set **Live video feeds** to single camera (V6-D17) |
 | SignalR disconnected | Tunnel WebSocket support; mixed content if URL not HTTPS |
 | Video 403 with token | Token gateway OK on LAN? Retest locally before blaming tunnel |
 | Commands fail remotely | ESP32 must reach **LAN** API; tunnel only carries operator browser traffic |
@@ -252,3 +256,4 @@ Remote operator opens the **`https://….trycloudflare.com`** URL printed by `st
 | 2026-09-12 | Production scale (~10 users) and client advisory — Cloudflare growth path to 50+ operators |
 | 2026-09-12 | Locked V6-D7–D11 — Quick Tunnel for Phase 6; scripts-only; D:\\SomNet.Edge config; SomNet auth only |
 | 2026-09-12 | Locked V6-D12–D16 — Q6a quick tunnel cmd; Q7a mse; Q8a ESP32 LAN; Q9a fix-if-fail; Q10a dev PC sign-off |
+| 2026-09-12 | **V6-D17** + live feed gating — Options **Live video feeds** mounts only selected camera(s); V6-T6 mobile smoke |
