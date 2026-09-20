@@ -1,0 +1,39 @@
+# SomNet Edge — go2rtc on Raspberry Pi (Layout A-dev: 2× USB webcam)
+# Copy to /opt/somnet-edge/go2rtc.yaml (or $SOMNET_EDGE_HOME/go2rtc.yaml) — never commit credentials.
+#
+# After v4l2-ctl --list-devices, prefer stable paths:
+#   ls -l /dev/v4l/by-id/
+# Replace video0 / video2 below with by-id symlinks if device order changes across reboots.
+
+log:
+  level: info
+
+api:
+  listen: ":1984"
+  origin: "*"
+
+rtsp:
+  listen: ":8554"
+
+streams:
+  # Prefer /dev/v4l/by-id/...-video-index0 paths (stable across reboots).
+  # Example bench mapping — replace with your ls -l /dev/v4l/by-id/ output:
+  front:
+    - exec:ffmpeg -hide_banner -f v4l2 -input_format mjpeg -video_size 1280x720 -framerate 15 -i /dev/v4l/by-id/usb-Anker_PowerConf_C200_Anker_PowerConf_C200_ACNV9P1D34684485-video-index0 -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 30 -an -f mpegts -
+
+  rear:
+    - exec:ffmpeg -hide_banner -f v4l2 -input_format mjpeg -video_size 1280x720 -framerate 15 -i /dev/v4l/by-id/usb-webcam_webcam_AN20200825001-video-index0 -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 30 -an -f mpegts -
+
+  # If WebRTC/MSE shows codec errors, use explicit libx264 exec instead, e.g.:
+  # front:
+  #   - exec:ffmpeg -hide_banner -f v4l2 -input_format mjpeg -video_size 1280x720 -framerate 15 -i /dev/video0 -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 30 -an -f mpegts -
+
+  # Options → Video feed bandwidth (Phase 6 / Phase 7)
+  front_medium:
+    - ffmpeg:front#video=h264#width=1280#bitrate=1500k
+  rear_medium:
+    - ffmpeg:rear#video=h264#width=1280#bitrate=1500k
+  front_low:
+    - ffmpeg:front#video=h264#width=640#bitrate=500k
+  rear_low:
+    - ffmpeg:rear#video=h264#width=640#bitrate=500k

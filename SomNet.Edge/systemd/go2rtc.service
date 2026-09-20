@@ -1,0 +1,19 @@
+[Unit]
+Description=SomNet go2rtc video gateway (Phase 7 Pi edge)
+Documentation=file:///opt/somnet-edge/go2rtc.yaml
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=somnet
+Group=video
+WorkingDirectory=/opt/somnet-edge/bin
+ExecStart=/opt/somnet-edge/bin/go2rtc -config /opt/somnet-edge/go2rtc.yaml
+Restart=on-failure
+RestartSec=5
+# USB webcams — ensure somnet is in group video (install script adds this)
+SupplementaryGroups=video plugdev
+
+[Install]
+WantedBy=multi-user.target
