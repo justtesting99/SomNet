@@ -34,9 +34,11 @@ function shouldHandleAutomaticSessionComplete(ack: HardwareCommandAck): boolean 
 function handleDeviceButtonEvent(
   event: DeviceButtonEvent,
   notifySiteUserReady: (subTarget: string, requestStartFeed: boolean) => void,
+  markSubPresentAck: (subTarget: string) => void,
 ) {
   if (event.clickType === 'double') {
     notifySiteUserReady(event.subTarget, true);
+    markSubPresentAck(event.subTarget);
     return;
   }
 
@@ -49,18 +51,20 @@ export function AutomaticSessionHubListener() {
   const { isAuthenticated } = useAuth();
   const { settings, setAutomaticRunningLocal } = useOptions();
   const { activeSession, endAutomaticSession } = useLiveSession();
-  const { notifySiteUserReady } = useSiteUserReady();
+  const { notifySiteUserReady, markSubPresentAck } = useSiteUserReady();
   const automaticRef = useRef(settings.automatic);
   const activeSessionRef = useRef(activeSession);
   const endAutomaticSessionRef = useRef(endAutomaticSession);
   const clearAutomaticRunningRef = useRef<() => void>(() => setAutomaticRunningLocal(false));
   const notifySiteUserReadyRef = useRef(notifySiteUserReady);
+  const markSubPresentAckRef = useRef(markSubPresentAck);
 
   automaticRef.current = settings.automatic;
   activeSessionRef.current = activeSession;
   endAutomaticSessionRef.current = endAutomaticSession;
   clearAutomaticRunningRef.current = () => setAutomaticRunningLocal(false);
   notifySiteUserReadyRef.current = notifySiteUserReady;
+  markSubPresentAckRef.current = markSubPresentAck;
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -93,7 +97,11 @@ export function AutomaticSessionHubListener() {
         );
       },
       onButtonEvent: (event) => {
-        handleDeviceButtonEvent(event, notifySiteUserReadyRef.current);
+        handleDeviceButtonEvent(
+          event,
+          notifySiteUserReadyRef.current,
+          markSubPresentAckRef.current,
+        );
       },
     });
 

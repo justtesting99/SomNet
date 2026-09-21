@@ -10,6 +10,7 @@
 #include "execution_context.h"
 #include "nvs_store.h"
 #include "relay_controller.h"
+#include "session_accessory_controller.h"
 #include "signalr_client.h"
 #include "status_led.h"
 #include "wifi_manager.h"
@@ -20,6 +21,7 @@ WifiManager wifiManager;
 DeviceIdentity deviceIdentity;
 NvsStore nvsStore;
 RelayController relayController;
+SessionAccessoryController sessionAccessoryController;
 ExecutionContext executionContext;
 CommandHandler commandHandler;
 ButtonInput buttonInput;
@@ -190,12 +192,18 @@ void setup() {
     }
 
     relayController.begin();
+    sessionAccessoryController.begin();
     executionContext.begin(&relayController);
     buttonInput.begin();
     buttonInput.setClickHandler(onButtonClick, nullptr);
     signalRClient.begin(&nvsStore, &deviceIdentity, &wifiManager);
     signalRClient.setExecutionActiveProbe([]() { return executionContext.isActive(); });
-    commandHandler.begin(&executionContext, &nvsStore, &deviceIdentity, &signalRClient);
+    commandHandler.begin(
+        &executionContext,
+        &nvsStore,
+        &deviceIdentity,
+        &signalRClient,
+        &sessionAccessoryController);
     statusLed.begin();
 
     startNetwork();
@@ -204,6 +212,9 @@ void setup() {
 
 void loop() {
     wifiManager.poll();
+    if (!wifiManager.isSoftAp() && !wifiManager.isConnected()) {
+        sessionAccessoryController.releaseSafety();
+    }
     tryWifiRecovery();
     configWebServer.poll();
     signalRClient.poll();

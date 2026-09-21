@@ -16,6 +16,12 @@ export type TabSyncMessage =
   | { type: 'running'; tabId: string; running: boolean }
   | { type: 'sub'; tabId: string; subTarget: SubTargetName }
   | { type: 'command-lock'; tabId: string; keys: HardwareCommandKey[] }
+  | {
+      type: 'session-accessory';
+      tabId: string;
+      inProgress: boolean;
+      subTarget: SubTargetName;
+    }
   | { type: 'request-sync'; tabId: string };
 
 let tabId: string | null = null;

@@ -4,6 +4,7 @@ import { useOptions } from '@/context/OptionsProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
+import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 import { Panel } from '@/components/ui/Panel';
 import { CommandButton } from '@/components/ui/CommandButton';
 import { NumberField } from '@/components/ui/NumberField';
@@ -42,6 +43,7 @@ export function ManualControls() {
     useLiveSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
+  const { sessionInProgress } = useSessionAccessory();
   const [commandError, setCommandError] = useState('');
 
   useEffect(() => {
@@ -62,10 +64,12 @@ export function ManualControls() {
   const strokePending = isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke);
   const burstPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualBurst);
   const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
-  const hardwareReady = systemStatus.isReady;
-  const strokeDisabledReason = hardwareReady
-    ? undefined
-    : systemStatus.detail || systemStatus.summary;
+  const hardwareReady = systemStatus.isReady && sessionInProgress;
+  const strokeDisabledReason = !sessionInProgress
+    ? 'Turn Session in Progress on before stroke or burst.'
+    : hardwareReady
+      ? undefined
+      : systemStatus.detail || systemStatus.summary;
 
   function update<K extends keyof ManualControlState>(key: K, value: ManualControlState[K]) {
     if (key === 'burstStrokes') {

@@ -1,12 +1,48 @@
-import { Button } from '@/components/ui/Button';
+import { useEffect } from 'react';
+import { useAuth } from '@/context/AuthProvider';
+import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 import { useSiteUserReady } from '@/context/SiteUserReadyProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { subTargetsMatch } from '@/utils/readyBannerStorage';
+import { readSessionAccessoryInProgress } from '@/utils/sessionAccessoryStorage';
+import { Button } from '@/components/ui/Button';
 
 export function SiteUserReadyBanner() {
-  const { notification, clearNotification } = useSiteUserReady();
+  const { user } = useAuth();
+  const domTarget = user?.displayName ?? user?.username ?? '';
+  const { notification, dismissReadyBannerForSub, isReadyBannerDismissedForSub } =
+    useSiteUserReady();
   const { selectedSub } = useSubTarget();
+  const { sessionInProgress, togglePending } = useSessionAccessory();
 
-  if (!notification || notification.subTarget !== selectedSub) {
+  const accessoryActive =
+    sessionInProgress ||
+    togglePending ||
+    (domTarget ? readSessionAccessoryInProgress(domTarget, selectedSub) : false);
+
+  const bannerDismissed = isReadyBannerDismissedForSub(selectedSub);
+
+  useEffect(() => {
+    if (!accessoryActive || !notification) {
+      return;
+    }
+
+    if (subTargetsMatch(notification.subTarget, selectedSub)) {
+      dismissReadyBannerForSub(selectedSub);
+    }
+  }, [
+    accessoryActive,
+    dismissReadyBannerForSub,
+    notification,
+    selectedSub,
+  ]);
+
+  if (
+    !notification ||
+    !subTargetsMatch(notification.subTarget, selectedSub) ||
+    accessoryActive ||
+    bannerDismissed
+  ) {
     return null;
   }
 
@@ -16,7 +52,11 @@ export function SiteUserReadyBanner() {
       role="status"
     >
       <span>{notification.message}</span>
-      <Button variant="secondary" size="sm" onClick={clearNotification}>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => dismissReadyBannerForSub(selectedSub)}
+      >
         Dismiss
       </Button>
     </div>

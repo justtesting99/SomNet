@@ -26,6 +26,9 @@ public static class HardwareCommandKeys
 
     public const string AutomaticUpdate = "automatic-update";
 
+    /// <summary>Device + API — session accessory / external lock (GPIO32).</summary>
+    public const string SessionAccessory = "session-accessory";
+
     public static bool IsManualSnapshotCommand(string commandKey) =>
         string.Equals(commandKey, ManualStroke, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(commandKey, ManualBurst, StringComparison.OrdinalIgnoreCase) ||

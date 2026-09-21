@@ -17,6 +17,8 @@ import { useNotify } from '@/context/NotifyProvider';
 import { useLiveSession } from '@/context/SessionProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { stopAutomaticForModeSwitch } from '@/utils/stopAutomaticForModeSwitch';
+import { SessionInProgressSwitch } from '@/components/hardware/SessionInProgressSwitch';
+import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 
 interface AppShellProps {
   children: ReactNode;
@@ -33,11 +35,33 @@ export function AppShell({ children, wide = false }: AppShellProps) {
   const { activeSession, endActiveSessionIfNeeded, endAutomaticSession } = useLiveSession();
   const { selectedSub } = useSubTarget();
   const { settings, setAutomaticRunningLocal } = useOptions();
+  const { sessionInProgress } = useSessionAccessory();
   const activeSessionRef = useRef(activeSession);
+  const sessionInProgressRef = useRef(sessionInProgress);
 
   activeSessionRef.current = activeSession;
+  sessionInProgressRef.current = sessionInProgress;
+
+  async function stopAutomaticDeviceOnly() {
+    if (activeSessionRef.current?.mode === 'automatic' || settings.automatic.running) {
+      await stopAutomaticForModeSwitch(selectedSub, settings.automatic, {
+        endAutomaticSession: async () => {
+          // Keep server session row while Session in Progress stays on (P16-D7).
+        },
+        setAutomaticRunningLocal,
+        isAutomaticSessionActive: () => activeSessionRef.current?.mode === 'automatic',
+      });
+    }
+
+    setAutomaticRunningLocal(false);
+  }
 
   async function leaveAutomaticSessionIfNeeded(reason: 'mode-switch' | 'sign-out') {
+    if (sessionInProgressRef.current) {
+      await stopAutomaticDeviceOnly();
+      return;
+    }
+
     if (activeSessionRef.current?.mode === 'automatic' || settings.automatic.running) {
       await stopAutomaticForModeSwitch(selectedSub, settings.automatic, {
         endAutomaticSession: (endReason, deviceResult) =>
@@ -57,6 +81,10 @@ export function AppShell({ children, wide = false }: AppShellProps) {
   }
 
   async function handleSignOut() {
+    if (sessionInProgressRef.current) {
+      return;
+    }
+
     await leaveAutomaticSessionIfNeeded('sign-out');
     setMode(null);
     logout();
@@ -98,6 +126,11 @@ export function AppShell({ children, wide = false }: AppShellProps) {
               <Button variant="ghost" size="sm" className="shrink-0" onClick={openNotify}>
                 Notify
               </Button>
+              {mode ? (
+                <div className="shrink-0">
+                  <SessionInProgressSwitch />
+                </div>
+              ) : null}
               <div className="min-w-0 flex-1">
                 <SystemStatusDisplay />
               </div>

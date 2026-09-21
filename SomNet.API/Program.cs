@@ -218,6 +218,23 @@ using (var scope = app.Services.CreateScope())
 var uiDistPath = Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "..", "SomNet.UI", "dist"));
 var uiDistExists = Directory.Exists(uiDistPath);
 
+if (uiDistExists && app.Environment.IsDevelopment())
+{
+    var indexHtmlPath = Path.Combine(uiDistPath, "index.html");
+    if (File.Exists(indexHtmlPath))
+    {
+        var indexHtml = File.ReadAllText(indexHtmlPath);
+        var scriptMatch = System.Text.RegularExpressions.Regex.Match(
+            indexHtml,
+            """src="/assets/(index-[^"]+\.js)""");
+        app.Logger.LogInformation(
+            "Serving SomNet UI from {UiDistPath} (index.html {IndexAge}, bundle {Bundle})",
+            uiDistPath,
+            File.GetLastWriteTime(indexHtmlPath).ToString("u"),
+            scriptMatch.Success ? scriptMatch.Groups[1].Value : "(unknown)");
+    }
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.Use(async (context, next) =>
@@ -258,6 +275,14 @@ if (uiDistExists)
     app.UseStaticFiles(new StaticFileOptions
     {
         FileProvider = uiFileProvider,
+        OnPrepareResponse = ctx =>
+        {
+            if (app.Environment.IsDevelopment())
+            {
+                ctx.Context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+                ctx.Context.Response.Headers.Pragma = "no-cache";
+            }
+        },
     });
 }
 else if (app.Environment.IsDevelopment())

@@ -6,6 +6,7 @@ class DeviceIdentity;
 class ExecutionContext;
 class NvsStore;
 class SignalRClient;
+class SessionAccessoryController;
 
 struct ExecuteCommandPayload {
     char correlationId[64];
@@ -23,7 +24,8 @@ public:
         ExecutionContext* executionContext,
         NvsStore* nvsStore,
         DeviceIdentity* identity,
-        SignalRClient* signalRClient);
+        SignalRClient* signalRClient,
+        SessionAccessoryController* sessionAccessory);
     void poll();
 
     void enqueueExecuteCommand(const ExecuteCommandPayload& command);
@@ -51,6 +53,7 @@ private:
     NvsStore* nvs_ = nullptr;
     DeviceIdentity* identity_ = nullptr;
     SignalRClient* signalR_ = nullptr;
+    SessionAccessoryController* sessionAccessory_ = nullptr;
     bool initialized_ = false;
     bool pendingCommandReady_ = false;
     ExecuteCommandPayload pendingCommand_{};

@@ -16,6 +16,11 @@ public sealed class AppOptionsDto
 
     public bool ShowSessionTimestamps { get; init; } = true;
 
+    /// <summary>
+    /// When true, UI shows the active session id under the Session in Progress header control.
+    /// </summary>
+    public bool ShowActiveSessionIdInHeader { get; init; }
+
     public string OperatorDisplayName { get; init; } = string.Empty;
 
     public string DefaultNotesPrefix { get; init; } = "Session";

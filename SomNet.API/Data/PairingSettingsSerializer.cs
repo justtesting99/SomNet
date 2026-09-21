@@ -133,6 +133,7 @@ public static class PairingSettingsSerializer
             AutoExpandVideoOnMobile = source.AutoExpandVideoOnMobile,
             MobileVideoExpandDefault = source.MobileVideoExpandDefault,
             ShowSessionTimestamps = source.ShowSessionTimestamps,
+            ShowActiveSessionIdInHeader = source.ShowActiveSessionIdInHeader,
             OperatorDisplayName = source.OperatorDisplayName?.Trim() ?? string.Empty,
             DefaultNotesPrefix = string.IsNullOrWhiteSpace(source.DefaultNotesPrefix)
                 ? AppOptionsDefaults.Value.DefaultNotesPrefix

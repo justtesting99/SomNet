@@ -35,6 +35,7 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [UI Session Rehydration (automatic)](./10-UI-Session-Rehydration-Checklist.md) | Developers | Restore Stop/Abort after browser refresh during automatic session — **signed off** (2026-09-10) |
 | [UI Manual Session Rehydration](./11-UI-Manual-Session-Rehydration-Checklist.md) | Developers | Restore manual event log after browser refresh — **signed off** (2026-09-11) |
 | [UI Multi-Tab Sync](./12-UI-Multi-Tab-Sync-Checklist.md) | Developers | Coordinate live session/mode/sub across browser tabs — **signed off** (2026-09-11) |
+| [Session accessory / Session in Progress (P16)](./25-Session-Accessory-In-Progress-Checklist.md) | Developers | GPIO32 lock + slide switch–gated sessions — **signed off** (2026-09-20; firmware `0.15.0-session-accessory`) |
 | [Video & Camera Architecture](./13-Video-And-Camera-Architecture.md) | Developers / installers | Session-scoped streams, edge gateway (Pi), webcam/IP cameras, snapshots — **Phases 1–6 implemented (PC); Phase 7 next** |
 | [Video Implementation Plan](./14-Video-Implementation-Plan.md) | Developers | Phases 1–8 roadmap — **Phases 2–6 complete; Phase 7 next; IP on hold** |
 | [Video Phase 1 — Edge bench](./14-Video-Phase-1-Edge-Bench-Checklist.md) | Developers | go2rtc on PC — **partial sign-off** (Layout A-dev: 2× USB webcam) |

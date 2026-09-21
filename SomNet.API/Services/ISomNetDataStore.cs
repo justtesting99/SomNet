@@ -28,6 +28,9 @@ public interface ISomNetDataStore
 
     SessionHistoryEntryDto EndSession(string domTarget, string sessionId, EndSessionRequestDto request);
 
+    /// <summary>Removes a session row that is still at the initial in-progress placeholder (P16 accessory off with no activity).</summary>
+    void DeleteInProgressSession(string domTarget, string sessionId);
+
     PairingSettingsDto GetPairingSettings(string domTarget, string subTarget);
 
     PairingSettingsDto SavePairingSettings(

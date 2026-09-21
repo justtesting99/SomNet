@@ -303,9 +303,9 @@ public sealed class SomNetDataStore : ISomNetDataStore
             throw new ArgumentException("Session id is required.", nameof(sessionId));
         }
 
-        if (string.IsNullOrWhiteSpace(request.Summary))
+        if (string.IsNullOrWhiteSpace(request.Summary) && request.Mode is null)
         {
-            throw new ArgumentException("Summary is required.", nameof(request));
+            throw new ArgumentException("Summary or Mode is required.", nameof(request));
         }
 
         var session = _db.Sessions.SingleOrDefault(entry =>
@@ -317,7 +317,16 @@ public sealed class SomNetDataStore : ISomNetDataStore
             throw new KeyNotFoundException($"Session '{sessionId}' was not found for this operator.");
         }
 
-        session.Summary = request.Summary.Trim();
+        if (!string.IsNullOrWhiteSpace(request.Summary))
+        {
+            session.Summary = request.Summary.Trim();
+        }
+
+        if (request.Mode is not null)
+        {
+            session.Mode = request.Mode.Value;
+        }
+
         _db.SaveChanges();
 
         return ToDto(session);
@@ -353,6 +362,37 @@ public sealed class SomNetDataStore : ISomNetDataStore
         _db.SaveChanges();
 
         return ToDto(session);
+    }
+
+    public void DeleteInProgressSession(string domTarget, string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(domTarget))
+        {
+            throw new ArgumentException("DomTarget is required.", nameof(domTarget));
+        }
+
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new ArgumentException("Session id is required.", nameof(sessionId));
+        }
+
+        var session = _db.Sessions.SingleOrDefault(entry =>
+            entry.Id == sessionId.Trim() &&
+            entry.DomTarget == domTarget.Trim());
+
+        if (session is null)
+        {
+            throw new KeyNotFoundException($"Session '{sessionId}' was not found for this operator.");
+        }
+
+        if (!SessionProgressHelper.IsInProgress(session.Summary))
+        {
+            throw new InvalidOperationException(
+                "Only in-progress sessions with no recorded activity can be discarded.");
+        }
+
+        _db.Sessions.Remove(session);
+        _db.SaveChanges();
     }
 
     public PairingSettingsDto GetPairingSettings(string domTarget, string subTarget)

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { OptionsAccountPanel } from '@/components/layout/options/OptionsAccountPanel';
 import { OptionsGeneralPanel } from '@/components/layout/options/OptionsGeneralPanel';
 import { OptionsNotificationsPanel } from '@/components/layout/options/OptionsNotificationsPanel';
+import { OptionsDebugPanel } from '@/components/layout/options/OptionsDebugPanel';
 
 export function OptionsDialog() {
   const { isDialogOpen, closeDialog, options, setOptions } = useOptions();
@@ -135,6 +136,9 @@ export function OptionsDialog() {
           ) : null}
           {activeTab === 'notifications' ? (
             <OptionsNotificationsPanel pendingOptions={pendingOptions} onUpdate={updateOption} />
+          ) : null}
+          {activeTab === 'debug' ? (
+            <OptionsDebugPanel pendingOptions={pendingOptions} onUpdate={updateOption} />
           ) : null}
         </div>
 

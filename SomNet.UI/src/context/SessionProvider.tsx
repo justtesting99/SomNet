@@ -9,10 +9,11 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  fetchActiveSession,
   startSession as startSessionApi,
   endSession as endSessionApi,
   updateSession as updateSessionApi,
+  patchSessionMode as patchSessionModeApi,
+  discardInProgressSession as discardInProgressSessionApi,
 } from '@/api/sessions';
 import { useAuth } from '@/context/AuthProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
@@ -37,6 +38,13 @@ interface ActiveSessionState {
   subTarget: SubTargetName;
   events: ManualActionEvent[];
   abortCount: number;
+  /** True after Automatic Start succeeds for this accessory session (P16). */
+  automaticDeviceStarted: boolean;
+}
+
+export interface EndSessionForAccessoryOptions {
+  automaticDeviceStarted: boolean;
+  automaticDeviceResult?: AutomaticResultJson | null;
 }
 
 interface SessionContextValue {
@@ -67,6 +75,11 @@ interface SessionContextValue {
   prepareManualSession: () => Promise<number>;
   /** Ensures an in-progress automatic session record exists (for video preview before Start). */
   prepareAutomaticSession: () => Promise<void>;
+  /** P16 — new server row on Session in Progress OFF→ON. */
+  startSessionForAccessory: (mode: OperationMode) => Promise<void>;
+  endSessionForAccessory: (options: EndSessionForAccessoryOptions) => Promise<void>;
+  syncActiveSessionMode: (mode: OperationMode) => Promise<void>;
+  markAutomaticDeviceStarted: () => void;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -122,45 +135,72 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       subTarget: entry.subTarget,
       events: manualProgress?.events ?? [],
       abortCount: manualProgress?.abortCount ?? 0,
+      automaticDeviceStarted: false,
     };
   }, []);
 
-  const ensureManualSession = useCallback(async () => {
-    if (activeSessionRef.current || startingRef.current || !domTarget) {
-      return;
-    }
-
-    startingRef.current = true;
-
-    try {
-      const existing = await fetchActiveSession(selectedSub);
-      if (existing && isRehydratableManualSession(existing)) {
-        const nextSession = buildSessionFromEntry(existing);
-        activeSessionRef.current = nextSession;
-        setActiveSession(nextSession);
+  const startSessionForAccessory = useCallback(
+    async (mode: OperationMode) => {
+      if (startingRef.current || !domTarget) {
         return;
       }
 
-      const entry = await startSessionApi(selectedSub, 'manual');
-      const nextSession: ActiveSessionState = {
-        id: entry.id,
-        startedAt: entry.startedAt,
-        mode: 'manual',
-        subTarget: selectedSub,
-        events: [],
-        abortCount: 0,
-      };
+      startingRef.current = true;
+
+      try {
+        const entry = await startSessionApi(selectedSub, mode);
+        const nextSession: ActiveSessionState = {
+          id: entry.id,
+          startedAt: entry.startedAt,
+          mode,
+          subTarget: selectedSub,
+          events: [],
+          abortCount: 0,
+          automaticDeviceStarted: false,
+        };
+        activeSessionRef.current = nextSession;
+        setActiveSession(nextSession);
+      } finally {
+        startingRef.current = false;
+      }
+    },
+    [domTarget, selectedSub],
+  );
+
+  const markAutomaticDeviceStarted = useCallback(() => {
+    const current = activeSessionRef.current;
+    if (!current || current.automaticDeviceStarted) {
+      return;
+    }
+
+    const nextSession: ActiveSessionState = { ...current, automaticDeviceStarted: true };
+    activeSessionRef.current = nextSession;
+    setActiveSession(nextSession);
+  }, []);
+
+  const syncActiveSessionMode = useCallback(
+    async (mode: OperationMode) => {
+      const current = activeSessionRef.current;
+      if (!current || current.mode === mode) {
+        return;
+      }
+
+      await patchSessionModeApi(current.id, mode);
+      const nextSession: ActiveSessionState = { ...current, mode };
       activeSessionRef.current = nextSession;
       setActiveSession(nextSession);
-    } finally {
-      startingRef.current = false;
-    }
-  }, [buildSessionFromEntry, domTarget, selectedSub]);
+    },
+    [],
+  );
 
   const prepareManualSession = useCallback(async (): Promise<number> => {
-    await ensureManualSession();
-    return activeSessionRef.current?.events.length ?? 0;
-  }, [ensureManualSession]);
+    const current = activeSessionRef.current;
+    if (!current || current.mode !== 'manual') {
+      throw new Error('Session in Progress must be on before manual actions.');
+    }
+
+    return current.events.length;
+  }, []);
 
   const finalizeSession = useCallback(async (summary: string) => {
     const current = activeSessionRef.current;
@@ -178,33 +218,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const beginAutomaticSession = useCallback(async () => {
-    if (activeSessionRef.current || startingRef.current || !domTarget) {
+    const current = activeSessionRef.current;
+    if (!current || current.mode !== 'automatic') {
       return;
     }
-
-    startingRef.current = true;
-
-    try {
-      const entry = await startSessionApi(selectedSub, 'automatic');
-      const nextSession: ActiveSessionState = {
-        id: entry.id,
-        startedAt: entry.startedAt,
-        mode: 'automatic',
-        subTarget: selectedSub,
-        events: [],
-        abortCount: 0,
-      };
-      activeSessionRef.current = nextSession;
-      setActiveSession(nextSession);
-    } finally {
-      startingRef.current = false;
-    }
-  }, [domTarget, selectedSub]);
+  }, []);
 
   const recordManualStroke = useCallback(
     async (powerPercent: number, actualStrokeMs?: number) => {
-      await ensureManualSession();
-
       const current = activeSessionRef.current;
       if (!current || current.mode !== 'manual') {
         return;
@@ -220,12 +241,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       markManualVideoCommandComplete();
       await persistManualProgress(nextSession);
     },
-    [bumpManualVideoActivity, ensureManualSession, persistManualProgress],
+    [bumpManualVideoActivity, persistManualProgress],
   );
 
   const recordManualAbort = useCallback(async () => {
-    await ensureManualSession();
-
     const current = activeSessionRef.current;
     if (!current || current.mode !== 'manual') {
       return;
@@ -240,7 +259,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     bumpManualVideoActivity();
     markManualVideoCommandComplete();
     await persistManualProgress(nextSession);
-  }, [bumpManualVideoActivity, ensureManualSession, persistManualProgress]);
+  }, [bumpManualVideoActivity, persistManualProgress]);
 
   const recordManualBurst = useCallback(
     async (
@@ -249,8 +268,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       burstDelaySeconds: number,
       strokesCompleted?: number,
     ) => {
-      await ensureManualSession();
-
       const current = activeSessionRef.current;
       if (!current || current.mode !== 'manual') {
         return;
@@ -271,7 +288,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       markManualVideoCommandComplete();
       await persistManualProgress(nextSession);
     },
-    [bumpManualVideoActivity, ensureManualSession, persistManualProgress],
+    [bumpManualVideoActivity, persistManualProgress],
   );
 
   const endManualSession = useCallback(
@@ -379,7 +396,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           reason === 'abort' ||
           reason === 'mode-switch' ||
           reason === 'sign-out' ||
-          reason === 'sub-change'
+          reason === 'sub-change' ||
+          reason === 'session-accessory-off'
             ? reason
             : 'mode-switch';
         await endManualSession(manualReason);
@@ -391,6 +409,48 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await endAutomaticSession(automaticReason);
     },
     [endAutomaticSession, endManualSession],
+  );
+
+  const discardActiveSession = useCallback(async () => {
+    const current = activeSessionRef.current;
+    if (!current) {
+      return;
+    }
+
+    try {
+      await discardInProgressSessionApi(current.id);
+      activeSessionRef.current = null;
+      setActiveSession(null);
+    } catch {
+      // Row may have progressed — fall back to a normal end below.
+      await endActiveSessionIfNeeded('session-accessory-off');
+    }
+  }, [endActiveSessionIfNeeded]);
+
+  const endSessionForAccessory = useCallback(
+    async (options: EndSessionForAccessoryOptions) => {
+      const current = activeSessionRef.current;
+      if (!current) {
+        return;
+      }
+
+      const discardManual =
+        current.mode === 'manual' && current.events.length === 0 && current.abortCount === 0;
+      const discardAutomatic = current.mode === 'automatic' && !options.automaticDeviceStarted;
+
+      if (discardManual || discardAutomatic) {
+        await discardActiveSession();
+        return;
+      }
+
+      if (current.mode === 'automatic') {
+        await endAutomaticSession('session-accessory-off', options.automaticDeviceResult ?? null);
+        return;
+      }
+
+      await endActiveSessionIfNeeded('session-accessory-off');
+    },
+    [discardActiveSession, endActiveSessionIfNeeded, endAutomaticSession],
   );
 
   const value = useMemo(
@@ -409,6 +469,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       syncSessionFromRemote,
       prepareManualSession,
       prepareAutomaticSession: beginAutomaticSession,
+      startSessionForAccessory,
+      endSessionForAccessory,
+      syncActiveSessionMode,
+      markAutomaticDeviceStarted,
     }),
     [
       activeSession,
@@ -418,9 +482,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       endActiveSessionIfNeeded,
       endAutomaticSession,
       endManualSession,
+      endSessionForAccessory,
       prepareManualSession,
       rehydrateSession,
       syncSessionFromRemote,
+      syncActiveSessionMode,
+      startSessionForAccessory,
+      markAutomaticDeviceStarted,
       recordManualBurst,
       recordManualStroke,
       recordManualAbort,

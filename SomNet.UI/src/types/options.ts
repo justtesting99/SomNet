@@ -13,6 +13,8 @@ export interface AppOptions {
   autoExpandVideoOnMobile: boolean;
   mobileVideoExpandDefault: MobileVideoExpandDefault;
   showSessionTimestamps: boolean;
+  /** When true, show session id under the header Session in Progress control (debugging). */
+  showActiveSessionIdInHeader: boolean;
   operatorDisplayName: string;
   defaultNotesPrefix: string;
   reconnectIntervalSeconds: number;
@@ -73,7 +75,12 @@ export const DEFAULT_GENERAL_APP_OPTIONS: Pick<
   defaultNotesPrefix: 'Session',
 };
 
+export const DEFAULT_DEBUG_APP_OPTIONS: Pick<AppOptions, 'showActiveSessionIdInHeader'> = {
+  showActiveSessionIdInHeader: false,
+};
+
 export const DEFAULT_APP_OPTIONS: AppOptions = {
   ...DEFAULT_NOTIFICATIONS_APP_OPTIONS,
   ...DEFAULT_GENERAL_APP_OPTIONS,
+  ...DEFAULT_DEBUG_APP_OPTIONS,
 };

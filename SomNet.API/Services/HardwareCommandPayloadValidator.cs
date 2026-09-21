@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SomNet.Shared.Models;
 
 namespace SomNet.API.Services;
 
@@ -66,7 +67,37 @@ internal static class HardwareCommandPayloadValidator
             return TryValidateAutomaticStartPayload(payloadJson, maxStrokeMs, out errorMessage);
         }
 
+        if (string.Equals(commandKey, HardwareCommandKeys.SessionAccessory, StringComparison.OrdinalIgnoreCase))
+        {
+            return TryValidateSessionAccessoryPayload(payloadJson, out errorMessage);
+        }
+
         return true;
+    }
+
+    private static bool TryValidateSessionAccessoryPayload(string payloadJson, out string errorMessage)
+    {
+        errorMessage = string.Empty;
+
+        try
+        {
+            using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
+            var root = document.RootElement;
+
+            if (!root.TryGetProperty("enabled", out var enabledElement) ||
+                enabledElement.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            {
+                errorMessage = "Session-accessory payload requires enabled (boolean).";
+                return false;
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            errorMessage = "Session-accessory payloadJson is not valid JSON.";
+            return false;
+        }
     }
 
     private static bool TryValidateStrokePayload(string payloadJson, int maxStrokeMs, out string errorMessage)

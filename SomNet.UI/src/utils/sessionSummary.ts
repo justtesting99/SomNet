@@ -1,4 +1,9 @@
-export type ManualSessionEndReason = 'abort' | 'mode-switch' | 'sign-out' | 'sub-change';
+export type ManualSessionEndReason =
+  | 'abort'
+  | 'mode-switch'
+  | 'sign-out'
+  | 'sub-change'
+  | 'session-accessory-off';
 
 export type ManualActionEvent =
   | { type: 'stroke'; powerPercent: number; actualStrokeMs?: number }
@@ -152,6 +157,8 @@ function formatAutomaticEndReason(endReason?: string, interrupted?: boolean): st
       return 'aborted';
     case 'error':
       return 'device error';
+    case 'session-accessory-off':
+      return 'session released';
     default:
       return endReason && endReason.length > 0 ? endReason : 'ended';
   }

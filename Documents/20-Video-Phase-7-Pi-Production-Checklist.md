@@ -1,6 +1,6 @@
 # Video — Phase 7 Pi production bench
 
-**Status:** **Next** — [Phase 6](./19-Video-Phase-6-Tunnel-Checklist.md) signed off (2026-09-13). Optional [Phase 7b intercom](./22-Video-Phase-7b-Edge-Intercom-Draft.md) is **out of scope** until Pi video is signed off.
+**Status:** **Next** — [P16 Session accessory](./25-Session-Accessory-In-Progress-Checklist.md) **signed off** (2026-09-20). [Phase 6](./19-Video-Phase-6-Tunnel-Checklist.md) signed off (2026-09-13). Optional [Phase 7b intercom](./22-Video-Phase-7b-Edge-Intercom-Draft.md) remains **out of scope** until Pi video is signed off.
 
 > **Production target while IP on hold (V1-D11):** **Raspberry Pi 4/5 + 2× USB webcam** (Layout A-dev) in a **standalone box** at the tool site. No vendor cloud egress — live video leaves the site only via **SomNet session-scoped tunnel** on the Pi. Validate dual V4L2 → **MSE** (`mode=mse`) before treating this as the production edge.
 

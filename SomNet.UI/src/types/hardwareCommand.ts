@@ -5,6 +5,11 @@ export const HARDWARE_COMMAND_KEYS = {
   automaticStart: 'automatic-start',
   automaticStop: 'automatic-stop',
   automaticUpdate: 'automatic-update',
+  sessionAccessory: 'session-accessory',
+} as const;
+
+export const DEVICE_COMMAND_KEYS = {
+  sessionAccessory: 'session-accessory',
 } as const;
 
 export type HardwareCommandKey =

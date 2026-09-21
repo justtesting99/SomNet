@@ -3,6 +3,7 @@
 #include "command_handler.h"
 #include "device_identity.h"
 #include "nvs_store.h"
+#include "session_accessory_controller.h"
 #include "wifi_manager.h"
 
 #include <Arduino.h>
@@ -1631,6 +1632,7 @@ void SignalRClient::poll() {
 }
 
 void SignalRClient::onTransportLost(bool immediateRetry) {
+    sessionAccessoryOnTransportLost();
     negotiateFsmActive_ = false;
     tcpProbeFsmActive_ = false;
     resetHubNetworkFsms();

@@ -5,6 +5,7 @@ import { useOptions } from '@/context/OptionsProvider';
 import { useLiveSession } from '@/context/SessionProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { reconcileActiveSessionForMode } from '@/utils/sessionReconcile';
+import { readSessionAccessoryInProgress } from '@/utils/sessionAccessoryStorage';
 
 /**
  * Restores SessionProvider when entering a mode or after browser refresh (P13/P14).
@@ -27,6 +28,10 @@ export function SessionRehydrator() {
 
   useEffect(() => {
     if (!domTarget || isLoading || !settingsLoaded || activeSession) {
+      return;
+    }
+
+    if (!readSessionAccessoryInProgress(domTarget, selectedSub)) {
       return;
     }
 

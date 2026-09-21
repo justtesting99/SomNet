@@ -1,14 +1,16 @@
 import type { AppOptions } from '@/types/options';
 import {
+  DEFAULT_DEBUG_APP_OPTIONS,
   DEFAULT_GENERAL_APP_OPTIONS,
   DEFAULT_NOTIFICATIONS_APP_OPTIONS,
 } from '@/types/options';
 
-export type OptionsDialogTab = 'general' | 'notifications' | 'account';
+export type OptionsDialogTab = 'general' | 'notifications' | 'debug' | 'account';
 
 export const OPTIONS_DIALOG_TABS: { id: OptionsDialogTab; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'notifications', label: 'Notifications' },
+  { id: 'debug', label: 'Debug' },
   { id: 'account', label: 'Account' },
 ];
 
@@ -40,7 +42,7 @@ export function writeLastOptionsDialogTab(tab: OptionsDialogTab): void {
 }
 
 export function isOptionsTabWithSaveFooter(tab: OptionsDialogTab): boolean {
-  return tab === 'general' || tab === 'notifications';
+  return tab === 'general' || tab === 'notifications' || tab === 'debug';
 }
 
 export function getDefaultOptionsForTab(tab: OptionsDialogTab): Partial<AppOptions> {
@@ -49,6 +51,8 @@ export function getDefaultOptionsForTab(tab: OptionsDialogTab): Partial<AppOptio
       return DEFAULT_GENERAL_APP_OPTIONS;
     case 'notifications':
       return DEFAULT_NOTIFICATIONS_APP_OPTIONS;
+    case 'debug':
+      return DEFAULT_DEBUG_APP_OPTIONS;
     default:
       return {};
   }
@@ -60,6 +64,8 @@ export function getResetDefaultsLabel(tab: OptionsDialogTab): string {
       return 'Reset General defaults';
     case 'notifications':
       return 'Reset Notifications defaults';
+    case 'debug':
+      return 'Reset Debug defaults';
     default:
       return 'Reset defaults';
   }

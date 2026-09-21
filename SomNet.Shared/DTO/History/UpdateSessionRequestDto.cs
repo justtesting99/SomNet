@@ -1,6 +1,10 @@
+using SomNet.Shared.Enums;
+
 namespace SomNet.Shared.DTO.History;
 
 public sealed class UpdateSessionRequestDto
 {
-    public required string Summary { get; init; }
+    public string? Summary { get; init; }
+
+    public OperationMode? Mode { get; init; }
 }

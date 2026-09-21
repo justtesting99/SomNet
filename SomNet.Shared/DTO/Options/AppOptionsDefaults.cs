@@ -12,6 +12,7 @@ public static class AppOptionsDefaults
         AutoExpandVideoOnMobile = true,
         MobileVideoExpandDefault = VideoExpandMode.Both,
         ShowSessionTimestamps = true,
+        ShowActiveSessionIdInHeader = false,
         OperatorDisplayName = string.Empty,
         DefaultNotesPrefix = "Session",
         ReconnectIntervalSeconds = 10,

@@ -100,6 +100,36 @@ public class SessionsController : ControllerBase
         }
     }
 
+    [HttpDelete("{sessionId}")]
+    public IActionResult DiscardInProgress(string sessionId)
+    {
+        var domTarget = GetDomTarget();
+
+        if (domTarget is null)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            _dataStore.DeleteInProgressSession(domTarget, sessionId);
+            _videoStreamTokenService.RevokeSession(sessionId);
+            return NoContent();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
     [HttpPost("{sessionId}/end")]
     public ActionResult<SessionHistoryEntryDto> End(
         string sessionId,

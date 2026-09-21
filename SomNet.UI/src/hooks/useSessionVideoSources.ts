@@ -6,6 +6,7 @@ import { useLiveSession } from '@/context/SessionProvider';
 import { useOptions } from '@/context/OptionsProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useMode } from '@/context/ModeProvider';
+import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 import { consumeManualVideoPendingNotify } from '@/utils/manualVideoCommandNotify';
@@ -71,6 +72,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
   const { options, settings } = useOptions();
   const { expandForPlaybackStart } = useVideoDisplay();
   const { isCommandPending } = useHardwareCommand();
+  const { sessionInProgress } = useSessionAccessory();
   const videoFeedBandwidth = normalizeVideoFeedBandwidth(options.videoFeedBandwidth);
 
   const timeoutSeconds = clampVideoFeedTimeoutSeconds(options.videoFeedTimeoutSeconds);
@@ -167,6 +169,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     if (
       !isVideoConfigured() ||
       !mode ||
+      !sessionInProgress ||
       (feedVisible && feedsAlreadyLoaded) ||
       previewStarting ||
       commandPending ||
@@ -201,6 +204,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     previewTimeoutSeconds,
     scheduleHideAfter,
     expandForPlaybackStart,
+    sessionInProgress,
     sources,
   ]);
 
@@ -439,6 +443,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     (): VideoPreviewControls => ({
       available: mode !== null && isVideoConfigured(),
       canStart:
+        sessionInProgress &&
         (!feedVisible || !hasLoadedSources) &&
         !previewStarting &&
         !commandPending &&
@@ -450,16 +455,17 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
       start: startPreview,
     }),
     [
-      automaticRunning,
-      commandPending,
-      feedVisible,
-      hasLoadedSources,
-      mode,
-      previewActive,
-      previewStarting,
-      previewTimeoutSeconds,
-      startPreview,
-    ],
+    automaticRunning,
+    commandPending,
+    feedVisible,
+    hasLoadedSources,
+    mode,
+    previewActive,
+    previewStarting,
+    previewTimeoutSeconds,
+    sessionInProgress,
+    startPreview,
+  ],
   );
 
   return { sources: filteredSources, videoPreview };

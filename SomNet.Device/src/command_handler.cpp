@@ -4,9 +4,11 @@
 #include "execution_context.h"
 #include "modes/automatic/automatic_config.h"
 #include "nvs_store.h"
+#include "session_accessory_controller.h"
 #include "signalr_client.h"
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <string.h>
 
 namespace {
@@ -44,11 +46,13 @@ void CommandHandler::begin(
     ExecutionContext* executionContext,
     NvsStore* nvsStore,
     DeviceIdentity* identity,
-    SignalRClient* signalRClient) {
+    SignalRClient* signalRClient,
+    SessionAccessoryController* sessionAccessory) {
     executionContext_ = executionContext;
     nvs_ = nvsStore;
     identity_ = identity;
     signalR_ = signalRClient;
+    sessionAccessory_ = sessionAccessory;
     gCommandHandlerInstance = this;
     initialized_ = true;
     if (executionContext_ != nullptr) {
@@ -215,6 +219,31 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
         return;
     }
 
+    if (strcmp(command.commandKey, "session-accessory") == 0) {
+        if (sessionAccessory_ == nullptr) {
+            sendAck(command.correlationId, false, "accessory unavailable", nullptr);
+            return;
+        }
+
+        JsonDocument doc;
+        const DeserializationError err = deserializeJson(
+            doc,
+            command.payloadJson[0] != '\0' ? command.payloadJson : "{}");
+        if (err || !doc["enabled"].is<bool>()) {
+            sendAck(command.correlationId, false, "invalid session-accessory payload", nullptr);
+            return;
+        }
+
+        const bool enabled = doc["enabled"].as<bool>();
+        if (!sessionAccessory_->setEnabled(enabled)) {
+            sendAck(command.correlationId, false, "accessory unavailable", nullptr);
+            return;
+        }
+
+        sendAck(command.correlationId, true, enabled ? "accessory on" : "accessory off", nullptr);
+        return;
+    }
+
     if (strcmp(command.commandKey, "abort") == 0) {
         if (!executionContext_->isActive()) {
             Serial.println(F("[CMD] reject: nothing to abort"));
@@ -224,6 +253,12 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
 
         executionContext_->abortActive();
         sendAck(command.correlationId, true, "command aborted", nullptr);
+        return;
+    }
+
+    if (sessionAccessory_ == nullptr || !sessionAccessory_->isEnabled()) {
+        Serial.println(F("[CMD] reject: session accessory off"));
+        sendAck(command.correlationId, false, "session accessory off", nullptr);
         return;
     }
 

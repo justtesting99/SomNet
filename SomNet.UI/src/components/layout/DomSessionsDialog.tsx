@@ -178,6 +178,10 @@ export function DomSessionsDialog() {
                       </span>
                     </div>
                   </div>
+                  <p className="mt-1 text-xs text-slate-400">
+                    <span className="font-medium text-slate-500">Session ID: </span>
+                    <span className="font-mono text-slate-200">{session.id}</span>
+                  </p>
                   <p className="mt-2 text-sm leading-relaxed text-slate-400">{session.summary}</p>
                 </li>
               ))}

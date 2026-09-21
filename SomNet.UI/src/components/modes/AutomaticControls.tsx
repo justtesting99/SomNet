@@ -11,6 +11,7 @@ import { useOptions } from '@/context/OptionsProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
+import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 import { Panel } from '@/components/ui/Panel';
 import { CommandButton } from '@/components/ui/CommandButton';
 import { StrokePowerSlider } from '@/components/modes/StrokePowerSlider';
@@ -68,9 +69,10 @@ export function AutomaticControls() {
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { selectedSub } = useSubTarget();
   const { expandOnAction } = useVideoDisplay();
-  const { beginAutomaticSession, endAutomaticSession, activeSession } = useLiveSession();
+  const { endAutomaticSession, activeSession, markAutomaticDeviceStarted } = useLiveSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
+  const { sessionInProgress } = useSessionAccessory();
   const [commandError, setCommandError] = useState('');
   const [cooperativeStopInProgress, setCooperativeStopInProgress] = useState(false);
   const runningRef = useRef(state.running);
@@ -102,15 +104,17 @@ export function AutomaticControls() {
   /** Master gate for burst sub-controls — Bursts On must be checked (Phase 10). */
   const burstSettingsDisabled = configLocked || !state.burstsOn;
   const delayStartLocked = sessionRunning;
-  const hardwareReady = systemStatus.isReady;
+  const hardwareReady = systemStatus.isReady && sessionInProgress;
   const lastPushedUpdateRef = useRef<string | null>(null);
   const updateDebounceRef = useRef<number | null>(null);
   const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);
   const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop);
   const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
-  const hardwareDisabledReason = hardwareReady
-    ? undefined
-    : systemStatus.detail || systemStatus.summary;
+  const hardwareDisabledReason = !sessionInProgress
+    ? 'Turn Session in Progress on before Start.'
+    : hardwareReady
+      ? undefined
+      : systemStatus.detail || systemStatus.summary;
 
   useEffect(() => {
     if (!automaticSessionActive && !state.running) {
@@ -274,7 +278,7 @@ export function AutomaticControls() {
         HARDWARE_COMMAND_KEYS.automaticStart,
         payloadJson,
       );
-      await beginAutomaticSession();
+      markAutomaticDeviceStarted();
       const sessionId = activeSessionRef.current?.id;
       if (sessionId) {
         writeAutomaticDeviceRunningHint({ sessionId, subTarget: selectedSub });

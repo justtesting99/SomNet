@@ -22,6 +22,7 @@ import { SessionRehydrator } from '@/components/hardware/SessionRehydrator';
 import { SiteUserReadyProvider } from '@/context/SiteUserReadyProvider';
 import { useSiteUserReadyStartFeed } from '@/hooks/useSiteUserReadyStartFeed';
 import { TabSyncProvider } from '@/context/TabSyncProvider';
+import { SessionAccessoryProvider } from '@/context/SessionAccessoryProvider';
 import { TabSyncBanner } from '@/components/layout/TabSyncBanner';
 import { useSessionVideoSources } from '@/hooks/useSessionVideoSources';
 
@@ -45,9 +46,7 @@ function DashboardLayoutWithSessionVideo({ mode }: { mode: 'manual' | 'automatic
 function DashboardWithVideo({ mode }: { mode: 'manual' | 'automatic' }) {
   return (
     <VideoDisplayProvider>
-      <HardwareCommandProvider>
-        <DashboardLayoutWithSessionVideo mode={mode} />
-      </HardwareCommandProvider>
+      <DashboardLayoutWithSessionVideo mode={mode} />
     </VideoDisplayProvider>
   );
 }
@@ -77,20 +76,24 @@ export function App() {
               <TabSyncProvider>
                 <NotifyProvider>
                   <SiteUserReadyProvider>
-                    <AutomaticSessionHubListener />
-                    <SessionRehydrator />
-                    <HistoryProvider>
-                    <SystemStatusProvider enabled>
-                      <AppShell wide={mode !== null}>
-                        <TabSyncBanner />
-                        {!mode ? (
-                          <ModeSelector />
-                        ) : (
-                          <DashboardWithVideo mode={mode} />
-                        )}
-                      </AppShell>
-                    </SystemStatusProvider>
-                    </HistoryProvider>
+                    <HardwareCommandProvider>
+                      <SystemStatusProvider enabled>
+                        <SessionAccessoryProvider>
+                          <AutomaticSessionHubListener />
+                          <SessionRehydrator />
+                          <HistoryProvider>
+                            <AppShell wide={mode !== null}>
+                              <TabSyncBanner />
+                              {!mode ? (
+                                <ModeSelector />
+                              ) : (
+                                <DashboardWithVideo mode={mode} />
+                              )}
+                            </AppShell>
+                          </HistoryProvider>
+                        </SessionAccessoryProvider>
+                      </SystemStatusProvider>
+                    </HardwareCommandProvider>
                   </SiteUserReadyProvider>
                 </NotifyProvider>
               </TabSyncProvider>
