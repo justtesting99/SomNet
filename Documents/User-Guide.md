@@ -227,16 +227,19 @@ Click **History** to view the timeline for the current Dom+Sub pair.
 
 The timeline shows:
 
-- **Sessions** — Date, mode, **session id** (`sess-…`), and summary (e.g. "2 strokes at 60%, 1 burst at 75%")
+- **Sessions** — Date, **session id** (`sess-…`), and a **summary** of everything that happened in that Session in Progress period (e.g. manual strokes, then an automatic run: `1 stroke at 45%.; Random Power and Timing — 4 main strokes over 1 min (stopped manually).`)
 - **Notifications** — Scheduled session announcements
+
+There is **no** single Manual/Automatic label on the whole session — one accessory session can include both. When video is configured, **action stills** appear under the summary:
+
+- Each action group has its own **Manual** or **Automatic** badge and a short **description** above the images (one group per manual stroke/burst; one group when an automatic run finishes).
+- **Double-click** a still for full screen; **Close** or **Esc** to return.
 
 Use the date range picker to filter entries.
 
-When video is configured, each session shows **action stills** (front and/or rear JPEGs captured on each stroke or burst). **Double-click** a still to view it full screen; use **Close** or **Esc** to return to the list.
-
 ### Dom Sessions
 
-Click your **Dom name** in the header to see all sessions across every sub you operate. Filter by sub using the dropdown.
+Click your **Dom name** in the header to see all sessions across every sub you operate. Filter by sub using the dropdown. Each row shows date, sub (when viewing all subs), session id, and summary — same summary text as History, without action stills (open **History** for the sub to see snapshots).
 
 ---
 
@@ -293,7 +296,7 @@ When hardware devices are paired, status reflects device connectivity for the se
 
 ## Tips
 
-- **Switch mode** ends your active session — use it when changing between manual and automatic
+- **Switch mode** — if **Session in Progress** is **Off**, ends the active session; if **On**, keeps the same session id when you change between manual and automatic (P16)
 - **Settings are per sub** — each sub remembers its own power levels and preferences
 - **Sign out** ends any active session before logging out
 - **Power slider ticks** mark 10% increments for precise control

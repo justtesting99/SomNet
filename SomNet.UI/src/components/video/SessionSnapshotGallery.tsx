@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { fetchSessionSnapshots, type SessionActionSnapshot } from '@/api/videoSnapshots';
 import { AuthenticatedSnapshotImage } from '@/components/video/AuthenticatedSnapshotImage';
 import { SnapshotLightbox } from '@/components/video/SnapshotLightbox';
+import {
+  captionForSnapshotGroup,
+  modeForSnapshotGroup,
+} from '@/utils/snapshotActionCaption';
 
 interface SessionSnapshotGalleryProps {
   sessionId: string;
@@ -67,17 +71,32 @@ export function SessionSnapshotGallery({ sessionId }: SessionSnapshotGalleryProp
         <SnapshotLightbox
           imageUrl={expandedSnapshot.imageUrl}
           alt={`${expandedSnapshot.feed} snapshot`}
-          caption={`Action ${expandedSnapshot.actionIndex + 1} · ${expandedSnapshot.feed}`}
+          caption={`${expandedSnapshot.actionSummary?.trim() || `Action ${expandedSnapshot.actionIndex + 1}`} · ${expandedSnapshot.feed}`}
           onClose={() => setExpandedSnapshot(null)}
         />
       ) : null}
 
       <div className="mt-3 space-y-3">
-      {groups.map(([actionIndex, actionSnapshots]) => (
+      {groups.map(([actionIndex, actionSnapshots]) => {
+        const caption = captionForSnapshotGroup(actionSnapshots);
+        const actionMode = modeForSnapshotGroup(actionSnapshots);
+        return (
         <div key={actionIndex} className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-            Action {actionIndex + 1}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {actionMode ? (
+              <span
+                className={[
+                  'shrink-0 rounded-md px-2 py-0.5 text-xs font-medium capitalize',
+                  actionMode === 'manual'
+                    ? 'bg-slate-800 text-slate-300'
+                    : 'bg-indigo-500/20 text-indigo-200',
+                ].join(' ')}
+              >
+                {actionMode}
+              </span>
+            ) : null}
+            <p className="min-w-0 flex-1 text-sm leading-snug text-slate-300">{caption}</p>
+          </div>
           <div
             className={[
               'grid gap-2',
@@ -102,7 +121,8 @@ export function SessionSnapshotGallery({ sessionId }: SessionSnapshotGalleryProp
             ))}
           </div>
         </div>
-      ))}
+        );
+      })}
       </div>
     </>
   );

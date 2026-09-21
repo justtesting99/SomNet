@@ -19,4 +19,7 @@ public sealed class SessionActionSnapshot
     public string? CommandKey { get; set; }
 
     public string? CorrelationId { get; set; }
+
+    /// <summary>Human-readable line for this action group in session history.</summary>
+    public string? ActionSummary { get; set; }
 }

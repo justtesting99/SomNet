@@ -263,13 +263,13 @@ All routes require operator JWT. Session-scoped routes validate Dom ownership an
 | Method | Route | Query / Body | Description |
 |--------|-------|--------------|-------------|
 | POST | `/api/video/sessions/{sessionId}/tokens` | `subTarget` (required) | Mint front/rear stream tokens + embed paths for active session |
-| POST | `/api/video/sessions/{sessionId}/snapshots` | `subTarget`; body: `{ actionIndex, feeds? }` | Capture stills for an action (manual trigger or internal) |
+| POST | `/api/video/sessions/{sessionId}/snapshots` | `subTarget`; body: `{ actionIndex, commandKey?, correlationId?, actionSummary?, feeds? }` | Capture stills for an action (manual trigger or internal). Production capture sets **`actionSummary`** server-side (`SessionActionSnapshotSummaryBuilder` on hardware ack / automatic session complete). |
 | GET | `/api/video/sessions/{sessionId}/snapshots` | — | List snapshot metadata for session (includes relative `imageUrl` paths) |
 | GET | `/api/video/snapshots/{snapshotId}/image` | — | Return JPEG bytes (decrypts encrypted files in memory) |
 
 **Token response** includes embed paths respecting `video.tunnelBaseUrl` (empty → same-origin `/go2rtc/…`).
 
-**List response** items include `id`, `sessionId`, `actionIndex`, `feed`, `imageUrl`, `capturedAt`. UI fetches `imageUrl` with JWT via blob fetch — see [03 — Frontend](./03-Frontend-Architecture.md).
+**List response** items include `id`, `sessionId`, `actionIndex`, `feed`, `imageUrl`, `capturedAt`, optional `commandKey`, `correlationId`, and **`actionSummary`** (one-line caption for history UI). UI fetches `imageUrl` with JWT via blob fetch — see [03 — Frontend](./03-Frontend-Architecture.md).
 
 **Image endpoint** returns `image/jpeg`. **404** when snapshot not found or Dom mismatch.
 

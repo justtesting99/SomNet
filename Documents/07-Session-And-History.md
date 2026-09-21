@@ -53,6 +53,8 @@ The UI rebuilds the summary from the local event log after each action.
 | Automatic | End-session rule (device) | `POST /api/sessions/{id}/end` | Hub `automatic-session-complete` → `(end session rule)` |
 | Automatic | Switch mode / sign-out / sub-change | Same as manual | respective reason |
 
+When a single accessory session includes **manual actions then an automatic run**, ending in automatic mode produces a **combined summary** (`manual segment; automatic segment`) on the session row. Snapshot groups still carry per-action **`actionSummary`** and Manual/Automatic badges in the UI.
+
 `SessionProvider.endActiveSessionIfNeeded()` is called from AppShell before destructive navigation actions.
 
 ---
@@ -174,6 +176,8 @@ When the hub delivers `automatic-session-complete` with `resultJson`, stroke cou
 | mode | string |
 | summary | string |
 
+The **`mode`** column reflects the **last** operation mode on the row (used for rehydration and API queries). The History UI does **not** show a single Manual/Automatic badge on the session card — mixed manual→automatic sessions would mislead if only the final mode were labeled.
+
 ---
 
 ## History Views
@@ -196,9 +200,19 @@ Timeline items are discriminated by `type`:
 { "type": "notification", "id": "...", "sentAt": "...", "subject": "...", "sessionDateTime": "..." }
 ```
 
-**UI:** `HistoryDialog.tsx` — opened from header "History" button.
+**UI:** `HistoryDialog.tsx` — opened from header "History" button. Each session card shows:
 
-**Action snapshots (Phase 4):** When video is configured, each session row shows `SessionSnapshotGallery`. **Manual sessions:** one still per **stroke** or per **whole burst** (on ack). **Automatic sessions:** **one still per session** when the run completes ([V4-D8](./17-Video-Phase-4-Action-Snapshots-Checklist.md)) — the system does **not** capture per-stroke stills during automatic runs ([V4-D9](./17-Video-Phase-4-Action-Snapshots-Checklist.md)). Images load via `GET /api/video/snapshots/{id}/image` (`AuthenticatedSnapshotImage`). Front + rear by default, or rear only via **Options → Action snapshot cameras**. **Double-click** opens `SnapshotLightbox`. Encrypted on disk ([24](./24-Video-Snapshot-Encryption-Checklist.md)).
+- Timestamp (and **Started** line when `lastActivityAt` differs)
+- **Session ID** (`sess-…`)
+- **Summary** — full text for the accessory session. Mixed manual then automatic runs store **`manual part; automatic part`** when the session ends in automatic mode with prior manual events (see `SessionProvider.endAutomaticSession`).
+- **`SessionSnapshotGallery`** when video is configured (no session-level mode pill)
+
+**Action snapshots (Phase 4+):** Grouped by **`actionIndex`**. **Manual:** one still group per **stroke** or per **whole burst** (on device ack). **Automatic:** **one still group** when the run completes ([V4-D8](./17-Video-Phase-4-Action-Snapshots-Checklist.md)) — not per stroke during automatic ([V4-D9](./17-Video-Phase-4-Action-Snapshots-Checklist.md)). Each group shows:
+
+- A **Manual** or **Automatic** badge (derived from snapshot `commandKey` / correlation id, not from the session row’s `mode`)
+- **`actionSummary`** — one-line caption (e.g. `Manual stroke at 60% (480 ms)`, `Random Power and Timing — 4 main strokes over 1 min (stopped manually)`), built on capture by `SessionActionSnapshotSummaryBuilder` and stored on `SessionActionSnapshots`
+
+Images load via `GET /api/video/snapshots/{id}/image` (`AuthenticatedSnapshotImage`). Front + rear by default, or rear only via **Options → Action snapshot cameras**. **Double-click** opens `SnapshotLightbox`. Encrypted on disk ([24](./24-Video-Snapshot-Encryption-Checklist.md)). Legacy rows without `actionSummary` use short fallbacks from `commandKey` (`utils/snapshotActionCaption.ts`).
 
 ### Dom Sessions Dialog (cross-Sub)
 
@@ -206,7 +220,7 @@ Timeline items are discriminated by `type`:
 
 Lists all sessions for the Dom across all subs. Supports sub filter dropdown.
 
-**UI:** `DomSessionsDialog.tsx` — opened by clicking the Dom name in the header.
+**UI:** `DomSessionsDialog.tsx` — opened by clicking the Dom name in the header. Shows date, optional **Sub** chip when viewing all subs, session id, and summary (same text as History). **No** session-level mode badge. Action stills are shown in **History** for the selected sub, not in this cross-sub list.
 
 ---
 

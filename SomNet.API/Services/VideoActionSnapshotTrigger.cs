@@ -29,6 +29,8 @@ public sealed class VideoActionSnapshotTrigger : IVideoActionSnapshotTrigger
         string subTarget,
         string commandKey,
         int? snapshotActionIndex = null,
+        string? payloadJson = null,
+        string? resultJson = null,
         CancellationToken cancellationToken = default)
     {
         if (!_settings.Enabled || !HardwareCommandKeys.IsManualSnapshotCommand(commandKey))
@@ -36,13 +38,19 @@ public sealed class VideoActionSnapshotTrigger : IVideoActionSnapshotTrigger
             return;
         }
 
+        var actionSummary = SessionActionSnapshotSummaryBuilder.BuildForManualAck(
+            commandKey,
+            payloadJson,
+            resultJson);
+
         // Fire-and-forget in a fresh scope — request-scoped DbContext is disposed before async capture finishes.
         _ = CaptureInBackgroundAsync(
             domTarget,
             subTarget,
             commandKey,
             snapshotActionIndex,
-            correlationId: null);
+            correlationId: null,
+            actionSummary);
     }
 
     public void TryCaptureAfterAutomaticSessionCompleteAsync(
@@ -57,12 +65,16 @@ public sealed class VideoActionSnapshotTrigger : IVideoActionSnapshotTrigger
             return;
         }
 
+        var actionSummary = SessionActionSnapshotSummaryBuilder.BuildForAutomaticSessionComplete(
+            acknowledgement.ResultJson);
+
         _ = CaptureInBackgroundAsync(
             domTarget,
             subTarget,
             HardwareCommandKeys.AutomaticStop,
             snapshotActionIndex: null,
-            acknowledgement.CorrelationId);
+            acknowledgement.CorrelationId,
+            actionSummary);
     }
 
     private async Task CaptureInBackgroundAsync(
@@ -70,7 +82,8 @@ public sealed class VideoActionSnapshotTrigger : IVideoActionSnapshotTrigger
         string subTarget,
         string commandKey,
         int? snapshotActionIndex,
-        string? correlationId)
+        string? correlationId,
+        string? actionSummary)
     {
         try
         {
@@ -96,6 +109,7 @@ public sealed class VideoActionSnapshotTrigger : IVideoActionSnapshotTrigger
                 ActionIndex = actionIndex,
                 CommandKey = commandKey,
                 CorrelationId = correlationId,
+                ActionSummary = actionSummary,
             };
 
             await videoSnapshotService.CaptureForActionAsync(

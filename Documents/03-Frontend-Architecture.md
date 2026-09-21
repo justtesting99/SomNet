@@ -100,7 +100,7 @@ The sticky header (`components/layout/AppShell.tsx`) contains:
 |--------|-----------|---------|
 | Sub selection | `SubSelectionDialog.tsx` | Click Sub name in header |
 | Dom sessions | `DomSessionsDialog.tsx` | Click Dom name in header |
-| History | `HistoryDialog.tsx` | Header "History" — includes `SessionSnapshotGallery` per session row |
+| History | `HistoryDialog.tsx` | Header "History" — session id + summary; `SessionSnapshotGallery` per row (per-action Manual/Automatic badge + `actionSummary` caption; no session-level mode pill) |
 | Options | `OptionsDialog.tsx` | Header "Options" — tabs **General**, **Notifications**, **Debug**, **Account** (`config/optionsDialog.ts`) |
 | Notify | `NotifyDialog.tsx` | Header "Notify" |
 
@@ -269,7 +269,7 @@ Page load (authenticated; last mode may restore from localStorage)
 - **VideoFeed** — Feed display (iframe `src` from session tokens when active)
 - **VideoFeedStartPanel** — **Start feed** / **Start feeds** preview controls (Phase 3; label follows live feed selection)
 - **VideoMaximizeOverlay** — Full-screen overlay on mobile when `expandOnAction` triggers
-- **SessionSnapshotGallery** / **AuthenticatedSnapshotImage** — action stills in history (Phase 4); JWT blob fetch via `apiFetchBlob` + object URL
+- **SessionSnapshotGallery** / **AuthenticatedSnapshotImage** — action stills grouped by `actionIndex`; captions from API `actionSummary` (`captionForSnapshotGroup`, `modeForSnapshotGroup` in `utils/snapshotActionCaption.ts`); JWT blob fetch via `apiFetchBlob` + object URL
 - **SnapshotLightbox** — full-screen still viewer (double-click in gallery; Close / Esc)
 - **SiteUserReadyBanner** — banner when device double-click reports site user ready ([23](./23-Device-Button-Clicks-Checklist.md))
 

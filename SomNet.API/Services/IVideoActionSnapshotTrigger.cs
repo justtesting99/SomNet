@@ -9,6 +9,8 @@ public interface IVideoActionSnapshotTrigger
         string subTarget,
         string commandKey,
         int? snapshotActionIndex = null,
+        string? payloadJson = null,
+        string? resultJson = null,
         CancellationToken cancellationToken = default);
 
     void TryCaptureAfterAutomaticSessionCompleteAsync(

@@ -106,6 +106,7 @@ public sealed class SomNetDbContext : DbContext
             entity.Property(snapshot => snapshot.RelativePath).HasMaxLength(512);
             entity.Property(snapshot => snapshot.CommandKey).HasMaxLength(64);
             entity.Property(snapshot => snapshot.CorrelationId).HasMaxLength(64);
+            entity.Property(snapshot => snapshot.ActionSummary).HasMaxLength(512);
             entity.HasIndex(snapshot => new { snapshot.SessionId, snapshot.ActionIndex, snapshot.Feed })
                 .IsUnique();
             entity.HasIndex(snapshot => new { snapshot.DomTarget, snapshot.SessionId });

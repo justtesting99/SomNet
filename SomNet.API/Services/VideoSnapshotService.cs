@@ -204,6 +204,7 @@ public sealed class VideoSnapshotService : IVideoSnapshotService
                 CapturedAt = capturedAt,
                 CommandKey = request.CommandKey,
                 CorrelationId = request.CorrelationId,
+                ActionSummary = TrimActionSummary(request.ActionSummary),
             };
             _db.SessionActionSnapshots.Add(existing);
         }
@@ -213,6 +214,7 @@ public sealed class VideoSnapshotService : IVideoSnapshotService
             existing.CapturedAt = capturedAt;
             existing.CommandKey = request.CommandKey;
             existing.CorrelationId = request.CorrelationId;
+            existing.ActionSummary = TrimActionSummary(request.ActionSummary);
         }
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -294,7 +296,19 @@ public sealed class VideoSnapshotService : IVideoSnapshotService
             CapturedAt = row.CapturedAt,
             CommandKey = row.CommandKey,
             CorrelationId = row.CorrelationId,
+            ActionSummary = row.ActionSummary,
         };
+
+    private static string? TrimActionSummary(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length <= 512 ? trimmed : trimmed[..512];
+    }
 }
 
 public static class VideoSnapshotServiceCollectionExtensions

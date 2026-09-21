@@ -11,6 +11,7 @@ export interface SessionActionSnapshot {
   capturedAt: string;
   commandKey?: string;
   correlationId?: string;
+  actionSummary?: string;
 }
 
 export interface CaptureSessionSnapshotsResponse {

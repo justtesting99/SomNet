@@ -313,10 +313,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const summary = buildAutomaticSessionSummary(deviceResult ?? null, reason);
+      const automaticSummary = buildAutomaticSessionSummary(deviceResult ?? null, reason);
+      const hasManualActivity = current.events.length > 0 || current.abortCount > 0;
+      const summary = hasManualActivity
+        ? `${buildManualSummary(current, current.abortCount, false).replace(/\.$/, '')}; ${automaticSummary}`
+        : automaticSummary;
       await finalizeSession(summary);
     },
-    [finalizeSession],
+    [buildManualSummary, finalizeSession],
   );
 
   const rehydrateSession = useCallback(

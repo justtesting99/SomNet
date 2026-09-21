@@ -385,7 +385,7 @@ Provider tree: diff mental model against `SomNet.UI/src/App.tsx` nesting (see [0
 
 ### Last full audit
 
-**2026-09-21** — P16 Session in Progress, Options **Debug** tab, `DELETE /api/sessions/{id}`, firmware **`0.15.0-session-accessory`**. Tracked in [25 § Docs / bench](./25-Session-Accessory-In-Progress-Checklist.md).
+**2026-09-21** — P16 Session in Progress, Options **Debug** tab, `DELETE /api/sessions/{id}`, firmware **`0.15.0-session-accessory`**, session history action captions + per-action mode badges ([07 § History Views](./07-Session-And-History.md#history-views)). Tracked in [25 § Docs / bench](./25-Session-Accessory-In-Progress-Checklist.md).
 
 Update this **Last full audit** line whenever you complete a canonical sweep.
 

@@ -4,6 +4,8 @@
 
 > **Phase 3:** Signed off (V3-T4 deferred).
 
+> **History UX (2026-09-21):** `SessionActionSnapshots.ActionSummary` + per-action **Manual** / **Automatic** badges in `SessionSnapshotGallery`; session-level mode pill removed from History / Dom sessions. Mixed manual→automatic accessory sessions show combined summary text on the session row. See [07 § History Views](./07-Session-And-History.md#history-views).
+
 | Related | Link |
 |---------|------|
 | Architecture §9 | [13 — Snapshot timing](./13-Video-And-Camera-Architecture.md#9-snapshot-timing-and-session-linkage) |

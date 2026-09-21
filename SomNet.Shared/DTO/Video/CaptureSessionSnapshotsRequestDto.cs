@@ -10,6 +10,9 @@ public sealed class CaptureSessionSnapshotsRequestDto
 
     public string? CorrelationId { get; init; }
 
+    /// <summary>One-line caption shown with action stills in session history.</summary>
+    public string? ActionSummary { get; init; }
+
     /// <summary>When set, overrides saved pairing action-snapshot feed preference.</summary>
     public ActionSnapshotFeeds? Feeds { get; init; }
 }

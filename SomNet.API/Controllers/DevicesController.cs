@@ -150,6 +150,8 @@ public class DevicesController : ControllerBase
                 request.SubTarget,
                 request.CommandKey,
                 request.SnapshotActionIndex,
+                request.PayloadJson,
+                response.ResultJson,
                 cancellationToken);
         }
 

@@ -17,4 +17,6 @@ public sealed class SessionActionSnapshotDto
     public string? CommandKey { get; init; }
 
     public string? CorrelationId { get; init; }
+
+    public string? ActionSummary { get; init; }
 }
