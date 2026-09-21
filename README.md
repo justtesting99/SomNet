@@ -49,11 +49,11 @@ Full documentation lives in the [`Documents/`](Documents/) folder. See [Document
 | [UI Multi-Tab Sync](Documents/12-UI-Multi-Tab-Sync-Checklist.md) | Live state across browser tabs — **signed off** |
 | [SomNet.Device/README](SomNet.Device/README.md) | Build, flash, and test ESP32 firmware |
 
-**ESP32 phase checklists:** [0](Documents/09-ESP32-Phase-0-Checklist.md) · … · [12](Documents/09-ESP32-Phase-12-Network-Hardening-Checklist.md) · [UI rehydration](Documents/10-UI-Session-Rehydration-Checklist.md) · [manual rehydration](Documents/11-UI-Manual-Session-Rehydration-Checklist.md) · [multi-tab sync](Documents/12-UI-Multi-Tab-Sync-Checklist.md) — **0–12 + UI phases signed off** (firmware **`0.13.0-network`**)
+**ESP32 phase checklists:** [0](Documents/09-ESP32-Phase-0-Checklist.md) · … · [12](Documents/09-ESP32-Phase-12-Network-Hardening-Checklist.md) · [button clicks](Documents/23-Device-Button-Clicks-Checklist.md) · [Session in Progress (P16)](Documents/25-Session-Accessory-In-Progress-Checklist.md) · [UI rehydration](Documents/10-UI-Session-Rehydration-Checklist.md) · [multi-tab sync](Documents/12-UI-Multi-Tab-Sync-Checklist.md)
 
 ## ESP32 firmware (quick pointer)
 
-Firmware lives in [`SomNet.Device/`](SomNet.Device/). Current release track: **`0.13.0-network`** — manual stroke/burst/abort; automatic start/stop with seven programs and burst-in-automatic; live **`automatic-update`** mid-session (Phase 11); network hardening (Phase 12).
+Firmware lives in [`SomNet.Device/`](SomNet.Device/). Current release track: **`0.15.0-session-accessory`** — Phases 0–12 + device button clicks + **`session-accessory`** on GPIO32 (gates stroke/burst/automatic-start). See [P16 checklist](Documents/25-Session-Accessory-In-Progress-Checklist.md).
 
 ```bash
 cd SomNet.Device
@@ -78,7 +78,8 @@ Copy `secrets.ini.example` → `secrets.ini` with your Wi‑Fi and PC **LAN IP**
 | React UI (auth, modes, settings, history) | Complete |
 | Dom/Sub management | Complete |
 | SignalR hub + device pairing (API) | Complete |
-| ESP32 firmware (pairing, stroke/burst/automatic) | **Phases 0–12 signed off** — firmware **`0.13.0-network`** |
+| ESP32 firmware (pairing, stroke/burst/automatic, session accessory) | **Phases 0–12 + P16 signed off** — firmware **`0.15.0-session-accessory`** |
+| Session in Progress (UI + GPIO32 lock) | **Signed off** — [P16 checklist](Documents/25-Session-Accessory-In-Progress-Checklist.md) |
 | UI device pairing | **Hardware** toolbar dialog (Phase 8) |
 | UI → hardware command dispatch | **Complete** — REST + operator hub listener (Phases 8–11) |
 | UI automatic session rehydration (browser refresh) | **Complete** — [checklist](Documents/10-UI-Session-Rehydration-Checklist.md) |

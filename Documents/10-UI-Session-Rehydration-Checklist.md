@@ -2,6 +2,8 @@
 
 **Status:** **Signed off** — bench R1–R5 pass + doc audit (2026-09-10)
 
+> **P16 update:** `SessionRehydrator` runs automatic rehydration only when **Session in Progress** is on for that Dom+Sub ([25](./25-Session-Accessory-In-Progress-Checklist.md)). R1–R5 steps remain valid once the switch is on.
+
 | Related | Link |
 |---------|------|
 | Parent plan | [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) — post–Phase 11 follow-up |

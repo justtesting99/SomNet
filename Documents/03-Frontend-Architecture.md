@@ -36,15 +36,16 @@ SubTargetProvider
           TabSyncProvider
             NotifyProvider
               SiteUserReadyProvider
-                AutomaticSessionHubListener   ← auto session end + ButtonEventReceived
-                SessionRehydrator
-                HistoryProvider
+                HardwareCommandProvider
                   SystemStatusProvider
-                    AppShell → ModeSelector | DashboardWithVideo
-                      VideoDisplayProvider
-                        HardwareCommandProvider
-                          SiteUserReadyBanner + DashboardLayout
-                            ManualControls | AutomaticControls
+                    SessionAccessoryProvider
+                      AutomaticSessionHubListener   ← auto session end + ButtonEventReceived
+                      SessionRehydrator
+                      HistoryProvider
+                        AppShell → ModeSelector | DashboardWithVideo
+                          VideoDisplayProvider
+                            SiteUserReadyBanner + DashboardLayout
+                              ManualControls | AutomaticControls
 ```
 
 ### Provider Responsibilities
@@ -57,10 +58,11 @@ SubTargetProvider
 | **SessionProvider** | `context/SessionProvider.tsx` | Creates/updates/ends sessions via API; maintains manual event log for summaries |
 | **DomSessionsProvider** | `context/DomSessionsProvider.tsx` | Dom sessions dialog open state |
 | **OptionsProvider** | `context/OptionsProvider.tsx` | Loads/saves `PairingSettingsDto` via `/api/settings`; **persists only after explicit user edit** (`userEditedRef`); 400 ms debounce; `running` never persisted |
-| **AutomaticSessionRehydrator** | `components/hardware/AutomaticSessionRehydrator.tsx` | On load: `GET /api/sessions/active`, device probe, restore `activeSession` + local `running` |
+| **SessionRehydrator** | `components/hardware/SessionRehydrator.tsx` | On load (when Session in Progress hint set): `GET /api/sessions/active`, automatic device probe, restore `activeSession` + local `running` |
+| **SessionAccessoryProvider** | `context/SessionAccessoryProvider.tsx` | **Session in Progress** switch state, `session-accessory` command, session start/end on OFF↔ON, tab-sync `session-accessory` |
 | **AutomaticSessionHubListener** | `components/hardware/AutomaticSessionHubListener.tsx` | Finalizes automatic sessions on hub `automatic-session-complete`; handles `ButtonEventReceived` → `SiteUserReadyProvider` |
-| **SiteUserReadyProvider** | `context/SiteUserReadyProvider.tsx` | Site user double-click ready signal; pairs with `useSiteUserReadyStartFeed` for auto **Start feed** |
-| **TabSyncProvider** | `context/TabSyncProvider.tsx` | Cross-tab session/sub/command sync via `BroadcastChannel` |
+| **SiteUserReadyProvider** | `context/SiteUserReadyProvider.tsx` | Sub double-click ack (P16-D1/D10), ready banner dismiss; pairs with `useSiteUserReadyStartFeed` for auto **Start feed** |
+| **TabSyncProvider** | `context/TabSyncProvider.tsx` | Cross-tab session/sub/`session-accessory`/command sync via `BroadcastChannel` |
 | **HardwareProvider** | `context/HardwareProvider.tsx` | Hardware dialog open state |
 | **NotifyProvider** | `context/NotifyProvider.tsx` | Notify dialog state |
 | **HistoryProvider** | `context/HistoryProvider.tsx` | History dialog state |
@@ -85,11 +87,12 @@ The sticky header (`components/layout/AppShell.tsx`) contains:
 
 - **SessionUsers** — Clickable Dom and Sub names (open dialogs)
 - **Notify** button
+- **SessionInProgressSwitch** (when in a mode) — slide switch + optional session id (Options → Debug)
 - **SystemStatusDisplay** — Connection indicator
 - **Switch mode** (when in a mode)
 - **History**, **Options**, **Sign out**
 
-Active sessions are ended automatically on mode switch, sign-out, or sub change.
+**Switch mode** with Session in Progress **ON** stops the automatic device if needed but **keeps** the server session row (P16-D7). **Sign out** is blocked while Session in Progress is **ON**. **Sub change** still ends the active session (`sub-change`) via `SubSelectionDialog`.
 
 ## Dialogs
 
@@ -98,7 +101,7 @@ Active sessions are ended automatically on mode switch, sign-out, or sub change.
 | Sub selection | `SubSelectionDialog.tsx` | Click Sub name in header |
 | Dom sessions | `DomSessionsDialog.tsx` | Click Dom name in header |
 | History | `HistoryDialog.tsx` | Header "History" — includes `SessionSnapshotGallery` per session row |
-| Options | `OptionsDialog.tsx` | Header "Options" |
+| Options | `OptionsDialog.tsx` | Header "Options" — tabs **General**, **Notifications**, **Debug**, **Account** (`config/optionsDialog.ts`) |
 | Notify | `NotifyDialog.tsx` | Header "Notify" |
 
 ### SubSelectionDialog
@@ -118,12 +121,11 @@ Active sessions are ended automatically on mode switch, sign-out, or sub change.
 - **Actions** — Stroke, Burst (with visual separation), Abort
 
 **Session behavior:**
-- Session starts lazily on first stroke or burst
-- Each action appends to local event log
-- Summary PATCHed to API after each action
+- Requires **Session in Progress ON** (creates server row via `startSessionForAccessory`)
+- Each stroke/burst appends to local event log and PATCHes summary
 - Abort ends session with reason
 
-**Commands:** Wrapped in `CommandButton` with keys `stroke`, `burst`, `abort`.
+**Commands:** Wrapped in `CommandButton` with keys `stroke`, `burst`, `abort` (gated when switch off).
 
 ### Automatic Mode (`AutomaticControls.tsx`)
 
@@ -136,13 +138,13 @@ Active sessions are ended automatically on mode switch, sign-out, or sub change.
 **Field minimums (UI):** Main-program gap **`strokeMinSeconds`** / **`strokeMaxSeconds`** — min **1** sec each (`automaticFieldRules.ts`). Burst **`burstDelayMin`** and **`burstStrokePowerMin`** — min **1** (`burstFieldRules.ts`). Max fields may use **0** where product rules allow (burst delay max; burst power max on relative 0–100 scale). Normalized on load/save.
 
 **Session behavior:**
-- Session starts immediately on Start (REST `automatic-start` + live session record)
+- Requires **Session in Progress ON** (server row); **Start** sends REST `automatic-start` on that row
 - Stop sends cooperative stop; session summary from device via hub `automatic-session-complete`
 - Abort cuts immediately; same hub path for history
 - **Live overrides (Phase 11):** When **`allowAutomaticModeOverrides`** is enabled (Options → General), settings stay editable during a session; debounced save (400 ms) also sends **`automatic-update`** to the device. Default is **locked** while running.
-- **Browser refresh (UI rehydration):** `AutomaticSessionRehydrator` queries the server for an in-progress automatic session, probes the device (`automatic-update` accept/reject), restores `SessionProvider.activeSession`, sets local `running: true`, and switches to automatic mode. Stale server rows (device idle) are closed without rehydrating. Controls do not render until settings finish loading.
+- **Browser refresh (UI rehydration):** `SessionRehydrator` runs only when the Session in Progress client hint is set; then queries `GET /api/sessions/active`, probes automatic runs via `automatic-update`, restores `activeSession` + local `running`. Stale rows are ended or discarded per mode.
 
-**Commands:** Keys `automatic-start`, `automatic-stop`, `automatic-update` (when live overrides enabled), `abort` (during automatic session).
+**Commands:** Keys `automatic-start`, `automatic-stop`, `automatic-update` (when live overrides enabled), `abort` (during automatic session), plus UI `session-accessory` for the header switch.
 
 **Hub:** `AutomaticSessionHubListener` syncs end-rule, abort, and cooperative stop without blocking the UI on long bursts.
 
@@ -272,6 +274,8 @@ Page load (authenticated; last mode may restore from localStorage)
 - **SiteUserReadyBanner** — banner when device double-click reports site user ready ([23](./23-Device-Button-Clicks-Checklist.md))
 
 **Live video feeds (Options → General):** `appOptions.mobileVideoExpandDefault` — `"both"` \| `"monitor1"` (front) \| `"monitor2"` (rear). Implemented in `utils/liveVideoFeedPreference.ts` + `useSessionVideoSources` — disabled cameras do not mount iframes or connect to go2rtc (bandwidth/CPU savings on mobile/tunnel). **`actionSnapshotFeeds`** is separate (stills only). On mobile, `appOptions.autoExpandVideoOnMobile` opens the selected feed full screen after commands. Rebuild **`SomNet.UI/dist`** after UI changes when using integrated API hosting.
+
+**Options → Debug:** `appOptions.showActiveSessionIdInHeader` — optional `sess-…` under the header Session in Progress switch.
 
 **Options → General (video):** `appOptions.videoFeedTimeoutSeconds` — live feed hide delay after manual actions or automatic session end. **`appOptions.actionSnapshotFeeds`** — `both` (front + rear) or `rear` only; applies to **manual** per stroke/burst and **automatic** session-end still ([V4-D8/V4-D9](./17-Video-Phase-4-Action-Snapshots-Checklist.md)). **`appOptions.videoFeedBandwidth`** — `high` \| `medium` \| `low` for live MSE bandwidth hints ([Phase 6 V6-D18](./19-Video-Phase-6-Tunnel-Checklist.md)).
 

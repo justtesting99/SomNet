@@ -14,7 +14,7 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 **End-user / installer documentation:** [Hardware User Guide](./Hardware-User-Guide.md) — provisioning, Wi‑Fi recovery (10 s button hold), Device ID, relay operation.
 
-**Implementation progress (2026-09-13):** Phases **0–12 + device button clicks signed off**. Current firmware **`0.14.0-button-clicks`** — manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On**; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; network hardening (Phase 12); GPIO **single/double click** + 10 s hold reset ([23](./23-Device-Button-Clicks-Checklist.md)); **`resultJson`** end-to-end. SomNet UI: session rehydration [10](./10-UI-Session-Rehydration-Checklist.md) / [11](./11-UI-Manual-Session-Rehydration-Checklist.md) + multi-tab sync [12](./12-UI-Multi-Tab-Sync-Checklist.md) — all signed off. See §10.
+**Implementation progress (2026-09-20):** Phases **0–12 + device button clicks + Session in Progress (P16) signed off**. Current firmware **`0.15.0-session-accessory`** — manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On**; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; network hardening (Phase 12); GPIO **single/double click** + 10 s hold reset ([23](./23-Device-Button-Clicks-Checklist.md)); **`session-accessory`** on GPIO32 ([25](./25-Session-Accessory-In-Progress-Checklist.md)); **`resultJson`** end-to-end. SomNet UI: P16 slide switch + session rehydration [10](./10-UI-Session-Rehydration-Checklist.md) / [11](./11-UI-Manual-Session-Rehydration-Checklist.md) + multi-tab sync [12](./12-UI-Multi-Tab-Sync-Checklist.md) — all signed off. See §10.
 
 **Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 12 + button clicks signed off (2026-09-13).** SomNet API/UI integration complete for manual and automatic commands.
 
@@ -1861,7 +1861,7 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 
 **Implementation through Phase 12 + button clicks (2026-09-13):**
 
-- [x] Phases 0–12 + button clicks signed off — current firmware **`0.14.0-button-clicks`**
+- [x] Phases 0–12 + button clicks + P16 signed off — current firmware **`0.15.0-session-accessory`**
 - [x] PlatformIO project `SomNet.Device/` with module tree per §12
 - [x] Pairing + manual **stroke**, **burst**, **abort** E2E from SomNet UI on hardware (`esp32-84CCA85C36B4` / Sub `Slv66`)
 - [x] Automatic **Start/Stop/Abort** E2E from SomNet UI; **Bursts On** during automatic; live **`automatic-update`**; auto-end / abort / cooperative stop via hub; session from device `resultJson`

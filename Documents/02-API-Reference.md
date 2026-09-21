@@ -60,8 +60,9 @@ This matches the UI, which uses `user.displayName` as the controller name.
 |--------|-------|-------------|
 | GET | `/api/sessions/active?subTarget=` | Latest **in-progress** session for Dom + Sub (404 if none) |
 | POST | `/api/sessions` | Start a new session |
-| PATCH | `/api/sessions/{sessionId}` | Update in-progress session summary |
+| PATCH | `/api/sessions/{sessionId}` | Update in-progress session summary and/or mode |
 | POST | `/api/sessions/{sessionId}/end` | End session with final summary |
+| DELETE | `/api/sessions/{sessionId}` | **Discard** in-progress placeholder (P16-D9 — no strokes / no automatic Start) |
 
 ### Get Active Session
 
@@ -91,9 +92,16 @@ This matches the UI, which uses `user.displayName` as the controller name.
 
 ```json
 {
-  "summary": "In progress: 2 strokes at 60%, 1 burst at 75% (5 strokes @ 5s delay)."
+  "summary": "In progress: 2 strokes at 60%, 1 burst at 75% (5 strokes @ 5s delay).",
+  "mode": "Automatic"
 }
 ```
+
+`mode` is optional — used when the operator switches Manual ↔ Automatic while **Session in Progress** stays on (same session row, P16-D7).
+
+### Discard In-Progress Session
+
+**DELETE** removes a row whose summary is still `"In progress"` or `"In progress: …"` with **no** completed automatic run. Used when **Session in Progress** turns off before any stroke or automatic **Start**. Returns **204 No Content**; **400** if the session is not eligible for discard.
 
 ### End Session
 
@@ -178,6 +186,7 @@ Per Dom+Sub pairing settings stored as JSON.
     "autoExpandVideoOnMobile": true,
     "mobileVideoExpandDefault": "both",
     "showSessionTimestamps": true,
+    "showActiveSessionIdInHeader": false,
     "operatorDisplayName": "",
     "defaultNotesPrefix": "Session",
     "reconnectIntervalSeconds": 10,
@@ -194,6 +203,8 @@ Per Dom+Sub pairing settings stored as JSON.
 ```
 
 **`allowAutomaticModeOverrides`** (default `false`) — when `true`, Automatic mode settings stay editable during a session and the UI sends **`automatic-update`** to the device (debounced). Persisted in `appOptions`; stripped from device command payloads (`running` is also UI-only and omitted on send).
+
+**`showActiveSessionIdInHeader`** (default `false`) — **Options → Debug**. When `true`, the header **Session in Progress** control shows the active `sess-…` id under the switch (for troubleshooting). History and Dom sessions always show session ids.
 
 **`videoFeedTimeoutSeconds`** (default `30`, range 5–600) — seconds to keep live video visible after manual stroke/burst idle or after automatic session end. See [16-Video-Phase-3-Session-Tokens-Checklist.md](./16-Video-Phase-3-Session-Tokens-Checklist.md).
 

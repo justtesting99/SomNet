@@ -2,11 +2,11 @@
 
 SomNet provides real-time communication between the API and ESP32 hardware devices through a SignalR hub.
 
-| Layer | Status (2026-09-13) |
+| Layer | Status (2026-09-20) |
 |-------|------------------------|
-| **API + hub** | Complete — pairing, dispatch, ack registry, per-command ack timeouts, **`ReportButtonEvent`** |
-| **ESP32 firmware** | **Phases 0–12 + button clicks signed off** — firmware **`0.14.0-button-clicks`** |
-| **React UI** | **Complete** — Hardware dialog pairing; REST command dispatch; operator hub for automatic session end + **device button events** |
+| **API + hub** | Complete — pairing, dispatch, ack registry, per-command ack timeouts, **`ReportButtonEvent`**, **`session-accessory`** validation |
+| **ESP32 firmware** | **Phases 0–12 + button clicks + P16 signed off** — firmware **`0.15.0-session-accessory`** |
+| **React UI** | **Complete** — Hardware dialog pairing; REST command dispatch; operator hub for automatic session end + **device button events**; **Session in Progress** slide switch ([P16](./25-Session-Accessory-In-Progress-Checklist.md)) |
 
 **Related docs:** [ESP32 Device Plan](./09-ESP32-Device-Plan.md) (source of truth) · [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md) (wire capture) · [Hardware User Guide](./Hardware-User-Guide.md) · [SomNet.Device/README](../SomNet.Device/README.md)
 
@@ -202,16 +202,17 @@ Example — device rejected missing `strokeMs`:
 
 ## Command Keys
 
-Aligned with UI constants (`types/hardwareCommand.ts`). **Firmware status** as of **`0.14.0-button-clicks`**:
+Aligned with UI constants (`types/hardwareCommand.ts`) and `HardwareCommandKeys` (Shared). **Firmware status** as of **`0.15.0-session-accessory`**:
 
 | Key | Trigger | Typical Payload | Firmware |
 |-----|---------|-----------------|----------|
-| `stroke` | Manual stroke button | `{ powerPercent, strokeMs }` | **Implemented** — relay pulse on D4 |
+| `stroke` | Manual stroke button | `{ powerPercent, strokeMs }` | **Implemented** — relay pulse on D4; **rejected when session accessory OFF** (P16) |
 | `abort` | Manual abort | `{}` | **Implemented** — cancels active stroke/burst/automatic |
-| `burst` | Manual burst button | `{ powerPercent, strokeMs, burstStrokes, burstDelayMs }` | **Implemented** — `BurstSequenceMode` |
-| `automatic-start` | Automatic start | Full automatic config snapshot (omit `running`) | **Implemented** — immediate ack (P9-D2) |
+| `burst` | Manual burst button | `{ powerPercent, strokeMs, burstStrokes, burstDelayMs }` | **Implemented** — `BurstSequenceMode`; **gated by accessory ON** |
+| `automatic-start` | Automatic start | Full automatic config snapshot (omit `running`) | **Implemented** — immediate ack (P9-D2); **gated by accessory ON** |
 | `automatic-stop` | Automatic stop | `{}` | **Implemented** — immediate accept; summary via hub |
 | `automatic-update` | Live automatic settings | Same snapshot as `automatic-start` | **Implemented** — validate + immediate ack; queue replan after current stroke (Phase 11) |
+| `session-accessory` | Session in Progress switch | `{ "enabled": true \| false }` | **Implemented** — GPIO32 (`PIN_SESSION_ACCESSORY`); serial `[ACCESSORY]`; fail-safe OFF on hub/Wi‑Fi loss |
 
 **Stroke rules (firmware):** `strokeMs` required, > 0, max 30 000 ms. Overlapping commands while a pulse is active → reject with `success: false` (busy). **`automatic-update`** is allowed during an active automatic session (not treated as busy).
 
@@ -255,7 +256,7 @@ Also surfaced via **GET /api/system/status?subTarget=Slv66** for header display.
 
 Device JWT Sub claim is the device id; Sub **name** is claim `sub_target` (not `sub`).
 
-### What is implemented (Phases 0–11)
+### What is implemented (Phases 0–12 + P16)
 
 | Phase | Capability |
 |-------|------------|
@@ -265,6 +266,9 @@ Device JWT Sub claim is the device id; Sub **name** is claim `sub_target` (not `
 | 9 | Burst mode + automatic start/stop (seven programs) |
 | 10 | Burst-in-automatic (`burstsOn`) |
 | 11 | Live **`automatic-update`** mid-session replan |
+| 12 | Network hardening — **`0.13.0-network`** |
+| 23 / BTN | Device button single/double on D33 — **`0.14.0-button-clicks`** |
+| P16 | **`session-accessory`** GPIO32 lock — **`0.15.0-session-accessory`** ([checklist](./25-Session-Accessory-In-Progress-Checklist.md)) |
 
 **Libraries:** `links2004/WebSockets`, `bblanchon/ArduinoJson`, `ESPAsyncWebServer` (config UI).
 

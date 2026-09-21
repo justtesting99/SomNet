@@ -311,6 +311,86 @@ Available in Development at `/swagger`. Disabled in production.
 
 ---
 
+## Documentation maintenance (recurring)
+
+Keep operator and developer docs aligned with the repo **whenever behavior, API contracts, or firmware version change** — not only at release. Treat outdated docs as a defect alongside broken tests.
+
+### When to run a doc pass
+
+| Trigger | Minimum updates |
+|---------|-----------------|
+| **Feature signed off** (new checklist complete) | Checklist + [Documents/README.md](./README.md) index row + user-facing guides if operators see the change |
+| **API / DTO change** | [02-API-Reference.md](./02-API-Reference.md), [07-Session-And-History.md](./07-Session-And-History.md) if sessions/history affected |
+| **UI provider / gating / Options** | [03-Frontend-Architecture.md](./03-Frontend-Architecture.md), [User-Guide.md](./User-Guide.md) |
+| **Firmware command or GPIO** | [06-SignalR-And-Hardware.md](./06-SignalR-And-Hardware.md), [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md), [Hardware-User-Guide.md](./Hardware-User-Guide.md), [SomNet.Device/README.md](../SomNet.Device/README.md), [SomNet.Device/docs/PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md) |
+| **Bump `FIRMWARE_VERSION` in `platformio.ini`** | All “current firmware” lines (see scan below) + root [README.md](../README.md) status table |
+| **Periodic hygiene** (e.g. monthly or before Phase 7+ milestones) | Full **canonical doc sweep** below |
+
+Phase-specific checklists (09-ESP32-Phase-*, video Phase *) stay **historical** at their sign-off version; do not rewrite old bench results. Instead, update **canonical** docs and add a one-line “Post-P16 / post-…” note on older checklists when product behavior diverges (pattern in [10-UI-Session-Rehydration-Checklist.md](./10-UI-Session-Rehydration-Checklist.md)).
+
+### Canonical documents (source of truth for “current product”)
+
+These should describe **today’s** behavior, not a past phase:
+
+| Doc | Must stay accurate for |
+|-----|-------------------------|
+| [01-System-Overview.md](./01-System-Overview.md) | Components, modes, major flows |
+| [02-API-Reference.md](./02-API-Reference.md) | Routes, DTOs, `appOptions` fields |
+| [03-Frontend-Architecture.md](./03-Frontend-Architecture.md) | Provider tree (`App.tsx`), dialogs, gating |
+| [06-SignalR-And-Hardware.md](./06-SignalR-And-Hardware.md) | Command keys, hub events, firmware capability table |
+| [07-Session-And-History.md](./07-Session-And-History.md) | Session start/end, rehydration, history |
+| [User-Guide.md](./User-Guide.md) | Operator steps (header, modes, Options tabs) |
+| [Hardware-User-Guide.md](./Hardware-User-Guide.md) | GPIO, pairing, firmware status line |
+| [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) | Plan header + “current firmware” readiness list |
+| [Documents/README.md](./README.md) | Index status column |
+| [README.md](../README.md) | Quick start + status table |
+| [SomNet.Device/README.md](../SomNet.Device/README.md) + [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md) | Wire protocol and pins |
+
+Feature checklists (e.g. [25-Session-Accessory-In-Progress-Checklist.md](./25-Session-Accessory-In-Progress-Checklist.md)) should include a **Docs / bench** section; check off canonical updates when the feature ships.
+
+### Doc pass checklist (copy for PRs or sign-off)
+
+- [ ] **Code truth:** Confirm claims against `App.tsx`, controllers, `HardwareCommandKeys`, `platformio.ini` (`FIRMWARE_VERSION`), `boardDefs.h`.
+- [ ] **Session & hardware:** Session lifecycle matches `SessionProvider` / `SessionAccessoryProvider`; command gating matches firmware.
+- [ ] **Options:** New `AppOptions` fields in `SomNet.Shared/DTO/Options/AppOptionsDto.cs`, `types/options.ts`, [02 API](./02-API-Reference.md), and User Guide / Frontend Architecture (tab: General | Notifications | Debug | Account).
+- [ ] **Index:** [Documents/README.md](./README.md) row descriptions and dates where “synced YYYY-MM-DD” is used ([06](./06-SignalR-And-Hardware.md) is an example).
+- [ ] **Root README:** ESP32 version and status table match `platformio.ini`.
+- [ ] **No false “current” on old phases:** Phase checklist headers keep their sign-off firmware tag; only canonical docs say **`0.15.0-session-accessory`** (or whatever `platformio.ini` reads today).
+
+### Quick stale scan (PowerShell, repo root)
+
+Find references that often lag after a firmware bump:
+
+```powershell
+cd D:\MoreRepos\SomNet
+Select-String -Path Documents\*.md,README.md,SomNet.Device\README.md -Pattern '0\.1[0-4]\.'
+```
+
+Review every hit: **historical checklist** (OK if sign-off context) vs **canonical doc** (must update).
+
+Verify current firmware string:
+
+```powershell
+Select-String -Path SomNet.Device\platformio.ini -Pattern 'FIRMWARE_VERSION'
+```
+
+Cross-check command keys (docs vs code):
+
+```powershell
+Select-String -Path SomNet.Shared\Models\HardwareCommandKeys.cs -Pattern 'public const string'
+Select-String -Path Documents\06-SignalR-And-Hardware.md -Pattern '^\| `[a-z-]+`'
+```
+
+Provider tree: diff mental model against `SomNet.UI/src/App.tsx` nesting (see [03 § Provider Tree](./03-Frontend-Architecture.md#provider-tree-authenticated)).
+
+### Last full audit
+
+**2026-09-21** — P16 Session in Progress, Options **Debug** tab, `DELETE /api/sessions/{id}`, firmware **`0.15.0-session-accessory`**. Tracked in [25 § Docs / bench](./25-Session-Accessory-In-Progress-Checklist.md).
+
+Update this **Last full audit** line whenever you complete a canonical sweep.
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |
@@ -331,10 +411,14 @@ No automated test projects exist yet. Manual verification workflow:
 
 1. Login as demo user
 2. Select/add a sub
-3. Manual mode — stroke, burst, abort; verify history summary
-4. Automatic mode — start, stop; verify session record
-5. Change settings — reload page, confirm persistence
-6. Check Swagger for API contract
+3. Choose Manual or Automatic mode
+4. **Session in Progress** ON (Ready + Sub double-click ack) — then stroke/burst or automatic Start
+5. Manual — stroke, burst, abort; verify history summary and session id in History
+6. Automatic — start, stop; verify session record
+7. Change settings (Options → Save) — reload page, confirm persistence
+8. Check Swagger for API contract
+
+After a test pass that changed product behavior, run [Documentation maintenance (recurring)](#documentation-maintenance-recurring).
 
 ---
 

@@ -508,8 +508,9 @@ Align with existing start/end triggers in [07-Session-And-History.md](./07-Sessi
 
 | Event | Video action |
 |-------|----------------|
-| Manual first stroke / automatic Start | Start session → enable streams → issue tokens |
-| Browser refresh with active session | Rehydration → re-issue tokens if session still open |
+| Session in Progress **ON** (P16) | Server session row created; preview/**Start feed** may mint tokens before first stroke |
+| Manual first stroke / automatic Start | Enable streams → issue tokens on active session |
+| Browser refresh with active session | Rehydration (when switch hint ON) → re-issue tokens if session still open |
 | Each stroke/burst ack | Capture + upload historical stills |
 | Session end (any reason) | Revoke tokens → disable live streams |
 | History / timeline view | Serve Blob URLs only; no live token |

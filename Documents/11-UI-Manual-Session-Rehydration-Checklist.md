@@ -1,5 +1,7 @@
 # UI Manual Session Rehydration — browser refresh during active manual session
 
+> **P16 update:** Rehydration requires **Session in Progress ON** ([25](./25-Session-Accessory-In-Progress-Checklist.md)). The server row is created when the switch turns on, not on first stroke.
+
 **Status:** **Signed off** — bench M1–M5 pass (2026-09-11)
 
 | Related | Link |

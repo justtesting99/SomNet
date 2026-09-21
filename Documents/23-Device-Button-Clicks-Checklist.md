@@ -4,6 +4,8 @@
 
 **Parent scope:** Extends [Phase 6 button policy](./09-ESP32-Phase-6-Checklist.md) (**P6-D10** — log + 10 s credential reset only). Adds **short-press click detection** on the same **D33** button without removing long-hold provisioning reset.
 
+> **Post-P16 (2026-09-20):** Double-click still drives the ready banner and optional auto **Start feed**, and sets the Sub **present ack** required before Dom turns [**Session in Progress**](./25-Session-Accessory-In-Progress-Checklist.md) **ON**. It does not bypass Ready + switch gating for **Stroke** / **Start**.
+
 | Related | Link |
 |---------|------|
 | GPIO / reset | [Hardware User Guide](./Hardware-User-Guide.md) — 10 s hold |

@@ -1,6 +1,6 @@
 # UI Multi-Tab Sync — coordinate live state across browser tabs
 
-**Status:** **Signed off** — bench T1–T9 pass (2026-09-11)
+**Status:** **Signed off** — bench T1–T9 pass (2026-09-11); **T8 extended** for **Session in Progress** tab-sync in [P16 S8](./25-Session-Accessory-In-Progress-Checklist.md).
 
 | Related | Link |
 |---------|------|

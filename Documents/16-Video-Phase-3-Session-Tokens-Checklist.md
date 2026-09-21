@@ -2,7 +2,7 @@
 
 **Status:** **Signed off** (2026-09-11) — V3-T4 manual smoke **deferred** (403 logic implemented in API)
 
-> **Manual mode note:** There is no **End session** button — one server session accumulates strokes until **Abort** (still in progress), **Switch mode**, **Sub change**, or **Sign out** ([07 § lifecycle](./07-Session-And-History.md#when-sessions-end)). Video: **no feeds until first stroke** → both feeds load with tokens → **feeds stay up** for subsequent strokes in the same session. Test **V3-T2** (clear feeds) via **Switch mode** or **Sub change**, not a manual End button.
+> **Manual mode note:** There is no **End session** button — one server session accumulates strokes until **Abort**, **Session in Progress OFF**, **Switch mode**, **Sub change**, or **Sign out** ([07 § lifecycle](./07-Session-And-History.md#when-sessions-end)). **P16:** the server row is created when **Session in Progress** turns **ON**; video tokens still attach on first stroke/burst or **Start feed** as before. Test **V3-T2** (clear feeds) via **Switch mode** or **Sub change**, not a manual End button.
 
 | Related | Link |
 |---------|------|

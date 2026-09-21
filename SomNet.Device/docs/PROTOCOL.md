@@ -3,7 +3,7 @@
 Captured and verified in **Phase 0** (2026-09-05) against SomNet API `http://localhost:5031`.
 
 **Audience:** ESP32 firmware (`SomNet.Device`) implementing a minimal SignalR JSON client.  
-**Scope:** Commands `stroke`, `burst`, `abort`, `automatic-start`, `automatic-stop`, and **`automatic-update`** (Phase 11). Firmware also accepts legacy alias **`automatic:update`**; API/UI use **`automatic-update`** only.
+**Scope:** Commands `stroke`, `burst`, `abort`, `automatic-start`, `automatic-stop`, **`automatic-update`** (Phase 11), and **`session-accessory`** (P16). Firmware also accepts legacy alias **`automatic:update`**; API/UI use **`automatic-update`** only.
 
 **Source references:**
 
@@ -353,6 +353,21 @@ When **`burstsOn: true`**, the start payload includes burst settings (full snaps
 **Power mapping:** `effectivePower = lerp(minimumPower, maximumPower, burstRelative / 100)` → `strokeMsFromPower(..., minimumStrokeMs, maximumStrokeMs)`. Intra-burst power/delay use Burst Settings only — not the active program row. After each burst, program `gapSec` applies before the next main stroke.
 
 Detail: [Phase 10 checklist](../../Documents/09-ESP32-Phase-10-Checklist.md).
+
+### 6.8 session-accessory (P16)
+
+Dom **Session in Progress** switch — drives **GPIO32** (`PIN_SESSION_ACCESSORY`). Payload:
+
+```json
+{ "enabled": true }
+```
+
+| `enabled` | Device action |
+|-----------|----------------|
+| `true` | Assert accessory output (active-high per `boardDefs.h`); serial `[ACCESSORY] ON` |
+| `false` | Release output; serial `[ACCESSORY] OFF` |
+
+While accessory is **off**, firmware **rejects** `stroke`, `burst`, and `automatic-start` (busy/gated). Output is **released** on hub/Wi‑Fi transport loss (fail-safe). See [P16 checklist](../../Documents/25-Session-Accessory-In-Progress-Checklist.md).
 
 ---
 

@@ -10,7 +10,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 | Video at tool site | [Video & Camera Architecture](./13-Video-And-Camera-Architecture.md) — Pi + cameras (separate from ESP32) |
 
-**Firmware status (2026-09-13):** Phases **0–12 + device button clicks** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app, including **Bursts On**, live **`automatic-update`**, network hardening, and GPIO **single/double click** on D33. Current firmware **`0.14.0-button-clicks`**. See [Device button clicks](./23-Device-Button-Clicks-Checklist.md) · [Phase 12 checklist](./09-ESP32-Phase-12-Network-Hardening-Checklist.md).
+**Firmware status (2026-09-20):** Phases **0–12 + device button clicks + Session in Progress (P16)** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app, including **Bursts On**, live **`automatic-update`**, network hardening, GPIO **single/double click** on D33, and **`session-accessory`** on **GPIO32**. Current firmware **`0.15.0-session-accessory`**. See [P16 checklist](./25-Session-Accessory-In-Progress-Checklist.md) · [Device button clicks](./23-Device-Button-Clicks-Checklist.md) · [Phase 12 checklist](./09-ESP32-Phase-12-Network-Hardening-Checklist.md).
 
 ---
 
@@ -22,8 +22,9 @@ The SomNet device is a small Wi‑Fi controller that connects **outbound** to yo
 
 | Part | Label | Purpose |
 |------|-------|---------|
-| Setup button | **D33** | Short press: single (reserved) / **double** = air-tool user ready (starts operator video feed). **Hold 10 s:** reset Wi‑Fi / server settings |
+| Setup button | **D33** | Short press: single (reserved) / **double** = air-tool user ready (Dom can turn **Session in Progress** on). **Hold 10 s:** reset Wi‑Fi / server settings |
 | Relay output | **D4** | Drives the air valve relay — energized during a **stroke** command from SomNet |
+| Session accessory | **D32** (GPIO32) | **Session in Progress** lock output — active while Dom switch is **ON**; fail-safe **OFF** if hub/Wi‑Fi drops |
 | USB | — | Power and optional service access (developers / support) |
 
 Production enclosures may label the button differently; the **10 second hold** behavior is the same.

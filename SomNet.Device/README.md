@@ -6,9 +6,9 @@ PlatformIO firmware for the SomNet hardware device (ESP32 DevKit V1 clone). Live
 **Partitions / OTA headroom:** [docs/PARTITIONS.md](docs/PARTITIONS.md)  
 **Hardware user guide:** [Documents/Hardware-User-Guide.md](../Documents/Hardware-User-Guide.md)  
 **Plan:** [Documents/09-ESP32-Device-Plan.md](../Documents/09-ESP32-Device-Plan.md)  
-**Phase checklists (0–11 complete):** [0](../Documents/09-ESP32-Phase-0-Checklist.md) · … · [10](../Documents/09-ESP32-Phase-10-Checklist.md) · [11](../Documents/09-ESP32-Phase-11-Checklist.md)
+**Phase checklists:** [0](../Documents/09-ESP32-Phase-0-Checklist.md) · … · [12](../Documents/09-ESP32-Phase-12-Network-Hardening-Checklist.md) · [button clicks](../Documents/23-Device-Button-Clicks-Checklist.md) · [P16 session accessory](../Documents/25-Session-Accessory-In-Progress-Checklist.md)
 
-**Current firmware:** `0.12.2-phase11` — manual stroke/burst/abort; automatic start/stop (seven programs); burst-in-automatic; live **`automatic-update`** mid-session replan; network layer per [Network Spec](../Documents/09-ESP32-Network-Spec.md).
+**Current firmware:** `0.15.0-session-accessory` — Phases 5–12 + device button clicks + **`session-accessory`** (GPIO32). Gates `stroke`, `burst`, and `automatic-start` when accessory output is off. Network layer per [Network Spec](../Documents/09-ESP32-Network-Spec.md).
 
 ### Capability summary
 
@@ -18,12 +18,16 @@ PlatformIO firmware for the SomNet hardware device (ESP32 DevKit V1 clone). Live
 | 9 | `burst`, `automatic-start`, `automatic-stop` |
 | 10 | `burstsOn` during automatic sessions |
 | 11 | `automatic-update` — replan after current stroke |
+| 12 | Network hardening |
+| 23 | Button single/double on D33 → hub `ReportButtonEvent` |
+| P16 | `session-accessory` `{ enabled }` → GPIO32; fail-safe OFF on transport loss |
 
 ## Hardware (default wiring)
 
 | Silkscreen | GPIO | Role |
 |------------|------|------|
 | D4 | 4 | Relay |
+| D32 | 32 | Session accessory / lock output |
 | D33 | 33 | Button (input, pull-up) |
 
 Change pins and relay polarity only in **`include/boardDefs.h`**.

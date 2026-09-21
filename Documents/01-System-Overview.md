@@ -70,7 +70,7 @@ SomNet is a full-stack web application for controlling and recording sessions be
 
 | Mode | Purpose |
 |------|---------|
-| **Manual** | Operator triggers individual strokes and bursts; session starts lazily on first action |
+| **Manual** | Operator turns **Session in Progress** on, then triggers strokes and bursts ([P16](./25-Session-Accessory-In-Progress-Checklist.md)) |
 | **Automatic** | Operator starts/stops an automated session; timing and power ranges configured in settings |
 
 ### Pairing Settings
@@ -93,7 +93,7 @@ Settings load when a Sub is selected and save automatically (debounced) when cha
 
 ESP32 devices connect to the SignalR hub at `/hubs/hardware`. Pairing binds a physical device to a specific Dom+Sub pair via a long-lived device JWT. Commands are dispatched through the hub and acknowledged by the device.
 
-> **Note:** The backend hardware pipeline and React UI command dispatch are complete (Phases 8–12 + device button clicks). Manual and automatic commands call **`POST /api/devices/commands`**; **`AutomaticSessionHubListener`** subscribes to operator hub events for automatic session completion and **device button clicks** ([23](./23-Device-Button-Clicks-Checklist.md)). Browser refresh rehydration ([10](./10-UI-Session-Rehydration-Checklist.md) · [11](./11-UI-Manual-Session-Rehydration-Checklist.md)) and multi-tab sync ([12](./12-UI-Multi-Tab-Sync-Checklist.md)) are signed off (2026-09-11). **Video (Phases 2–6 + snapshot encryption):** dev PC bench with go2rtc, session tokens, Cloudflare Quick Tunnel, AES-256-GCM action stills ([13](./13-Video-And-Camera-Architecture.md) · [24](./24-Video-Snapshot-Encryption-Checklist.md)).
+> **Note:** The backend hardware pipeline and React UI command dispatch are complete (Phases 8–12 + device button clicks + **P16 Session in Progress**). Manual and automatic commands call **`POST /api/devices/commands`** (including **`session-accessory`**); **`AutomaticSessionHubListener`** subscribes to operator hub events for automatic session completion and **device button clicks** ([23](./23-Device-Button-Clicks-Checklist.md)). Browser refresh rehydration ([10](./10-UI-Session-Rehydration-Checklist.md) · [11](./11-UI-Manual-Session-Rehydration-Checklist.md)) and multi-tab sync ([12](./12-UI-Multi-Tab-Sync-Checklist.md)) are signed off; rehydration runs only when Session in Progress is on ([25](./25-Session-Accessory-In-Progress-Checklist.md)). **Video (Phases 2–6 + snapshot encryption):** dev PC bench with go2rtc, session tokens, Cloudflare Quick Tunnel, AES-256-GCM action stills ([13](./13-Video-And-Camera-Architecture.md) · [24](./24-Video-Snapshot-Encryption-Checklist.md)). **Phase 7 (Pi)** is next ([20](./20-Video-Phase-7-Pi-Production-Checklist.md)).
 
 ## Request Flow Examples
 

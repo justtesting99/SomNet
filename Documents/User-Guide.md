@@ -41,8 +41,9 @@ After signing in, you see the application header and main content area.
 | **Dom name** (your display name) | Click to view all your sessions across subs |
 | **Sub name** | Click to select or manage subs |
 | **Notify** | Schedule a session notification |
+| **Session in Progress** (when in Manual or Automatic mode) | Slide switch — gates the session and hardware lock; see below |
 | **Status indicator** | Shows system/device connection state |
-| **Switch mode** | Return to mode selection (ends active session) |
+| **Switch mode** | Return to mode selection (ends active session unless **Session in Progress** is **ON** — then the session row is kept) |
 | **History** | View session and notification timeline for current sub |
 | **Options** | Configure app preferences and default control settings |
 | **Sign out** | End session and log out |
@@ -74,7 +75,22 @@ Suggested names include `Slv66`, `Slv67`, `Slv68`, but any valid name works.
 
 Removing a sub deletes its saved settings. Past session history for that sub remains in the database but the sub no longer appears in your list.
 
-> **Note:** Changing subs while a session is active will end the current session first.
+> **Note:** Changing subs while a session is active ends the current session first. **Sign out** is blocked while **Session in Progress** is **ON** — turn the switch off first.
+
+---
+
+## Session in Progress
+
+After you choose Manual or Automatic mode, use the **Session in Progress** slide switch in the header before **Stroke**, **Burst**, or automatic **Start**.
+
+1. Wait until **Status** shows **Ready** (API, device, and SignalR online).
+2. The Sub at the tool **double-clicks** the device button (same button as Wi‑Fi reset — short double press, not the 10 s hold).
+3. A green **Ready For Session** banner may appear; you can **Dismiss** it or it hides when you turn the switch **On**.
+4. Turn **Session in Progress** **On** — this starts a new server session and energizes the device **session accessory** output (external lock).
+
+Turn the switch **Off** when the scene is done. If you turned the switch on but never ran a stroke or automatic **Start**, the empty session row is removed from history (not saved as “no activity”).
+
+While automatic is **running**, or a stroke/burst is pending, the switch stays disabled until idle or you **Abort**.
 
 ---
 
@@ -118,7 +134,7 @@ Adjustments save automatically for this Dom+Sub pairing.
 
 Buttons show a brief pending state while the command is processed.
 
-**Session behavior:** A session starts automatically when you perform your first stroke or burst. Each action updates the session record. Abort ends the session and records the summary.
+**Session behavior:** Turn **Session in Progress** **On** first — that creates the session row. Each stroke or burst updates the record. **Abort** ends the session and records the summary.
 
 ---
 
@@ -167,7 +183,7 @@ Choose how the automatic session ends:
 | **Stop** | Ends the running session cooperatively (finishes current stroke, or entire current burst when bursts are on). **Abort stays available** if you need to cut off immediately. |
 | **Abort** | Immediately opens the relay and ends the session (shown only while a session is running) |
 
-Unlike manual mode, the session starts immediately when you press Start.
+Turn **Session in Progress** **On** before **Start**. **Start** begins the automatic program on the current session row (the row is created when you turned the switch on).
 
 ### Changing settings during a session
 
@@ -196,9 +212,10 @@ Click **Options** in the header to configure preferences and default control val
 
 Settings are organized into tabs:
 
-- **General** — Sound effects, confirmation dialogs, **live video feeds** (which cameras load), **video feed bandwidth**, **video feed timeout**, **action snapshot cameras**, mobile video auto-expand, timestamp display, **allow automatic mode overrides while running**, system status reconnect interval
-- **Notifications** — Notification preferences
-- **Account** — Operator display name and password
+- **General** — Confirmation dialogs, **live video feeds** (which cameras load), **video feed bandwidth**, **video feed timeout**, **action snapshot cameras**, mobile video auto-expand, display name / notes prefix, **allow automatic mode overrides while running**, system status reconnect interval
+- **Notifications** — Sound alerts, session timestamps in history
+- **Debug** — Troubleshooting toggles (e.g. show active session ID under the header switch)
+- **Account** — Password change
 
 Default control values for **Manual** and **Automatic** modes are edited on each mode page (not in Options). Changes save automatically after a brief delay (400 ms). Settings persist across sessions and browser restarts.
 
@@ -210,7 +227,7 @@ Click **History** to view the timeline for the current Dom+Sub pair.
 
 The timeline shows:
 
-- **Sessions** — Date, mode, and summary (e.g. "2 strokes at 60%, 1 burst at 75%")
+- **Sessions** — Date, mode, **session id** (`sess-…`), and summary (e.g. "2 strokes at 60%, 1 burst at 75%")
 - **Notifications** — Scheduled session announcements
 
 Use the date range picker to filter entries.
