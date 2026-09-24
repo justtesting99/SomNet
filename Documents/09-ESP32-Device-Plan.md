@@ -1686,6 +1686,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 - ~~**Device button single / double click**~~ — **signed off** 2026-09-13 (`0.14.0-button-clicks`). See [23 — Device button clicks checklist](./23-Device-Button-Clicks-Checklist.md).
 - ~~**Session accessory (`session-accessory`, GPIO32)**~~ — **signed off** 2026-09-20 ([P16 checklist](./25-Session-Accessory-In-Progress-Checklist.md); firmware **`0.15.0-session-accessory`**).
 - **Session timeline visualization** — graph or timeline of a planned or completed automatic session (main strokes, burst events, gaps, relative power). Placement TBD: Automatic mode page (pre-start preview or live), session history detail, or both.
+- **Site operating profiles (cloud / Pi API / ESP32 fallback)** — [26 — Site operating profiles](./26-ESP32-Local-Offline-Mode-Design.md): **(1)** ESP32 + Pi + cloud — online; **(2)** ESP32 + Pi-hosted API (Mode B, preferred offline) — ESP32 unchanged; **(3)** ESP32-only `/operate` (Mode A, optional). Not implemented except tier 1.
 
 ---
 
