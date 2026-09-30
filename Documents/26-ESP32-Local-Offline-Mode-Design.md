@@ -1,17 +1,24 @@
 # Site operating profiles — cloud, Pi-hosted API, and ESP32 fallback (draft)
 
-**Status:** **Design only** — not implemented. Captures feasibility, architecture, and **three deployment tiers** from discussion through 2026-09-24.
+**Status:** **Design only** — not implemented. Captures feasibility, architecture, and **three deployment tiers** (through 2026-09-30): full site **Pi + ESP32** ideal; **standalone ESP32 + browser** first-class single-user profile.
 
-**Former title:** *ESP32 local / offline operate mode* — this doc now covers **online (tier 1)**, **site-local API on Pi (tier 2 / Mode B)**, and **ESP32-only fallback (tier 3 / Mode A)**.
+**Former title:** *ESP32 local / offline operate mode* — this doc covers **online (tier 1)**, **site-local API on Pi (tier 2 / Mode B)**, and **standalone ESP32 + browser (tier 3 / Mode A)**.
 
-**Intent:** When SomNet **cloud UI/API is unavailable**, site operation continues on the **LAN**. **Preferred route:** run a **cloud-equivalent SomNet.API (+ UI) on the site Pi**; **ESP32 firmware stays as shipped today** — only **`server_url`** (and pairing target) points at the Pi instead of Azure. **Optional fallback:** Mode A adds ESP32-hosted `/operate` when **both** cloud and Pi API are down.
+**Intent:** Two **product lines** share one relay firmware core:
+
+| Product line | Typical kit | Ideal control surface |
+|--------------|-------------|------------------------|
+| **Full tool site** | **ESP32 + Pi** (+ cloud in tier 1) | **Mode B** on LAN or **tier 1** online — full SomNet UI, video, history |
+| **Standalone / single-user** | **ESP32 only** (no Pi in the box) | **Mode A** — phone/tablet/PC browser → **`/operate`** on device LAN |
+
+For **full sites**, **Pi + ESP32** is the **ideal** path (tier 1 or 2). For **single-user standalone**, browser control **on the ESP32** is **prominent** — not a minor edge case. Mode A still **can** serve as **failover** when a Pi site loses its API while the ESP32 remains reachable.
 
 | Mode | Name | ESP32 firmware | Operator + API | Video / stills |
 |------|------|----------------|----------------|----------------|
-| **B** ★ | **Pi-hosted API** (preferred) | **Unchanged** — SignalR to Pi LAN URL | **SomNet.UI + SomNet.API** on Pi | **Yes** — go2rtc on Pi |
-| **A** | **ESP32-only fallback** | **New** — `/operate`, `/api/local/*` | Browser → ESP32 HTTP | **No** — optional JSON history on flash |
+| **B** ★ | **Pi-hosted API** (full site — ideal offline) | **Unchanged** — SignalR to Pi LAN URL | **SomNet.UI + SomNet.API** on Pi | **Yes** — go2rtc on Pi |
+| **A** ★ | **Standalone operate** (single-user) | **New** — `/operate`, `/api/local/*` | Browser → ESP32 HTTP | **No** — optional JSON history on flash |
 
-★ **Mode B** is the same pattern as **dev bench** (ESP32 → LAN API on PC); production offline colocates that API on the **Pi** with go2rtc. **No multi-Dom.** Cameras stay on Pi — [13 — Video & Camera Architecture](./13-Video-And-Camera-Architecture.md).
+★ **Mode B** — same pattern as dev bench (ESP32 → LAN API); Pi colocates API with go2rtc. **Mode A** — LAN-only panel; **no multi-Dom**; cameras only with Pi ([13 — Video & Camera Architecture](./13-Video-And-Camera-Architecture.md)).
 
 | Related | Link |
 |---------|------|
@@ -28,13 +35,13 @@
 
 ## 0. Three operating profiles (consolidated summary)
 
-This is the **agreed mental model** for how a tool site can run. All tiers use the **same ESP32 relay firmware** for timing; tiers differ by **where the API/UI live** and **whether the Pi is in the loop**.
+This is the **agreed mental model** for deployments. All tiers use the **same ESP32 relay core** for timing; tiers differ by **kit composition** and **where the operator UI/API live**.
 
-| Tier | Stack | Name in this doc | Status |
-|------|--------|------------------|--------|
-| **1** | **ESP32 + Pi + cloud API/UI** | **Online (production-normal)** | **Implemented** (video/phases ongoing on Pi) |
-| **2** | **ESP32 + Pi** (API/UI on Pi, cloud unreachable) | **Mode B** — Pi-hosted API ★ | **Design** — preferred offline path |
-| **3** | **ESP32 only** (no Pi API; optional no Pi at all for video) | **Mode A** — ESP32 `/operate` | **Design** — optional fallback |
+| Tier | Stack | Name in this doc | Primary use case | Status |
+|------|--------|------------------|------------------|--------|
+| **1** | **ESP32 + Pi + cloud API/UI** | **Online (production-normal)** | Full site, remote operator | **Implemented** (video/phases ongoing on Pi) |
+| **2** | **ESP32 + Pi** (API/UI on Pi, cloud down) | **Mode B** — Pi-hosted API | **Full site offline** — ideal Pi + ESP32 | **Design** |
+| **3** | **ESP32 only** | **Mode A** — standalone `/operate` | **Single-user kit** — browser on phone/tablet/PC; also Pi-outage fallback | **Design** — **first-class** product profile |
 
 ### 0.1 Tier 1 — ESP32 + Pi + cloud (online)
 
@@ -64,19 +71,22 @@ ESP32 does **not** handle video; Pi does **not** host the main API in **cloud-pr
 
 ★ **Preferred offline / site-local route:** run a **cloud-equivalent** `SomNet.API` (+ UI) on the Pi — **not** a separate mini-protocol on ESP32. Work is **Pi hosting + site profile**, not `SomNet.Device` features.
 
-### 0.3 Tier 3 — ESP32 only, Mode A (fallback)
+### 0.3 Tier 3 — ESP32 only, Mode A (standalone + fallback)
 
 | Aspect | Detail |
 |--------|--------|
-| **Operator** | Browser → **`http://<esp32-ip>/operate`** (embedded UI — **new firmware**) |
-| **ESP32** | **Local HTTP** command ingress + optional JSON history on flash |
-| **Pi** | **Absent or down** — no go2rtc, no LAN API |
-| **Commands** | Local `/api/local/commands` → same execution FSMs (bypass SignalR) |
-| **Video / action stills** | **No** — no cameras on ESP32; no edge gateway |
+| **Operator** | **Phone, tablet, or PC browser** → **`http://<esp32-ip>/operate`** (embedded UI — **new firmware**) |
+| **ESP32** | **Local HTTP** command ingress + optional JSON history on flash; may still use cloud SignalR when `server_url` set (hybrid kit — **LO-D13**) |
+| **Pi** | **Not in product** for standalone SKU — or absent/down on full-site failover |
+| **Commands** | Local `/api/local/commands` → same execution FSMs (bypass SignalR when operating standalone) |
+| **Video / action stills** | **No** — no edge gateway in standalone SKU |
 | **Session history** | **Optional** — text/JSON on device (**LittleFS/JSONL**); **not** image history |
 | **Control parity** | **Similar** manual/automatic **payloads** (~85% functional vs SomNet.UI); not full React parity |
+| **Users** | **Single operator** — no multi-Dom; one person on home/tool LAN |
 
-Use tier 3 only when **both** cloud **and** Pi API are unavailable and product requires continued strokes (**LO-D9**).
+**Prominent use case (product):** Customer buys **ESP32 relay unit only** — joins home Wi‑Fi, opens browser on any device on LAN, unlocks **`/operate`**, runs manual/automatic sessions **without** cloud account, **without** Pi, **without** video. Provisioning stays familiar (`/config` for Wi‑Fi; optional empty or dummy `server_url` policy per **LO-D4**).
+
+**Secondary use case (operations):** On a **tier 1/2 site**, if **Pi API is down** but ESP32 is up, **`/operate`** restores strokes until Pi returns (**LO-D9**).
 
 ### 0.4 Side-by-side comparison
 
@@ -89,8 +99,19 @@ Use tier 3 only when **both** cloud **and** Pi API are unavailable and product r
 | **Images (action stills)** | Yes | Yes | No |
 | **Session history** | Cloud DB | Pi DB + disk | Optional JSON on ESP32 |
 | **Multi-Dom** | Product scope | **Out of scope** (single site) | **Out of scope** |
+| **Typical buyer** | Site / remote Dom | Site installer (offline LAN) | **Single user**, standalone unit |
 
-### 0.5 Nuances (discussion outcomes)
+### 0.5 Deployment personas (which tier to sell)
+
+| Persona | Recommended tier | Rationale |
+|---------|------------------|-----------|
+| **Tool site with cameras and history** | **1** (online) or **2** (cloud outage) | **Pi + ESP32** — video, snapshots, full SomNet UI |
+| **Single user, one device, no Pi** | **3** (Mode A) | Browser panel on ESP32; lowest cost/complexity |
+| **Single user who later adds Pi** | **3** now → **1** or **2** later | Commission Pi; point `server_url` at cloud or Pi; Mode A can remain dormant or for failover |
+
+**Ideal vs prominent:** **Ideal engineering path for rich sessions = Pi + ESP32 (tiers 1–2).** **Prominent commercial path for standalone relay = tier 3** — Mode A should be **designed and documented** for installers/end users, not treated as an afterthought.
+
+### 0.6 Nuances (discussion outcomes)
 
 **Tier 1 vs tier 2 (on-site operator):** Can feel **very similar** — full SomNet UI, strokes, P16 session-accessory, video, history. Difference is **host** (Azure vs Pi) and **remote access** (tier 1 + tunnel to Pi for video; tier 2 is mainly **LAN** unless Pi is tunneled separately).
 
@@ -102,11 +123,50 @@ Use tier 3 only when **both** cloud **and** Pi API are unavailable and product r
 
 **Resources:** Tier 3 may use ESP32 **second core** / JSONL history optionally; **second ESP32** or **Pi mini-API only** were considered — **tier 2 full API on Pi** preferred over growing a minimal agent-only stack.
 
-**Implementation priority (agreed):**
+**Implementation priority (revised):**
 
 1. **Tier 1** — continue current roadmap (Azure + Pi video edge).
-2. **Tier 2 (Mode B)** — **Phase E** in §13 — Pi-hosted API, ESP32 provisioning only.
-3. **Tier 3 (Mode A)** — **Phases A–D** — only if tier-2-outage fallback is required.
+2. **Tier 2 (Mode B)** — **Phase E** in §13 — Pi-hosted API for **full-site offline** (ESP32 provisioning only).
+3. **Tier 3 (Mode A)** — **Phases A–D** — **required** for **standalone single-user SKU**; **also** valuable as Pi-outage fallback on tier 1/2 sites.
+
+**Parallel tracks OK:** Mode B (Pi/DevOps) and Mode A (firmware) can progress on separate milestones if standalone product has a committed ship date.
+
+### 0.7 Product family UI — one surface vs embedded duplication (harder ask)
+
+**Product goal (stated):** Use the **same or similar UI** across **family products** (cloud, Pi-hosted API, future variants)—not a one-off panel per device type.
+
+**Why Mode A is a harder ask for that goal:**
+
+| Factor | **Pi / cloud — `SomNet.UI`** | **Standalone ESP32 — `/operate` embedded UI** |
+|--------|------------------------------|-----------------------------------------------|
+| **UI codebase** | **Single** React app (`SomNet.UI`) | **Second** UI (PROGMEM / vanilla JS in firmware) |
+| **Feature releases** | Ship API + UI build; ESP32 firmware only if protocol changes | **Every UI change** may require **firmware flash** (or separate asset pipeline) |
+| **Family consistency** | New product = same login, modes, components, branding | Each SKU risks **visual/behavior drift** from main app |
+| **Logic duplication** | `automaticFieldRules`, `computeStrokeMs`, P16 flows live in **one** TS tree | Must **re-port** to C++/JS on device or accept mismatch |
+| **Testing** | UI E2E + API tests | **Duplicate** matrices (cloud UI + device HTML) |
+| **OTA / versioning** | UI updates independent of ESP32 | UI tied to **firmware version** unless UI loaded from elsewhere |
+
+**Inevitable duplication:** Any new cloud UI capability (new automatic mode, new gate, new option, new history view) becomes **two workstreams** if Mode A mirrors it: implement in **SomNet.UI** and again in **`config_pages` / `/operate` JS**. PROTOCOL parity alone does not keep **labels, validation, disabled states, and mobile layout** aligned.
+
+**Strategic alignment with family UI:**
+
+| Strategy | Family UI fit | Standalone without Pi? |
+|----------|---------------|-------------------------|
+| **A. Pi (or LAN) hosts `SomNet.UI`** — tier 2 | **Best** — one UI artifact everywhere API runs | **No** — needs Pi or equivalent host |
+| **B. Thin ESP32: config + status only; control always via API** | **Best** for firmware — no operate UI in flash | **No** — still needs API host on LAN |
+| **C. ESP32 serves **static** `SomNet.UI` `dist/` from flash/LittleFS** | **Good** — same built assets; **large** flash/OTA; API still required for full app OR need local API subset | **Partial** — bundle bloat; API/session/video still missing without host |
+| **D. Mode A — bespoke `/operate` JS** | **Poor** for family goal — permanent second UI | **Yes** — lowest hardware BOM |
+
+**Recommendation for “same UI across family”:**
+
+1. **Default product architecture:** **ESP32 + API host** (cloud or Pi) — operator always uses **`SomNet.UI`**; firmware stays protocol-focused ([09 device plan](./09-ESP32-Device-Plan.md) config UI excepted).
+2. **Standalone SKU without Pi:** Prefer **minimal companion host** (Pi Zero 2 W, cheap SBC, or **phone-as-edge** running a small API in a future product—out of scope here) over a **full duplicate UI** in firmware—**if** family UI consistency is non-negotiable.
+3. **If Mode A ships anyway:** Treat as **explicit trade** — document **UI drift** as ongoing cost; cap scope (manual-only v1, no automatic parity); or invest in **shared build** (e.g. compile a **subset** of UI to static files in CI, flash to LittleFS)—still hard on ESP32-WROOM flash budget.
+4. **Mode A as failover only** on Pi sites: **smaller** duplication surface (emergency strokes, not full automatic UX).
+
+**Open decision — LO-D15:** Accept **dual UI maintenance** for standalone SKU vs **require LAN API host** (tier 2) even for “single user” to preserve **one `SomNet.UI`**.
+
+**UX vs maintainability (summary):** Pi-hosted API gives **~90%+** UX parity **and** **one UI codebase**. Standalone `/operate` trades **BOM/simplicity** for **lower UX parity** and **higher long-term UI tax** across the product family.
 
 ---
 
@@ -118,7 +178,7 @@ Normal operation: operator uses **SomNet.UI** → **SomNet.API** → SignalR **`
 
 **Goal (Mode B — preferred):** Host **SomNet.API + SomNet.UI** on the **site Pi** as an alternate to cloud — same REST, SignalR **`/hubs/hardware`**, sessions, video tokens, snapshot-on-ack. ESP32 **`server_url`** → `http://<pi>:5031` (or site hostname). **No ESP32 protocol or command-path changes.**
 
-**Goal (Mode A — optional):** If the Pi is also down, add device **`/operate`** so strokes can still run from the ESP32 web server (requires firmware work — see §4–7).
+**Goal (Mode A — standalone + fallback):** Device **`/operate`** so a **single user** controls the tool from **any browser on LAN** without Pi or cloud; same feature set supports **failover** when Pi API is down on a full site (see §4–7).
 
 ---
 
@@ -171,7 +231,7 @@ Mode A — ESP32 fallback (optional; Pi + cloud both unreachable)
   Browser → http://<esp32-ip>/operate
   ESP32   → local CommandHandler (NEW firmware — no SignalR required)
 
-Policy: Prefer Mode B only unless Pi outage is a required scenario — see LO-D9, LO-D12.
+Full site: prefer Mode B when Pi is in the kit. Standalone SKU: Mode A is primary — see §0.5. Coexistence on one ESP32: LO-D9, LO-D13.
 ```
 
 **Note:** Mode B is **not a new ESP32 feature** — it reuses [Hardware User Guide](./Hardware-User-Guide.md) / `/config` **SomNet server URL** aimed at the Pi, identical in spirit to dev PC LAN IP ([08 — Development Guide](./08-Development-Guide.md)).
@@ -576,9 +636,12 @@ Offline operate estimate: **tens of KB** flash for JS + routes; history size dep
 | **LO-D6** | Partition change (Mode A) | Stay on minimal SPIFFS vs custom **512 KB** LittleFS |
 | **LO-D7** | Mode B API shape | **Full SomNet.API on Pi (SQLite)** ★ vs trimmed vs edge-agent-only |
 | **LO-D8** | Mode B auth | Site PIN vs local operator login vs reuse cloud credentials offline |
-| **LO-D9** | Mode A + B together | Pi primary when up; ESP32 `/operate` fallback only vs disable Mode A when Pi healthy |
+| **LO-D9** | Mode A + B on same ESP32 | Pi/API primary when up; `/operate` always available vs disabled when hub healthy |
 | **LO-D10** | ESP32 URL failover | Manual installer URL vs automatic cloud→Pi fallback in firmware |
-| **LO-D12** | **Primary offline route** | **Pi-hosted API (Mode B)** vs ESP32 `/operate` first — **default B** |
+| **LO-D12** | **Default offline route (full site)** | **Pi-hosted API (Mode B)** when Pi in kit |
+| **LO-D13** | **Standalone SKU** | Ship with `/operate` only vs optional cloud `server_url` for hybrid upgrade path |
+| **LO-D14** | **Mode A UX default** | Local operate **anytime on LAN** for standalone (LO-D1 default **yes** for tier 3) |
+| **LO-D15** | **Family UI strategy** | Dual UI (Mode A) vs **SomNet.UI-only** (force tier 2 host for standalone) |
 
 ---
 
@@ -592,9 +655,9 @@ Offline operate estimate: **tens of KB** flash for JS + routes; history size dep
 - Installer doc: **cloud-primary** vs **site-local API** profiles
 - Optional: site backup / restore of SQLite + snapshot disk
 
-### Phases A–D — Mode A fallback (optional ESP32 firmware)
+### Phases A–D — Mode A (standalone ESP32 + browser — first-class)
 
-Only if **LO-D9** requires control when Pi is down.
+**Primary:** single-user kit (tier 3). **Secondary:** failover on Pi sites (**LO-D9**). End-user guide: join Wi‑Fi → open `/operate` on phone/tablet/PC.
 
 **Phase A — MVP**
 
@@ -692,3 +755,5 @@ Reuse **S12 relay jitter** from [Phase 12](./09-ESP32-Phase-12-Network-Hardening
 | 2026-09-24 | **Mode B preferred** — Pi-hosted **cloud-equivalent API**; ESP32 unchanged; Mode A optional fallback |
 | 2026-09-24 | **§0 Three operating profiles** — tier 1 (online), tier 2 (Mode B), tier 3 (Mode A); comparison table + nuances + priority |
 | 2026-09-24 | Renamed doc title to **Site operating profiles**; tier summary validated with stakeholders |
+| 2026-09-30 | **Mode A prominent** — standalone single-user (browser on phone/tablet/PC); Pi+ESP32 remains ideal for full site; §0.5 personas; priority + LO-D13/D14 |
+| 2026-09-30 | **§0.7** — product family UI goal; duplication/drift cost of embedded `/operate` vs single `SomNet.UI` on Pi/cloud; LO-D15 |
