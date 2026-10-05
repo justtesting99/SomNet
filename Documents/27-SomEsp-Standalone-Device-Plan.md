@@ -203,6 +203,15 @@ CommandHandler
 
 **Exit:** Trial checklist §6 all pass.
 
+**Phase 4 checklist (2026-10-05):**
+
+- [x] Setup AP: `/api/local/*` → `403 setup_mode`; `/operate` redirects to `/`
+- [x] Factory reset clears `operate_pin` (via `clearAll`)
+- [x] Unlock optional `newPin`; operate UI field
+- [x] Status poll serial log throttled (5 s); client poll 800 ms while busy
+- [x] `docs/SOMESP-STANDALONE.md` end-user guide; banner prints real operate URL
+- [x] `pio run -e somesp` flash budget OK (< 85% OTA slot)
+
 ---
 
 ### Phase 5 — History (optional v1.1)

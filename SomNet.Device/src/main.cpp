@@ -182,7 +182,9 @@ void printSerialBanner() {
         Serial.print(F(" Server: "));
         Serial.println(serverUrl[0] != '\0' ? serverUrl : "(not configured)");
     } else {
-        Serial.println(F(" Control: http://<ip>/operate"));
+        Serial.print(F(" Control: http://"));
+        Serial.print(wifiManager.localIp());
+        Serial.println(F("/operate"));
     }
     Serial.println(F(" Log prefixes: [WIFI] [TIME] [HTTP] [HUB] [CMD] [STROKE] [RELAY] [NVS] [ID]"));
     Serial.println(F("========================================"));

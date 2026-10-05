@@ -420,7 +420,13 @@ void registerRoutes(AsyncWebServer& server) {
     server.on(AsyncURIMatcher::exact("/config"), HTTP_POST, handleConfigPost);
     server.on("/api/status", HTTP_GET, handleApiStatus);
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
-    server.on("/operate", HTTP_GET, [](AsyncWebServerRequest* request) { OperatePages::handleOperateGet(request); });
+    server.on("/operate", HTTP_GET, [](AsyncWebServerRequest* request) {
+        if (gWifi != nullptr && gWifi->isSoftAp()) {
+            request->redirect("/");
+            return;
+        }
+        OperatePages::handleOperateGet(request);
+    });
     if (gLocalOperate != nullptr) {
         registerLocalApiRoutes(server, gLocalOperate);
     }

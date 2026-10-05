@@ -14,7 +14,13 @@ class LocalOperate {
 public:
     void begin(NvsStore* nvs, SessionAccessoryController* accessory);
 
-    bool unlockWithPin(const char* pin, char* tokenOut, size_t tokenOutLen, uint64_t* expiresAtMsOut);
+    /** If newPin is non-empty after verify, stores operate_pin in NVS (trial plaintext). */
+    bool unlockWithPin(
+        const char* pin,
+        const char* newPin,
+        char* tokenOut,
+        size_t tokenOutLen,
+        uint64_t* expiresAtMsOut);
     void lock();
 
     bool isUnlocked() const;

@@ -19,6 +19,15 @@ CommandHandler* gCommandHandler = nullptr;
 DeviceIdentity* gIdentity = nullptr;
 
 void logLocalRequest(AsyncWebServerRequest* request, const char* path) {
+    if (path != nullptr && strcmp(path, "/api/local/status") == 0) {
+        static unsigned long lastStatusLogMs = 0;
+        const unsigned long now = millis();
+        if (now - lastStatusLogMs < 5000UL) {
+            return;
+        }
+        lastStatusLogMs = now;
+    }
+
     Serial.print(F("[HTTP] "));
     Serial.print(request->methodToString());
     Serial.print(' ');
@@ -38,6 +47,14 @@ void sendJsonError(AsyncWebServerRequest* request, int code, const char* error) 
     char body[96];
     snprintf(body, sizeof(body), "{\"error\":\"%s\"}", error);
     sendJson(request, code, body);
+}
+
+bool rejectLocalApiInSetupMode(AsyncWebServerRequest* request) {
+    if (gWifi != nullptr && gWifi->isSoftAp()) {
+        sendJsonError(request, 403, "setup_mode");
+        return true;
+    }
+    return false;
 }
 
 bool requireUnlocked(AsyncWebServerRequest* request) {
@@ -85,6 +102,10 @@ void handleJsonPost(
 }
 
 void handleLocalUnlockBody(AsyncWebServerRequest* request, const char* body, size_t len) {
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+
     JsonDocument doc;
     const DeserializationError err = deserializeJson(doc, body, len);
     if (err) {
@@ -98,9 +119,15 @@ void handleLocalUnlockBody(AsyncWebServerRequest* request, const char* body, siz
         return;
     }
 
+    const char* newPin = doc["newPin"] | "";
+    if (newPin[0] != '\0' && strlen(newPin) > kLocalOperatePinMaxLen) {
+        sendJsonError(request, 400, "newPin_too_long");
+        return;
+    }
+
     char token[kLocalOperateTokenHexLen + 1];
     uint64_t expiresAtMs = 0;
-    if (!gLocalOperate->unlockWithPin(pin, token, sizeof(token), &expiresAtMs)) {
+    if (!gLocalOperate->unlockWithPin(pin, newPin, token, sizeof(token), &expiresAtMs)) {
         sendJsonError(request, 401, "invalid_pin");
         return;
     }
@@ -128,6 +155,9 @@ void handleLocalUnlock(
 
 void handleLocalLock(AsyncWebServerRequest* request) {
     logLocalRequest(request, "/api/local/lock");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
     if (!requireUnlocked(request)) {
         return;
     }
@@ -137,6 +167,9 @@ void handleLocalLock(AsyncWebServerRequest* request) {
 
 void handleLocalArm(AsyncWebServerRequest* request) {
     logLocalRequest(request, "/api/local/arm");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
     if (!requireUnlocked(request)) {
         return;
     }
@@ -149,6 +182,9 @@ void handleLocalArm(AsyncWebServerRequest* request) {
 
 void handleLocalDisarm(AsyncWebServerRequest* request) {
     logLocalRequest(request, "/api/local/disarm");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
     if (!requireUnlocked(request)) {
         return;
     }
@@ -158,6 +194,9 @@ void handleLocalDisarm(AsyncWebServerRequest* request) {
 
 void handleLocalStatus(AsyncWebServerRequest* request) {
     logLocalRequest(request, "/api/local/status");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
     const bool unlocked = gLocalOperate != nullptr && gLocalOperate->isUnlocked();
     const bool armed = gLocalOperate != nullptr && gLocalOperate->isArmed();
     const bool busy = gExecutionContext != nullptr && gExecutionContext->isActive();
@@ -210,6 +249,9 @@ void handleLocalStatus(AsyncWebServerRequest* request) {
 
 void handleLocalCaps(AsyncWebServerRequest* request) {
     logLocalRequest(request, "/api/local/caps");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
     char json[160];
     snprintf(
         json,
@@ -290,6 +332,9 @@ void handleLocalCommandsPost(
     size_t index,
     size_t total) {
     logLocalRequest(request, "/api/local/commands");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
     if (gLocalOperate == nullptr || !gLocalOperate->authorizeRequest(request)) {
         sendJsonError(request, 401, "unauthorized");
         return;

@@ -332,7 +332,8 @@ void renderConfigForm(
         if (!kSomNetStandaloneBuild) {
             append(out, outLen, &offset, " and server settings, or all NVS including pairing.");
         } else {
-            append(out, outLen, &offset, " settings, or all NVS.");
+            append(out, outLen, &offset,
+                " settings, or factory reset (also clears operate PIN; default 1234 after reset).");
         }
         append(out, outLen, &offset, "</p>");
         append(out, outLen, &offset, "<form method=POST action=\"/config/reset-wifi\"><p class=\"actions\"><button class=\"btn btn-secondary\" type=submit>Reset Wi-Fi / server</button></p></form>");

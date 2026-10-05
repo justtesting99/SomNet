@@ -109,11 +109,22 @@ void LocalOperate::clearSession() {
 
 bool LocalOperate::unlockWithPin(
     const char* pin,
+    const char* newPin,
     char* tokenOut,
     size_t tokenOutLen,
     uint64_t* expiresAtMsOut) {
     if (!pinMatches(pin)) {
         return false;
+    }
+
+    if (newPin != nullptr && newPin[0] != '\0' && nvs_ != nullptr) {
+        if (strlen(newPin) > kLocalOperatePinMaxLen) {
+            return false;
+        }
+        if (!nvs_->setOperatePin(newPin)) {
+            return false;
+        }
+        Serial.println(F("[LOCAL] operate PIN updated in NVS"));
     }
 
     mintSession(tokenOut, tokenOutLen, expiresAtMsOut);

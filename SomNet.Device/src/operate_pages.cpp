@@ -32,6 +32,7 @@ a{color:#818cf8}
 <p class="note"><a href="/">Status</a> &middot; LAN only &middot; default PIN 1234</p>
 <div id="gate" class="panel">
 <label>PIN<input id="pin" type="password" maxlength="16" value="1234"></label>
+<label>New PIN (optional)<input id="pin-new" type="password" maxlength="16" placeholder="change on unlock"></label>
 <button class="btn-primary" id="btn-unlock">Unlock</button>
 <button class="btn-secondary hidden" id="btn-arm">Arm session</button>
 <button class="btn-secondary hidden" id="btn-lock">Lock</button>
@@ -135,7 +136,7 @@ async function poll(){
     }
     setStatus(parts.join(' · ')||'Idle');
     $('btn-auto-start').disabled=!!(s.busy||s.automaticActive);
-    if(s.busy||s.automaticActive){if(!pollTimer)pollTimer=setInterval(poll,600);}
+    if(s.busy||s.automaticActive){if(!pollTimer)pollTimer=setInterval(poll,800);}
     else if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
   }catch(e){setStatus(e.message);}
 }
@@ -151,7 +152,8 @@ document.querySelectorAll('.tab').forEach(function(b){
 });
 $('btn-unlock').onclick=async function(){
   try{
-    var u=await api('/api/local/unlock',{method:'POST',body:JSON.stringify({pin:$('pin').value})});
+    var body={pin:$('pin').value};if($('pin-new').value)body.newPin=$('pin-new').value;
+    var u=await api('/api/local/unlock',{method:'POST',body:JSON.stringify(body)});
     token=u.token;sessionStorage.setItem(TOKEN_KEY,token);showMain(true);setStatus('Unlocked');
     await poll();
   }catch(e){setStatus('Unlock: '+e.message);}
