@@ -1686,7 +1686,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 - ~~**Device button single / double click**~~ — **signed off** 2026-09-13 (`0.14.0-button-clicks`). See [23 — Device button clicks checklist](./23-Device-Button-Clicks-Checklist.md).
 - ~~**Session accessory (`session-accessory`, GPIO32)**~~ — **signed off** 2026-09-20 ([P16 checklist](./25-Session-Accessory-In-Progress-Checklist.md); firmware **`0.15.0-session-accessory`**).
 - **Session timeline visualization** — graph or timeline of a planned or completed automatic session (main strokes, burst events, gaps, relative power). Placement TBD: Automatic mode page (pre-start preview or live), session history detail, or both.
-- **Site operating profiles** — [26](./26-ESP32-Local-Offline-Mode-Design.md): tiers 1–3; **family UI** favors **SomNet.UI on Pi/cloud** (tier 2) over embedded `/operate` (tier 3) due to **UI duplication** on firmware updates. Tier 1 only implemented today.
+- **Site operating profiles** — [26](./26-ESP32-Local-Offline-Mode-Design.md): tiers 1–3; **SomEsp fork trial** — [27 standalone device plan](./27-SomEsp-Standalone-Device-Plan.md) (ESP-only, no API/Pi). Tier 1 only implemented on main today.
 
 ---
 

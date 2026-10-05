@@ -89,6 +89,10 @@ void onButtonClick(ButtonClickKind kind, void*) {
         Serial.println(F("[BTN] click dropped (provisioning)"));
         return;
     }
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    Serial.println(F("[BTN] click ignored (standalone, no hub)"));
+    return;
+#endif
     if (!nvsStore.isPaired()) {
         Serial.println(F("[BTN] click dropped (not paired)"));
         return;
@@ -133,17 +137,23 @@ void printSerialBanner() {
     buildEffectiveServerUrl(serverUrl, sizeof(serverUrl));
 
     Serial.println(F("========================================"));
-    Serial.println(F(" SomNet Device Firmware"));
+    Serial.println(kSomNetStandaloneBuild ? F(" SomEsp Standalone Firmware") : F(" SomNet Device Firmware"));
     Serial.print(F(" Version: "));
     Serial.println(FIRMWARE_VERSION);
+    Serial.print(F(" Product: "));
+    Serial.println(kSomNetStandaloneBuild ? F("STANDALONE (no hub)") : F("SomNet cloud"));
     Serial.print(F(" Mode: "));
     Serial.println(bootMode == DeviceBootMode::Provisioning ? F("PROVISIONING") : F("RUNNING"));
     Serial.print(F(" Device ID: "));
     Serial.println(deviceIdentity.deviceId());
     Serial.print(F(" MAC: "));
     Serial.println(deviceIdentity.macAddress());
-    Serial.print(F(" Pairing: "));
-    Serial.println(nvsStore.isPaired() ? F("paired") : F("not paired"));
+    if (!kSomNetStandaloneBuild) {
+        Serial.print(F(" Pairing: "));
+        Serial.println(nvsStore.isPaired() ? F("paired") : F("not paired"));
+    } else {
+        Serial.println(F(" Hub: disabled (standalone)"));
+    }
     Serial.print(F(" Wi-Fi: "));
     if (wifiManager.isSoftAp()) {
         Serial.println(F("setup AP"));
@@ -158,8 +168,12 @@ void printSerialBanner() {
     }
     Serial.print(F(" IP: "));
     Serial.println(wifiManager.localIp());
-    Serial.print(F(" Server: "));
-    Serial.println(serverUrl[0] != '\0' ? serverUrl : "(not configured)");
+    if (!kSomNetStandaloneBuild) {
+        Serial.print(F(" Server: "));
+        Serial.println(serverUrl[0] != '\0' ? serverUrl : "(not configured)");
+    } else {
+        Serial.println(F(" Control: LAN HTTP (/operate in Phase 2+)"));
+    }
     Serial.println(F(" Log prefixes: [WIFI] [TIME] [HTTP] [HUB] [CMD] [STROKE] [RELAY] [NVS] [ID]"));
     Serial.println(F("========================================"));
 }
@@ -170,7 +184,9 @@ void setup() {
     Serial.begin(115200);
     delay(500);
     Serial.println();
-    Serial.print(F("[BOOT] SomNet.Device starting — firmware "));
+    Serial.print(F("[BOOT] "));
+    Serial.print(kSomNetStandaloneBuild ? F("SomEsp") : F("SomNet.Device"));
+    Serial.print(F(" starting, firmware "));
     Serial.println(FIRMWARE_VERSION);
 
     if (!nvsStore.begin()) {
@@ -220,6 +236,8 @@ void loop() {
     signalRClient.poll();
     if (buttonInput.isAwaitingCredentialResetRelease()) {
         statusLed.pollCredentialResetFlash();
+    } else if (kSomNetStandaloneBuild) {
+        statusLed.poll(wifiManager.isConnected() && !wifiManager.isSoftAp());
     } else {
         statusLed.poll(signalRClient.isHubConnected());
     }

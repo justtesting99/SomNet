@@ -2,6 +2,13 @@
 
 #include <stdint.h>
 
+/** SomEsp standalone build (env:somesp) — no cloud hub; Wi-Fi-only provisioning. */
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+constexpr bool kSomNetStandaloneBuild = true;
+#else
+constexpr bool kSomNetStandaloneBuild = false;
+#endif
+
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "0.1.0-phase1"
 #endif

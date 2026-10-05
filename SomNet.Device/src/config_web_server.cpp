@@ -152,6 +152,13 @@ bool saveConfigFromRequest(AsyncWebServerRequest* request, String& errorOut) {
         errorOut = "Wi-Fi password is required";
         return false;
     }
+
+    bool useTls = false;
+    char serverBuf[NvsStore::kMaxStringLen] = {};
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    serverBuf[0] = '\0';
+    useTls = false;
+#else
     if (serverUrl.length() == 0) {
         errorOut = "Server URL is required";
         return false;
@@ -161,7 +168,6 @@ bool saveConfigFromRequest(AsyncWebServerRequest* request, String& errorOut) {
         return false;
     }
 
-    char serverBuf[NvsStore::kMaxStringLen];
     strncpy(serverBuf, serverUrl.c_str(), sizeof(serverBuf) - 1);
     serverBuf[sizeof(serverBuf) - 1] = '\0';
     trimTrailingSlashes(serverBuf);
@@ -176,7 +182,8 @@ bool saveConfigFromRequest(AsyncWebServerRequest* request, String& errorOut) {
         return false;
     }
 
-    const bool useTls = strncmp(serverBuf, "https://", 8) == 0;
+    useTls = strncmp(serverBuf, "https://", 8) == 0;
+#endif
 
     if (!gNvs->setWifiSsid(wifiSsid.c_str())) {
         errorOut = "Failed to save Wi-Fi SSID";
@@ -326,21 +333,34 @@ void handleApiStatus(AsyncWebServerRequest* request) {
     buildEffectiveServerUrl(serverUrl, sizeof(serverUrl));
     gNvs->getFriendlyName(friendly, sizeof(friendly));
 
-    char json[768];
-    snprintf(
-        json,
-        sizeof(json),
-        "{\"deviceId\":\"%s\",\"mac\":\"%s\",\"friendlyName\":\"%s\",\"paired\":%s,\"wifiConnected\":%s,\"ip\":\"%s\",\"serverUrl\":\"%s\",\"mode\":\"%s\",\"hubConnected\":%s,\"hubState\":\"%s\"}",
-        gIdentity->deviceId(),
-        gIdentity->macAddress(),
-        friendly,
-        gNvs->isPaired() ? "true" : "false",
-        gWifi->isConnected() ? "true" : "false",
-        gWifi->localIp(),
-        serverUrl,
-        gHttpMode == DeviceBootMode::Provisioning ? "provisioning" : "running",
-        gSignalR != nullptr && gSignalR->isHubConnected() ? "true" : "false",
-        gSignalR != nullptr ? gSignalR->hubStateLabel() : "offline");
+    char json[832];
+    if (kSomNetStandaloneBuild) {
+        snprintf(
+            json,
+            sizeof(json),
+            "{\"standalone\":true,\"deviceId\":\"%s\",\"mac\":\"%s\",\"friendlyName\":\"%s\",\"wifiConnected\":%s,\"ip\":\"%s\",\"mode\":\"%s\",\"hubConnected\":false,\"hubState\":\"disabled\"}",
+            gIdentity->deviceId(),
+            gIdentity->macAddress(),
+            friendly,
+            gWifi->isConnected() ? "true" : "false",
+            gWifi->localIp(),
+            gHttpMode == DeviceBootMode::Provisioning ? "provisioning" : "running");
+    } else {
+        snprintf(
+            json,
+            sizeof(json),
+            "{\"standalone\":false,\"deviceId\":\"%s\",\"mac\":\"%s\",\"friendlyName\":\"%s\",\"paired\":%s,\"wifiConnected\":%s,\"ip\":\"%s\",\"serverUrl\":\"%s\",\"mode\":\"%s\",\"hubConnected\":%s,\"hubState\":\"%s\"}",
+            gIdentity->deviceId(),
+            gIdentity->macAddress(),
+            friendly,
+            gNvs->isPaired() ? "true" : "false",
+            gWifi->isConnected() ? "true" : "false",
+            gWifi->localIp(),
+            serverUrl,
+            gHttpMode == DeviceBootMode::Provisioning ? "provisioning" : "running",
+            gSignalR != nullptr && gSignalR->isHubConnected() ? "true" : "false",
+            gSignalR != nullptr ? gSignalR->hubStateLabel() : "offline");
+    }
     request->send(200, "application/json", json);
 }
 

@@ -217,8 +217,16 @@ bool NvsStore::isFullyProvisioned() const {
     }
 
     char wifi[NvsStore::kMaxStringLen];
+    if (!getWifiSsid(wifi, sizeof(wifi)) || wifi[0] == '\0') {
+        return false;
+    }
+
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    return true;
+#else
     char server[NvsStore::kMaxStringLen];
-    return getWifiSsid(wifi, sizeof(wifi)) && getServerUrl(server, sizeof(server));
+    return getServerUrl(server, sizeof(server)) && server[0] != '\0';
+#endif
 }
 
 bool NvsStore::getAccessToken(char* out, size_t outLen) const {

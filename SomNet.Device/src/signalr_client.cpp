@@ -222,6 +222,9 @@ void buildEffectiveServerUrl(NvsStore& nvs, char* out, size_t outLen) {
 }
 
 bool hasHubServerConfig(NvsStore& nvs) {
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    return false;
+#endif
     if (nvs.isFullyProvisioned()) {
         return true;
     }
@@ -1103,6 +1106,16 @@ bool SignalRClient::begin(NvsStore* nvsStore, DeviceIdentity* identity, WifiMana
         return false;
     }
 
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    nvs_ = nvsStore;
+    identity_ = identity;
+    wifi_ = wifi;
+    initialized_ = true;
+    state_ = HubConnectionState::Offline;
+    Serial.println(F("[HUB] standalone build, hub disabled"));
+    return true;
+#endif
+
     nvs_ = nvsStore;
     identity_ = identity;
     wifi_ = wifi;
@@ -1402,6 +1415,10 @@ void SignalRClient::poll() {
     if (!initialized_ || nvs_ == nullptr || identity_ == nullptr || wifi_ == nullptr) {
         return;
     }
+
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    return;
+#endif
 
     if (wifi_->isSoftAp() || !wifi_->isConnected() || !hasHubServerConfig(*nvs_)) {
         wifiLinkUpMs_ = 0;

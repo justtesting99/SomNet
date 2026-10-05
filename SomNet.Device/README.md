@@ -71,6 +71,12 @@ Or use the PlatformIO sidebar: **Build**, **Upload**, **Monitor** (115200 baud).
 |-------------|-----|---------------|
 | **`dev`** (default) | Local LAN development | `http://` negotiate + `ws://` |
 | **`prod_cloud`** | Cloud / Azure deployment | `https://` negotiate + `wss://` |
+| **`somesp`** | **SomEsp** standalone trial (no API/hub) | **Disabled** — see [docs/SOMESP-STANDALONE.md](docs/SOMESP-STANDALONE.md) |
+
+```bash
+pio run -e somesp
+pio run -e somesp -t upload
+```
 
 **Local dev:** keep `env:dev` and set server URL to `http://192.168.x.x:5031`.
 

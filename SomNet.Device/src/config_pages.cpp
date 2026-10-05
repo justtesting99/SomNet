@@ -170,8 +170,14 @@ void renderStatus(
     htmlEscape(installer, escInstaller, sizeof(escInstaller));
     htmlEscape(effectiveServerUrl != nullptr ? effectiveServerUrl : "", escServer, sizeof(escServer));
 
-    appendHtmlHead(out, outLen, &offset, "SomNet Device");
-    append(out, outLen, &offset, "<h1>SomNet Device</h1>");
+    appendHtmlHead(out, outLen, &offset, kSomNetStandaloneBuild ? "SomEsp Device" : "SomNet Device");
+    append(out, outLen, &offset, kSomNetStandaloneBuild ? "<h1>SomEsp Device</h1>" : "<h1>SomNet Device</h1>");
+
+    if (kSomNetStandaloneBuild && !provisioningMode) {
+        append(out, outLen, &offset,
+            "<div class=\"panel note\"><strong>Standalone mode.</strong> No cloud or SomNet API. "
+            "Control panel (<code>/operate</code>) ships in a later firmware phase.</div>");
+    }
 
     if (provisioningMode) {
         append(out, outLen, &offset,
@@ -180,9 +186,18 @@ void renderStatus(
             "<strong>somnetsetup</strong>, then open <a href=\"/config\">Configure</a>.</div>");
     }
 
-    append(out, outLen, &offset, "<div class=\"panel\"><p><strong>Device ID</strong> (pair in SomNet)</p><div class=\"device-id\">");
+    append(out, outLen, &offset, "<div class=\"panel\"><p><strong>Device ID</strong>");
+    if (!kSomNetStandaloneBuild) {
+        append(out, outLen, &offset, " (pair in SomNet)");
+    }
+    append(out, outLen, &offset, "</p><div class=\"device-id\">");
     append(out, outLen, &offset, escId);
-    append(out, outLen, &offset, "</div><p class=\"note\">Dom account &rarr; select Sub &rarr; Options &rarr; Hardware device &rarr; paste this ID.</p></div>");
+    append(out, outLen, &offset, "</div>");
+    if (!kSomNetStandaloneBuild) {
+        append(out, outLen, &offset,
+            "<p class=\"note\">Dom account &rarr; select Sub &rarr; Options &rarr; Hardware device &rarr; paste this ID.</p>");
+    }
+    append(out, outLen, &offset, "</div>");
 
     if (escFriendly[0] != '\0' || escInstaller[0] != '\0') {
         append(out, outLen, &offset, "<div class=\"panel\">");
@@ -202,16 +217,22 @@ void renderStatus(
     append(out, outLen, &offset, "<div class=\"panel\">");
     append(out, outLen, &offset, "<p class=\"row\"><strong>MAC:</strong> ");
     append(out, outLen, &offset, escMac);
-    append(out, outLen, &offset, "</p><p class=\"row\"><strong>Pairing:</strong> ");
-    append(out, outLen, &offset, nvs.isPaired() ? "paired" : "not paired");
+    if (!kSomNetStandaloneBuild) {
+        append(out, outLen, &offset, "</p><p class=\"row\"><strong>Pairing:</strong> ");
+        append(out, outLen, &offset, nvs.isPaired() ? "paired" : "not paired");
+    }
     append(out, outLen, &offset, "</p><p class=\"row\"><strong>Wi-Fi:</strong> ");
     append(out, outLen, &offset, wifi.isConnected() ? (wifi.isSoftAp() ? "setup AP" : "connected") : "disconnected");
     append(out, outLen, &offset, "</p><p class=\"row\"><strong>IP:</strong> ");
     append(out, outLen, &offset, wifi.localIp());
-    append(out, outLen, &offset, "</p><p class=\"row\"><strong>Server:</strong> ");
-    append(out, outLen, &offset, escServer[0] != '\0' ? escServer : "(not configured)");
+    if (!kSomNetStandaloneBuild) {
+        append(out, outLen, &offset, "</p><p class=\"row\"><strong>Server:</strong> ");
+        append(out, outLen, &offset, escServer[0] != '\0' ? escServer : "(not configured)");
+    }
     append(out, outLen, &offset, "</p><p class=\"row\"><strong>Hub:</strong> ");
-    if (provisioningMode) {
+    if (kSomNetStandaloneBuild) {
+        append(out, outLen, &offset, "disabled (standalone)");
+    } else if (provisioningMode) {
         append(out, outLen, &offset, "off (provisioning)");
     } else if (hubConnected) {
         append(out, outLen, &offset, "connected (");
@@ -267,9 +288,13 @@ void renderConfigForm(
     htmlEscape(wifiPass, escPass, sizeof(escPass));
     htmlEscape(server, escServer, sizeof(escServer));
 
-    appendHtmlHead(out, outLen, &offset, "Configure SomNet Device");
+    appendHtmlHead(out, outLen, &offset, kSomNetStandaloneBuild ? "Configure SomEsp Device" : "Configure SomNet Device");
     append(out, outLen, &offset, "<h1>Configure</h1>");
-    if (provisioningMode || !nvs.isFullyProvisioned()) {
+    if (kSomNetStandaloneBuild) {
+        append(out, outLen, &offset,
+            "<p class=\"note\">Enter home Wi-Fi only. No SomNet server URL is used in standalone mode. "
+            "<strong>Wi-Fi SSID and password are required.</strong></p>");
+    } else if (provisioningMode || !nvs.isFullyProvisioned()) {
         append(out, outLen, &offset, "<p class=\"note\">Enter Wi-Fi and SomNet API base URL (no /hubs/hardware suffix). <strong>All fields below are required</strong>, including Wi-Fi password.</p>");
     }
 
@@ -284,14 +309,27 @@ void renderConfigForm(
     append(out, outLen, &offset, escSsid);
     append(out, outLen, &offset, "\"></label><label>Wi-Fi password<input required type=password name=wifi_pass maxlength=64 value=\"");
     append(out, outLen, &offset, escPass);
-    append(out, outLen, &offset, "\"></label><label>SomNet server URL<input required type=url name=server_url placeholder=\"http://192.168.x.x:5031\" maxlength=128 value=\"");
-    append(out, outLen, &offset, escServer);
-    append(out, outLen, &offset, "\"></label><p class=\"note\">Example: http://192.168.1.100:5031</p>");
+    append(out, outLen, &offset, "\"></label>");
+    if (!kSomNetStandaloneBuild) {
+        append(out, outLen, &offset, "<label>SomNet server URL<input required type=url name=server_url placeholder=\"http://192.168.x.x:5031\" maxlength=128 value=\"");
+        append(out, outLen, &offset, escServer);
+        append(out, outLen, &offset, "\"></label><p class=\"note\">Example: http://192.168.1.100:5031</p>");
+    }
     append(out, outLen, &offset, "<p class=\"actions\"><button id=cfg-save class=\"btn btn-primary\" type=submit disabled>Save and reboot</button> <a class=\"btn btn-secondary\" href=\"/\">Cancel</a></p></form></div>");
-    append(out, outLen, &offset, "<script>(function(){var f=document.getElementById('cfg-form');if(!f)return;var b=document.getElementById('cfg-save');var req=['wifi_ssid','wifi_pass','server_url'];function ok(){for(var i=0;i<req.length;i++){var el=f.elements[req[i]];if(!el||!String(el.value||'').trim())return false;}return true;}function upd(){if(b)b.disabled=!ok();}f.addEventListener('input',upd);f.addEventListener('change',upd);upd();})();</script>");
+    if (kSomNetStandaloneBuild) {
+        append(out, outLen, &offset, "<script>(function(){var f=document.getElementById('cfg-form');if(!f)return;var b=document.getElementById('cfg-save');var req=['wifi_ssid','wifi_pass'];function ok(){for(var i=0;i<req.length;i++){var el=f.elements[req[i]];if(!el||!String(el.value||'').trim())return false;}return true;}function upd(){if(b)b.disabled=!ok();}f.addEventListener('input',upd);f.addEventListener('change',upd);upd();})();</script>");
+    } else {
+        append(out, outLen, &offset, "<script>(function(){var f=document.getElementById('cfg-form');if(!f)return;var b=document.getElementById('cfg-save');var req=['wifi_ssid','wifi_pass','server_url'];function ok(){for(var i=0;i<req.length;i++){var el=f.elements[req[i]];if(!el||!String(el.value||'').trim())return false;}return true;}function upd(){if(b)b.disabled=!ok();}f.addEventListener('input',upd);f.addEventListener('change',upd);upd();})();</script>");
+    }
 
     if (!provisioningMode) {
-        append(out, outLen, &offset, "<div class=\"panel danger-zone\"><p class=\"note\">Advanced: clears Wi-Fi and server settings, or all NVS including pairing.</p>");
+        append(out, outLen, &offset, "<div class=\"panel danger-zone\"><p class=\"note\">Advanced: clears Wi-Fi");
+        if (!kSomNetStandaloneBuild) {
+            append(out, outLen, &offset, " and server settings, or all NVS including pairing.");
+        } else {
+            append(out, outLen, &offset, " settings, or all NVS.");
+        }
+        append(out, outLen, &offset, "</p>");
         append(out, outLen, &offset, "<form method=POST action=\"/config/reset-wifi\"><p class=\"actions\"><button class=\"btn btn-secondary\" type=submit>Reset Wi-Fi / server</button></p></form>");
         append(out, outLen, &offset, "<form method=POST action=\"/config/factory-reset\" onsubmit=\"return confirm('Clear all settings including pairing?')\"><p class=\"actions\"><button class=\"btn btn-danger\" type=submit>Factory reset</button></p></form></div>");
     }
