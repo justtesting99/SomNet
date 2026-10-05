@@ -5,6 +5,7 @@
 #include "device_identity.h"
 #include "execution_context.h"
 #include "local_command_status.h"
+#include "local_history_store.h"
 #include "wifi_manager.h"
 
 #include <ArduinoJson.h>
@@ -17,6 +18,11 @@ ExecutionContext* gExecutionContext = nullptr;
 WifiManager* gWifi = nullptr;
 CommandHandler* gCommandHandler = nullptr;
 DeviceIdentity* gIdentity = nullptr;
+
+// HTTP handlers run on async_tcp (small stack) — no large stack buffers.
+static char gHttpStatusJson[1536];
+static char gHttpHistoryIndexJson[4096];
+static char gHttpHistoryEventJson[1400];
 
 void logLocalRequest(AsyncWebServerRequest* request, const char* path) {
     if (path != nullptr && strcmp(path, "/api/local/status") == 0) {
@@ -238,13 +244,12 @@ void handleLocalStatus(AsyncWebServerRequest* request) {
         doc["resultJson"] = resultJson;
     }
 
-    char json[1400];
-    const size_t n = serializeJson(doc, json, sizeof(json));
-    if (n == 0 || n >= sizeof(json)) {
+    const size_t n = serializeJson(doc, gHttpStatusJson, sizeof(gHttpStatusJson));
+    if (n == 0 || n >= sizeof(gHttpStatusJson)) {
         sendJsonError(request, 500, "status_overflow");
         return;
     }
-    sendJson(request, 200, json);
+    sendJson(request, 200, gHttpStatusJson);
 }
 
 void handleLocalCaps(AsyncWebServerRequest* request) {
@@ -285,7 +290,7 @@ bool dispatchLocalCommand(
 
     localCommandStatusBegin(payload.correlationId);
     gCommandHandler->enqueueExecuteCommand(payload);
-    gCommandHandler->poll();
+    // Run CommandHandler::poll() only from main loop — avoid stack overflow on async_tcp.
 
     char response[128];
     snprintf(
@@ -362,6 +367,61 @@ void handleLocalCommandsPost(
     handleLocalCommandsBody(request, body.c_str(), body.length());
 }
 
+void handleLocalHistoryList(AsyncWebServerRequest* request) {
+    logLocalRequest(request, "/api/local/history");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+
+    if (!localHistoryWriteIndexJson(gHttpHistoryIndexJson, sizeof(gHttpHistoryIndexJson))) {
+        sendJsonError(request, 503, "history_unavailable");
+        return;
+    }
+    sendJson(request, 200, gHttpHistoryIndexJson);
+}
+
+void handleLocalHistoryDetail(AsyncWebServerRequest* request) {
+    logLocalRequest(request, "/api/local/history/detail");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+
+    String url = request->url();
+    String id;
+    if (request->hasParam("id")) {
+        id = request->getParam("id")->value();
+    } else if (url.startsWith("/api/local/history/")) {
+        id = url.substring(strlen("/api/local/history/"));
+    } else {
+        sendJsonError(request, 400, "id_required");
+        return;
+    }
+
+    if (!localHistoryReadEventById(id.c_str(), gHttpHistoryEventJson, sizeof(gHttpHistoryEventJson))) {
+        sendJsonError(request, 404, "not_found");
+        return;
+    }
+    sendJson(request, 200, gHttpHistoryEventJson);
+}
+
+void handleLocalHistoryDelete(AsyncWebServerRequest* request) {
+    logLocalRequest(request, "/api/local/history");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+    localHistoryClearAll();
+    sendJson(request, 200, "{\"cleared\":true}");
+}
+
 } // namespace
 
 void registerLocalApiRoutes(AsyncWebServer& server, LocalOperate* localOperate) {
@@ -381,6 +441,14 @@ void registerLocalApiRoutes(AsyncWebServer& server, LocalOperate* localOperate) 
     server.on("/api/local/disarm", HTTP_POST, [](AsyncWebServerRequest* request) { handleLocalDisarm(request); });
     server.on("/api/local/status", HTTP_GET, [](AsyncWebServerRequest* request) { handleLocalStatus(request); });
     server.on("/api/local/caps", HTTP_GET, [](AsyncWebServerRequest* request) { handleLocalCaps(request); });
+    server.on("/api/local/history", HTTP_GET, [](AsyncWebServerRequest* request) {
+        if (request->hasParam("id")) {
+            handleLocalHistoryDetail(request);
+            return;
+        }
+        handleLocalHistoryList(request);
+    });
+    server.on("/api/local/history", HTTP_DELETE, [](AsyncWebServerRequest* request) { handleLocalHistoryDelete(request); });
     server.on(
         "/api/local/commands",
         HTTP_POST,

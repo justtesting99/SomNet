@@ -65,6 +65,14 @@ On setup AP, local API returns **`403 setup_mode`**.
 | Button D33 clicks | Hub event | Ignored (log only) |
 | Status LED | Wi‑Fi + hub | Wi‑Fi only |
 
-## Roadmap
+## Session history (LittleFS)
 
-- **Phase 5 (optional):** JSON session history on flash (LittleFS).
+Completed strokes, bursts, and automatic summaries are stored on the **~192 KB** SPIFFS/LittleFS partition (`board_build.filesystem = littlefs` on `env:somesp`). Up to **30** events; factory reset clears history.
+
+| Method | Path | Auth |
+|--------|------|------|
+| GET | `/api/local/history` | Bearer — `{ "items": [ … ] }` |
+| GET | `/api/local/history/{id}` | Bearer — full event JSON |
+| DELETE | `/api/local/history` | Bearer — wipe all |
+
+**History** tab on `/operate` lists events (newest first).

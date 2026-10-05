@@ -224,6 +224,14 @@ CommandHandler
 
 Only after Phase 4 sign-off.
 
+**Phase 5 checklist (2026-10-05):**
+
+- [x] `board_build.filesystem = littlefs` on `env:somesp`
+- [x] `local_history_store.*` — index + per-event JSON, cap 30
+- [x] Hook on local ack with `resultJson`
+- [x] `GET/DELETE /api/local/history`, `GET /api/local/history/{id}`
+- [x] History tab on `/operate`; factory reset clears history
+
 ---
 
 ## 5. File map (new / touched)

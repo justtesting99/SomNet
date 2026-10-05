@@ -38,7 +38,7 @@ a{color:#818cf8}
 <button class="btn-secondary hidden" id="btn-lock">Lock</button>
 </div>
 <div id="main" class="hidden">
-<div class="tabs"><button type="button" class="tab active" data-tab="manual">Manual</button><button type="button" class="tab" data-tab="auto">Automatic</button></div>
+<div class="tabs"><button type="button" class="tab active" data-tab="manual">Manual</button><button type="button" class="tab" data-tab="auto">Automatic</button><button type="button" class="tab" data-tab="hist">History</button></div>
 <div id="tab-manual" class="panel">
 <div class="row"><label>Min stroke ms<input id="m-min" type="number" min="1" max="30000" value="25"></label>
 <label>Max stroke ms<input id="m-max" type="number" min="1" max="30000" value="400"></label></div>
@@ -67,6 +67,12 @@ a{color:#818cf8}
 <button class="btn-primary" id="btn-auto-start">Start automatic</button>
 <button class="btn-secondary" id="btn-auto-stop">Stop</button>
 <button class="btn-secondary" id="btn-auto-update">Apply update</button>
+</div>
+<div id="tab-hist" class="panel hidden">
+<button class="btn-secondary" id="btn-hist-refresh">Refresh</button>
+<button class="btn-danger" id="btn-hist-clear">Clear history</button>
+<ul id="hist-list" class="note" style="padding-left:1.1rem"></ul>
+<pre id="hist-detail" class="note" style="white-space:pre-wrap;font-size:.75rem"></pre>
 </div>
 <p class="status" id="status-line">Idle</p>
 </div>
@@ -148,8 +154,30 @@ document.querySelectorAll('.tab').forEach(function(b){
     b.classList.add('active');
     $('tab-manual').classList.toggle('hidden',b.dataset.tab!=='manual');
     $('tab-auto').classList.toggle('hidden',b.dataset.tab!=='auto');
+    $('tab-hist').classList.toggle('hidden',b.dataset.tab!=='hist');
+    if(b.dataset.tab==='hist')loadHistory();
   };
 });
+async function loadHistory(){
+  try{
+    var j=await api('/api/local/history');
+    var ul=$('hist-list');ul.innerHTML='';
+    (j.items||[]).forEach(function(it){
+      var li=document.createElement('li');
+      li.textContent=(it.endedAtUtc||it.endedAtMs)+' — '+it.summary+(it.success?'':' (fail)');
+      li.style.cursor='pointer';
+      li.onclick=async function(){
+        try{
+          var d=await api('/api/local/history?id='+encodeURIComponent(it.id));
+          $('hist-detail').textContent=JSON.stringify(d,null,2);
+        }catch(e){$('hist-detail').textContent='Detail: '+e.message;}
+      };
+      ul.appendChild(li);
+    });
+  }catch(e){$('hist-detail').textContent=e.message;}
+}
+$('btn-hist-refresh').onclick=loadHistory;
+$('btn-hist-clear').onclick=async function(){try{await api('/api/local/history',{method:'DELETE'});loadHistory();}catch(e){setStatus(e.message);}};
 $('btn-unlock').onclick=async function(){
   try{
     var body={pin:$('pin').value};if($('pin-new').value)body.newPin=$('pin-new').value;

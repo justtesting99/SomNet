@@ -9,6 +9,7 @@
 
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
 #include "local_operate.h"
+#include "local_history_store.h"
 #include "operate_pages.h"
 #endif
 
@@ -388,6 +389,9 @@ void handleFactoryReset(AsyncWebServerRequest* request) {
     if (gNvs != nullptr) {
         gNvs->clearAll();
     }
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    localHistoryClearAll();
+#endif
     scheduleRestartAfterResponse(request);
     char html[2560];
     ConfigPages::renderSavedPage(html, sizeof(html), "Factory reset complete.");

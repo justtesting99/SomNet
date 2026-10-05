@@ -16,6 +16,7 @@
 #include "wifi_manager.h"
 
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#include "local_history_store.h"
 #include "local_operate.h"
 #endif
 
@@ -237,6 +238,7 @@ void setup() {
     startNetwork();
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
     localOperate.begin(&nvsStore, &sessionAccessoryController);
+    localHistoryBegin(&nvsStore, &wifiManager);
     localApiSetExecutionContext(&executionContext);
     localApiSetWifiManager(&wifiManager);
     localApiSetCommandHandler(&commandHandler, &deviceIdentity);
@@ -278,6 +280,9 @@ void loop() {
     relayController.poll();
     executionContext.poll();
     commandHandler.poll();
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    localHistoryPoll();
+#endif
     buttonInput.poll();
 
     if (!bannerPrinted && millis() >= 1500) {

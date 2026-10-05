@@ -9,6 +9,7 @@
 
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
 #include "local_command_status.h"
+#include "local_history_store.h"
 #endif
 
 #include <Arduino.h>
@@ -197,6 +198,9 @@ void CommandHandler::sendAck(
         Serial.print(F(" success="));
         Serial.println(success ? F("true") : F("false"));
         localCommandStatusOnAck(correlationId, success, message, resultJson);
+        if (resultJson != nullptr && resultJson[0] != '\0') {
+            localHistoryOnLocalAck(correlationId, success, message, resultJson);
+        }
         return;
     }
 #endif
