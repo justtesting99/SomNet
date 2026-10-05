@@ -175,9 +175,9 @@ void renderStatus(
 
     if (kSomNetStandaloneBuild && !provisioningMode) {
         append(out, outLen, &offset,
-            "<div class=\"panel note\"><strong>Standalone mode.</strong> Unlock via "
-            "<code>POST /api/local/unlock</code> (default PIN <strong>1234</strong>), then "
-            "<code>POST /api/local/arm</code>. Browser <code>/operate</code> UI is Phase 2.</div>");
+            "<div class=\"panel note\"><strong>Standalone mode.</strong> "
+            "<a class=\"btn btn-primary\" href=\"/operate\">Control panel</a> "
+            "(PIN unlock + arm). API: <code>/api/local/*</code>.</div>");
     }
 
     if (provisioningMode) {
@@ -244,7 +244,11 @@ void renderStatus(
     }
     append(out, outLen, &offset, "</p></div>");
 
-    append(out, outLen, &offset, "<p class=\"actions\"><a class=\"btn btn-primary\" href=\"/config\">Configure</a></p>");
+    append(out, outLen, &offset, "<p class=\"actions\">");
+    if (kSomNetStandaloneBuild && !provisioningMode) {
+        append(out, outLen, &offset, "<a class=\"btn btn-primary\" href=\"/operate\">Control panel</a> ");
+    }
+    append(out, outLen, &offset, "<a class=\"btn btn-secondary\" href=\"/config\">Configure</a></p>");
     appendHtmlFoot(out, outLen, &offset);
 }
 

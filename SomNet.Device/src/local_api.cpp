@@ -1,7 +1,10 @@
 #include "local_operate.h"
 
+#include "command_handler.h"
 #include "config.h"
+#include "device_identity.h"
 #include "execution_context.h"
+#include "local_command_status.h"
 #include "wifi_manager.h"
 
 #include <ArduinoJson.h>
@@ -12,6 +15,8 @@ namespace {
 LocalOperate* gLocalOperate = nullptr;
 ExecutionContext* gExecutionContext = nullptr;
 WifiManager* gWifi = nullptr;
+CommandHandler* gCommandHandler = nullptr;
+DeviceIdentity* gIdentity = nullptr;
 
 void logLocalRequest(AsyncWebServerRequest* request, const char* path) {
     Serial.print(F("[HTTP] "));
@@ -156,22 +161,134 @@ void handleLocalStatus(AsyncWebServerRequest* request) {
     const bool unlocked = gLocalOperate != nullptr && gLocalOperate->isUnlocked();
     const bool armed = gLocalOperate != nullptr && gLocalOperate->isArmed();
     const bool busy = gExecutionContext != nullptr && gExecutionContext->isActive();
+    const bool automaticActive =
+        gExecutionContext != nullptr && gExecutionContext->isAutomaticSessionActive();
     const bool wifiConnected = gWifi != nullptr && gWifi->isConnected() && !gWifi->isSoftAp();
 
-    char json[320];
-    snprintf(
-        json,
-        sizeof(json),
-        "{\"unlocked\":%s,\"armed\":%s,\"busy\":%s,\"wifiConnected\":%s,\"expiresAtMs\":%llu}",
-        unlocked ? "true" : "false",
-        armed ? "true" : "false",
-        busy ? "true" : "false",
-        wifiConnected ? "true" : "false",
-        static_cast<unsigned long long>(unlocked ? gLocalOperate->sessionExpiresAtMs() : 0ULL));
+    char correlationId[64];
+    bool cmdComplete = false;
+    bool cmdSuccess = false;
+    char cmdMessage[96];
+    char resultJson[768];
+    localCommandStatusGet(
+        correlationId,
+        sizeof(correlationId),
+        &cmdComplete,
+        &cmdSuccess,
+        cmdMessage,
+        sizeof(cmdMessage),
+        resultJson,
+        sizeof(resultJson));
+
+    JsonDocument doc;
+    doc["unlocked"] = unlocked;
+    doc["armed"] = armed;
+    doc["busy"] = busy;
+    doc["automaticActive"] = automaticActive;
+    doc["wifiConnected"] = wifiConnected;
+    doc["expiresAtMs"] = unlocked ? gLocalOperate->sessionExpiresAtMs() : 0ULL;
+    doc["commandComplete"] = cmdComplete;
+    doc["commandSuccess"] = cmdSuccess;
+    if (correlationId[0] != '\0') {
+        doc["lastCorrelationId"] = correlationId;
+    }
+    if (cmdMessage[0] != '\0') {
+        doc["commandMessage"] = cmdMessage;
+    }
+    if (resultJson[0] != '\0') {
+        doc["resultJson"] = resultJson;
+    }
+
+    char json[1400];
+    const size_t n = serializeJson(doc, json, sizeof(json));
+    if (n == 0 || n >= sizeof(json)) {
+        sendJsonError(request, 500, "status_overflow");
+        return;
+    }
     sendJson(request, 200, json);
 }
 
-void handleLocalCommands(AsyncWebServerRequest* request) {
+void handleLocalCaps(AsyncWebServerRequest* request) {
+    logLocalRequest(request, "/api/local/caps");
+    char json[160];
+    snprintf(
+        json,
+        sizeof(json),
+        "{\"maxStrokeMs\":%lu,\"maxBurstStrokes\":%d,\"maxBurstDelayMs\":%lu}",
+        static_cast<unsigned long>(kMaxStrokeMs),
+        kMaxBurstStrokes,
+        static_cast<unsigned long>(kMaxBurstDelayMs));
+    sendJson(request, 200, json);
+}
+
+bool dispatchLocalCommand(
+    AsyncWebServerRequest* request,
+    const char* commandKey,
+    const char* payloadJson) {
+    if (gCommandHandler == nullptr || gIdentity == nullptr) {
+        sendJsonError(request, 503, "command_handler_unavailable");
+        return false;
+    }
+    if (commandKey == nullptr || commandKey[0] == '\0') {
+        sendJsonError(request, 400, "commandKey_required");
+        return false;
+    }
+
+    ExecuteCommandPayload payload{};
+    snprintf(payload.correlationId, sizeof(payload.correlationId), "local-%08lx", static_cast<unsigned long>(millis()));
+    strncpy(payload.commandKey, commandKey, sizeof(payload.commandKey) - 1);
+    strncpy(payload.deviceId, gIdentity->deviceId(), sizeof(payload.deviceId) - 1);
+    strncpy(payload.payloadJson, payloadJson != nullptr ? payloadJson : "{}", sizeof(payload.payloadJson) - 1);
+    payload.fromLocal = true;
+
+    localCommandStatusBegin(payload.correlationId);
+    gCommandHandler->enqueueExecuteCommand(payload);
+    gCommandHandler->poll();
+
+    char response[128];
+    snprintf(
+        response,
+        sizeof(response),
+        "{\"accepted\":true,\"correlationId\":\"%s\"}",
+        payload.correlationId);
+    sendJson(request, 200, response);
+    return true;
+}
+
+void handleLocalCommandsBody(AsyncWebServerRequest* request, const char* body, size_t len) {
+    JsonDocument doc;
+    const DeserializationError err = deserializeJson(doc, body, len);
+    if (err) {
+        sendJsonError(request, 400, "invalid_json");
+        return;
+    }
+
+    const char* commandKey = doc["commandKey"] | "";
+    if (commandKey[0] == '\0') {
+        sendJsonError(request, 400, "commandKey_required");
+        return;
+    }
+
+    char payloadBuf[sizeof(ExecuteCommandPayload::payloadJson)];
+    payloadBuf[0] = '\0';
+
+    if (doc["payloadJson"].is<const char*>()) {
+        strncpy(payloadBuf, doc["payloadJson"].as<const char*>(), sizeof(payloadBuf) - 1);
+    } else if (doc["payloadJson"].is<JsonObject>() || doc["payloadJson"].is<JsonArray>()) {
+        serializeJson(doc["payloadJson"], payloadBuf, sizeof(payloadBuf));
+    } else {
+        strncpy(payloadBuf, "{}", sizeof(payloadBuf) - 1);
+    }
+
+    dispatchLocalCommand(request, commandKey, payloadBuf);
+}
+
+void handleLocalCommandsPost(
+    AsyncWebServerRequest* request,
+    uint8_t* data,
+    size_t len,
+    size_t index,
+    size_t total) {
     logLocalRequest(request, "/api/local/commands");
     if (gLocalOperate == nullptr || !gLocalOperate->authorizeRequest(request)) {
         sendJsonError(request, 401, "unauthorized");
@@ -181,7 +298,23 @@ void handleLocalCommands(AsyncWebServerRequest* request) {
         sendJsonError(request, 403, "not_armed");
         return;
     }
-    sendJsonError(request, 501, "not_implemented");
+
+    static String body;
+    if (index == 0) {
+        body = "";
+        if (total > 2048) {
+            sendJsonError(request, 413, "body_too_large");
+            return;
+        }
+    }
+    for (size_t i = 0; i < len; ++i) {
+        body += static_cast<char>(data[i]);
+    }
+    if (index + len < total) {
+        return;
+    }
+
+    handleLocalCommandsBody(request, body.c_str(), body.length());
 }
 
 } // namespace
@@ -202,10 +335,15 @@ void registerLocalApiRoutes(AsyncWebServer& server, LocalOperate* localOperate) 
     server.on("/api/local/arm", HTTP_POST, [](AsyncWebServerRequest* request) { handleLocalArm(request); });
     server.on("/api/local/disarm", HTTP_POST, [](AsyncWebServerRequest* request) { handleLocalDisarm(request); });
     server.on("/api/local/status", HTTP_GET, [](AsyncWebServerRequest* request) { handleLocalStatus(request); });
+    server.on("/api/local/caps", HTTP_GET, [](AsyncWebServerRequest* request) { handleLocalCaps(request); });
     server.on(
         "/api/local/commands",
         HTTP_POST,
-        [](AsyncWebServerRequest* request) { handleLocalCommands(request); });
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handleLocalCommandsPost(request, data, len, index, total);
+        });
 }
 
 void localApiSetExecutionContext(ExecutionContext* ctx) {
@@ -214,4 +352,9 @@ void localApiSetExecutionContext(ExecutionContext* ctx) {
 
 void localApiSetWifiManager(WifiManager* wifi) {
     gWifi = wifi;
+}
+
+void localApiSetCommandHandler(CommandHandler* handler, DeviceIdentity* identity) {
+    gCommandHandler = handler;
+    gIdentity = identity;
 }

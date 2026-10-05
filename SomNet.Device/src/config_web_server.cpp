@@ -9,6 +9,7 @@
 
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
 #include "local_operate.h"
+#include "operate_pages.h"
 #endif
 
 #include <ESPAsyncWebServer.h>
@@ -419,6 +420,7 @@ void registerRoutes(AsyncWebServer& server) {
     server.on(AsyncURIMatcher::exact("/config"), HTTP_POST, handleConfigPost);
     server.on("/api/status", HTTP_GET, handleApiStatus);
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    server.on("/operate", HTTP_GET, [](AsyncWebServerRequest* request) { OperatePages::handleOperateGet(request); });
     if (gLocalOperate != nullptr) {
         registerLocalApiRoutes(server, gLocalOperate);
     }

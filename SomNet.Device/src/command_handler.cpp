@@ -7,6 +7,10 @@
 #include "session_accessory_controller.h"
 #include "signalr_client.h"
 
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#include "local_command_status.h"
+#endif
+
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <string.h>
@@ -85,12 +89,43 @@ void CommandHandler::poll() {
     handleExecuteCommand(pendingCommand_);
 }
 
-bool CommandHandler::validateCommand(
+bool CommandHandler::validateLocalCommand(
     const ExecuteCommandPayload& command,
     char* rejectMessage,
     size_t rejectMessageLen) {
     if (rejectMessageLen > 0) {
         rejectMessage[0] = '\0';
+    }
+
+    if (!command.fromLocal) {
+        strncpy(rejectMessage, "not a local command", rejectMessageLen - 1);
+        return false;
+    }
+
+    if (identity_ == nullptr) {
+        strncpy(rejectMessage, "handler unavailable", rejectMessageLen - 1);
+        return false;
+    }
+
+    if (command.deviceId[0] == '\0' || strcmp(command.deviceId, identity_->deviceId()) != 0) {
+        strncpy(rejectMessage, "deviceId mismatch", rejectMessageLen - 1);
+        return false;
+    }
+
+    return true;
+}
+
+bool CommandHandler::validateHubCommand(
+    const ExecuteCommandPayload& command,
+    char* rejectMessage,
+    size_t rejectMessageLen) {
+    if (rejectMessageLen > 0) {
+        rejectMessage[0] = '\0';
+    }
+
+    if (command.fromLocal) {
+        strncpy(rejectMessage, "hub validation on local command", rejectMessageLen - 1);
+        return false;
     }
 
     if (nvs_ == nullptr || identity_ == nullptr || signalR_ == nullptr) {
@@ -153,6 +188,19 @@ void CommandHandler::sendAck(
         Serial.println(resultJson);
     }
 
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    if (correlationId != nullptr &&
+        (strncmp(correlationId, "local-", 6) == 0 ||
+            strcmp(correlationId, "automatic-session-complete") == 0)) {
+        Serial.print(F("[CMD] local ack correlationId="));
+        Serial.print(correlationId != nullptr ? correlationId : "");
+        Serial.print(F(" success="));
+        Serial.println(success ? F("true") : F("false"));
+        localCommandStatusOnAck(correlationId, success, message, resultJson);
+        return;
+    }
+#endif
+
     if (signalR_ == nullptr || correlationId == nullptr || correlationId[0] == '\0') {
         Serial.println(F("[CMD] ack skipped — hub unavailable"));
         return;
@@ -207,7 +255,10 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
     Serial.println(command.commandKey);
 
     char rejectMessage[96];
-    if (!validateCommand(command, rejectMessage, sizeof(rejectMessage))) {
+    const bool valid = command.fromLocal
+        ? validateLocalCommand(command, rejectMessage, sizeof(rejectMessage))
+        : validateHubCommand(command, rejectMessage, sizeof(rejectMessage));
+    if (!valid) {
         Serial.print(F("[CMD] reject: "));
         Serial.println(rejectMessage);
         sendAck(command.correlationId, false, rejectMessage, nullptr);

@@ -61,9 +61,17 @@ Invoke-RestMethod -Uri http://192.168.1.172/api/local/status
 
 Wrong PIN → `401` with `invalid_pin`. Commands without unlock/arm → `401` / `403`.
 
+## Control panel (`/operate`)
+
+Open **`http://<device-ip>/operate`** on the LAN. Flow: **Unlock** (PIN) → **Arm session** → Manual or Automatic tab.
+
+Commands use `POST /api/local/commands` with `{ "commandKey", "payloadJson" }` (same shapes as [PROTOCOL.md](./PROTOCOL.md) §6). Poll `GET /api/local/status` for `busy`, `automaticActive`, `commandComplete`, `resultJson`.
+
+`GET /api/local/caps` returns `maxStrokeMs`, burst limits.
+
 ## Roadmap
 
-- **Phase 2:** `/operate` UI + `POST /api/local/commands` (same `payloadJson` as [PROTOCOL.md](./PROTOCOL.md) §6)
+- **Phase 4:** trial hardening, factory reset PIN, flash budget check
 
 ## Security note (trial)
 

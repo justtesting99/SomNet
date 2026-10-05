@@ -160,6 +160,13 @@ CommandHandler
 
 **Exit:** Phone on LAN → unlock → stroke → relay fires; burst completes; abort works; S12 jitter spot-check.
 
+**Phase 2 checklist (2026-10-05):**
+
+- [x] `fromLocal` + `validateHubCommand` / `validateLocalCommand`
+- [x] `local_command_status` + hub-less acks (`local-*` / `automatic-session-complete`)
+- [x] `POST /api/local/commands`, `GET /api/local/caps`, extended status
+- [x] `GET /operate` manual UI (stroke / burst / abort)
+
 ---
 
 ### Phase 3 — Automatic UI (2–3 days)
@@ -174,6 +181,12 @@ CommandHandler
 | Status UI | `automaticActive`, disable start when busy |
 
 **Exit:** Periodic program runs; stop returns idle; one mid-session `automatic-update` replans (serial `[AUTO] update applied`).
+
+**Phase 3 checklist (2026-10-05):**
+
+- [x] Automatic tab on `/operate` (7 modes, field rules, bursts flag)
+- [x] `automatic-start` / `automatic-stop` / `automatic-update` (400 ms debounce on update)
+- [x] Status line + polling (`automaticActive`, disable start when busy)
 
 ---
 

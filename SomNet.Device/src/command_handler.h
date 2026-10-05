@@ -16,6 +16,7 @@ struct ExecuteCommandPayload {
     char subTarget[64];
     char deviceId[32];
     char payloadJson[768];
+    bool fromLocal = false;
 };
 
 class CommandHandler {
@@ -47,7 +48,8 @@ public:
 private:
     void handleExecuteCommand(const ExecuteCommandPayload& command);
     void sendAck(const char* correlationId, bool success, const char* message, const char* resultJson);
-    bool validateCommand(const ExecuteCommandPayload& command, char* rejectMessage, size_t rejectMessageLen);
+    bool validateHubCommand(const ExecuteCommandPayload& command, char* rejectMessage, size_t rejectMessageLen);
+    bool validateLocalCommand(const ExecuteCommandPayload& command, char* rejectMessage, size_t rejectMessageLen);
 
     ExecutionContext* executionContext_ = nullptr;
     NvsStore* nvs_ = nullptr;

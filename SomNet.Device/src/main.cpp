@@ -182,7 +182,7 @@ void printSerialBanner() {
         Serial.print(F(" Server: "));
         Serial.println(serverUrl[0] != '\0' ? serverUrl : "(not configured)");
     } else {
-        Serial.println(F(" Control: LAN HTTP (/operate in Phase 2+)"));
+        Serial.println(F(" Control: http://<ip>/operate"));
     }
     Serial.println(F(" Log prefixes: [WIFI] [TIME] [HTTP] [HUB] [CMD] [STROKE] [RELAY] [NVS] [ID]"));
     Serial.println(F("========================================"));
@@ -237,6 +237,7 @@ void setup() {
     localOperate.begin(&nvsStore, &sessionAccessoryController);
     localApiSetExecutionContext(&executionContext);
     localApiSetWifiManager(&wifiManager);
+    localApiSetCommandHandler(&commandHandler, &deviceIdentity);
     configWebServer.begin(
         bootMode,
         &nvsStore,

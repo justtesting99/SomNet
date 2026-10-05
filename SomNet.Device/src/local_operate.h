@@ -48,3 +48,4 @@ class WifiManager;
 void registerLocalApiRoutes(class AsyncWebServer& server, LocalOperate* localOperate);
 void localApiSetExecutionContext(ExecutionContext* ctx);
 void localApiSetWifiManager(WifiManager* wifi);
+void localApiSetCommandHandler(class CommandHandler* handler, class DeviceIdentity* identity);
