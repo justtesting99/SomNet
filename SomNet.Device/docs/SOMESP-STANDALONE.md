@@ -11,7 +11,7 @@ SomEsp is a **compile-time product profile** for the ESP32 firmware: same relay/
 2. On a phone or PC on the **same Wi‑Fi**, open **`http://<device-ip>/`** (IP is on the serial banner or your router).
 3. Tap **Control panel** or go to **`http://<device-ip>/operate`**.
 4. **Unlock** with PIN **`1234`** (factory default). Optionally set **New PIN** on the same screen.
-5. Tap **Arm session**, then use **Manual** or **Automatic** controls.
+5. Tap **Arm session**, then use **Manual** or **Automatic** controls. Slider and field values persist in the browser across refresh (`localStorage` keys `somnet-local-manual`, `somnet-local-automatic`; active tab `somesp-operate-tab`). Unlock token stays in `sessionStorage` (re-enter PIN after refresh). `/operate` uses responsive CSS on larger screens.
 
 Operate and local API are **not available** on the setup Wi‑Fi (`SomNetSetup-XXXX`) — finish provisioning first.
 
