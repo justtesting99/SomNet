@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <stdint.h>
 
 /** SomEsp standalone build (env:somesp) — no cloud hub; Wi-Fi-only provisioning. */
@@ -97,6 +98,11 @@ constexpr unsigned long BUTTON_CLICK_MAX_MS = 500;
 constexpr unsigned long BUTTON_SINGLE_FIRE_MS = 450;
 
 constexpr uint16_t CONFIG_HTTP_PORT = 80;
+
+/** SomEsp local API (used when env:somesp). */
+constexpr uint64_t kLocalOperateTokenTtlMs = 8ULL * 60ULL * 60ULL * 1000ULL;
+constexpr size_t kLocalOperateTokenHexLen = 64;
+constexpr size_t kLocalOperatePinMaxLen = 16;
 
 /** WPA2 password for SomNetSetup-XXXX provisioning AP (required by many phones/Windows). */
 constexpr char SETUP_AP_PASSWORD[] = "somnetsetup";

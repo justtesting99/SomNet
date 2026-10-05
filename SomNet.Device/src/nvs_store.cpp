@@ -23,6 +23,7 @@ constexpr char kKeySubTarget[] = "sub_target";
 constexpr char kKeyPaired[] = "paired";
 constexpr char kKeyProvisioned[] = "provisioned";
 constexpr char kKeyCredReset[] = "cred_reset";
+constexpr char kKeyOperatePin[] = "operate_pin";
 
 Preferences preferences;
 NvsStore* gNvsStoreInstance = nullptr;
@@ -308,4 +309,19 @@ bool NvsStore::isPaired() const {
 
     char token[NvsStore::kMaxTokenLen];
     return getAccessToken(token, sizeof(token));
+}
+
+bool NvsStore::hasOperatePin() const {
+    if (!open_) {
+        return false;
+    }
+    return preferences.isKey(kKeyOperatePin);
+}
+
+bool NvsStore::getOperatePin(char* out, size_t outLen) const {
+    return getString(kKeyOperatePin, out, outLen);
+}
+
+bool NvsStore::setOperatePin(const char* value) {
+    return setString(kKeyOperatePin, value);
 }

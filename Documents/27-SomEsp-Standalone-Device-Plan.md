@@ -134,6 +134,14 @@ CommandHandler
 
 **Exit:** Wrong PIN → 401; unlock → token; lock → 403 on commands.
 
+**Phase 1 checklist (2026-10-05):**
+
+- [x] `local_operate.*` + `local_api.cpp` — PIN, Bearer TTL, arm/disarm → GPIO32
+- [x] NVS `operate_pin` (default **1234**)
+- [x] Routes under `/api/local/*`; `commands` stub → 401/403/501
+- [x] Wi‑Fi drop clears local session (SE-T8 prep)
+- [x] `docs/SOMESP-STANDALONE.md` API table
+
 ---
 
 ### Phase 2 — Command path + manual UI (2–4 days)

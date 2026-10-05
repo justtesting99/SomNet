@@ -15,6 +15,10 @@
 #include "status_led.h"
 #include "wifi_manager.h"
 
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#include "local_operate.h"
+#endif
+
 namespace {
 
 WifiManager wifiManager;
@@ -28,10 +32,16 @@ ButtonInput buttonInput;
 SignalRClient signalRClient;
 ConfigWebServer configWebServer;
 StatusLed statusLed;
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+LocalOperate localOperate;
+#endif
 
 DeviceBootMode bootMode = DeviceBootMode::Running;
 bool bannerPrinted = false;
 bool wifiRecoveryAttempted = false;
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+bool wasWifiConnectedForLocal = false;
+#endif
 
 void buildEffectiveServerUrl(char* out, size_t outLen) {
     out[0] = '\0';
@@ -223,14 +233,35 @@ void setup() {
     statusLed.begin();
 
     startNetwork();
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    localOperate.begin(&nvsStore, &sessionAccessoryController);
+    localApiSetExecutionContext(&executionContext);
+    localApiSetWifiManager(&wifiManager);
+    configWebServer.begin(
+        bootMode,
+        &nvsStore,
+        &deviceIdentity,
+        &wifiManager,
+        &signalRClient,
+        &localOperate);
+#else
     configWebServer.begin(bootMode, &nvsStore, &deviceIdentity, &wifiManager, &signalRClient);
+#endif
 }
 
 void loop() {
     wifiManager.poll();
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    const bool wifiStaUp = wifiManager.isConnected() && !wifiManager.isSoftAp();
+    if (wasWifiConnectedForLocal && !wifiStaUp) {
+        localOperate.onWifiDisconnected();
+    }
+    wasWifiConnectedForLocal = wifiStaUp;
+#else
     if (!wifiManager.isSoftAp() && !wifiManager.isConnected()) {
         sessionAccessoryController.releaseSafety();
     }
+#endif
     tryWifiRecovery();
     configWebServer.poll();
     signalRClient.poll();

@@ -175,8 +175,9 @@ void renderStatus(
 
     if (kSomNetStandaloneBuild && !provisioningMode) {
         append(out, outLen, &offset,
-            "<div class=\"panel note\"><strong>Standalone mode.</strong> No cloud or SomNet API. "
-            "Control panel (<code>/operate</code>) ships in a later firmware phase.</div>");
+            "<div class=\"panel note\"><strong>Standalone mode.</strong> Unlock via "
+            "<code>POST /api/local/unlock</code> (default PIN <strong>1234</strong>), then "
+            "<code>POST /api/local/arm</code>. Browser <code>/operate</code> UI is Phase 2.</div>");
     }
 
     if (provisioningMode) {

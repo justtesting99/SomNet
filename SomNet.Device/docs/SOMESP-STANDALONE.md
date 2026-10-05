@@ -37,11 +37,34 @@ Serial banner includes **`Mode: STANDALONE`**. Firmware version is prefixed with
 | Button → hub | `ReportButtonEvent` | Ignored (serial log only) |
 | Status LED | Wi‑Fi + hub | Wi‑Fi only |
 
-## Roadmap (not in Phase 0)
+## Local API (Phase 1)
 
-- **`/operate`** — manual + automatic browser UI  
-- **`/api/local/*`** — PIN unlock, arm/disarm, commands (same `payloadJson` as [PROTOCOL.md](./PROTOCOL.md) §6)
+Default operate PIN: **`1234`** until you store a custom value in NVS (`operate_pin`). PIN is stored in **plaintext** on the device for the trial — use only on a trusted LAN.
+
+| Method | Path | Auth | Notes |
+|--------|------|------|--------|
+| POST | `/api/local/unlock` | — | Body `{"pin":"1234"}` → `token`, `expiresAtMs` (8 h TTL) |
+| POST | `/api/local/lock` | Bearer | Clears session + disarm |
+| POST | `/api/local/arm` | Bearer | GPIO32 accessory ON |
+| POST | `/api/local/disarm` | Bearer | Accessory OFF |
+| GET | `/api/local/status` | — | `unlocked`, `armed`, `busy`, `wifiConnected` |
+| POST | `/api/local/commands` | Bearer + armed | **Phase 2** — returns `501` today |
+
+Example (PowerShell):
+
+```powershell
+$u = Invoke-RestMethod -Method Post -Uri http://192.168.1.172/api/local/unlock -ContentType application/json -Body '{"pin":"1234"}'
+$h = @{ Authorization = "Bearer $($u.token)" }
+Invoke-RestMethod -Method Post -Uri http://192.168.1.172/api/local/arm -Headers $h
+Invoke-RestMethod -Uri http://192.168.1.172/api/local/status
+```
+
+Wrong PIN → `401` with `invalid_pin`. Commands without unlock/arm → `401` / `403`.
+
+## Roadmap
+
+- **Phase 2:** `/operate` UI + `POST /api/local/commands` (same `payloadJson` as [PROTOCOL.md](./PROTOCOL.md) §6)
 
 ## Security note (trial)
 
-Local PIN and tokens are planned for Phase 1. Until then, treat the device HTTP surface as **LAN-trust** only — do not expose port 80 to the internet.
+Do not expose port 80 to the internet. Bearer tokens live in RAM until lock, expiry, or Wi‑Fi loss (session cleared).

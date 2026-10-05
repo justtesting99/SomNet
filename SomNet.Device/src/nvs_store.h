@@ -60,6 +60,11 @@ public:
 
     bool isPaired() const;
 
+    /** SomEsp local operate PIN (plaintext trial — see SOMESP-STANDALONE.md). */
+    bool hasOperatePin() const;
+    bool getOperatePin(char* out, size_t outLen) const;
+    bool setOperatePin(const char* value);
+
     bool savePairing(
         const char* accessToken,
         const char* domTarget,

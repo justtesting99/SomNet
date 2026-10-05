@@ -7,6 +7,10 @@
 #include "signalr_client.h"
 #include "wifi_manager.h"
 
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#include "local_operate.h"
+#endif
+
 #include <ESPAsyncWebServer.h>
 #include <Arduino.h>
 
@@ -20,6 +24,9 @@ NvsStore* gNvs = nullptr;
 DeviceIdentity* gIdentity = nullptr;
 WifiManager* gWifi = nullptr;
 SignalRClient* gSignalR = nullptr;
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+LocalOperate* gLocalOperate = nullptr;
+#endif
 
 void buildEffectiveServerUrl(char* out, size_t outLen) {
     out[0] = '\0';
@@ -411,6 +418,11 @@ void registerRoutes(AsyncWebServer& server) {
     server.on(AsyncURIMatcher::exact("/config"), HTTP_GET, handleConfigGet);
     server.on(AsyncURIMatcher::exact("/config"), HTTP_POST, handleConfigPost);
     server.on("/api/status", HTTP_GET, handleApiStatus);
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    if (gLocalOperate != nullptr) {
+        registerLocalApiRoutes(server, gLocalOperate);
+    }
+#endif
     server.onNotFound([](AsyncWebServerRequest* request) {
         Serial.print(F("[HTTP] 404 "));
         Serial.println(request->url());
@@ -459,7 +471,8 @@ bool ConfigWebServer::begin(
     NvsStore* nvsStore,
     DeviceIdentity* identity,
     WifiManager* wifi,
-    SignalRClient* signalRClient) {
+    SignalRClient* signalRClient,
+    LocalOperate* localOperate) {
     if (nvsStore == nullptr || identity == nullptr || wifi == nullptr) {
         return false;
     }
@@ -473,6 +486,9 @@ bool ConfigWebServer::begin(
     gIdentity = identity;
     gWifi = wifi;
     gSignalR = signalRClient;
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    gLocalOperate = localOperate;
+#endif
     gHttpMode = mode;
     staIpSinceMs_ = 0;
     gActiveHttpServer = this;
