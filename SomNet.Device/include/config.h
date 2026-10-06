@@ -103,6 +103,8 @@ constexpr uint16_t CONFIG_HTTP_PORT = 80;
 constexpr uint64_t kLocalOperateTokenTtlMs = 8ULL * 60ULL * 60ULL * 1000ULL;
 constexpr size_t kLocalOperateTokenHexLen = 64;
 constexpr size_t kLocalOperatePinMaxLen = 16;
+/** Max JSON bytes for GET/PUT /api/local/settings (manual + automatic + tab). */
+constexpr size_t kMaxLocalOperateSettingsBytes = 1536;
 
 /** WPA2 password for SomNetSetup-XXXX provisioning AP (required by many phones/Windows). */
 constexpr char SETUP_AP_PASSWORD[] = "somnetsetup";

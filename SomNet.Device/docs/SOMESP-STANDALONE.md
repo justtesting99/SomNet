@@ -11,7 +11,7 @@ SomEsp is a **compile-time product profile** for the ESP32 firmware: same relay/
 2. On a phone or PC on the **same Wi‑Fi**, open **`http://<device-ip>/`** (IP is on the serial banner or your router).
 3. Tap **Control panel** or go to **`http://<device-ip>/operate`**.
 4. **Unlock** with PIN **`1234`** (factory default). Optionally set **New PIN** on the same screen.
-5. Tap **Arm session**, then use **Manual** or **Automatic** controls. Slider and field values persist in the browser across refresh (`localStorage` keys `somnet-local-manual`, `somnet-local-automatic`; active tab `somesp-operate-tab`). Unlock token stays in `sessionStorage` (re-enter PIN after refresh). `/operate` uses responsive CSS on larger screens.
+5. Tap **Arm session**, then use **Manual** or **Automatic** controls. Control values persist in the browser (`localStorage`) and on the device (**NVS**, synced via `GET`/`PUT` `/api/local/settings` after unlock). Factory reset clears NVS defaults. Unlock token stays in `sessionStorage` (re-enter PIN after refresh).
 
 Operate and local API are **not available** on the setup Wi‑Fi (`SomNetSetup-XXXX`) — finish provisioning first.
 
@@ -53,6 +53,8 @@ Serial banner includes **`Mode: STANDALONE`** and **`Control: http://<ip>/operat
 | GET | `/api/local/status` | — | `busy`, `automaticActive`, `commandComplete`, `resultJson`, … |
 | GET | `/api/local/caps` | — | `maxStrokeMs`, burst limits |
 | POST | `/api/local/commands` | Bearer + armed | `commandKey` + `payloadJson` — [PROTOCOL.md](./PROTOCOL.md) §6 |
+| GET | `/api/local/settings` | Bearer | `{ "stored": false }` or `{ "manual", "automatic", "activeTab" }` |
+| PUT | `/api/local/settings` | Bearer | Same JSON shape; saved to NVS (`loc_oper_set`) |
 
 On setup AP, local API returns **`403 setup_mode`**.
 

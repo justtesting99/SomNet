@@ -65,6 +65,11 @@ public:
     bool getOperatePin(char* out, size_t outLen) const;
     bool setOperatePin(const char* value);
 
+    /** SomEsp operate UI defaults JSON (see /api/local/settings). */
+    bool hasLocalOperateSettings() const;
+    bool getLocalOperateSettings(char* out, size_t outLen) const;
+    bool setLocalOperateSettings(const char* json);
+
     bool savePairing(
         const char* accessToken,
         const char* domTarget,

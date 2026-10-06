@@ -154,6 +154,7 @@ var pollTimer=null;
 var updateTimer=null;
 var autoLiveActive=false;
 var lastPushedAuto=null;
+var deviceSaveTimer=null;
 var MAX_BURST_STROKES=100,MAX_BURST_DELAY_SEC=300,MIN_BURST_DELAY_SEC=1,MIN_BURST_STROKE_POWER=1;
 function $(id){return document.getElementById(id);}
 function headers(){return token?{Authorization:'Bearer '+token,'Content-Type':'application/json'}:{'Content-Type':'application/json'};}
@@ -298,7 +299,7 @@ function queueAutoUpdate(){
 function onAutoFieldChange(){
   applyRules();
   applyBurstRules();
-  saveAutoSettings();
+  persistAllOperateSettings();
   queueAutoUpdate();
 }
 async function api(path,opt){
@@ -346,14 +347,44 @@ function loadManualSettings(){
     if(raw)fillManualForm(JSON.parse(raw));
   }catch(e){}
 }
+function buildDeviceSettingsPayload(){
+  return JSON.stringify({
+    manual:normalizeManual(readManualSnapshot()),
+    automatic:readAutoSnapshot(),
+    activeTab:localStorage.getItem(TAB_KEY)||'manual'
+  });
+}
+function queueDeviceSettingsSave(){
+  if(!token)return;
+  if(deviceSaveTimer)clearTimeout(deviceSaveTimer);
+  deviceSaveTimer=setTimeout(async function(){
+    deviceSaveTimer=null;
+    try{
+      await api('/api/local/settings',{method:'PUT',body:buildDeviceSettingsPayload()});
+    }catch(e){}
+  },600);
+}
 function persistAllOperateSettings(){
   saveManualSettings();
   saveAutoSettings();
+  queueDeviceSettingsSave();
+}
+async function applyDeviceSettingsFromNvs(){
+  if(!token)return;
+  try{
+    var j=await api('/api/local/settings');
+    if(j.stored===false)return;
+    if(j.manual)fillManualForm(j.manual);
+    if(j.automatic)fillAutoForm(j.automatic);
+    if(j.activeTab&&document.querySelector('.tab[data-tab="'+j.activeTab+'"]'))activateTab(j.activeTab);
+    applyRules();applyBurstRules();refreshManualMs();
+    saveManualSettings();saveAutoSettings();
+  }catch(e){}
 }
 function refreshManualMs(){$('m-stroke-ms').textContent=strokeMs($('m-power').value,$('m-min').value,$('m-max').value);}
 function onManualFieldChange(){
   refreshManualMs();
-  saveManualSettings();
+  persistAllOperateSettings();
 }
 async function poll(){
   try{
@@ -400,6 +431,7 @@ function activateTab(tab){
   $('tab-hist').classList.toggle('hidden',tab!=='hist');
   if(tab==='hist')loadHistory();
   try{localStorage.setItem(TAB_KEY,tab);}catch(e){}
+  queueDeviceSettingsSave();
 }
 document.querySelectorAll('.tab').forEach(function(b){
   b.onclick=function(){activateTab(b.dataset.tab);};
@@ -434,6 +466,7 @@ $('btn-unlock').onclick=async function(){
     var body={pin:$('pin').value};if($('pin-new').value)body.newPin=$('pin-new').value;
     var u=await api('/api/local/unlock',{method:'POST',body:JSON.stringify(body)});
     token=u.token;sessionStorage.setItem(TOKEN_KEY,token);showMain(true);setStatus('Unlocked');
+    await applyDeviceSettingsFromNvs();
     await poll();
   }catch(e){setStatus('Unlock: '+e.message);}
 };
@@ -469,7 +502,7 @@ $('btn-auto-update').onclick=function(){
     try{await cmd('automatic-update',autoPayload());setStatus('Update queued');poll();}catch(e){setStatus(e.message);}
   },400);
 };
-if(token){showMain(true);poll();}
+if(token){showMain(true);applyDeviceSettingsFromNvs().then(function(){return poll();});}
 })();
 </script></div></body></html>
 )raw";

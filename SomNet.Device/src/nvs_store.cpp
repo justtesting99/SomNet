@@ -1,5 +1,7 @@
 #include "nvs_store.h"
 
+#include "config.h"
+
 #include <Arduino.h>
 #include <Preferences.h>
 #include <string.h>
@@ -24,6 +26,7 @@ constexpr char kKeyPaired[] = "paired";
 constexpr char kKeyProvisioned[] = "provisioned";
 constexpr char kKeyCredReset[] = "cred_reset";
 constexpr char kKeyOperatePin[] = "operate_pin";
+constexpr char kKeyLocalOperateSet[] = "loc_oper_set";
 
 Preferences preferences;
 NvsStore* gNvsStoreInstance = nullptr;
@@ -324,4 +327,47 @@ bool NvsStore::getOperatePin(char* out, size_t outLen) const {
 
 bool NvsStore::setOperatePin(const char* value) {
     return setString(kKeyOperatePin, value);
+}
+
+bool NvsStore::hasLocalOperateSettings() const {
+    if (!open_) {
+        return false;
+    }
+    return preferences.isKey(kKeyLocalOperateSet);
+}
+
+bool NvsStore::getLocalOperateSettings(char* out, size_t outLen) const {
+    if (out == nullptr || outLen == 0) {
+        return false;
+    }
+    out[0] = '\0';
+    if (!open_ || !preferences.isKey(kKeyLocalOperateSet)) {
+        return false;
+    }
+
+    const size_t len = preferences.getBytesLength(kKeyLocalOperateSet);
+    if (len == 0 || len >= outLen) {
+        return false;
+    }
+
+    const size_t read = preferences.getBytes(kKeyLocalOperateSet, out, len);
+    if (read != len) {
+        out[0] = '\0';
+        return false;
+    }
+    out[len] = '\0';
+    return true;
+}
+
+bool NvsStore::setLocalOperateSettings(const char* json) {
+    if (!open_ || json == nullptr) {
+        return false;
+    }
+
+    const size_t len = strlen(json);
+    if (len == 0 || len >= kMaxLocalOperateSettingsBytes) {
+        return false;
+    }
+
+    return preferences.putBytes(kKeyLocalOperateSet, json, len) > 0;
 }

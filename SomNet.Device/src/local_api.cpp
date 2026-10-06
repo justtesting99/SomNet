@@ -6,6 +6,7 @@
 #include "execution_context.h"
 #include "local_command_status.h"
 #include "local_history_store.h"
+#include "nvs_store.h"
 #include "wifi_manager.h"
 
 #include <ArduinoJson.h>
@@ -23,6 +24,7 @@ DeviceIdentity* gIdentity = nullptr;
 static char gHttpStatusJson[1536];
 static char gHttpHistoryIndexJson[4096];
 static char gHttpHistoryEventJson[1400];
+static char gHttpLocalSettingsJson[kMaxLocalOperateSettingsBytes];
 
 void logLocalRequest(AsyncWebServerRequest* request, const char* path) {
     if (path != nullptr && strcmp(path, "/api/local/status") == 0) {
@@ -82,15 +84,19 @@ void handleJsonPost(
     size_t len,
     size_t index,
     size_t total,
-    JsonPostContext* ctx) {
+    JsonPostContext* ctx,
+    size_t maxBody) {
     if (ctx == nullptr) {
         return;
     }
 
     static String body;
+    if (maxBody == 0) {
+        maxBody = 512;
+    }
     if (index == 0) {
         body = "";
-        if (total > 512) {
+        if (total > maxBody) {
             sendJsonError(request, 413, "body_too_large");
             return;
         }
@@ -156,7 +162,7 @@ void handleLocalUnlock(
     size_t total) {
     logLocalRequest(request, "/api/local/unlock");
     static JsonPostContext ctx = {"/api/local/unlock", handleLocalUnlockBody};
-    handleJsonPost(request, data, len, index, total, &ctx);
+    handleJsonPost(request, data, len, index, total, &ctx, 512);
 }
 
 void handleLocalLock(AsyncWebServerRequest* request) {
@@ -422,6 +428,94 @@ void handleLocalHistoryDelete(AsyncWebServerRequest* request) {
     sendJson(request, 200, "{\"cleared\":true}");
 }
 
+bool validateLocalOperateSettingsJson(const char* body, size_t len) {
+    if (body == nullptr || len == 0 || len >= kMaxLocalOperateSettingsBytes) {
+        return false;
+    }
+
+    JsonDocument doc;
+    const DeserializationError err = deserializeJson(doc, body, len);
+    if (err || !doc.is<JsonObject>()) {
+        return false;
+    }
+
+    const bool hasManual = doc["manual"].is<JsonObject>();
+    const bool hasAutomatic = doc["automatic"].is<JsonObject>();
+    const bool hasTab = doc["activeTab"].is<const char*>();
+    if (!hasManual && !hasAutomatic && !hasTab) {
+        return false;
+    }
+
+    if (hasTab) {
+        const char* tab = doc["activeTab"];
+        if (tab == nullptr || strlen(tab) > 16) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void handleLocalSettingsGet(AsyncWebServerRequest* request) {
+    logLocalRequest(request, "/api/local/settings");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+
+    NvsStore* nvs = nvsStoreInstance();
+    if (nvs == nullptr || !nvs->isOpen()) {
+        sendJsonError(request, 503, "nvs_unavailable");
+        return;
+    }
+
+    if (!nvs->getLocalOperateSettings(gHttpLocalSettingsJson, sizeof(gHttpLocalSettingsJson))) {
+        sendJson(request, 200, "{\"stored\":false}");
+        return;
+    }
+
+    sendJson(request, 200, gHttpLocalSettingsJson);
+}
+
+void handleLocalSettingsPutBody(AsyncWebServerRequest* request, const char* body, size_t len) {
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+
+    if (!validateLocalOperateSettingsJson(body, len)) {
+        sendJsonError(request, 400, "invalid_settings");
+        return;
+    }
+
+    NvsStore* nvs = nvsStoreInstance();
+    if (nvs == nullptr || !nvs->isOpen()) {
+        sendJsonError(request, 503, "nvs_unavailable");
+        return;
+    }
+
+    if (!nvs->setLocalOperateSettings(body)) {
+        sendJsonError(request, 500, "settings_save_failed");
+        return;
+    }
+
+    sendJson(request, 200, "{\"saved\":true}");
+}
+
+void handleLocalSettingsPut(
+    AsyncWebServerRequest* request,
+    uint8_t* data,
+    size_t len,
+    size_t index,
+    size_t total) {
+    static JsonPostContext ctx = {"/api/local/settings", handleLocalSettingsPutBody};
+    handleJsonPost(request, data, len, index, total, &ctx, kMaxLocalOperateSettingsBytes);
+}
+
 } // namespace
 
 void registerLocalApiRoutes(AsyncWebServer& server, LocalOperate* localOperate) {
@@ -456,6 +550,15 @@ void registerLocalApiRoutes(AsyncWebServer& server, LocalOperate* localOperate) 
         nullptr,
         [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
             handleLocalCommandsPost(request, data, len, index, total);
+        });
+    server.on("/api/local/settings", HTTP_GET, [](AsyncWebServerRequest* request) { handleLocalSettingsGet(request); });
+    server.on(
+        "/api/local/settings",
+        HTTP_PUT,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handleLocalSettingsPut(request, data, len, index, total);
         });
 }
 
