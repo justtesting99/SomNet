@@ -1,9 +1,11 @@
+using SomNet.Shared.DTO.DeviceGateway;
+
 namespace SomNet.Device.LocalGateway.Middleware;
 
 public sealed class GatewayCorrelationMiddleware
 {
     public const string CorrelationItemKey = "GatewayCorrelationId";
-    public const string CorrelationHeaderName = "X-Correlation-Id";
+    public const string CorrelationHeaderName = DeviceGatewayHttp.CorrelationHeaderName;
 
     private readonly RequestDelegate _next;
 

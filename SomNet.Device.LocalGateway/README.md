@@ -68,7 +68,7 @@ If the main app runs in another container on the same compose network, it calls 
 }
 ```
 
-HTTP client: set base address to `DeviceGateway:BaseUrl` and add header `X-SomNet-Device-Gateway-Key` on each request (see plan doc §8).
+Main app integration: **`AddDeviceGatewayClient()`** in `SomNet.Device.LocalClient` — see [Documents/30-Main-App-Device-Gateway-Integration.md](../Documents/30-Main-App-Device-Gateway-Integration.md).
 
 ### Health check
 

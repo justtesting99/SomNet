@@ -1,6 +1,6 @@
 # Device local gateway — implementation plan & checklists
 
-**Status:** **Phase 5 complete** — phased build for a **lightweight HTTP service** the main application calls; the service drives **SomEsp** over **`/api/local/*`**.
+**Status:** **Phase 6 complete** — phased build for a **lightweight HTTP service** the main application calls; the service drives **SomEsp** over **`/api/local/*`**.
 
 **Audience:** Build first in the **SomNet** repo; **move** `LocalClient` + `LocalGateway` into the **main application solution** for long-term hosting (laptop dev → Docker compose with main app).
 
@@ -281,7 +281,7 @@ Move or duplicate **automatic session summary** into shared code so gateway and 
 | **P5-T1** | Compose up on Linux bench; run from sibling container | Automatic run completes |
 | **P5-T2** | Reboot ESP; next job | `DeviceUnreachable` then recovery after Wi‑Fi up |
 
-**Exit:** P5-T1.
+**Exit:** P5-T1 (deferred — Linux compose smoke not required for current laptop-only deploy).
 
 ---
 
@@ -289,12 +289,12 @@ Move or duplicate **automatic session summary** into shared code so gateway and 
 
 **Goal:** Scheduler uses gateway; persists history locally.
 
-- [ ] **P6-D1** Document client snippet (HttpClient + `AutomaticRunResponseDto`) for main app repo
-- [ ] **P6-D2** Job stores: `status`, `message`, `summary`, raw `result` JSON, UTC timestamps, optional job id
-- [ ] **P6-D3** Scheduler policy: skip if gateway returns 409; backoff on `DeviceUnreachable`
-- [ ] **P6-D4** No dependency on SomNet.API in main app (only `SomNet.Shared` optional for DTOs)
+- [x] **P6-D1** Document client snippet (HttpClient + `AutomaticRunResponseDto`) for main app repo — [30-Main-App-Device-Gateway-Integration.md](./30-Main-App-Device-Gateway-Integration.md); `IDeviceGatewayClient` + `AddDeviceGatewayClient()`
+- [x] **P6-D2** Job stores: `status`, `message`, `summary`, raw `result` JSON, UTC timestamps, optional job id — `AutomaticRunJobRecordDto` / `AutomaticRunJobRecordBuilder`
+- [x] **P6-D3** Scheduler policy: skip if gateway returns 409; backoff on `DeviceUnreachable` — `DeviceGatewaySchedulerPolicy`
+- [x] **P6-D4** No dependency on SomNet.API in main app (only `SomNet.Shared` optional for DTOs)
 
-**Exit:** One scheduled job runs end-to-end in target Docker environment.
+**Exit:** One scheduled job runs end-to-end (laptop: main app → gateway → ESP). Docker compose optional until Phase 5-T1.
 
 ---
 
@@ -310,22 +310,21 @@ Move or duplicate **automatic session summary** into shared code so gateway and 
 
 ## 8. Main application ↔ gateway (reference)
 
-```csharp
-// Illustrative — main app (separate repo or project)
-var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/automatic/run")
-{
-    Content = JsonContent.Create(new
-    {
-        parameters = automaticSnapshot,
-        waitTimeoutSeconds = 7200,
-        disarmAfterRun = true,
-    }),
-};
-request.Headers.Add("X-SomNet-Device-Gateway-Key", apiKey);
+Full guide: **[30 — Main app device gateway integration](./30-Main-App-Device-Gateway-Integration.md)**.
 
-var response = await httpClient.SendAsync(request, cancellationToken);
-var body = await response.Content.ReadFromJsonAsync<AutomaticRunResponseDto>();
-// Persist body.Summary, body.Result, body.Status for scheduling logic
+```csharp
+builder.Services.AddDeviceGatewayClient();
+
+var outcome = await gateway.RunAutomaticAsync(new AutomaticRunRequestDto
+{
+    Parameters = automaticSnapshot,
+    WaitTimeoutSeconds = 7200,
+    DisarmAfterRun = true,
+}, jobCorrelationId, cancellationToken);
+
+var record = outcome.Response is null
+    ? /* handle 409 concurrent / unreachable per DeviceGatewaySchedulerPolicy */
+    : AutomaticRunJobRecordBuilder.FromGatewayResponse(outcome.Response, jobId, scheduleId, automaticSnapshot);
 ```
 
 ---
@@ -348,3 +347,4 @@ var body = await response.Content.ReadFromJsonAsync<AutomaticRunResponseDto>();
 | 2026-10-25 | Initial plan — Phases 0–7, HTTP contract, checklists |
 | 2026-10-25 | Pre–Phase 0 decisions LG-P0-1 … LG-P0-6 signed off |
 | 2026-10-25 | Phase 5 — Dockerfile, compose example, LAN/env docs |
+| 2026-10-25 | Phase 6 — `IDeviceGatewayClient`, job record DTO, doc 30; P5-T1 deferred |

@@ -1,11 +1,12 @@
 using Microsoft.Extensions.Options;
 using SomNet.Device.LocalGateway.Configuration;
+using SomNet.Shared.DTO.DeviceGateway;
 
 namespace SomNet.Device.LocalGateway.Middleware;
 
 public sealed class GatewayApiKeyMiddleware
 {
-    public const string ApiKeyHeaderName = "X-SomNet-Device-Gateway-Key";
+    public const string ApiKeyHeaderName = DeviceGatewayHttp.ApiKeyHeaderName;
 
     private readonly RequestDelegate _next;
     private readonly GatewaySettings _settings;
