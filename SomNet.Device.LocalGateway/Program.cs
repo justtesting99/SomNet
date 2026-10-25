@@ -8,9 +8,7 @@ builder.Services
     .AddOptions<GatewaySettings>()
     .Bind(builder.Configuration.GetSection(GatewaySettings.SectionName));
 
-builder.Services
-    .AddOptions<SomEspLocalClientOptions>()
-    .Bind(builder.Configuration.GetSection(SomEspLocalClientOptions.SectionName));
+builder.Services.AddSomEspLocalClient();
 
 var app = builder.Build();
 

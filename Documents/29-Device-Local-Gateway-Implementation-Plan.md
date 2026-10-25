@@ -1,6 +1,6 @@
 # Device local gateway — implementation plan & checklists
 
-**Status:** **Phase 0 complete** — phased build for a **lightweight HTTP service** the main application calls; the service drives **SomEsp** over **`/api/local/*`**.
+**Status:** **Phase 1 complete** — phased build for a **lightweight HTTP service** the main application calls; the service drives **SomEsp** over **`/api/local/*`**.
 
 **Audience:** Build first in the **SomNet** repo; **move** `LocalClient` + `LocalGateway` into the **main application solution** for long-term hosting (laptop dev → Docker compose with main app).
 
@@ -178,13 +178,13 @@ Move or duplicate **automatic session summary** into shared code so gateway and 
 
 **Goal:** Typed calls to SomEsp local API without job orchestration.
 
-- [ ] **P1-D1** DTOs for unlock response (`token`, `expiresAtMs`), commands accept (`accepted`, `correlationId`), local status
-- [ ] **P1-D2** `UnlockAsync` / `LockAsync` / `ArmAsync` / `DisarmAsync` with `Authorization: Bearer`
-- [ ] **P1-D3** `SendCommandAsync(commandKey, payloadJson)` — POST `/api/local/commands`
-- [ ] **P1-D4** `GetLocalStatusAsync` — parse `resultJson` string when present
-- [ ] **P1-D5** `GetDeviceStatusAsync` — `GET /api/status` (wifi, standalone, hubEnabled)
-- [ ] **P1-D6** Central `SomEspLocalApiException` with HTTP status + device error code (`invalid_pin`, `not_armed`, …)
-- [ ] **P1-D7** Unit tests with `HttpMessageHandler` mock (unlock → arm → command sequence)
+- [x] **P1-D1** DTOs for unlock response (`token`, `expiresAtMs`), commands accept (`accepted`, `correlationId`), local status
+- [x] **P1-D2** `UnlockAsync` / `LockAsync` / `ArmAsync` / `DisarmAsync` with `Authorization: Bearer`
+- [x] **P1-D3** `SendCommandAsync(commandKey, payloadJson)` — POST `/api/local/commands`
+- [x] **P1-D4** `GetLocalStatusAsync` — parse `resultJson` string when present
+- [x] **P1-D5** `GetDeviceStatusAsync` — `GET /api/status` (wifi, standalone, hubEnabled)
+- [x] **P1-D6** Central `SomEspLocalApiException` with HTTP status + device error code (`invalid_pin`, `not_armed`, …)
+- [x] **P1-D7** Unit tests with `HttpMessageHandler` mock (`SomNet.Device.LocalClient.Tests`)
 
 **Smoke (manual):**
 

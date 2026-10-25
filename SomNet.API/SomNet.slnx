@@ -8,4 +8,5 @@
   <Project Path="../SomNet.API.Tests/SomNet.API.Tests.csproj" />
   <Project Path="../SomNet.Device.LocalClient/SomNet.Device.LocalClient.csproj" />
   <Project Path="../SomNet.Device.LocalGateway/SomNet.Device.LocalGateway.csproj" />
+  <Project Path="../SomNet.Device.LocalClient.Tests/SomNet.Device.LocalClient.Tests.csproj" />
 </Solution>
