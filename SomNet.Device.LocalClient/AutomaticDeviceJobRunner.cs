@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using SomNet.Device.LocalClient.Models;
 using SomNet.Shared.DTO.Modes;
+using SomNet.Shared.History;
 using SomNet.Shared.Models;
 
 namespace SomNet.Device.LocalClient;
@@ -82,16 +83,18 @@ public sealed class AutomaticDeviceJobRunner
                 }
 
                 var result = AutomaticSessionResultParser.TryParse(status.ResultJson);
+                var summary = AutomaticSessionSummaryBuilder.BuildFromResultJson(status.ResultJson);
                 await ApplyAfterRunAsync(runOptions, cancellationToken);
 
                 return Finish(
                     AutomaticDeviceJobStatus.Completed,
-                    BuildCompletedMessage(result, status),
+                    summary,
                     startedAtUtc,
                     DateTimeOffset.UtcNow,
                     status.LastCorrelationId ?? accepted.CorrelationId,
                     status.ResultJson,
-                    result);
+                    result,
+                    summary);
             }
 
             await TryStopAsync(cancellationToken);
@@ -181,7 +184,8 @@ public sealed class AutomaticDeviceJobRunner
         DateTimeOffset endedAtUtc,
         string? correlationId,
         string? rawResultJson,
-        AutomaticSessionResultDto? result)
+        AutomaticSessionResultDto? result,
+        string? summary = null)
     {
         return new AutomaticDeviceJobResult
         {
@@ -190,6 +194,7 @@ public sealed class AutomaticDeviceJobRunner
             DeviceCorrelationId = correlationId,
             RawResultJson = rawResultJson,
             Result = result,
+            Summary = summary,
             StartedAtUtc = startedAtUtc,
             EndedAtUtc = endedAtUtc,
         };
@@ -205,26 +210,4 @@ public sealed class AutomaticDeviceJobRunner
         return prefix;
     }
 
-    private static string BuildCompletedMessage(
-        AutomaticSessionResultDto? result,
-        LocalOperateStatus status)
-    {
-        if (result is not null)
-        {
-            var strokes = result.MainStrokesCompleted ?? result.StrokesCompleted;
-            var reason = result.EndReason ?? "ended";
-            if (strokes is >= 0 && result.DurationMs is > 0)
-            {
-                var minutes = Math.Max(1, result.DurationMs.Value / 60_000);
-                return $"Automatic ended ({reason}): {strokes} strokes, ~{minutes} min.";
-            }
-
-            if (strokes is >= 0)
-            {
-                return $"Automatic ended ({reason}): {strokes} strokes.";
-            }
-        }
-
-        return FormatCommandMessage("Automatic session finished", status);
-    }
 }

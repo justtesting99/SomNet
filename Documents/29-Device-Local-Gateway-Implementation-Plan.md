@@ -1,6 +1,6 @@
 # Device local gateway — implementation plan & checklists
 
-**Status:** **Phase 2 complete** — phased build for a **lightweight HTTP service** the main application calls; the service drives **SomEsp** over **`/api/local/*`**.
+**Status:** **Phase 3 complete** — phased build for a **lightweight HTTP service** the main application calls; the service drives **SomEsp** over **`/api/local/*`**.
 
 **Audience:** Build first in the **SomNet** repo; **move** `LocalClient` + `LocalGateway` into the **main application solution** for long-term hosting (laptop dev → Docker compose with main app).
 
@@ -227,11 +227,11 @@ Move or duplicate **automatic session summary** into shared code so gateway and 
 
 **Goal:** Same history line text as SomNet UI/API from raw `resultJson`.
 
-- [ ] **P3-D1** Add `AutomaticSessionSummaryBuilder` to `SomNet.Shared`
-- [ ] **P3-D2** Port logic from `SessionActionSnapshotSummaryBuilder.BuildForAutomaticSessionComplete`
-- [ ] **P3-D3** Refactor API `SessionActionSnapshotSummaryBuilder` to call Shared (thin wrapper) — avoid drift
-- [ ] **P3-D4** `SomNet.Shared.Tests` or extend `SomNet.API.Tests` with golden cases (periodic, bursts on, manualStop, abort)
-- [ ] **P3-D5** Runner sets `summary = AutomaticSessionSummaryBuilder.BuildFromResultJson(...)`
+- [x] **P3-D1** Add `AutomaticSessionSummaryBuilder` to `SomNet.Shared`
+- [x] **P3-D2** Port logic from `SessionActionSnapshotSummaryBuilder.BuildForAutomaticSessionComplete`
+- [x] **P3-D3** Refactor API `SessionActionSnapshotSummaryBuilder` to call Shared (thin wrapper) — avoid drift
+- [x] **P3-D4** Golden cases in `SomNet.Device.LocalClient.Tests` (+ API test duration fix)
+- [x] **P3-D5** Runner sets `Summary` + `Message` from `AutomaticSessionSummaryBuilder.BuildFromResultJson(...)`
 
 **Exit:** Golden strings match `sessionSummary.test.ts` / existing API expectations.
 

@@ -17,7 +17,7 @@ public sealed class AutomaticDeviceJobRunnerTests
         {
             Busy = false,
             AutomaticActive = false,
-            ResultJson = """{"commandKey":"automatic-stop","strokesCompleted":5,"durationMs":120000,"endReason":"endSession"}""",
+            ResultJson = """{"commandKey":"automatic-stop","automaticMode":"periodic","strokesCompleted":5,"durationMs":120000,"endReason":"endSession"}""",
             LastCorrelationId = "local-abc",
         });
 
@@ -28,7 +28,10 @@ public sealed class AutomaticDeviceJobRunnerTests
 
         Assert.Equal(AutomaticDeviceJobStatus.Completed, result.Status);
         Assert.Equal(5, result.Result?.StrokesCompleted);
-        Assert.Contains("5 strokes", result.Message);
+        Assert.Equal(
+            "Periodic — 5 main strokes over 2 min (end session rule)",
+            result.Summary);
+        Assert.Equal(result.Summary, result.Message);
         Assert.True(fake.Disarmed);
     }
 

@@ -14,6 +14,9 @@ public sealed class AutomaticDeviceJobResult
 
     public string? RawResultJson { get; init; }
 
+    /// <summary>SomNet-style history line from <see cref="RawResultJson"/>.</summary>
+    public string? Summary { get; init; }
+
     public DateTimeOffset? StartedAtUtc { get; init; }
 
     public DateTimeOffset? EndedAtUtc { get; init; }
