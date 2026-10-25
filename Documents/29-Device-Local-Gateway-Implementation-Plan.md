@@ -1,12 +1,15 @@
 # Device local gateway — implementation plan & checklists
 
-**Status:** **Phase 6 complete** — phased build for a **lightweight HTTP service** the main application calls; the service drives **SomEsp** over **`/api/local/*`**.
+**Status:** **Phase 7 in progress** — Phase 6 exit met (TheSystem admin test bed + hardware). **P7-D1** stop endpoint shipped.
+
+**Deploy:** **Docker deferred** — laptop `dotnet run` for gateway + ESP on LAN until Linux compose is needed (Phase 5 artifacts remain in repo).
 
 **Audience:** Build first in the **SomNet** repo; **move** `LocalClient` + `LocalGateway` into the **main application solution** for long-term hosting (laptop dev → Docker compose with main app).
 
 | Related | Link |
 |---------|------|
 | Integration guide (use case, job flow) | [28 — Scheduled jobs — local device integration](./28-Scheduled-Jobs-Local-Device-Integration.md) |
+| TheSystem / admin test runbook | [SomNet integration runbook](./SomNetIntegrationRunbook.md) |
 | SomEsp firmware & local API | [SomNet.Device/docs/SOMESP-STANDALONE.md](../SomNet.Device/docs/SOMESP-STANDALONE.md) |
 | Wire payloads | [SomNet.Device/docs/PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md) §6.5–6.7 |
 | SomNet history text (reference) | [07 — Session & History](./07-Session-And-History.md) § Automatic session summaries |
@@ -254,18 +257,20 @@ Move or duplicate **automatic session summary** into shared code so gateway and 
 
 | # | Steps | Pass |
 |---|--------|------|
-| **P4-T1** | `curl` health + status with API key | 200 |
-| **P4-T2** | POST `/automatic/run` short session | 200, `summary` matches UI pattern |
-| **P4-T3** | Missing API key | 401 |
-| **P4-T4** | Two parallel POSTs | Second **409** |
+| **P4-T1** | `curl` health + status with API key | ✓ 2026-10-25 (laptop) |
+| **P4-T2** | POST `/automatic/run` short session | ✓ 2026-10-25 |
+| **P4-T3** | Missing API key | ✓ 2026-10-25 |
+| **P4-T4** | Two parallel POSTs | Second **409** — optional manual; covered by `LocalGatewayWebTests` |
 
-**Exit:** P4-T1–T4.
+**Exit:** P4-T1–T3 manual + T4 via test (or parallel POST smoke).
 
 ---
 
 ### Phase 5 — Docker & LAN networking
 
 **Goal:** Run gateway on Linux Docker alongside main app; reach ESP on Wi‑Fi.
+
+**Deploy status:** **Deferred** — no compose/Linux bench smoke for now; use local gateway on **5290** (P4 smoke complete on laptop).
 
 - [x] **P5-D1** `Dockerfile` for `SomNet.Device.LocalGateway` (multi-stage, `SkipFrontendBuild` N/A)
 - [x] **P5-D2** `docker-compose` snippet in doc or `SomNet.Device.LocalGateway/docker-compose.example.yml`
@@ -278,10 +283,10 @@ Move or duplicate **automatic session summary** into shared code so gateway and 
 
 | # | Steps | Pass |
 |---|--------|------|
-| **P5-T1** | Compose up on Linux bench; run from sibling container | Automatic run completes |
-| **P5-T2** | Reboot ESP; next job | `DeviceUnreachable` then recovery after Wi‑Fi up |
+| **P5-T1** | Compose up on Linux bench; run from sibling container | *deferred* |
+| **P5-T2** | Reboot ESP; next job | `DeviceUnreachable` then recovery after Wi‑Fi up — *deferred* |
 
-**Exit:** P5-T1 (deferred — Linux compose smoke not required for current laptop-only deploy).
+**Exit:** P5-T1 when Docker deploy resumes (`docker-compose.example.yml` + `Dockerfile` ready).
 
 ---
 
@@ -294,17 +299,105 @@ Move or duplicate **automatic session summary** into shared code so gateway and 
 - [x] **P6-D3** Scheduler policy: skip if gateway returns 409; backoff on `DeviceUnreachable` — `DeviceGatewaySchedulerPolicy`
 - [x] **P6-D4** No dependency on SomNet.API in main app (only `SomNet.Shared` optional for DTOs)
 
-**Exit:** One scheduled job runs end-to-end (laptop: main app → gateway → ESP). Docker compose optional until Phase 5-T1.
+**Exit:** ✓ TheSystem admin UI + gateway + ESP (see [SomNet integration runbook](./SomNetIntegrationRunbook.md)). Scheduler wiring remains in main app when ready.
 
 ---
 
 ### Phase 7 — Hardening (v1.1, optional)
 
-- [ ] **P7-D1** `POST /api/v1/automatic/stop`
-- [ ] **P7-D2** Multi-device: `Device:Devices[]` + `deviceId` route param
-- [ ] **P7-D3** mDNS or config service for ESP IP drift
-- [ ] **P7-D4** Metrics (Prometheus): run count, duration, failures
-- [ ] **P7-D5** Integration test project against recorded ESP JSON fixtures
+- [x] **P7-D1** `POST /api/v1/automatic/stop` — `AutomaticStopRequestDto` (`abort` optional); `IDeviceGatewayClient.StopAutomaticAsync`
+- [x] **P7-D2** Multi-device: `Device:Devices[]` + `deviceId` route param
+- [ ] **P7-D3** mDNS or config service for ESP IP drift — see [§P7-D3](#p7-d3--mdns--esp-ip-drift-not-implemented)
+- [x] **P7-D4** Metrics (Prometheus): `GET /api/v1/gateway/metrics` — run status counters, stop/concurrent totals (`GatewayRunMetrics`)
+- [x] **P7-D5** Integration test project against recorded ESP JSON fixtures — `SomNet.Device.LocalClient.Tests/Fixtures/` + `EspJsonFixtureTests`
+
+#### P7-D2 — Multi-device (implemented)
+
+**Why:** Several SomEsp units on the same LAN (different rooms, subs, or accessories). The **main app** schedules jobs per logical device; the **gateway** must route each HTTP call to the correct ESP **base URL** and **PIN**, using a stable id that matches firmware and SomNet pairing: **`deviceId`** (e.g. `esp32-84CCA85C36B4` from `GET /api/status`).
+
+**v1 today (LG-D8):** One `Device:BaseUrl` + `Device:Pin` in gateway config. Status JSON already exposes `device.deviceId` for verification. TheSystem can store that id on run records even before P7-D2 ships.
+
+**Config (gateway host):** use `Device:Devices[]`, or legacy flat `Device:BaseUrl` + `Device:Pin` with optional `Device:DeviceId`:
+
+```json
+"Device": {
+  "Devices": [
+    {
+      "deviceId": "esp32-84CCA85C36B4",
+      "baseUrl": "http://192.168.1.172",
+      "pin": "<secret>"
+    },
+    {
+      "deviceId": "esp32-AABBCCDDEEFF",
+      "baseUrl": "http://192.168.1.173",
+      "pin": "<secret>"
+    }
+  ],
+  "pollIntervalMs": 800
+}
+```
+
+Environment variables could use indexed keys (`Device__Devices__0__BaseUrl`, …) or a single JSON blob — decide at implementation.
+
+**Target HTTP shape (proposed):** device-scoped routes (plan checklist: **`deviceId` route param**):
+
+| v1 (current) | v2 (P7-D2) |
+|--------------|------------|
+| `GET /api/v1/device/status` | `GET /api/v1/devices/{deviceId}/status` |
+| `POST /api/v1/automatic/run` | `POST /api/v1/devices/{deviceId}/automatic/run` |
+| `POST /api/v1/automatic/stop` | `POST /api/v1/devices/{deviceId}/automatic/stop` |
+
+Optional **compatibility:** if exactly one device is configured, allow legacy paths without `{deviceId}` and infer the sole entry.
+
+**Concurrency (important):**
+
+| Scope | Rule |
+|-------|------|
+| **Per ESP** | At most **one** automatic session (firmware + doc 28 §6). |
+| **Gateway v1** | **Global** single-flight — only one `/automatic/run` total across all devices. |
+| **Gateway v2** | **Per-`deviceId`** single-flight — device A and device B may run **in parallel** on one gateway process (separate `SomEspLocalClient` or client factory per device, each with its own bearer session). |
+| **TheSystem** | Scheduler must pass **`deviceId`** on every run; use app-level locks if multiple workers could target the same device. |
+
+**Library / main app (`IDeviceGatewayClient` v2 sketch):**
+
+- Add `deviceId` to each method, e.g. `RunAutomaticAsync(deviceId, request, …)`, **or** register named clients per device from config.
+- **`AutomaticRunJobRecordDto`:** always persist **`deviceId`** (and optional snapshot of `baseUrl` used).
+- **Admin UI:** device picker populated from gateway `GET /api/v1/devices` (new list endpoint) or from TheSystem’s own device registry.
+
+**TheSystem data model (prepare now):**
+
+- Store **`deviceId`** on presets, scheduled jobs, and run history — even while only one ESP exists.
+- Do **not** key long-term history only by IP; IPs change (see **P7-D3**).
+
+**Hosting:**
+
+- **Default:** one **LocalGateway** instance on the LAN with `Devices[]` — simplest ops.
+- **Alternative:** multiple gateway processes each with one device — only if network/policy requires isolation; usually unnecessary at home scale.
+
+**Related:** **P7-D3** (mDNS / discovery) updates **`baseUrl`** when DHCP changes; multi-device makes per-entry IP drift more likely.
+
+**Exit criteria for P7-D2:** Two ESPs on bench; parallel runs on different `deviceId`s succeed; second run on **same** `deviceId` returns **409**; TheSystem admin can select device and run §4.2 preset against each. *(SomNet .NET + gateway tests done; bench verification with two ESPs + TheSystem `deviceId` client calls remain.)*
+
+**Related (different axis):** A second ESP driving an **H-bridge motor** shares the same multi-`deviceId` gateway model but needs **actuator-specific** payloads and firmware — see [31 — Motor actuator early design](./31-Motor-Actuator-Device-Design.md).
+
+#### P7-D3 — mDNS / ESP IP drift (not implemented)
+
+**Problem:** Gateway config stores each ESP as **`baseUrl`** (usually `http://192.168.x.x`). DHCP can assign a **new IP** after reboot or lease expiry. **`deviceId`** stays stable; **`baseUrl`** does not — jobs then fail with `device_unreachable` until someone edits `appsettings` or env vars.
+
+**What P7-D3 is not:** It does not replace **`deviceId`** for scheduling or history. It only keeps **reachability** (URL → current LAN address) correct.
+
+**Typical approaches (pick one at implementation):**
+
+| Approach | Idea | Pros / cons |
+|----------|------|-------------|
+| **DHCP reservation** | Router pins MAC → IP | Zero code; ops discipline (works today — runbook default) |
+| **mDNS hostname** | ESP advertises e.g. `somesp-84cca85c36b4.local`; gateway `baseUrl` uses `http://….local` | Stable URL without static IP; needs mDNS on ESP + resolver on gateway host (Linux often fine; Docker bridge can be fiddly) |
+| **Gateway discovery job** | Periodically resolve `deviceId` → IP (mDNS browse, ARP, or `GET /api/status` via last-known IP + subnet scan) and **refresh in-memory `baseUrl`** | Central fix for multi-device; more gateway code; must not fight manual config |
+| **External config service** | Small LAN registry UI or file the installer updates | Simple mentally; still manual unless automated |
+
+**Likely v1 implementation sketch:** extend `Device:Devices[]` with optional **`hostName`** (mDNS) **or** keep `baseUrl` but add a **background resolver** that updates the HTTP client factory when the hostname resolves to a new IP. Firmware may need `MDNS_RESPONDER` with a deterministic name derived from `deviceId`.
+
+**Exit criteria:** ESP gets new DHCP address; **without** editing gateway config, the next status/run succeeds after rediscovery (or within one refresh interval). Document Windows vs Linux Docker behavior.
 
 ---
 
@@ -315,7 +408,8 @@ Full guide: **[30 — Main app device gateway integration](./30-Main-App-Device-
 ```csharp
 builder.Services.AddDeviceGatewayClient();
 
-var outcome = await gateway.RunAutomaticAsync(new AutomaticRunRequestDto
+var deviceId = /* job preset or DeviceGateway:DefaultDeviceId */;
+var outcome = await gateway.RunAutomaticAsync(deviceId, new AutomaticRunRequestDto
 {
     Parameters = automaticSnapshot,
     WaitTimeoutSeconds = 7200,
@@ -348,3 +442,5 @@ var record = outcome.Response is null
 | 2026-10-25 | Pre–Phase 0 decisions LG-P0-1 … LG-P0-6 signed off |
 | 2026-10-25 | Phase 5 — Dockerfile, compose example, LAN/env docs |
 | 2026-10-25 | Phase 6 — `IDeviceGatewayClient`, job record DTO, doc 30; P5-T1 deferred |
+| 2026-10-25 | P7-D1 stop API; P7-D4 metrics; P7-D5 ESP fixtures; runbook §9 |
+| 2026-10-25 | P7-D2 multi-device design (plan §7); runbook §9.7 |

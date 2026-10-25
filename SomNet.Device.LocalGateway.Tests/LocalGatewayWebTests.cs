@@ -24,14 +24,16 @@ public sealed class LocalGatewayWebTests : IClassFixture<WebApplicationFactory<P
     {
         _factory = factory.WithWebHostBuilder(builder =>
         {
-            builder.ConfigureServices(services =>
-            {
-                services.RemoveAll<IAutomaticDeviceJobRunner>();
-                services.RemoveAll<ISomEspLocalSessionClient>();
-                services.AddSingleton<ISomEspLocalSessionClient, StubSessionClient>();
-                services.AddSingleton<IAutomaticDeviceJobRunner, StubJobRunner>();
-            });
+            builder.ConfigureServices(services => WireStubRunner(services));
         });
+    }
+
+    [Fact]
+    public async Task Gateway_metrics_requires_api_key()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/api/v1/gateway/metrics");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
@@ -94,12 +96,7 @@ public sealed class LocalGatewayWebTests : IClassFixture<WebApplicationFactory<P
         var factory = _factory.WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
-            {
-                services.RemoveAll<IAutomaticDeviceJobRunner>();
-                services.RemoveAll<ISomEspLocalSessionClient>();
-                services.AddSingleton<ISomEspLocalSessionClient, StubSessionClient>();
-                services.AddSingleton<IAutomaticDeviceJobRunner, SlowJobRunner>(sp => new SlowJobRunner(gate));
-            });
+                WireStubRunner(services, new SlowJobRunner(gate)));
         });
 
         var firstClient = CreateAuthorizedClient(factory);
@@ -110,13 +107,70 @@ public sealed class LocalGatewayWebTests : IClassFixture<WebApplicationFactory<P
             Parameters = new AutomaticControlStateDto { AutomaticMode = AutomaticRunMode.Periodic },
         };
 
-        var first = firstClient.PostAsJsonAsync("/api/v1/automatic/run", request);
-        await Task.Delay(100);
-        var second = await secondClient.PostAsJsonAsync("/api/v1/automatic/run", request);
+        try
+        {
+            using var runMessage = JsonContent.Create(request);
+            var first = firstClient.SendAsync(
+                new HttpRequestMessage(HttpMethod.Post, "/api/v1/automatic/run") { Content = runMessage },
+                HttpCompletionOption.ResponseHeadersRead);
+            await Task.Delay(300);
+            var second = await secondClient.PostAsJsonAsync("/api/v1/automatic/run", request);
 
-        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+            Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+            gate.Release();
+            (await first).EnsureSuccessStatusCode();
+        }
+        finally
+        {
+            if (gate.CurrentCount == 0)
+            {
+                gate.Release();
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Automatic_stop_returns_404_when_no_run_active()
+    {
+        var client = CreateAuthorizedClient();
+        var response = await client.PostAsJsonAsync("/api/v1/automatic/stop", new AutomaticStopRequestDto());
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<AutomaticStopResponseDto>();
+        Assert.Equal("NoActiveRun", body?.Status);
+    }
+
+    [Fact]
+    public async Task Automatic_stop_accepts_while_run_in_progress()
+    {
+        var gate = new SemaphoreSlim(0, 1);
+        var session = new RecordingSessionClient();
+        var factory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+                WireStubRunner(services, new SlowJobRunner(gate), session));
+        });
+
+        var client = CreateAuthorizedClient(factory);
+        var runRequest = new AutomaticRunRequestDto
+        {
+            Parameters = new AutomaticControlStateDto { AutomaticMode = AutomaticRunMode.Periodic },
+        };
+
+        var runTask = client.PostAsJsonAsync("/api/v1/automatic/run", runRequest);
+        await Task.Delay(100);
+
+        var stopResponse = await client.PostAsJsonAsync(
+            "/api/v1/automatic/stop",
+            new AutomaticStopRequestDto { Abort = false });
+        stopResponse.EnsureSuccessStatusCode();
+
+        var stopBody = await stopResponse.Content.ReadFromJsonAsync<AutomaticStopResponseDto>();
+        Assert.Equal("StopAccepted", stopBody?.Status);
+        Assert.Contains("automatic-stop", session.Commands);
+
         gate.Release();
-        (await first).EnsureSuccessStatusCode();
+        await runTask;
     }
 
     private HttpClient CreateAuthorizedClient() => CreateAuthorizedClient(_factory);
@@ -128,7 +182,107 @@ public sealed class LocalGatewayWebTests : IClassFixture<WebApplicationFactory<P
         return client;
     }
 
+    internal static void WireStubRunner(
+        IServiceCollection services,
+        IAutomaticDeviceJobRunner? runner = null,
+        ISomEspLocalSessionClient? sessionClient = null)
+    {
+        services.RemoveAll<IAutomaticDeviceJobRunnerFactory>();
+        services.RemoveAll<ISomEspLocalSessionClientFactory>();
+        services.RemoveAll<IAutomaticDeviceJobRunner>();
+        services.RemoveAll<ISomEspLocalSessionClient>();
+
+        sessionClient ??= new StubSessionClient();
+        runner ??= new StubJobRunner();
+        services.AddSingleton(sessionClient);
+        services.AddSingleton(runner);
+        services.AddSingleton<ISomEspLocalSessionClientFactory>(sp =>
+            new RegistryAwareSessionClientFactory(
+                sp.GetRequiredService<IConfiguredDeviceRegistry>(),
+                sessionClient));
+        services.AddSingleton<IAutomaticDeviceJobRunnerFactory>(sp =>
+            new RegistryAwareJobRunnerFactory(
+                sp.GetRequiredService<IConfiguredDeviceRegistry>(),
+                runner));
+    }
+
     private sealed record HealthResponse(string Status);
+
+    private sealed class RegistryAwareSessionClientFactory : ISomEspLocalSessionClientFactory
+    {
+        private readonly IConfiguredDeviceRegistry _registry;
+        private readonly ISomEspLocalSessionClient _client;
+
+        public RegistryAwareSessionClientFactory(
+            IConfiguredDeviceRegistry registry,
+            ISomEspLocalSessionClient client)
+        {
+            _registry = registry;
+            _client = client;
+        }
+
+        public ISomEspLocalSessionClient GetClient(string deviceId)
+        {
+            _registry.GetRequired(deviceId);
+            return _client;
+        }
+    }
+
+    private sealed class RegistryAwareJobRunnerFactory : IAutomaticDeviceJobRunnerFactory
+    {
+        private readonly IConfiguredDeviceRegistry _registry;
+        private readonly IAutomaticDeviceJobRunner _runner;
+
+        public RegistryAwareJobRunnerFactory(
+            IConfiguredDeviceRegistry registry,
+            IAutomaticDeviceJobRunner runner)
+        {
+            _registry = registry;
+            _runner = runner;
+        }
+
+        public IAutomaticDeviceJobRunner CreateRunner(string deviceId)
+        {
+            _registry.GetRequired(deviceId);
+            return _runner;
+        }
+    }
+
+    private sealed class RecordingSessionClient : ISomEspLocalSessionClient
+    {
+        public List<string> Commands { get; } = new();
+
+        public Task<LocalUnlockResponse> UnlockAsync(
+            string? pin = null,
+            string? newPin = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new LocalUnlockResponse { Token = "t", Unlocked = true, ExpiresAtMs = 1 });
+
+        public Task LockAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task ArmAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task DisarmAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task<LocalOperateStatus> GetLocalStatusAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new LocalOperateStatus());
+
+        public Task<DeviceApiStatus> GetDeviceStatusAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new DeviceApiStatus { Standalone = true, WifiConnected = true });
+
+        public Task<LocalCommandAcceptedResponse> SendCommandAsync(
+            string commandKey,
+            string payloadJson = "{}",
+            CancellationToken cancellationToken = default)
+        {
+            Commands.Add(commandKey);
+            return Task.FromResult(new LocalCommandAcceptedResponse
+            {
+                Accepted = true,
+                CorrelationId = "local-stop-test",
+            });
+        }
+    }
 
     private sealed class StubSessionClient : ISomEspLocalSessionClient
     {

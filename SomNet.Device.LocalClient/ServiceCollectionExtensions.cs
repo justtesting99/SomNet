@@ -6,6 +6,21 @@ namespace SomNet.Device.LocalClient;
 
 public static class ServiceCollectionExtensions
 {
+    public const string SomEspHttpClientFactoryName = "SomEspLocalSession";
+
+    /// <summary>Multi-device pool for <see cref="SomNet.Device.LocalGateway"/> (P7-D2).</summary>
+    public static IServiceCollection AddSomEspDevicePool(this IServiceCollection services)
+    {
+        services.AddOptions<ConfiguredDeviceOptions>()
+            .BindConfiguration(ConfiguredDeviceOptions.SectionName);
+
+        services.AddSingleton<IConfiguredDeviceRegistry, ConfiguredDeviceRegistry>();
+        services.AddHttpClient(SomEspHttpClientFactoryName);
+        services.AddSingleton<ISomEspLocalSessionClientFactory, SomEspLocalSessionClientFactory>();
+        services.AddSingleton<IAutomaticDeviceJobRunnerFactory, AutomaticDeviceJobRunnerFactory>();
+        return services;
+    }
+
     public static IServiceCollection AddSomEspLocalClient(this IServiceCollection services)
     {
         services.AddOptions<SomEspLocalClientOptions>()

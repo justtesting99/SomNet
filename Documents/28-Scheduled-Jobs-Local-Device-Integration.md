@@ -9,6 +9,7 @@
 | SomEsp operator + local API | [SomNet.Device/docs/SOMESP-STANDALONE.md](../SomNet.Device/docs/SOMESP-STANDALONE.md) |
 | Payload shapes (`automatic-start` / stop `resultJson`) | [SomNet.Device/docs/PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md) §6.5–6.7, §4.2 |
 | SomEsp product boundary | [27 — SomEsp standalone device plan](./27-SomEsp-Standalone-Device-Plan.md) |
+| Motor / H-bridge (draft) | [31 — Motor actuator early design](./31-Motor-Actuator-Device-Design.md) |
 | Cloud session history (optional mirror) | [07 — Session & History](./07-Session-And-History.md) |
 | Site profiles (why not hub for this use case) | [26 — Site operating profiles](./26-ESP32-Local-Offline-Mode-Design.md) §0.3 |
 

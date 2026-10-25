@@ -1,0 +1,10 @@
+{
+  "unlocked": true,
+  "armed": true,
+  "busy": true,
+  "automaticActive": true,
+  "wifiConnected": true,
+  "commandComplete": true,
+  "commandSuccess": true,
+  "lastCorrelationId": "local-abc123"
+}

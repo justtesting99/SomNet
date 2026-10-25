@@ -20,4 +20,10 @@
     <ProjectReference Include="..\SomNet.Device.LocalClient\SomNet.Device.LocalClient.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Fixtures\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

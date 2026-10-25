@@ -23,4 +23,6 @@ public sealed class DeviceGatewayAutomaticRunResult
         string.Equals(Response?.Status, nameof(AutomaticDeviceJobStatus.FailedPrecondition), StringComparison.Ordinal);
 
     public string? GatewayCorrelationId { get; init; }
+
+    public string? DeviceId { get; init; }
 }

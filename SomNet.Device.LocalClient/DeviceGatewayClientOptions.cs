@@ -8,6 +8,9 @@ public sealed class DeviceGatewayClientOptions
 
     public string ApiKey { get; init; } = string.Empty;
 
+    /// <summary>Used when API methods are called with an empty <c>deviceId</c> (single-device hosts).</summary>
+    public string? DefaultDeviceId { get; init; }
+
     /// <summary>Must cover longest <c>waitTimeoutSeconds</c> plus margin (gateway blocks until run ends).</summary>
     public TimeSpan HttpTimeout { get; init; } = TimeSpan.FromHours(2) + TimeSpan.FromMinutes(5);
 }

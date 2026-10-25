@@ -20,14 +20,6 @@ public sealed class SomEspLocalClient : ISomEspLocalSessionClient
         ConfigureHttpClientBaseAddress();
     }
 
-    /// <summary>For tests — supply a pre-configured <see cref="HttpClient"/>.</summary>
-    public SomEspLocalClient(HttpClient http, SomEspLocalClientOptions options)
-    {
-        _http = http;
-        _options = options;
-        ConfigureHttpClientBaseAddress();
-    }
-
     public string? BearerToken => _bearerToken;
 
     public async Task<LocalUnlockResponse> UnlockAsync(

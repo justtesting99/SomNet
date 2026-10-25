@@ -6,18 +6,20 @@ namespace SomNet.Device.LocalGateway.Services;
 
 public sealed class DeviceGatewayStatusService
 {
-    private readonly ISomEspLocalSessionClient _client;
+    private readonly ISomEspLocalSessionClientFactory _clientFactory;
 
-    public DeviceGatewayStatusService(ISomEspLocalSessionClient client)
+    public DeviceGatewayStatusService(ISomEspLocalSessionClientFactory clientFactory)
     {
-        _client = client;
+        _clientFactory = clientFactory;
     }
 
     public async Task<DeviceGatewayCombinedStatusDto> GetCombinedStatusAsync(
+        string deviceId,
         CancellationToken cancellationToken = default)
     {
-        var local = await _client.GetLocalStatusAsync(cancellationToken);
-        var device = await _client.GetDeviceStatusAsync(cancellationToken);
+        var client = _clientFactory.GetClient(deviceId);
+        var local = await client.GetLocalStatusAsync(cancellationToken);
+        var device = await client.GetDeviceStatusAsync(cancellationToken);
 
         return new DeviceGatewayCombinedStatusDto
         {

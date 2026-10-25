@@ -9,19 +9,35 @@ namespace SomNet.Device.LocalClient;
 public sealed class DeviceGatewayClient : IDeviceGatewayClient
 {
     private readonly HttpClient _http;
+    private readonly DeviceGatewayClientOptions _options;
     private readonly JsonSerializerOptions _jsonOptions;
 
     public DeviceGatewayClient(HttpClient http, IOptions<DeviceGatewayClientOptions> options)
     {
         _http = http;
-        _ = options.Value;
+        _options = options.Value;
         _jsonOptions = AutomaticRunJobRecordBuilder.CreateJsonOptions();
     }
 
-    public async Task<DeviceGatewayCombinedStatusDto> GetDeviceStatusAsync(
+    public async Task<IReadOnlyList<DeviceGatewayConfiguredDeviceDto>> ListDevicesAsync(
         CancellationToken cancellationToken = default)
     {
-        using var response = await _http.GetAsync("/api/v1/device/status", cancellationToken);
+        using var response = await _http.GetAsync("/api/v1/devices", cancellationToken);
+        await EnsureSuccessOrThrowAsync(response, cancellationToken);
+
+        var body = await response.Content.ReadFromJsonAsync<List<DeviceGatewayConfiguredDeviceDto>>(
+            _jsonOptions,
+            cancellationToken);
+
+        return body ?? [];
+    }
+
+    public async Task<DeviceGatewayCombinedStatusDto> GetDeviceStatusAsync(
+        string deviceId,
+        CancellationToken cancellationToken = default)
+    {
+        var path = BuildDevicePath(ResolveDeviceId(deviceId), "status");
+        using var response = await _http.GetAsync(path, cancellationToken);
         await EnsureSuccessOrThrowAsync(response, cancellationToken);
 
         var body = await response.Content.ReadFromJsonAsync<DeviceGatewayCombinedStatusDto>(
@@ -32,11 +48,13 @@ public sealed class DeviceGatewayClient : IDeviceGatewayClient
     }
 
     public async Task<DeviceGatewayAutomaticRunResult> RunAutomaticAsync(
+        string deviceId,
         AutomaticRunRequestDto request,
         string? correlationId = null,
         CancellationToken cancellationToken = default)
     {
-        using var message = new HttpRequestMessage(HttpMethod.Post, "/api/v1/automatic/run")
+        var path = BuildDevicePath(ResolveDeviceId(deviceId), "automatic/run");
+        using var message = new HttpRequestMessage(HttpMethod.Post, path)
         {
             Content = JsonContent.Create(request, options: _jsonOptions),
         };
@@ -61,6 +79,7 @@ public sealed class DeviceGatewayClient : IDeviceGatewayClient
                     ErrorBody = bodyText,
                     IsGatewayConcurrentRun = true,
                     GatewayCorrelationId = gatewayCorrelationId,
+                    DeviceId = deviceId,
                 };
             }
         }
@@ -77,8 +96,56 @@ public sealed class DeviceGatewayClient : IDeviceGatewayClient
             Response = dto,
             ErrorBody = dto is null ? bodyText : null,
             GatewayCorrelationId = gatewayCorrelationId,
+            DeviceId = deviceId,
         };
     }
+
+    public async Task<DeviceGatewayStopResult> StopAutomaticAsync(
+        string deviceId,
+        bool abort = false,
+        CancellationToken cancellationToken = default)
+    {
+        var path = BuildDevicePath(ResolveDeviceId(deviceId), "automatic/stop");
+        using var response = await _http.PostAsJsonAsync(
+            path,
+            new AutomaticStopRequestDto { Abort = abort },
+            _jsonOptions,
+            cancellationToken);
+
+        var bodyText = await response.Content.ReadAsStringAsync(cancellationToken);
+        AutomaticStopResponseDto? dto = null;
+        if (!string.IsNullOrWhiteSpace(bodyText))
+        {
+            dto = JsonSerializer.Deserialize<AutomaticStopResponseDto>(bodyText, _jsonOptions);
+        }
+
+        return new DeviceGatewayStopResult
+        {
+            HttpStatusCode = (int)response.StatusCode,
+            Response = dto,
+            ErrorBody = dto is null ? bodyText : null,
+            DeviceId = deviceId,
+        };
+    }
+
+    private string ResolveDeviceId(string deviceId)
+    {
+        if (!string.IsNullOrWhiteSpace(deviceId))
+        {
+            return deviceId.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(_options.DefaultDeviceId))
+        {
+            return _options.DefaultDeviceId.Trim();
+        }
+
+        throw new InvalidOperationException(
+            "deviceId is required. Set DeviceGateway:DefaultDeviceId for single-device hosts or pass deviceId explicitly.");
+    }
+
+    private static string BuildDevicePath(string deviceId, string suffix) =>
+        $"/api/v1/devices/{Uri.EscapeDataString(deviceId)}/{suffix}";
 
     private static bool TryReadConcurrentRun(string bodyText)
     {

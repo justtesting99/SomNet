@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using Microsoft.Extensions.Options;
 using Xunit;
 using SomNet.Device.LocalClient;
 using SomNet.Device.LocalClient.Models;
@@ -46,7 +47,7 @@ public sealed class SomEspLocalClientTests
         using var http = new HttpClient(handler) { BaseAddress = new Uri("http://esp.test/") };
         var client = new SomEspLocalClient(
             http,
-            new SomEspLocalClientOptions { Pin = "1234" });
+            Options.Create(new SomEspLocalClientOptions { Pin = "1234" }));
 
         var unlock = await client.UnlockAsync();
         Assert.Equal("abc", unlock.Token);
@@ -73,7 +74,7 @@ public sealed class SomEspLocalClientTests
         });
 
         using var http = new HttpClient(handler) { BaseAddress = new Uri("http://esp.test/") };
-        var client = new SomEspLocalClient(http, new SomEspLocalClientOptions { Pin = "wrong" });
+        var client = new SomEspLocalClient(http, Options.Create(new SomEspLocalClientOptions { Pin = "wrong" }));
 
         var ex = await Assert.ThrowsAsync<SomEspLocalApiException>(() => client.UnlockAsync());
         Assert.Equal(401, ex.StatusCode);
@@ -84,7 +85,7 @@ public sealed class SomEspLocalClientTests
     public async Task Arm_without_unlock_throws()
     {
         using var http = new HttpClient(new RecordingHandler()) { BaseAddress = new Uri("http://esp.test/") };
-        var client = new SomEspLocalClient(http, new SomEspLocalClientOptions { Pin = "1234" });
+        var client = new SomEspLocalClient(http, Options.Create(new SomEspLocalClientOptions { Pin = "1234" }));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => client.ArmAsync());
     }
@@ -111,7 +112,7 @@ public sealed class SomEspLocalClientTests
         });
 
         using var http = new HttpClient(handler) { BaseAddress = new Uri("http://esp.test/") };
-        var client = new SomEspLocalClient(http, new SomEspLocalClientOptions());
+        var client = new SomEspLocalClient(http, Options.Create(new SomEspLocalClientOptions()));
 
         var status = await client.GetLocalStatusAsync();
         Assert.False(status.AutomaticActive);

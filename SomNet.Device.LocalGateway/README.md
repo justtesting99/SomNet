@@ -13,10 +13,28 @@ dotnet run
 
 - **URL:** http://localhost:5290
 - **Health:** `GET /health` (no API key)
+- **Metrics:** `GET /api/v1/gateway/metrics` (Prometheus text; API key required)
+- **Stop in-flight run:** `POST /api/v1/automatic/stop` body `{ "abort": false }` (legacy, single device), or `POST /api/v1/devices/{deviceId}/automatic/stop`
 - **Other routes:** header `X-SomNet-Device-Gateway-Key` (see `appsettings.json` → `Gateway:ApiKey`)
-- **Device:** set `Device:BaseUrl` and `Device:Pin` in `appsettings.json` for hardware runs
+- **Device:** one ESP — `Device:DeviceId` (optional), `Device:BaseUrl`, `Device:Pin`; several ESPs — `Device:Devices[]` with `deviceId`, `baseUrl`, `pin` per entry (see doc 29 §P7-D2)
+
+### Smoke (Phase 4) on Windows PowerShell
+
+`curl` is an alias for `Invoke-WebRequest` and does **not** accept `-H`. Use **`curl.exe`** (real curl) or:
+
+```powershell
+$headers = @{ "X-SomNet-Device-Gateway-Key" = "SomNet-Dev-Device-Gateway-Key-2026" }
+Invoke-RestMethod http://localhost:5290/health
+Invoke-RestMethod http://localhost:5290/api/v1/device/status -Headers $headers
+```
+
+```powershell
+curl.exe -H "X-SomNet-Device-Gateway-Key: SomNet-Dev-Device-Gateway-Key-2026" http://localhost:5290/api/v1/device/status
+```
 
 ## Docker (Linux / compose)
+
+*Deferred for now — use `dotnet run` on the laptop; files below are for when you enable compose.*
 
 Build from the **SomNet repo root**:
 

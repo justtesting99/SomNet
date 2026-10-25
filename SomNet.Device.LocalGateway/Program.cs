@@ -12,7 +12,8 @@ builder.Services
     .AddOptions<GatewaySettings>()
     .Bind(builder.Configuration.GetSection(GatewaySettings.SectionName));
 
-builder.Services.AddSomEspLocalClient();
+builder.Services.AddSomEspDevicePool();
+builder.Services.AddSingleton<GatewayRunMetrics>();
 builder.Services.AddSingleton<AutomaticRunCoordinator>();
 builder.Services.AddSingleton<DeviceGatewayStatusService>();
 

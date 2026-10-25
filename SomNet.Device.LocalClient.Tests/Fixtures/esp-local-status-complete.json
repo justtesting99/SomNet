@@ -1,0 +1,11 @@
+{
+  "unlocked": true,
+  "armed": true,
+  "busy": false,
+  "automaticActive": false,
+  "wifiConnected": true,
+  "commandComplete": true,
+  "commandSuccess": true,
+  "lastCorrelationId": "local-abc123",
+  "resultJson": "{\"commandKey\":\"automatic-stop\",\"automaticMode\":\"periodic\",\"strokesCompleted\":5,\"durationMs\":95000,\"endReason\":\"endSession\",\"interrupted\":false}"
+}

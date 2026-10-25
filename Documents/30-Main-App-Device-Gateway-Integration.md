@@ -7,6 +7,9 @@
 | Gateway implementation plan | [29 — Device local gateway](./29-Device-Local-Gateway-Implementation-Plan.md) |
 | Job flow & ESP protocol | [28 — Scheduled jobs — local device](./28-Scheduled-Jobs-Local-Device-Integration.md) |
 | Gateway host README | [SomNet.Device.LocalGateway/README.md](../SomNet.Device.LocalGateway/README.md) |
+| **Admin test bed (payloads + UI fields + Stop/metrics)** | [SomNet integration runbook](./SomNetIntegrationRunbook.md) (§9 recipes) |
+| Motor / H-bridge (draft) | [31 — Motor actuator early design](./31-Motor-Actuator-Device-Design.md) |
+| TheSystem device registry (planned) | §5 below · [TheSystem `SOMNET_DEVICE_REGISTRY.md`](../../TheSystem/Docs/SOMNET_DEVICE_REGISTRY.md) |
 
 **Dependencies:** Reference **`SomNet.Shared`** (DTOs) and **`SomNet.Device.LocalClient`** (`AddDeviceGatewayClient`). **Do not** reference **SomNet.API**.
 
@@ -34,10 +37,13 @@ Main app scheduler
 {
   "DeviceGateway": {
     "BaseUrl": "http://localhost:5290",
-    "ApiKey": "<same as Gateway:ApiKey on the gateway host>"
+    "ApiKey": "<same as Gateway:ApiKey on the gateway host>",
+    "DefaultDeviceId": "esp32-84CCA85C36B4"
   }
 }
 ```
+
+`DefaultDeviceId` should match the ESP’s `device.deviceId` (gateway `Device:DeviceId` or `Device:Devices[].deviceId`). Omit only if the app always passes `deviceId` explicitly (e.g. from `ListDevicesAsync()`).
 
 Environment variables: `DeviceGateway__BaseUrl`, `DeviceGateway__ApiKey`.
 
@@ -75,7 +81,8 @@ public sealed class AutomaticDeviceScheduledJob
         };
 
         var correlationId = $"{jobId}:{scheduleId}";
-        var outcome = await _gateway.RunAutomaticAsync(request, correlationId, cancellationToken);
+        var deviceId = /* from job / preset, or options.DefaultDeviceId */;
+        var outcome = await _gateway.RunAutomaticAsync(deviceId, request, correlationId, cancellationToken);
 
         var disposition = DeviceGatewaySchedulerPolicy.GetDisposition(outcome);
         if (disposition == DeviceGatewaySchedulerDisposition.SkipUntilNextSchedule)
@@ -124,7 +131,7 @@ public sealed class AutomaticDeviceScheduledJob
 }
 ```
 
-Preflight (optional): `await _gateway.GetDeviceStatusAsync()` before POST when you want to skip early if Wi‑Fi is down.
+Preflight (optional): `await _gateway.GetDeviceStatusAsync(deviceId)` before POST when you want to skip early if Wi‑Fi is down. `await _gateway.ListDevicesAsync()` to populate admin device pickers.
 
 ---
 
@@ -143,10 +150,60 @@ Use **`AutomaticRunJobRecordDto`** (or map to your EF entity):
 | `DeviceCorrelationId` | ESP `local-…` |
 | `GatewayCorrelationId` | Response header `X-Correlation-Id` |
 | `ParametersSnapshot` | Full `AutomaticControlStateDto` sent on this run |
+| **`DeviceId`** *(planned)* | ESP identity from registration / job — see §5 |
 
 ---
 
-## 5. Scheduler policy (P6-D3)
+## 5. Planned — TheSystem device registry (database)
+
+**Status:** **Not implemented** — admin test bed today uses gateway `GET /api/v1/devices`, optional `DeviceGateway:DefaultDeviceId`, and query/body `deviceId`. **TheSystem.Server** will persist registrations in its own DB for presets, scheduler jobs, and run history.
+
+**TheSystem implementation notes:** [TheSystem `Docs/SOMNET_DEVICE_REGISTRY.md`](../../TheSystem/Docs/SOMNET_DEVICE_REGISTRY.md) (sibling repo).
+
+### 5.1 Responsibility split
+
+| Layer | Owns |
+|-------|------|
+| **TheSystem DB** | Which devices this installation uses: stable **`deviceId`**, display name, enabled flag, optional **`actuatorKind`** (motor vs relay — [31](./31-Motor-Actuator-Device-Design.md)), links to presets and schedules |
+| **Gateway host** | **Reachability secrets:** `Device:Devices[]` → `deviceId`, `baseUrl`, `pin` per ESP (P7-D2). Not stored in the browser; avoid duplicating PIN in the main app DB |
+| **`IDeviceGatewayClient`** | Every operation passes **`deviceId`**; gateway resolves URL + PIN |
+
+Do **not** use DHCP **IP** as the primary key for jobs or history — IPs drift ([29 §P7-D3](./29-Device-Local-Gateway-Implementation-Plan.md#p7-d3--mdns--esp-ip-drift-not-implemented)). Optional **`LastKnownIp`** on the registration row (or on run records) for display only, refreshed from `GetDeviceStatusAsync`.
+
+### 5.2 Suggested table (sketch)
+
+Name is illustrative (`SomNetDeviceRegistration`, `DeviceGatewayDevice`, etc.):
+
+| Column | Notes |
+|--------|--------|
+| `Id` | Surrogate PK |
+| `DeviceId` | **Unique**, matches firmware / `GET /api/status` → `device.deviceId` |
+| `DisplayName` | Admin UI label |
+| `IsEnabled` | Soft-disable without deleting history |
+| `ActuatorKind` | Optional until motor ships — `relay`, `hbridge`, … |
+| `LastKnownIp` | Optional, diagnostic; updated on status poll |
+| `CreatedAtUtc` / `UpdatedAtUtc` | Audit |
+
+Related tables (later): **automatic presets** and **scheduled jobs** FK or required `DeviceId`; **run history** always stores `DeviceId` + `ParametersSnapshot` (§4).
+
+### 5.3 Registration workflow
+
+1. Operator configures ESP on gateway (`Device:Devices[]` or legacy single device).
+2. **Admin “add device”** in TheSystem: pick from `ListDevicesAsync()` **or** paste `deviceId` after first status probe.
+3. Persist row; admin UI dropdown lists **enabled** DB registrations (not only raw gateway list).
+4. Optional **health job:** compare enabled `DeviceId`s in DB to gateway `GET /api/v1/devices`; flag “configured on gateway but missing in DB” or unknown id before a scheduled run.
+
+`DeviceGateway:DefaultDeviceId` remains a **dev fallback** when exactly one device exists and the UI does not pass an id.
+
+### 5.4 Scheduler and admin API
+
+- Job definition includes **`deviceId`** (from preset or registration row).
+- `RunAutomaticAsync(deviceId, …)`, `StopAutomaticAsync(deviceId, …)`, `GetDeviceStatusAsync(deviceId)` — unchanged.
+- TheSystem proxy routes (`SomNetVOController` today): optional `deviceId` query/body; resolve via DB selection in production instead of only `DefaultDeviceId`.
+
+---
+
+## 6. Scheduler policy (P6-D3)
 
 | Gateway outcome | `DeviceGatewaySchedulerPolicy` | Action |
 |-----------------|--------------------------------|--------|
@@ -160,7 +217,7 @@ At most **one** automatic run per device; use a single gateway instance or distr
 
 ---
 
-## 6. Manual end-to-end (laptop, no Docker)
+## 7. Manual end-to-end (laptop, no Docker)
 
 1. Start gateway: `dotnet run` in `SomNet.Device.LocalGateway` (set `Device:BaseUrl` + `Device:Pin` for ESP).
 2. Main app: `DeviceGateway:BaseUrl` = `http://localhost:5290`, matching API key.
@@ -171,8 +228,9 @@ This satisfies Phase 6 exit until Linux compose smoke (Phase 5-T1) is run later.
 
 ---
 
-## 7. Document history
+## 8. Document history
 
 | Date | Change |
 |------|--------|
 | 2026-10-25 | Phase 6 — client, record DTO, scheduler policy, integration guide |
+| 2026-10-25 | §5 — planned TheSystem device registry (DB) |

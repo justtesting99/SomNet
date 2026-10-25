@@ -57,3 +57,6 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [SomEsp standalone device plan](./27-SomEsp-Standalone-Device-Plan.md) | Developers | **`env:somesp`** — LAN `/operate`, local API |
 | [Scheduled jobs — local device integration](./28-Scheduled-Jobs-Local-Device-Integration.md) | Developers | LAN-only .NET jobs → SomEsp `/api/local/*`, completion result for scheduler, history options |
 | [Device local gateway — implementation plan](./29-Device-Local-Gateway-Implementation-Plan.md) | Developers | **LocalClient** + **LocalGateway** (:5290) — phases, checklists, Docker, HTTP contract |
+| [Main app device gateway integration](./30-Main-App-Device-Gateway-Integration.md) | Developers | TheSystem / scheduler → `IDeviceGatewayClient`, config, persisted run fields; §5 device registry (DB) |
+| [Motor (H-bridge) actuator — early design](./31-Motor-Actuator-Device-Design.md) | Developers | **Draft** — relay vs motor `actuatorKind`, shared LAN patterns, payload seams, phased M0–M4 |
+| [SomNet integration runbook](./SomNetIntegrationRunbook.md) | Developers / operators | Admin test bed, gateway payloads, TheSystem recipes |

@@ -29,10 +29,12 @@ public sealed class DeviceGatewayClientTests
             JsonResponse(HttpStatusCode.OK, responseDto));
         var client = CreateClient(handler);
 
-        var result = await client.RunAutomaticAsync(new AutomaticRunRequestDto
-        {
-            Parameters = new AutomaticControlStateDto { AutomaticMode = AutomaticRunMode.Periodic },
-        });
+        var result = await client.RunAutomaticAsync(
+            "esp-a",
+            new AutomaticRunRequestDto
+            {
+                Parameters = new AutomaticControlStateDto { AutomaticMode = AutomaticRunMode.Periodic },
+            });
 
         Assert.True(result.IsSuccess);
         Assert.Equal("Completed", result.Response!.Status);
@@ -51,10 +53,12 @@ public sealed class DeviceGatewayClientTests
         });
 
         var client = CreateClient(handler);
-        var result = await client.RunAutomaticAsync(new AutomaticRunRequestDto
-        {
-            Parameters = new AutomaticControlStateDto { AutomaticMode = AutomaticRunMode.Periodic },
-        });
+        var result = await client.RunAutomaticAsync(
+            "esp-a",
+            new AutomaticRunRequestDto
+            {
+                Parameters = new AutomaticControlStateDto { AutomaticMode = AutomaticRunMode.Periodic },
+            });
 
         Assert.True(result.IsGatewayConcurrentRun);
         Assert.Equal(
@@ -72,10 +76,12 @@ public sealed class DeviceGatewayClientTests
         }));
 
         var client = CreateClient(handler);
-        var result = await client.RunAutomaticAsync(new AutomaticRunRequestDto
-        {
-            Parameters = new AutomaticControlStateDto { AutomaticMode = AutomaticRunMode.Periodic },
-        });
+        var result = await client.RunAutomaticAsync(
+            "esp-a",
+            new AutomaticRunRequestDto
+            {
+                Parameters = new AutomaticControlStateDto { AutomaticMode = AutomaticRunMode.Periodic },
+            });
 
         Assert.True(result.IsFailedPrecondition);
         Assert.Equal(
@@ -88,6 +94,22 @@ public sealed class DeviceGatewayClientTests
     {
         var delay = DeviceGatewaySchedulerPolicy.GetUnreachableBackoff(100, TimeSpan.FromMinutes(10));
         Assert.Equal(TimeSpan.FromHours(1), delay);
+    }
+
+    [Fact]
+    public async Task StopAutomatic_deserializes_no_active_run()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound)
+        {
+            Content = new StringContent(
+                """{"status":"NoActiveRun","message":"none"}""",
+                Encoding.UTF8,
+                "application/json"),
+        });
+
+        var client = CreateClient(handler);
+        var result = await client.StopAutomaticAsync("esp-a");
+        Assert.True(result.IsNoActiveRun);
     }
 
     [Fact]
@@ -126,7 +148,7 @@ public sealed class DeviceGatewayClientTests
         var http = new HttpClient(handler) { BaseAddress = new Uri("http://gateway.test/") };
         return new DeviceGatewayClient(
             http,
-            Options.Create(new DeviceGatewayClientOptions()));
+            Options.Create(new DeviceGatewayClientOptions { DefaultDeviceId = "esp-a" }));
     }
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode code, object body)
