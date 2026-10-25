@@ -53,3 +53,7 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Video Snapshot encryption (dev)](./24-Video-Snapshot-Encryption-Checklist.md) | Developers | AES-256-GCM on disk before Pi — **signed off** (2026-09-13) |
 | [Video Phase 8 — Azure cutover](./21-Video-Phase-8-Azure-Cutover-Checklist.md) | Developers | App Service + SQL + Blob — blocked |
 | [ESP32 Network Spec](./09-ESP32-Network-Spec.md) | Developers | **Wi‑Fi / HTTP / hub architecture** — signed off **`0.12.0-network`** (2026-09-09); S3–S6 verified |
+| [Site operating profiles (cloud / Pi / standalone)](./26-ESP32-Local-Offline-Mode-Design.md) | Developers | Tier 1–3 deployment models |
+| [SomEsp standalone device plan](./27-SomEsp-Standalone-Device-Plan.md) | Developers | **`env:somesp`** — LAN `/operate`, local API |
+| [Scheduled jobs — local device integration](./28-Scheduled-Jobs-Local-Device-Integration.md) | Developers | LAN-only .NET jobs → SomEsp `/api/local/*`, completion result for scheduler, history options |
+| [Device local gateway — implementation plan](./29-Device-Local-Gateway-Implementation-Plan.md) | Developers | **LocalClient** + **LocalGateway** (:5290) — phases, checklists, Docker, HTTP contract |
