@@ -7,7 +7,7 @@ using SomNet.Device.LocalClient.Models;
 
 namespace SomNet.Device.LocalClient;
 
-public sealed class SomEspLocalClient
+public sealed class SomEspLocalClient : ISomEspLocalSessionClient
 {
     private readonly HttpClient _http;
     private readonly SomEspLocalClientOptions _options;

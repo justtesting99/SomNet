@@ -21,6 +21,11 @@ public static class ServiceCollectionExtensions
             client.Timeout = options.HttpTimeout;
         });
 
+        services.AddSingleton<ISomEspLocalSessionClient>(provider =>
+            provider.GetRequiredService<SomEspLocalClient>());
+
+        services.AddSingleton<AutomaticDeviceJobRunner>();
+
         return services;
     }
 }

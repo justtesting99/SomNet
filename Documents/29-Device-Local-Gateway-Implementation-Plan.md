@@ -1,6 +1,6 @@
 # Device local gateway — implementation plan & checklists
 
-**Status:** **Phase 1 complete** — phased build for a **lightweight HTTP service** the main application calls; the service drives **SomEsp** over **`/api/local/*`**.
+**Status:** **Phase 2 complete** — phased build for a **lightweight HTTP service** the main application calls; the service drives **SomEsp** over **`/api/local/*`**.
 
 **Audience:** Build first in the **SomNet** repo; **move** `LocalClient` + `LocalGateway` into the **main application solution** for long-term hosting (laptop dev → Docker compose with main app).
 
@@ -201,15 +201,15 @@ Move or duplicate **automatic session summary** into shared code so gateway and 
 
 **Goal:** End-to-end automatic session with completion result.
 
-- [ ] **P2-D1** `AutomaticDeviceJobRunner` — precondition check (`busy`, `automaticActive`)
-- [ ] **P2-D2** Serialize `AutomaticControlStateDto` → start payload (omit `Running`)
-- [ ] **P2-D3** Poll until `!automaticActive && !busy` or timeout
-- [ ] **P2-D4** Do not treat start ack as session end (`automaticActive` still true)
-- [ ] **P2-D5** On complete: parse `resultJson` → `AutomaticSessionResultDto`
-- [ ] **P2-D6** Map to `AutomaticDeviceJobResult` + `message` templates
-- [ ] **P2-D7** Optional `disarmAfterRun` / `lockAfterRun`
-- [ ] **P2-D8** CancellationToken → optional `automatic-stop` + `Cancelled` status
-- [ ] **P2-D9** Unit tests: poll state machine with mocked status sequence
+- [x] **P2-D1** `AutomaticDeviceJobRunner` — precondition check (`busy`, `automaticActive`)
+- [x] **P2-D2** Serialize `AutomaticControlStateDto` → start payload (omit `Running`)
+- [x] **P2-D3** Poll until `!automaticActive && !busy` or timeout
+- [x] **P2-D4** Do not treat start ack as session end (`automaticActive` still true)
+- [x] **P2-D5** On complete: parse `resultJson` → `AutomaticSessionResultDto`
+- [x] **P2-D6** Map to `AutomaticDeviceJobResult` + `message` templates
+- [x] **P2-D7** Optional `disarmAfterRun` / `lockAfterRun`
+- [x] **P2-D8** CancellationToken → optional `automatic-stop` + `Cancelled` status
+- [x] **P2-D9** Unit tests: poll state machine with mocked status sequence
 
 **Smoke:**
 

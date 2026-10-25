@@ -28,3 +28,13 @@ var status = await client.GetLocalStatusAsync();
 ```
 
 Unit tests: `dotnet test SomNet.Device.LocalClient.Tests`
+
+## Job runner (Phase 2)
+
+```csharp
+var runner = serviceProvider.GetRequiredService<AutomaticDeviceJobRunner>();
+var result = await runner.RunAutomaticAsync(
+    parameters,
+    new AutomaticDeviceJobRunOptions { WaitTimeout = TimeSpan.FromHours(2), DisarmAfterRun = true });
+// result.Status, result.Message, result.Result, result.RawResultJson
+```
