@@ -24,6 +24,13 @@ public:
     // True when provisioned flag set and wifi_ssid + server_url stored
     bool isFullyProvisioned() const;
 
+    /** Non-empty NVS server_url (SomEsp optional SomNet hub). */
+    bool hasHubServerUrl() const;
+
+    /** SomEsp: when false, keep server_url/pairing but do not connect SignalR (local /operate). */
+    bool isHubRuntimeEnabled() const;
+    bool setHubRuntimeEnabled(bool value);
+
     // device_id
     bool getDeviceId(char* out, size_t outLen) const;
     bool setDeviceId(const char* value);

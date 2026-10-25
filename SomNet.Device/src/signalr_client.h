@@ -25,6 +25,10 @@ using ExecutionActiveProbe = bool (*)();
 class SignalRClient {
 public:
     bool begin(NvsStore* nvsStore, DeviceIdentity* identity, WifiManager* wifi);
+    /** SomEsp: WebSocket stack + globals (safe to call once after server_url saved at runtime). */
+    bool ensureHubStackReady();
+    /** SomEsp: connect or idle hub without touching session accessory (local arm). */
+    void applySomEspHubEnabled(bool enabled);
     void setExecutionActiveProbe(ExecutionActiveProbe probe);
     void poll();
 
@@ -50,6 +54,7 @@ public:
 
 private:
     void enterServerUnavailable(int httpStatus);
+    void forceHubOfflineWithoutAccessory();
     void beginArpWarm(const IPAddress& target);
     bool pollArpWarm();
     NvsStore* nvs_ = nullptr;
@@ -59,6 +64,7 @@ private:
     unsigned long nextAttemptMs_ = 0;
     unsigned long backoffMs_ = HUB_RETRY_BASE_MS;
     bool initialized_ = false;
+    bool hubStackReady_ = false;
     bool handshakeComplete_ = false;
     bool pendingConnect_ = false;
     unsigned long wifiLinkUpMs_ = 0;

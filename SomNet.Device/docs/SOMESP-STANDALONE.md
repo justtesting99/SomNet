@@ -33,7 +33,18 @@ Serial banner includes **`Mode: STANDALONE`** and **`Control: http://<ip>/operat
 2. Open **`http://192.168.4.1/`** and **Configure** — **Wi‑Fi SSID + password only**.
 3. Save and reboot; use the STA IP for `/` and `/operate`.
 
-`GET /api/status` returns `"standalone": true` and `"hubState": "disabled"`.
+`GET /api/status` returns `"standalone": true` and `"hubState": "disabled"` until you connect a SomNet server (see **SomNet network** below).
+
+## SomNet network (optional hybrid)
+
+1. On **status** (`http://<device-ip>/`), save **SomNet server URL** (API base, LAN IP, no `/hubs/hardware`). Hub connects **without reboot**.
+2. Pair **Device ID** in SomNet (Dom → Sub → Options → Hardware device).
+3. Use **Connect SomNet hub** on/off to switch between **remote hub** and **local-only** `/operate` (pairing and `server_url` stay in NVS).
+
+| API | Notes |
+|-----|--------|
+| `GET /api/hub/mode` | `hubEnabled`, `paired`, `hubState`, … |
+| `POST /api/hub/mode` | `{"enabled":true\|false}` — requires paired + `server_url` to enable |
 
 ## Security (trial)
 

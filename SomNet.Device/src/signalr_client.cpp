@@ -223,7 +223,7 @@ void buildEffectiveServerUrl(NvsStore& nvs, char* out, size_t outLen) {
 
 bool hasHubServerConfig(NvsStore& nvs) {
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
-    return false;
+    return nvs.hasHubServerUrl() && nvs.isHubRuntimeEnabled();
 #endif
     if (nvs.isFullyProvisioned()) {
         return true;
@@ -1101,34 +1101,18 @@ void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
 
 } // namespace
 
-bool SignalRClient::begin(NvsStore* nvsStore, DeviceIdentity* identity, WifiManager* wifi) {
-    if (nvsStore == nullptr || identity == nullptr || wifi == nullptr) {
+bool SignalRClient::ensureHubStackReady() {
+    if (hubStackReady_) {
+        return true;
+    }
+    if (nvs_ == nullptr || identity_ == nullptr || wifi_ == nullptr) {
         return false;
     }
 
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
-    nvs_ = nvsStore;
-    identity_ = identity;
-    wifi_ = wifi;
-    initialized_ = true;
-    state_ = HubConnectionState::Offline;
-    Serial.println(F("[HUB] standalone build, hub disabled"));
-    return true;
-#endif
-
-    nvs_ = nvsStore;
-    identity_ = identity;
-    wifi_ = wifi;
-    gNvs = nvsStore;
-    gIdentity = identity;
+    gNvs = nvs_;
+    gIdentity = identity_;
     gActiveClient = this;
     gUsePairedConnect = nvs_->isPaired();
-    initialized_ = true;
-    state_ = HubConnectionState::Offline;
-    nextAttemptMs_ = 0;
-    backoffMs_ = HUB_RETRY_BASE_MS;
-    handshakeComplete_ = false;
-    pendingConnect_ = false;
 
     const esp_reset_reason_t resetReason = esp_reset_reason();
     hubBootSettleMs_ = (resetReason == ESP_RST_POWERON || resetReason == ESP_RST_BROWNOUT)
@@ -1141,7 +1125,87 @@ bool SignalRClient::begin(NvsStore* nvsStore, DeviceIdentity* identity, WifiMana
     gWs.onEvent(onWebSocketEvent);
     disableLibraryWebSocketReconnect();
     gWs.enableHeartbeat(0, 0, 0);
+    hubStackReady_ = true;
+    return true;
+}
 
+void SignalRClient::forceHubOfflineWithoutAccessory() {
+    negotiateFsmActive_ = false;
+    tcpProbeFsmActive_ = false;
+    resetHubNetworkFsms();
+    pendingConnect_ = false;
+    gPendingConnectStartedMs = 0;
+    clearHandshakeState();
+    disableLibraryWebSocketReconnect();
+    gSuppressDisconnectNotify = true;
+    gWs.disconnect();
+    state_ = HubConnectionState::Offline;
+    serverUnavailable_ = false;
+    wifiLinkUpMs_ = 0;
+}
+
+void SignalRClient::applySomEspHubEnabled(bool enabled) {
+    if (!initialized_ || nvs_ == nullptr) {
+        return;
+    }
+
+    if (!enabled) {
+        forceHubOfflineWithoutAccessory();
+        Serial.println(F("[HUB] SomEsp local mode — hub suspended"));
+        return;
+    }
+
+    if (!nvs_->hasHubServerUrl()) {
+        Serial.println(F("[HUB] cannot enable — no server_url"));
+        return;
+    }
+
+    if (!ensureHubStackReady()) {
+        Serial.println(F("[HUB] cannot enable — stack init failed"));
+        return;
+    }
+
+    gUsePairedConnect = nvs_->isPaired();
+    forceHubOfflineWithoutAccessory();
+    nextAttemptMs_ = 0;
+    backoffMs_ = HUB_RETRY_BASE_MS;
+    Serial.println(F("[HUB] SomEsp remote mode — connecting hub"));
+}
+
+bool SignalRClient::begin(NvsStore* nvsStore, DeviceIdentity* identity, WifiManager* wifi) {
+    if (nvsStore == nullptr || identity == nullptr || wifi == nullptr) {
+        return false;
+    }
+
+    nvs_ = nvsStore;
+    identity_ = identity;
+    wifi_ = wifi;
+    initialized_ = true;
+    state_ = HubConnectionState::Offline;
+    nextAttemptMs_ = 0;
+    backoffMs_ = HUB_RETRY_BASE_MS;
+    handshakeComplete_ = false;
+    pendingConnect_ = false;
+
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    if (!nvsStore->hasHubServerUrl()) {
+        Serial.println(F("[HUB] standalone — no server_url (local /operate only)"));
+        return true;
+    }
+    if (!ensureHubStackReady()) {
+        return false;
+    }
+    if (!nvsStore->isHubRuntimeEnabled()) {
+        Serial.println(F("[HUB] standalone — hub suspended (local /operate)"));
+        return true;
+    }
+    Serial.println(F("[HUB] standalone — hub active"));
+    return true;
+#endif
+
+    if (!ensureHubStackReady()) {
+        return false;
+    }
     return true;
 }
 
@@ -1417,7 +1481,21 @@ void SignalRClient::poll() {
     }
 
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
-    return;
+    if (!nvs_->hasHubServerUrl()) {
+        return;
+    }
+    if (!nvs_->isHubRuntimeEnabled()) {
+        if (hubStackReady_ && (state_ != HubConnectionState::Offline || gWs.isConnected())) {
+            forceHubOfflineWithoutAccessory();
+        }
+        if (hubStackReady_) {
+            gWs.loop();
+        }
+        return;
+    }
+    if (!hubStackReady_ && !ensureHubStackReady()) {
+        return;
+    }
 #endif
 
     if (wifi_->isSoftAp() || !wifi_->isConnected() || !hasHubServerConfig(*nvs_)) {

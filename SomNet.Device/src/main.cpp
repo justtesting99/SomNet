@@ -101,8 +101,10 @@ void onButtonClick(ButtonClickKind kind, void*) {
         return;
     }
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
-    Serial.println(F("[BTN] click ignored (standalone, no hub)"));
-    return;
+    if (!nvsStore.hasHubServerUrl() || !nvsStore.isHubRuntimeEnabled()) {
+        Serial.println(F("[BTN] click ignored (standalone, hub paused)"));
+        return;
+    }
 #endif
     if (!nvsStore.isPaired()) {
         Serial.println(F("[BTN] click dropped (not paired)"));
@@ -162,8 +164,12 @@ void printSerialBanner() {
     if (!kSomNetStandaloneBuild) {
         Serial.print(F(" Pairing: "));
         Serial.println(nvsStore.isPaired() ? F("paired") : F("not paired"));
+    } else if (nvsStore.hasHubServerUrl()) {
+        Serial.print(F(" Hub: network ("));
+        Serial.print(nvsStore.isPaired() ? F("paired") : F("not paired"));
+        Serial.println(F(")"));
     } else {
-        Serial.println(F(" Hub: disabled (standalone)"));
+        Serial.println(F(" Hub: disabled (local /operate only)"));
     }
     Serial.print(F(" Wi-Fi: "));
     if (wifiManager.isSoftAp()) {
@@ -180,6 +186,9 @@ void printSerialBanner() {
     Serial.print(F(" IP: "));
     Serial.println(wifiManager.localIp());
     if (!kSomNetStandaloneBuild) {
+        Serial.print(F(" Server: "));
+        Serial.println(serverUrl[0] != '\0' ? serverUrl : "(not configured)");
+    } else if (nvsStore.hasHubServerUrl()) {
         Serial.print(F(" Server: "));
         Serial.println(serverUrl[0] != '\0' ? serverUrl : "(not configured)");
     } else {
@@ -273,7 +282,11 @@ void loop() {
     if (buttonInput.isAwaitingCredentialResetRelease()) {
         statusLed.pollCredentialResetFlash();
     } else if (kSomNetStandaloneBuild) {
-        statusLed.poll(wifiManager.isConnected() && !wifiManager.isSoftAp());
+        if (nvsStore.hasHubServerUrl() && nvsStore.isHubRuntimeEnabled()) {
+            statusLed.poll(signalRClient.isHubConnected());
+        } else {
+            statusLed.poll(wifiManager.isConnected() && !wifiManager.isSoftAp());
+        }
     } else {
         statusLed.poll(signalRClient.isHubConnected());
     }

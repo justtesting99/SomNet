@@ -27,6 +27,7 @@ constexpr char kKeyProvisioned[] = "provisioned";
 constexpr char kKeyCredReset[] = "cred_reset";
 constexpr char kKeyOperatePin[] = "operate_pin";
 constexpr char kKeyLocalOperateSet[] = "loc_oper_set";
+constexpr char kKeyHubRuntimeEn[] = "hub_run";
 
 Preferences preferences;
 NvsStore* gNvsStoreInstance = nullptr;
@@ -230,6 +231,38 @@ bool NvsStore::isFullyProvisioned() const {
 #else
     char server[NvsStore::kMaxStringLen];
     return getServerUrl(server, sizeof(server)) && server[0] != '\0';
+#endif
+}
+
+bool NvsStore::hasHubServerUrl() const {
+    char server[NvsStore::kMaxStringLen];
+    return getServerUrl(server, sizeof(server)) && server[0] != '\0';
+}
+
+bool NvsStore::isHubRuntimeEnabled() const {
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    if (!open_) {
+        return false;
+    }
+    if (!preferences.isKey(kKeyHubRuntimeEn)) {
+        // Devices that saved server_url before hub_run existed: keep hub on until user toggles.
+        return hasHubServerUrl();
+    }
+    return preferences.getBool(kKeyHubRuntimeEn, false);
+#else
+    return true;
+#endif
+}
+
+bool NvsStore::setHubRuntimeEnabled(bool value) {
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    if (!open_) {
+        return false;
+    }
+    preferences.putBool(kKeyHubRuntimeEn, value);
+    return true;
+#else
+    return true;
 #endif
 }
 
