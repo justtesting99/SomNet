@@ -1,12 +1,13 @@
 using Microsoft.Extensions.Options;
 using SomNet.Device.LocalClient.Models;
+using SomNet.Shared.DTO.DeviceGateway;
 using SomNet.Shared.DTO.Modes;
 using SomNet.Shared.History;
 using SomNet.Shared.Models;
 
 namespace SomNet.Device.LocalClient;
 
-public sealed class AutomaticDeviceJobRunner
+public sealed class AutomaticDeviceJobRunner : IAutomaticDeviceJobRunner
 {
     private readonly ISomEspLocalSessionClient _client;
     private readonly SomEspLocalClientOptions _options;

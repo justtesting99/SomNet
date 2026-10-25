@@ -1,6 +1,6 @@
 # Device local gateway — implementation plan & checklists
 
-**Status:** **Phase 3 complete** — phased build for a **lightweight HTTP service** the main application calls; the service drives **SomEsp** over **`/api/local/*`**.
+**Status:** **Phase 4 complete** — phased build for a **lightweight HTTP service** the main application calls; the service drives **SomEsp** over **`/api/local/*`**.
 
 **Audience:** Build first in the **SomNet** repo; **move** `LocalClient` + `LocalGateway` into the **main application solution** for long-term hosting (laptop dev → Docker compose with main app).
 
@@ -241,14 +241,14 @@ Move or duplicate **automatic session summary** into shared code so gateway and 
 
 **Goal:** Main app calls gateway only.
 
-- [ ] **P4-D1** `GatewayApiKeyMiddleware` — `X-SomNet-Device-Gateway-Key`
-- [ ] **P4-D2** Register `SomEspLocalClient` + `AutomaticDeviceJobRunner` DI (singleton or scoped per device)
-- [ ] **P4-D3** `GET /health`, `GET /api/v1/device/status`
-- [ ] **P4-D4** `POST /api/v1/automatic/run` — body validation (automaticMode required)
-- [ ] **P4-D5** Single-flight lock — reject concurrent `/automatic/run` with **409**
-- [ ] **P4-D6** OpenAPI/Swagger optional in Development only
-- [ ] **P4-D7** Structured logging (correlation id per request, device correlation id in logs)
-- [ ] **P4-D8** `AutomaticRunResponseDto` in `SomNet.Shared` (gateway + main app reference)
+- [x] **P4-D1** `GatewayApiKeyMiddleware` — `X-SomNet-Device-Gateway-Key`
+- [x] **P4-D2** Register `SomEspLocalClient` + `AutomaticDeviceJobRunner` DI (singleton or scoped per device)
+- [x] **P4-D3** `GET /health`, `GET /api/v1/device/status`
+- [x] **P4-D4** `POST /api/v1/automatic/run` — body validation (`parameters` required)
+- [x] **P4-D5** Single-flight lock — reject concurrent `/automatic/run` with **409**
+- [x] **P4-D6** OpenAPI/Swagger optional in Development only
+- [x] **P4-D7** Structured logging (correlation id per request, device correlation id in logs)
+- [x] **P4-D8** `AutomaticRunResponseDto` in `SomNet.Shared` (gateway + main app reference)
 
 **Smoke:**
 

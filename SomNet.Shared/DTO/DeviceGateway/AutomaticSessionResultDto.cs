@@ -1,4 +1,4 @@
-namespace SomNet.Device.LocalClient.Models;
+namespace SomNet.Shared.DTO.DeviceGateway;
 
 /// <summary>Device automatic-stop / session-complete <c>resultJson</c> (hub parity).</summary>
 public sealed class AutomaticSessionResultDto

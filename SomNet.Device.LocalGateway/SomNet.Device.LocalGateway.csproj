@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\SomNet.Device.LocalClient\SomNet.Device.LocalClient.csproj" />
     <ProjectReference Include="..\SomNet.Shared\SomNet.Shared.csproj" />
   </ItemGroup>

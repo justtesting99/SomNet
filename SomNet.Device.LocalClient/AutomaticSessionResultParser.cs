@@ -1,5 +1,5 @@
 using System.Text.Json;
-using SomNet.Device.LocalClient.Models;
+using SomNet.Shared.DTO.DeviceGateway;
 
 namespace SomNet.Device.LocalClient;
 

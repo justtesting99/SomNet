@@ -9,4 +9,5 @@
   <Project Path="../SomNet.Device.LocalClient/SomNet.Device.LocalClient.csproj" />
   <Project Path="../SomNet.Device.LocalGateway/SomNet.Device.LocalGateway.csproj" />
   <Project Path="../SomNet.Device.LocalClient.Tests/SomNet.Device.LocalClient.Tests.csproj" />
+  <Project Path="../SomNet.Device.LocalGateway.Tests/SomNet.Device.LocalGateway.Tests.csproj" />
 </Solution>

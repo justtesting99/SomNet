@@ -17,6 +17,8 @@ public interface ISomEspLocalSessionClient
 
     Task<LocalOperateStatus> GetLocalStatusAsync(CancellationToken cancellationToken = default);
 
+    Task<DeviceApiStatus> GetDeviceStatusAsync(CancellationToken cancellationToken = default);
+
     Task<LocalCommandAcceptedResponse> SendCommandAsync(
         string commandKey,
         string payloadJson = "{}",

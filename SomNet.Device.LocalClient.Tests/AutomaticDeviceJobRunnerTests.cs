@@ -151,6 +151,9 @@ public sealed class AutomaticDeviceJobRunnerTests
             return Task.FromResult(new LocalOperateStatus { Busy = true, AutomaticActive = true });
         }
 
+        public Task<DeviceApiStatus> GetDeviceStatusAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new DeviceApiStatus());
+
         public Task<LocalCommandAcceptedResponse> SendCommandAsync(
             string commandKey,
             string payloadJson = "{}",

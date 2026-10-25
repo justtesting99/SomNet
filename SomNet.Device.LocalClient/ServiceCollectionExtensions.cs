@@ -25,6 +25,8 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<SomEspLocalClient>());
 
         services.AddSingleton<AutomaticDeviceJobRunner>();
+        services.AddSingleton<IAutomaticDeviceJobRunner>(provider =>
+            provider.GetRequiredService<AutomaticDeviceJobRunner>());
 
         return services;
     }
