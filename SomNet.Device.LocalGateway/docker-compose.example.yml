@@ -1,0 +1,40 @@
+# Example: gateway on Linux Docker next to the main app.
+#
+#   cd SomNet.Device.LocalGateway
+#   cp .env.example .env   # edit values
+#   docker compose -f docker-compose.example.yml up --build
+#
+# Build context is the SomNet repo root (parent of this folder).
+
+services:
+  somnet-device-local-gateway:
+    image: somnet-device-local-gateway:local
+    build:
+      context: ..
+      dockerfile: SomNet.Device.LocalGateway/Dockerfile
+    ports:
+      - "5290:5290"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # Secrets and device target — never bake into the image (P5-D4).
+      Gateway__ApiKey: ${SOMNET_DEVICE_GATEWAY_API_KEY:?set SOMNET_DEVICE_GATEWAY_API_KEY in .env}
+      Device__BaseUrl: ${SOMNET_DEVICE_BASE_URL:?set SOMNET_DEVICE_BASE_URL to ESP LAN URL}
+      Device__Pin: ${SOMNET_DEVICE_PIN:?set SOMNET_DEVICE_PIN in .env}
+      Device__PollIntervalMs: ${SOMNET_DEVICE_POLL_INTERVAL_MS:-800}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5290/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # Sibling main app (illustrative — wire your image and env).
+  # main-app:
+  #   image: your-main-app:latest
+  #   depends_on:
+  #     somnet-device-local-gateway:
+  #       condition: service_healthy
+  #   environment:
+  #     DeviceGateway__BaseUrl: http://somnet-device-local-gateway:5290
+  #     DeviceGateway__ApiKey: ${SOMNET_DEVICE_GATEWAY_API_KEY}

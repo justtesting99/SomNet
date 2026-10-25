@@ -1,6 +1,6 @@
 # Device local gateway — implementation plan & checklists
 
-**Status:** **Phase 4 complete** — phased build for a **lightweight HTTP service** the main application calls; the service drives **SomEsp** over **`/api/local/*`**.
+**Status:** **Phase 5 complete** — phased build for a **lightweight HTTP service** the main application calls; the service drives **SomEsp** over **`/api/local/*`**.
 
 **Audience:** Build first in the **SomNet** repo; **move** `LocalClient` + `LocalGateway` into the **main application solution** for long-term hosting (laptop dev → Docker compose with main app).
 
@@ -267,12 +267,12 @@ Move or duplicate **automatic session summary** into shared code so gateway and 
 
 **Goal:** Run gateway on Linux Docker alongside main app; reach ESP on Wi‑Fi.
 
-- [ ] **P5-D1** `Dockerfile` for `SomNet.Device.LocalGateway` (multi-stage, `SkipFrontendBuild` N/A)
-- [ ] **P5-D2** `docker-compose` snippet in doc or `SomNet.Device.LocalGateway/docker-compose.example.yml`
-- [ ] **P5-D3** Document **host network** or `extra_hosts` / host IP for `Device:BaseUrl` (ESP cannot use `host.docker.internal` on all Linux setups)
-- [ ] **P5-D4** Secrets: `Device__Pin`, `Gateway__ApiKey` via env (not in image)
-- [ ] **P5-D5** Healthcheck `GET /health`
-- [ ] **P5-D6** Main app config: `DeviceGateway:BaseUrl` + API key header
+- [x] **P5-D1** `Dockerfile` for `SomNet.Device.LocalGateway` (multi-stage, `SkipFrontendBuild` N/A)
+- [x] **P5-D2** `docker-compose` snippet in doc or `SomNet.Device.LocalGateway/docker-compose.example.yml`
+- [x] **P5-D3** Document **host network** or `extra_hosts` / host IP for `Device:BaseUrl` (ESP cannot use `host.docker.internal` on all Linux setups)
+- [x] **P5-D4** Secrets: `Device__Pin`, `Gateway__ApiKey` via env (not in image)
+- [x] **P5-D5** Healthcheck `GET /health`
+- [x] **P5-D6** Main app config: `DeviceGateway:BaseUrl` + API key header
 
 **Smoke:**
 
@@ -347,3 +347,4 @@ var body = await response.Content.ReadFromJsonAsync<AutomaticRunResponseDto>();
 |------|--------|
 | 2026-10-25 | Initial plan — Phases 0–7, HTTP contract, checklists |
 | 2026-10-25 | Pre–Phase 0 decisions LG-P0-1 … LG-P0-6 signed off |
+| 2026-10-25 | Phase 5 — Dockerfile, compose example, LAN/env docs |
