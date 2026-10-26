@@ -2,6 +2,8 @@
 
 **Status:** **Ready to execute** — derived from [31 — Motor actuator design](./31-Motor-Actuator-Device-Design.md). Check boxes per phase; **do not start the next phase until the prior sign-off block is complete**.
 
+**Git (SomNet repo):** Feature work branches from **`SomEsp`** — e.g. **`feature/motor-actuator`** (merge back to `SomEsp` / `main` per your release flow when phases complete).
+
 | Related | Link |
 |---------|------|
 | **Design (decisions, MA-D*, payloads)** | [31 — Motor actuator design](./31-Motor-Actuator-Device-Design.md) |
@@ -268,3 +270,4 @@ Update this table when a phase is signed off.
 | Date | Change |
 |------|--------|
 | 2026-10-25 | Initial plan + checklists from doc 31 |
+| 2026-10-25 | Git: branch from `SomEsp` → `feature/motor-actuator` |
