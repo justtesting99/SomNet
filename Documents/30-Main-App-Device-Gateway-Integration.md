@@ -149,7 +149,7 @@ Use **`AutomaticRunJobRecordDto`** (or map to your EF entity):
 | `StartedAtUtc` / `EndedAtUtc` | Gateway host timestamps |
 | `DeviceCorrelationId` | ESP `local-…` |
 | `GatewayCorrelationId` | Response header `X-Correlation-Id` |
-| `ParametersSnapshot` | Full `AutomaticControlStateDto` sent on this run |
+| `ParametersSnapshot` | **Program body only** — relay: `AutomaticControlStateDto`; motor: actuator-specific snapshot ([31 §5.3](./31-Motor-Actuator-Device-Design.md)). Unlock/stop envelopes are shared; store `ActuatorKind` on the run row |
 | **`DeviceId`** *(planned)* | ESP identity from registration / job — see §5 |
 
 ---
@@ -184,14 +184,18 @@ Name is illustrative (`SomNetDeviceRegistration`, `DeviceGatewayDevice`, etc.):
 | `LastKnownIp` | Optional, diagnostic; updated on status poll |
 | `CreatedAtUtc` / `UpdatedAtUtc` | Audit |
 
-Related tables (later): **automatic presets** and **scheduled jobs** FK or required `DeviceId`; **run history** always stores `DeviceId` + `ParametersSnapshot` (§4).
+Related tables (later): **automatic presets** and **scheduled jobs** FK or required `DeviceId` + **`ActuatorKind`**; preset body is **per-kind** (relay DTO vs motor DTO / JSON), not one shared relay shape for all devices ([31 §5.4](./31-Motor-Actuator-Device-Design.md)). **Run history** stores `DeviceId` + kind + `ParametersSnapshot` (§4).
 
 ### 5.3 Registration workflow
 
 1. Operator configures ESP on gateway (`Device:Devices[]` or legacy single device).
 2. **Admin “add device”** in TheSystem: pick from `ListDevicesAsync()` **or** paste `deviceId` after first status probe.
-3. Persist row; admin UI dropdown lists **enabled** DB registrations (not only raw gateway list).
-4. Optional **health job:** compare enabled `DeviceId`s in DB to gateway `GET /api/v1/devices`; flag “configured on gateway but missing in DB” or unknown id before a scheduled run.
+3. **Required:** **“Register this device as relay or motor?”** — set **`ActuatorKind`** on the row to match the **fitted module**; must match ESP NVS after bind ([31 §6.2 MA-D12](./31-Motor-Actuator-Device-Design.md)).
+4. Persist row; admin UI dropdown lists **enabled** DB registrations (not only raw gateway list).
+5. Optional: status/caps probe confirms `actuatorKind` matches registration before enabling schedules.
+6. Optional **health job:** compare enabled `DeviceId`s in DB to gateway `GET /api/v1/devices`; flag “configured on gateway but missing in DB” or unknown id before a scheduled run.
+
+**SomNet hub pairing (same rule):** extend `POST /api/devices/pair` + `PairDevice` with `actuatorKind` when motor ships — operator selects relay vs motor in the Hardware pairing dialog ([31 §6.2](./31-Motor-Actuator-Device-Design.md)).
 
 `DeviceGateway:DefaultDeviceId` remains a **dev fallback** when exactly one device exists and the UI does not pass an id.
 
