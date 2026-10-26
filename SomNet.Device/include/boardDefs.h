@@ -20,7 +20,7 @@ constexpr int PIN_MOTOR_ENABLE_SECONDARY = 14; // D14
 /** BTS7960 module enable pin polarity (ESP output → module EN). Tune on bench — doc 31. */
 constexpr bool MOTOR_ENABLE_ACTIVE_HIGH = true;
 /** LEDC PWM frequency for motor channels (Hz). Tune on bench for audible noise / driver behavior. */
-constexpr unsigned long MOTOR_PWM_FREQUENCY_HZ = 20000;
+constexpr unsigned long MOTOR_PWM_FREQUENCY_HZ = 5000;
 
 // Optional production straps (3 inputs → 3-bit actuatorProfileId at boot). Not v1 — see Documents/31-Motor-Actuator-Device-Design.md §2.4
 // constexpr int PIN_ACTUATOR_STRAP_0 = TBD;
