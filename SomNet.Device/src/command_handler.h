@@ -8,6 +8,7 @@ class NvsStore;
 class SignalRClient;
 class SessionAccessoryController;
 class MotorController;
+class MotorAutomaticSessionMode;
 
 struct ExecuteCommandPayload {
     char correlationId[64];
@@ -59,6 +60,7 @@ private:
     SignalRClient* signalR_ = nullptr;
     SessionAccessoryController* sessionAccessory_ = nullptr;
     MotorController* motor_ = nullptr;
+    MotorAutomaticSessionMode* motorAutomatic_ = nullptr;
     bool initialized_ = false;
     bool pendingCommandReady_ = false;
     ExecuteCommandPayload pendingCommand_{};

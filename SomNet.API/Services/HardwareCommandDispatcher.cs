@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using SomNet.API.Configuration;
 using SomNet.API.Hubs;
 using SomNet.Shared.DTO.Devices;
+using SomNet.Shared.Enums;
 using SomNet.Shared.Models;
 
 namespace SomNet.API.Services;
@@ -89,6 +90,7 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
                 commandKey,
                 payloadJson,
                 ResolveMaxStrokeMs(),
+                registration.ActuatorKind,
                 out var validationError))
         {
             _logger.LogWarning(

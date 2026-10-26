@@ -32,6 +32,7 @@ public static class AutomaticSessionSummaryBuilder
             ? label
             : (modeKey ?? "Automatic");
 
+        var segments = ReadInt(result, "segmentsCompleted");
         var mainStrokes = ReadInt(result, "mainStrokesCompleted") ?? ReadInt(result, "strokesCompleted");
         var burstEvents = ReadInt(result, "burstEventsCompleted");
         var burstsOn = ReadBool(result, "burstsOn");
@@ -40,7 +41,11 @@ public static class AutomaticSessionSummaryBuilder
         var interrupted = ReadBool(result, "interrupted") == true;
 
         var detailParts = new List<string>();
-        if (mainStrokes is >= 0)
+        if (segments is >= 0)
+        {
+            detailParts.Add($"{segments} motor segment{(segments == 1 ? "" : "s")}");
+        }
+        else if (mainStrokes is >= 0)
         {
             detailParts.Add($"{mainStrokes} main stroke{(mainStrokes == 1 ? "" : "s")}");
         }

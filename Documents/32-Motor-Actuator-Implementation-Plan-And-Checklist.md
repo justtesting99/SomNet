@@ -1,6 +1,6 @@
 # Motor (H-bridge) actuator — implementation plan & phase checklists
 
-**Status:** **Ready to execute** — derived from [31 — Motor actuator design](./31-Motor-Actuator-Device-Design.md). Check boxes per phase; **do not start the next phase until the prior sign-off block is complete**.
+**Status:** **In progress** on `feature/motor-actuator` — derived from [31 — Motor actuator design](./31-Motor-Actuator-Device-Design.md). Check boxes per phase; **do not start the next phase until the prior sign-off block is complete**.
 
 **Git (SomNet repo):** Feature work branches from **`SomEsp`** — e.g. **`feature/motor-actuator`** (merge back to `SomEsp` / `main` per your release flow when phases complete).
 
@@ -36,13 +36,16 @@
 
 Track once; reference from phase checklists.
 
-| ID | Item | Owner / area |
-|----|------|----------------|
-| **X-1** | `ActuatorKind` enum in `SomNet.Shared` (`relay`, `hbridge`) | Shared |
-| **X-2** | Motor program DTO sketch (`minimumDutyPercent`, `maximumDutyPercent`, `rampMs`, `endSessionMode` minutes/noAutoEnd — MA-D19, MA-D20) | Shared + PROTOCOL |
-| **X-3** | Motor `resultJson` + summary builder (separate from relay) | Firmware + Shared + API |
-| **X-4** | Relay regression: relay NVS profile unchanged on same binary | Firmware CI / manual |
-| **X-5** | `boardDefs.h`: `MOTOR_PWM_FREQUENCY_HZ`, `MOTOR_ENABLE_ACTIVE_HIGH` tuned on module (MA-D18) | Firmware / bench |
+| ID | Item | Owner / area | Status |
+|----|------|----------------|--------|
+| **X-1** | `ActuatorKind` enum in `SomNet.Shared` (`relay`, `hbridge`) | Shared | **Done** |
+| **X-2** | Motor program DTO sketch (`minimumDutyPercent`, `maximumDutyPercent`, `rampMs`, `endSessionMode` minutes/noAutoEnd — MA-D19, MA-D20) | Shared + PROTOCOL | **Done** (DTO + PROTOCOL) |
+| **X-3** | Motor `resultJson` + summary builder (separate from relay) | Firmware + Shared + API | **Done** (v1 periodic) |
+| **X-4** | Relay regression: relay NVS profile unchanged on same binary | Firmware CI / manual | |
+| **X-5** | `boardDefs.h`: `MOTOR_PWM_FREQUENCY_HZ`, `MOTOR_ENABLE_ACTIVE_HIGH` tuned on module (MA-D18) | Firmware / bench | Constants in tree; bench tune pending |
+| **X-6** | **Multi-device per Sub** — project remit; **review & correct** API/DB/hub/UI (today: one `deviceId` per Sub). See [31 §12](./31-Motor-Actuator-Device-Design.md). **Interim testing:** two Subs, one ESP each | API + UI + docs | **Not started** |
+
+**Bench note (until X-6):** use **two Subs** (e.g. relay on `Slv66`, motor on `Slv67`) — not two boards on one Sub.
 
 ---
 
@@ -52,18 +55,18 @@ Track once; reference from phase checklists.
 
 ### 3.1 Firmware (`SomNet.Device`)
 
-- [ ] **M0-F1** NVS key `actuator_kind` (`relay` \| `hbridge`); read at boot; default `relay` for existing units.
-- [ ] **M0-F2** Boot: select **one** backend + gated init (relay **or** motor per NVS) — MA-R7.
-- [ ] **M0-F3** `MotorController` / `MotorBackend`: LEDC PWM on `PIN_MOTOR_PWM`; enable outputs `PIN_MOTOR_ENABLE` (+ secondary pins held inactive v1).
-- [ ] **M0-F4** **MA-D15:** disarmed / aborted / idle → PWM 0, enables **inactive** (`MOTOR_ENABLE_ACTIVE_HIGH`).
-- [ ] **M0-F5** Manual commands (hub and/or `/operate`): motor run/stop at duty % — route only when NVS = `hbridge`.
-- [ ] **M0-F6** Reject relay `stroke` / relay-shaped automatic payload when NVS = `hbridge` (and vice versa).
-- [ ] **M0-F7** Extend **`GET /api/local/caps`** (and device status if applicable): `actuatorKind`, motor duty limits (placeholder OK).
-- [ ] **M0-F8** Serial diagnostics: `[MOTOR]` PWM/enable state for bench without PCB optional.
+- [x] **M0-F1** NVS key `actuator_kind` (`relay` \| `hbridge`); read at boot; default `relay` for existing units. *(NVS key `act_kind`; config POST `actuator_kind`.)*
+- [ ] **M0-F2** Boot: select **one** backend + gated init (relay **or** motor per NVS) — MA-R7. *(Both drivers `begin()`/`poll()` today; dispatch gated by NVS.)*
+- [x] **M0-F3** `MotorController` / `MotorBackend`: LEDC PWM on `PIN_MOTOR_PWM`; enable outputs `PIN_MOTOR_ENABLE` (+ secondary pins held inactive v1).
+- [x] **M0-F4** **MA-D15:** disarmed / aborted / idle → PWM 0, enables **inactive** (`MOTOR_ENABLE_ACTIVE_HIGH`).
+- [ ] **M0-F5** Manual commands (hub and/or `/operate`): motor run/stop at duty % — route only when NVS = `hbridge`. *(Hub `motor-run` / `motor-stop` done; `/operate` UI still relay-only.)*
+- [x] **M0-F6** Reject relay `stroke` / relay-shaped automatic payload when NVS = `hbridge` (and vice versa).
+- [x] **M0-F7** Extend **`GET /api/local/caps`** (and device status if applicable): `actuatorKind`, motor duty limits (placeholder OK). *(Caps only; status JSON not extended yet.)*
+- [x] **M0-F8** Serial diagnostics: `[MOTOR]` PWM/enable state for bench without PCB optional.
 
 ### 3.2 Protocol & docs
 
-- [ ] **M0-P1** PROTOCOL draft: motor caps fields; manual command keys; link from [31](./31-Motor-Actuator-Device-Design.md).
+- [x] **M0-P1** PROTOCOL draft: motor caps fields; manual command keys; link from [31](./31-Motor-Actuator-Device-Design.md).
 
 ### 3.3 Verification
 
@@ -89,39 +92,39 @@ Track once; reference from phase checklists.
 
 ### 4.1 Registration & NVS (MA-D12)
 
-- [ ] **M1-R1** `PairDeviceRequestDto` + `PairDeviceMessageDto`: **`actuatorKind`**.
-- [ ] **M1-R2** `POST /api/devices/pair`: accept `actuatorKind`; persist on server device record.
-- [ ] **M1-R3** SomNet.UI Hardware pairing: **“Register as relay or motor?”** control.
-- [ ] **M1-R4** Firmware `PairDevice` handler: write NVS if unbound; **reject mismatch** if already bound.
+- [x] **M1-R1** `PairDeviceRequestDto` + `PairDeviceMessageDto`: **`actuatorKind`**.
+- [x] **M1-R2** `POST /api/devices/pair`: accept `actuatorKind`; persist on server device record.
+- [x] **M1-R3** SomNet.UI Hardware pairing: **“Register as relay or motor?”** control.
+- [x] **M1-R4** Firmware `PairDevice` handler: write NVS if unbound; **reject mismatch** if already bound.
 - [ ] **M1-R5** Rebind documented: revoke + device reset + re-pair (operator doc or Hardware UI copy).
-- [ ] **M1-R6** PROTOCOL §4.2 updated with `actuatorKind` in `PairDevice` arguments.
+- [x] **M1-R6** PROTOCOL §4.2 updated with `actuatorKind` in `PairDevice` arguments.
 
 ### 4.2 Firmware — motor automatic FSM
 
-- [ ] **M1-F1** Separate **motor automatic FSM** (do not overload relay-only `AutomaticSessionMode` indefinitely) — MA-D10.
-- [ ] **M1-F2** `automatic-start` validation: NVS `hbridge` + motor JSON schema.
-- [ ] **M1-F3** **Periodic** mode only for v1 sign-off (MA-D14 first ship).
-- [ ] **M1-F4** `endSessionMode`: **`minutes`** and **`noAutoEnd`** only — **no** rotation/stroke count (MA-D20).
-- [ ] **M1-F5** `automatic-stop` / abort: MA-D4 (PWM off, enables low).
-- [ ] **M1-F6** Terminal **`resultJson`** (motor schema — PROTOCOL); hub ack / session complete path like relay.
-- [ ] **M1-F7** Ramp hook in FSM structure (may use fixed `rampMs` default until UI exposes it).
+- [x] **M1-F1** Separate **motor automatic FSM** (do not overload relay-only `AutomaticSessionMode` indefinitely) — MA-D10. *(`MotorAutomaticSessionMode`.)*
+- [x] **M1-F2** `automatic-start` validation: NVS `hbridge` + motor JSON schema.
+- [x] **M1-F3** **Periodic** mode only for v1 sign-off (MA-D14 first ship).
+- [x] **M1-F4** `endSessionMode`: **`minutes`** and **`noAutoEnd`** only — **no** rotation/stroke count (MA-D20).
+- [x] **M1-F5** `automatic-stop` / abort: MA-D4 (PWM off, enables low).
+- [x] **M1-F6** Terminal **`resultJson`** (motor schema — PROTOCOL); hub ack / session complete path like relay.
+- [ ] **M1-F7** Ramp hook in FSM structure (may use fixed `rampMs` default until UI exposes it). **Deferred** — bench motor needed to validate ramp visually; do with **M1b** (not blocking M1 hub sign-off). *(`rampMs` parsed; duty steps instantly today.)*
 
 ### 4.3 SomNet.Shared & API
 
-- [ ] **M1-S1** `MotorAutomaticControlStateDto` (or equivalent) — separate from `AutomaticControlStateDto` (MA-R6).
-- [ ] **M1-S2** API validation on hub command dispatch for motor vs relay device registration.
-- [ ] **M1-S3** Motor session summary builder for history (parallel to relay).
+- [x] **M1-S1** `MotorAutomaticControlStateDto` (or equivalent) — separate from `AutomaticControlStateDto` (MA-R6).
+- [x] **M1-S2** API validation on hub command dispatch for motor vs relay device registration.
+- [x] **M1-S3** Motor session summary builder for history (parallel to relay). *(`segmentsCompleted` in Shared + UI summary.)*
 
 ### 4.4 SomNet.UI
 
-- [ ] **M1-U1** Motor automatic form: duty min/max, segment timing, end session (no stroke-ms; no count end mode).
-- [ ] **M1-U2** Hide relay-only controls when device/caps `actuatorKind` = `hbridge`.
-- [ ] **M1-U3** Start / Stop / Abort E2E on paired motor device.
+- [x] **M1-U1** Motor automatic form: duty min/max, segment timing, end session (no stroke-ms; no count end mode).
+- [x] **M1-U2** Hide relay-only controls when device/caps `actuatorKind` = `hbridge`. *(`AutomaticModeControls` switches UI; manual tab still relay — M2/M1 follow-up.)*
+- [x] **M1-U3** Start / Stop / Abort E2E on paired motor device. *(2026-10-26 `sess-173` / `esp32-84CCA85C36B4` → Slv67, hbridge.)*
 
 ### 4.5 Tests
 
-- [ ] **M1-T1** Unit/integration tests for motor DTO validation (API or Shared).
-- [ ] **M1-T2** Manual test script or checklist run recorded (pair → arm → periodic → result).
+- [x] **M1-T1** Unit/integration tests for motor DTO validation (API or Shared).
+- [x] **M1-T2** Manual test script or checklist run recorded (pair → arm → periodic → result). *(Same run as M1-U3.)*
 
 ### Phase M1 sign-off
 
@@ -138,6 +141,8 @@ Track once; reference from phase checklists.
 
 ## 5. Phase M1b — Random mode + ramp (optional before M2)
 
+**Planned after motor module on bench** (operator: defer until hardware can show duty/speed ramping — MA-D14).
+
 **Exit:** Random power/timing (motor analog of relay) with **duty ramp** between targets — no instant duty jumps (MA-D14).
 
 - [ ] **M1b-F1** Motor random mode(s) in FSM with ramp state machine.
@@ -151,7 +156,7 @@ Track once; reference from phase checklists.
 |-------|--------|
 | **Date** | |
 | **Signed by** | |
-| **Skipped for MVP?** | ☐ Yes — defer post-M3 |
+| **Skipped for MVP?** | ☑ Yes — defer until motor on bench (then M1b or post-M2) |
 | **All M1b items complete** | ☐ |
 
 ---
@@ -256,9 +261,9 @@ Update this table when a phase is signed off.
 
 | Phase | Status | Sign-off date |
 |-------|--------|----------------|
-| M0 | Not started | |
-| M1 | Not started | |
-| M1b | Optional / skipped | |
+| M0 | In progress (firmware + PROTOCOL; verification pending) | |
+| M1 | Ready for sign-off (M1-R5 rebind copy; M1-F7 deferred to M1b) | |
+| M1b | Deferred — motor on bench for ramp tuning | |
 | M2 | Blocked on M1 | |
 | M3 | Blocked on M2 | |
 | M4 | Optional | |
@@ -271,3 +276,8 @@ Update this table when a phase is signed off.
 |------|--------|
 | 2026-10-25 | Initial plan + checklists from doc 31 |
 | 2026-10-25 | Git: branch from `SomEsp` → `feature/motor-actuator` |
+| 2026-10-26 | Checklist: M0/M1 items marked per `feature/motor-actuator` implementation state |
+| 2026-10-26 | M1: motor periodic FSM, API validation, motor automatic UI, PROTOCOL `resultJson` |
+| 2026-10-26 | M1-U3/T2 E2E: Slv67 motor periodic → history `sess-173` (2 segments / 50 s) |
+| 2026-10-26 | M1-F7 / M1b ramp deferred until motor module on bench for visual tuning |
+| 2026-10-26 | X-6 / MA-D21 — document multi-device-per-Sub remit gap; interim dual-Sub bench |

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SomNet.Shared.Enums;
 using SomNet.Shared.Models;
 
 namespace SomNet.API.Services;
@@ -47,9 +48,15 @@ internal static class HardwareCommandPayloadValidator
         string commandKey,
         string payloadJson,
         int maxStrokeMs,
+        ActuatorKind actuatorKind,
         out string errorMessage)
     {
         errorMessage = string.Empty;
+
+        if (actuatorKind == ActuatorKind.Hbridge)
+        {
+            return TryValidateForMotorProfile(commandKey, payloadJson, out errorMessage);
+        }
 
         if (string.Equals(commandKey, "stroke", StringComparison.OrdinalIgnoreCase))
         {
@@ -73,6 +80,167 @@ internal static class HardwareCommandPayloadValidator
         }
 
         return true;
+    }
+
+    private static bool TryValidateForMotorProfile(
+        string commandKey,
+        string payloadJson,
+        out string errorMessage)
+    {
+        errorMessage = string.Empty;
+
+        if (string.Equals(commandKey, HardwareCommandKeys.MotorRun, StringComparison.OrdinalIgnoreCase))
+        {
+            return TryValidateMotorRunPayload(payloadJson, out errorMessage);
+        }
+
+        if (string.Equals(commandKey, HardwareCommandKeys.MotorStop, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.Equals(commandKey, HardwareCommandKeys.AutomaticStart, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(commandKey, HardwareCommandKeys.AutomaticStop, StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(commandKey, HardwareCommandKeys.AutomaticStop, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return TryValidateMotorAutomaticStartPayload(payloadJson, out errorMessage);
+        }
+
+        if (string.Equals(commandKey, HardwareCommandKeys.AutomaticUpdate, StringComparison.OrdinalIgnoreCase))
+        {
+            errorMessage = "automatic-update is not supported for motor devices in v1.";
+            return false;
+        }
+
+        if (string.Equals(commandKey, "stroke", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(commandKey, "burst", StringComparison.OrdinalIgnoreCase))
+        {
+            errorMessage = "Relay stroke/burst commands are not valid for a motor device.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryValidateMotorRunPayload(string payloadJson, out string errorMessage)
+    {
+        errorMessage = string.Empty;
+
+        try
+        {
+            using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
+            var root = document.RootElement;
+
+            if (!root.TryGetProperty("dutyPercent", out var dutyElement))
+            {
+                errorMessage = "motor-run payload requires dutyPercent.";
+                return false;
+            }
+
+            var duty = dutyElement.GetInt32();
+            if (duty < 0 || duty > 100)
+            {
+                errorMessage = "dutyPercent must be between 0 and 100.";
+                return false;
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            errorMessage = "motor-run payloadJson is not valid JSON.";
+            return false;
+        }
+    }
+
+    private static bool TryValidateMotorAutomaticStartPayload(string payloadJson, out string errorMessage)
+    {
+        errorMessage = string.Empty;
+
+        try
+        {
+            using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
+            var root = document.RootElement;
+
+            if (!root.TryGetProperty("automaticMode", out var modeElement) ||
+                modeElement.ValueKind != JsonValueKind.String ||
+                !string.Equals(modeElement.GetString(), "periodic", StringComparison.OrdinalIgnoreCase))
+            {
+                errorMessage = "Motor automatic-start requires automaticMode periodic.";
+                return false;
+            }
+
+            foreach (var propertyName in new[]
+                     {
+                         "minimumDutyPercent", "maximumDutyPercent", "segmentMinSeconds", "segmentMaxSeconds",
+                         "delayBeforeStartSeconds", "endSessionValue", "rampMs",
+                     })
+            {
+                if (root.TryGetProperty(propertyName, out var valueElement) && valueElement.GetInt64() < 0)
+                {
+                    errorMessage = $"{propertyName} must be zero or greater.";
+                    return false;
+                }
+            }
+
+            if (!TryValidateIntMinMax(
+                    root,
+                    "minimumDutyPercent",
+                    "maximumDutyPercent",
+                    0,
+                    100,
+                    out errorMessage))
+            {
+                return false;
+            }
+
+            if (!TryValidateIntMinMax(
+                    root,
+                    "segmentMinSeconds",
+                    "segmentMaxSeconds",
+                    1,
+                    3600,
+                    out errorMessage))
+            {
+                return false;
+            }
+
+            string? endSessionMode = null;
+            if (root.TryGetProperty("endSessionMode", out var endSessionModeElement) &&
+                endSessionModeElement.ValueKind == JsonValueKind.String)
+            {
+                endSessionMode = endSessionModeElement.GetString();
+                if (!string.Equals(endSessionMode, "minutes", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(endSessionMode, "noAutoEnd", StringComparison.OrdinalIgnoreCase))
+                {
+                    errorMessage = "Motor endSessionMode must be minutes or noAutoEnd.";
+                    return false;
+                }
+            }
+
+            if (string.Equals(endSessionMode, "minutes", StringComparison.OrdinalIgnoreCase))
+            {
+                var endSessionValue = root.TryGetProperty("endSessionValue", out var endSessionValueElement)
+                    ? endSessionValueElement.GetInt32()
+                    : 0;
+                if (endSessionValue <= 0)
+                {
+                    errorMessage = "Motor minutes end session requires endSessionValue greater than zero.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            errorMessage = "Motor automatic-start payloadJson is not valid JSON.";
+            return false;
+        }
     }
 
     private static bool TryValidateSessionAccessoryPayload(string payloadJson, out string errorMessage)

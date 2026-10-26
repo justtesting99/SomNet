@@ -113,6 +113,8 @@ Scheduled/upcoming session notifications.
 
 Hardware device pairing for a Dom+Sub pair.
 
+> **Planned change (project remit, 2026-10-26):** Today this table enforces **one `deviceId` per Sub** (`DomTarget` + `SubName` PK). The product remit requires **multiple devices per Sub** — see [31 — Motor design §12](./31-Motor-Actuator-Device-Design.md) and checklist **X-6** in [32](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md). Schema/API migration TBD.
+
 | Column | Type | Notes |
 |--------|------|-------|
 | DomTarget | string (PK part) | |

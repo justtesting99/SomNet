@@ -15,7 +15,7 @@ import { SessionProvider } from '@/context/SessionProvider';
 import { HardwareCommandProvider } from '@/context/HardwareCommandProvider';
 import { ModeSelector } from '@/components/modes/ModeSelector';
 import { ManualControls } from '@/components/modes/ManualControls';
-import { AutomaticControls } from '@/components/modes/AutomaticControls';
+import { AutomaticModeControls } from '@/components/modes/AutomaticModeControls';
 import { AutomaticSessionHubListener } from '@/components/hardware/AutomaticSessionHubListener';
 import { SiteUserReadyBanner } from '@/components/hardware/SiteUserReadyBanner';
 import { SessionRehydrator } from '@/components/hardware/SessionRehydrator';
@@ -34,7 +34,7 @@ function DashboardLayoutWithSessionVideo({ mode }: { mode: 'manual' | 'automatic
     <>
       <SiteUserReadyBanner />
       <DashboardLayout
-        controls={mode === 'manual' ? <ManualControls /> : <AutomaticControls />}
+        controls={mode === 'manual' ? <ManualControls /> : <AutomaticModeControls />}
         videoSources={sources}
         mode={mode}
         videoPreview={videoPreview}

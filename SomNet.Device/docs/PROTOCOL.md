@@ -299,7 +299,45 @@ Device runs the full sequence locally; one completing ack with `resultJson` when
 { "actuatorKind": "hbridge", "minDutyPercent": 0, "maxDutyPercent": 100 }
 ```
 
-Relay caps keep `actuatorKind: relay` with stroke limits. Motor **`automatic-start`** / **`resultJson`** schemas are defined in [31 — Motor actuator design](../../Documents/31-Motor-Actuator-Device-Design.md) (M1+).
+Relay caps keep `actuatorKind: relay` with stroke limits.
+
+**Motor `automatic-start` (periodic v1):**
+
+```json
+{
+  "actuatorKind": "hbridge",
+  "automaticMode": "periodic",
+  "minimumDutyPercent": 20,
+  "maximumDutyPercent": 80,
+  "segmentMinSeconds": 5,
+  "segmentMaxSeconds": 20,
+  "delayBeforeStartSeconds": 0,
+  "rampMs": 500,
+  "endSessionMode": "minutes",
+  "endSessionValue": 30
+}
+```
+
+`endSessionMode`: **`minutes`** or **`noAutoEnd`** only (no stroke/count end modes — MA-D20).
+
+**Motor session complete `resultJson` (excerpt):**
+
+```json
+{
+  "commandKey": "automatic-stop",
+  "actuatorKind": "hbridge",
+  "automaticMode": "periodic",
+  "dutyPercent": 80,
+  "segmentsCompleted": 12,
+  "durationMs": 125000,
+  "endSessionMode": 1,
+  "endSessionValue": 30,
+  "interrupted": false,
+  "endReason": "manualStop"
+}
+```
+
+See [31 — Motor actuator design](../../Documents/31-Motor-Actuator-Device-Design.md).
 
 ### 6.5 automatic-start payload (Phase 9 Part 2)
 

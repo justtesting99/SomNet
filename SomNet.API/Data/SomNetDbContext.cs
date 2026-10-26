@@ -10,7 +10,7 @@ namespace SomNet.API.Data;
 /// 
 /// Update-Database -context SomNetDbContext -Project SomNet.API
 /// 
-/// 
+/// dotnet ef database update
 /// 
 /// 
 /// 

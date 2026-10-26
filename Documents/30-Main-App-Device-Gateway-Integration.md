@@ -197,6 +197,8 @@ Related tables (later): **automatic presets** and **scheduled jobs** FK or requi
 
 **SomNet hub pairing (same rule):** extend `POST /api/devices/pair` + `PairDevice` with `actuatorKind` when motor ships — operator selects relay vs motor in the Hardware pairing dialog ([31 §6.2](./31-Motor-Actuator-Device-Design.md)).
 
+> **Hub gap (2026-10-26):** SomNet.API still pairs **one ESP per Sub** (`SubDeviceRegistrations` PK). Project remit requires **multiple devices per Sub** — see [31 §12](./31-Motor-Actuator-Device-Design.md) / checklist **X-6**. Gateway multi-`deviceId` (P7-D2) is related but does not fix hub Sub pairing alone.
+
 `DeviceGateway:DefaultDeviceId` remains a **dev fallback** when exactly one device exists and the UI does not pass an id.
 
 ### 5.4 Scheduler and admin API

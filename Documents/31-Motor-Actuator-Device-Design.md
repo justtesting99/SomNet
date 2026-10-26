@@ -45,6 +45,8 @@ Goals:
 
 Non-goals: **concurrent relay + motor automatic sessions** on one ESP; **two output modules active at once** in v1; multi-motor on one ESP; OTA policy unchanged unless added later.
 
+> **Remit correction (2026-10-26):** A **single Sub** must be able to register **multiple** hardware devices (e.g. relay ESP + motor ESP for the same session identity). **Today’s hub/API model does not support this** — see [§12 — Multi-device per Sub](#12-multi-device-per-sub-remit--review-required). Until that is designed and implemented, **bench testing uses two Subs** (one board per Sub).
+
 **Signed product rules (2026-10-25):**
 
 | ID | Rule |
@@ -380,6 +382,44 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 
 ---
 
+## 12. Multi-device per Sub (remit — review required)
+
+**Status:** **Gap / not implemented** — must be **reviewed and corrected** to match project remit (forgotten constraint surfaced during motor bench planning).
+
+### 12.1 Current behavior (SomNet.API + UI)
+
+| Area | Today |
+|------|--------|
+| **DB** | `SubDeviceRegistrations` primary key **`(DomTarget, SubName)`** — **at most one** `deviceId` (and one `actuatorKind`) per Sub. Re-pair **replaces** the row. |
+| **Device JWT** | One active token per Sub registration; `sub_target` identifies the Sub, not a device slot. |
+| **Hub commands** | Operator sends `subTarget` only; dispatcher delivers to **the** paired connection for that Sub. |
+| **ESP NVS** | Each unit stores **one** pairing (`dom` + `sub` + token). |
+
+So **two ESPs cannot both be registered to the same Sub** in the current product. Motor + relay on one “session” requires **two Subs** (e.g. `Slv66` relay, `Slv67` motor) and switching Sub in the UI — workable for **testing**, not the end-state remit.
+
+### 12.2 Target behavior (to design)
+
+| Need | Notes |
+|------|--------|
+| **Multiple `deviceId`s per Sub** | Register relay + motor (or more) under **one** Sub; stable routing per device. |
+| **Command routing** | Hub/API must target **`deviceId`** (or role/slot), not Sub alone — align with gateway **P7-D2** multi-`deviceId` patterns where possible. |
+| **UI** | Session/controls must know **which** device(s) on the Sub are in scope (picker, per-actuator panels, or explicit device binding). |
+| **Pairing** | `PairDevice` / `POST /api/devices/pair` likely becomes **add or update device on Sub**, not overwrite sole registration. |
+| **Unchanged per ESP** | Still **one output profile per ESP** (`actuatorKind` in NVS); remit is **many ESPs per Sub**, not two actuators on one ESP. |
+
+### 12.3 Interim (until corrected)
+
+- **Dual-bench:** flash same firmware to two boards; pair **relay → Sub A**, **motor → Sub B**; regression + motor features in parallel.
+- **Do not** assume one Sub can host both without schema/API work.
+
+### 12.4 Tracking
+
+- Implementation backlog: [32 — Motor plan §2 X-6](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md).
+- Schema doc note: [04 — Database schema](./04-Database-Schema.md) (`SubDeviceRegistrations`).
+- Gateway / TheSystem: [30 — Main app integration](./30-Main-App-Device-Gateway-Integration.md) when multi-device Sub affects presets and schedules.
+
+---
+
 ## 10. Decisions log
 
 | ID | Topic | Decision | Date |
@@ -404,6 +444,7 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 | **MA-D10** | FSM structure | **Separate** relay vs motor automatic FSMs; **gated** init from NVS/handshake (MA-R7) | 2026-10-25 |
 | **MA-D8** | Host coverage (end state) | Hub/web, standalone, and gateway **all** required when motor product is complete (MA-R4) | 2026-10-25 |
 | **MA-D9** | Delivery order | **Hub + ESP first** → **standalone** → **gateway** (MA-R5); matches relay development sequence | 2026-10-25 |
+| **MA-D21** | **Multi-device per Sub** | **Remit:** one Sub registers **multiple** ESPs — **not implemented**; review API/DB/UI/hub routing (§12). **Interim:** two Subs for bench | 2026-10-26 |
 
 Update this table when choices are made; move settled items to firmware `config.h` / PROTOCOL and Shared enums.
 
@@ -436,3 +477,4 @@ Implementation tracking: [32 — Motor plan & checklists](./32-Motor-Actuator-Im
 | 2026-10-25 | MA-Q1/Q4–Q7/Q5, MA-D14–D17 — abort, enable gating, periodic+ramp, API-led dev, registration/rebind |
 | 2026-10-25 | MA-D18–D20; boardDefs PWM/enable constants; motor endSession without count until Hall v2 |
 | 2026-10-25 | [32 — Implementation plan & phase checklists](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) |
+| 2026-10-26 | §12 + MA-D21 — multi-device per Sub remit; current 1:1 Sub↔device gap; interim two-Sub bench |
