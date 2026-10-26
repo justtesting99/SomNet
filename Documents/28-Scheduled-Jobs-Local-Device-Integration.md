@@ -2,7 +2,7 @@
 
 **Status:** **Design + integration guide** — describes how a **.NET 9 host application** runs **scheduled jobs** that start **automatic mode** on an ESP32 **over the local network only**, with **no UI** and **no video**.
 
-**Companion implementation (planned):** `SomNet.Device.LocalClient` — thin HTTP client library referenced by the host app (project reference to `SomNet.Shared` for DTOs/enums).
+**Companion implementation:** `SomNet.Device.LocalClient` + `SomNet.Device.LocalGateway` in **TheSystem** (see [29](./29-Device-Local-Gateway-Implementation-Plan.md) · [layout](../../TheSystem/Docs/SOMNET_GATEWAY_SOLUTION_LAYOUT.md)); host app references `SomNet.Shared` from the SomNet repo.
 
 | Related | Link |
 |---------|------|

@@ -1,9 +1,0 @@
-{
-  "commandKey": "automatic-stop",
-  "automaticMode": "periodic",
-  "strokesCompleted": 5,
-  "mainStrokesCompleted": 5,
-  "durationMs": 95000,
-  "endReason": "endSession",
-  "interrupted": false
-}

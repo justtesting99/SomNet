@@ -6,7 +6,7 @@
 |---------|------|
 | Gateway implementation plan | [29 — Device local gateway](./29-Device-Local-Gateway-Implementation-Plan.md) |
 | Job flow & ESP protocol | [28 — Scheduled jobs — local device](./28-Scheduled-Jobs-Local-Device-Integration.md) |
-| Gateway host README | [SomNet.Device.LocalGateway/README.md](../SomNet.Device.LocalGateway/README.md) |
+| Gateway host README | [SomNet.Device.LocalGateway/README.md](../../TheSystem/SomNet.Device.LocalGateway/README.md) |
 | **Admin test bed (payloads + UI fields + Stop/metrics)** | [SomNet integration runbook](./SomNetIntegrationRunbook.md) (§9 recipes) |
 | Motor / H-bridge (draft) | [31 — Motor actuator early design](./31-Motor-Actuator-Device-Design.md) |
 | TheSystem device registry (planned) | §5 below · [TheSystem `SOMNET_DEVICE_REGISTRY.md`](../../TheSystem/Docs/SOMNET_DEVICE_REGISTRY.md) |
@@ -24,7 +24,7 @@ Main app scheduler
   → ESP /api/local/*
 ```
 
-**Laptop dev:** run gateway with `dotnet run` in `SomNet.Device.LocalGateway`; main app `DeviceGateway:BaseUrl` = `http://localhost:5290`.  
+**Laptop dev:** open **TheSystem** solution; run gateway with `dotnet run` in `TheSystem/SomNet.Device.LocalGateway` (or multi-startup with `TheSystem.Server`); main app `DeviceGateway:BaseUrl` = `http://localhost:5290`.  
 **Later Docker:** same compose network URL `http://somnet-device-local-gateway:5290` (see doc 29 Phase 5).
 
 ---
@@ -219,7 +219,7 @@ At most **one** automatic run per device; use a single gateway instance or distr
 
 ## 7. Manual end-to-end (laptop, no Docker)
 
-1. Start gateway: `dotnet run` in `SomNet.Device.LocalGateway` (set `Device:BaseUrl` + `Device:Pin` for ESP).
+1. Start gateway: `dotnet run` in `TheSystem/SomNet.Device.LocalGateway` (set `Device:BaseUrl` + `Device:Pin` for ESP).
 2. Main app: `DeviceGateway:BaseUrl` = `http://localhost:5290`, matching API key.
 3. Fire one scheduled job with a short session (`endSessionValue` small).
 4. Confirm DB row: `status` = `Completed`, `summary` populated, `resultJson` present.

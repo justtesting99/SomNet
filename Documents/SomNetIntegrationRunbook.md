@@ -9,7 +9,7 @@
 | Main app integration (DI, policies, persistence) | [30 — Main app device gateway integration](./30-Main-App-Device-Gateway-Integration.md) |
 | Gateway plan & smoke | [29 — Device local gateway implementation plan](./29-Device-Local-Gateway-Implementation-Plan.md) |
 | ESP wire format | [PROTOCOL.md §6.5–6.7](../SomNet.Device/docs/PROTOCOL.md) |
-| Gateway host | [SomNet.Device.LocalGateway/README.md](../SomNet.Device.LocalGateway/README.md) |
+| Gateway host | [SomNet.Device.LocalGateway/README.md](../../TheSystem/SomNet.Device.LocalGateway/README.md) |
 
 ---
 

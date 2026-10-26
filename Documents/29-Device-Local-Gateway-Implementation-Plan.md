@@ -4,7 +4,7 @@
 
 **Deploy:** **Docker deferred** — laptop `dotnet run` for gateway + ESP on LAN until Linux compose is needed (Phase 5 artifacts remain in repo).
 
-**Audience:** Build first in the **SomNet** repo; **move** `LocalClient` + `LocalGateway` into the **main application solution** for long-term hosting (laptop dev → Docker compose with main app).
+**Audience:** Gateway + client **host in TheSystem** (`TheSystem.sln`); firmware, **`SomNet.Shared`**, and SomNet product app remain in the **SomNet** repo. Laptop dev: TheSystem + gateway startup projects; **Docker compose deferred** (Phase 5 Dockerfile lives under `TheSystem/SomNet.Device.LocalGateway/`).
 
 | Related | Link |
 |---------|------|
@@ -75,14 +75,14 @@ Deliver two artifacts:
 
 | ID | Question | Decision |
 |----|----------|----------|
-| **LG-P0-1** | Where is code built first? | **SomNet repo** (`LocalClient` + `LocalGateway`); **move** projects into the **main application solution** when ready (keep `SomNet.Shared` reference or equivalent package). |
+| **LG-P0-1** | Where is code built first? | **Done (2026-10-25):** `SomNet.Device.LocalClient`, `SomNet.Device.LocalGateway`, and both test projects live in **TheSystem**; **`SomNet.Shared`** stays in SomNet (project reference to sibling repo). |
 | **LG-P0-2** | Hosting path | **Laptop:** main app + gateway local processes. **Production:** both in **same compose** as main app on Linux. |
 | **LG-P0-3** | After successful run | **`disarmAfterRun: true`** (default); **`lockAfterRun: false`** unless policy changes. |
 | **LG-P0-4** | Human `/operate` vs scheduler | **Single operator** — concurrent browser use acceptable; gateway **409** only for overlapping **gateway** runs. |
 | **LG-P0-5** | Run request body | **Full automatic parameters** each POST; **presets live only** in main app DB (not gateway). |
 | **LG-P0-6** | Main app contracts | Main app references **`SomNet.Shared`** (project ref while in monorepo; DLL/package after move) for DTOs + summary types. |
 
-**Migration note (LG-P0-1):** When moving to the main app repo, copy or submodule `SomNet.Device.LocalClient`, `SomNet.Device.LocalGateway`, and retain **`SomNet.Shared`** (project reference, git submodule, or published package). Gateway **never** needs `SomNet.API`.
+**Migration note (LG-P0-1):** **Complete.** Projects removed from `SomNet.slnx`; TheSystem references `..\SomNet\SomNet.Shared`. Gateway **never** needs `SomNet.API`. Layout: [TheSystem `SOMNET_GATEWAY_SOLUTION_LAYOUT.md`](../../TheSystem/Docs/SOMNET_GATEWAY_SOLUTION_LAYOUT.md).
 
 ---
 
@@ -172,8 +172,9 @@ Move or duplicate **automatic session summary** into shared code so gateway and 
 - [x] **P0-D4** `LocalGateway` `appsettings.json`: `Gateway:ApiKey`, `Device:BaseUrl`, `Device:Pin`, `Kestrel:Endpoints` → port **5290**
 - [x] **P0-D5** `Properties/launchSettings.json` for local dev
 - [x] **P0-D6** Link this plan from [doc 28](./28-Scheduled-Jobs-Local-Device-Integration.md) §8 (replace “planned” with link)
+- [x] **P0-D7** **LG-P0-1:** Host `LocalClient`, `LocalGateway`, and test projects in **TheSystem** solution; drop from `SomNet.slnx`; keep **`SomNet.Shared`** in SomNet repo
 
-**Exit:** `dotnet build` solution succeeds.
+**Exit:** `dotnet build` hosting solution (TheSystem) succeeds for gateway projects.
 
 ---
 
@@ -444,3 +445,4 @@ var record = outcome.Response is null
 | 2026-10-25 | Phase 6 — `IDeviceGatewayClient`, job record DTO, doc 30; P5-T1 deferred |
 | 2026-10-25 | P7-D1 stop API; P7-D4 metrics; P7-D5 ESP fixtures; runbook §9 |
 | 2026-10-25 | P7-D2 multi-device design (plan §7); runbook §9.7 |
+| 2026-10-25 | **LG-P0-1 / P0-D7:** Gateway + LocalClient moved to TheSystem solution; Docker Phase 5 still deferred |
