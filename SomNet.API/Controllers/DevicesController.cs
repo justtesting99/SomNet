@@ -82,6 +82,7 @@ public class DevicesController : ControllerBase
                 domTarget,
                 subTarget,
                 request.DeviceId,
+                request.ActuatorKind,
                 cancellationToken));
         }
         catch (ArgumentException ex)

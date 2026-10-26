@@ -6,6 +6,7 @@
 #include "execution_context.h"
 #include "local_command_status.h"
 #include "local_history_store.h"
+#include "actuator_kind.h"
 #include "nvs_store.h"
 #include "wifi_manager.h"
 
@@ -263,14 +264,26 @@ void handleLocalCaps(AsyncWebServerRequest* request) {
     if (rejectLocalApiInSetupMode(request)) {
         return;
     }
-    char json[160];
-    snprintf(
-        json,
-        sizeof(json),
-        "{\"maxStrokeMs\":%lu,\"maxBurstStrokes\":%d,\"maxBurstDelayMs\":%lu}",
-        static_cast<unsigned long>(kMaxStrokeMs),
-        kMaxBurstStrokes,
-        static_cast<unsigned long>(kMaxBurstDelayMs));
+    NvsStore* nvs = nvsStoreInstance();
+    const DeviceActuatorKind kind =
+        nvs != nullptr ? nvs->getActuatorKind() : DeviceActuatorKind_Relay;
+
+    char json[220];
+    if (kind == DeviceActuatorKind_HBridge) {
+        snprintf(
+            json,
+            sizeof(json),
+            "{\"actuatorKind\":\"hbridge\",\"minDutyPercent\":0,\"maxDutyPercent\":100}");
+    } else {
+        snprintf(
+            json,
+            sizeof(json),
+            "{\"actuatorKind\":\"relay\",\"maxStrokeMs\":%lu,\"maxBurstStrokes\":%d,"
+            "\"maxBurstDelayMs\":%lu}",
+            static_cast<unsigned long>(kMaxStrokeMs),
+            kMaxBurstStrokes,
+            static_cast<unsigned long>(kMaxBurstDelayMs));
+    }
     sendJson(request, 200, json);
 }
 

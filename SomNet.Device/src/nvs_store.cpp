@@ -28,6 +28,7 @@ constexpr char kKeyCredReset[] = "cred_reset";
 constexpr char kKeyOperatePin[] = "operate_pin";
 constexpr char kKeyLocalOperateSet[] = "loc_oper_set";
 constexpr char kKeyHubRuntimeEn[] = "hub_run";
+constexpr char kKeyActuatorKind[] = "act_kind";
 
 Preferences preferences;
 NvsStore* gNvsStoreInstance = nullptr;
@@ -403,4 +404,46 @@ bool NvsStore::setLocalOperateSettings(const char* json) {
     }
 
     return preferences.putBytes(kKeyLocalOperateSet, json, len) > 0;
+}
+
+bool NvsStore::hasActuatorKindBound() const {
+    return open_ && preferences.isKey(kKeyActuatorKind);
+}
+
+DeviceActuatorKind NvsStore::getActuatorKind() const {
+    char buf[16] = {};
+    if (!getString(kKeyActuatorKind, buf, sizeof(buf))) {
+        return DeviceActuatorKind_Relay;
+    }
+
+    DeviceActuatorKind kind = DeviceActuatorKind_Relay;
+    if (!actuatorKindFromJson(buf, &kind)) {
+        return DeviceActuatorKind_Relay;
+    }
+    return kind;
+}
+
+bool NvsStore::setActuatorKind(DeviceActuatorKind kind) {
+    return setString(kKeyActuatorKind, actuatorKindToJson(kind));
+}
+
+bool NvsStore::setActuatorKindFromJson(const char* value) {
+    DeviceActuatorKind kind = DeviceActuatorKind_Relay;
+    if (!actuatorKindFromJson(value, &kind)) {
+        return false;
+    }
+    return setActuatorKind(kind);
+}
+
+bool NvsStore::tryBindActuatorKindFromPairJson(const char* jsonKind) {
+    DeviceActuatorKind incoming = DeviceActuatorKind_Relay;
+    if (!actuatorKindFromJson(jsonKind, &incoming)) {
+        return false;
+    }
+
+    if (hasActuatorKindBound()) {
+        return getActuatorKind() == incoming;
+    }
+
+    return setActuatorKind(incoming);
 }

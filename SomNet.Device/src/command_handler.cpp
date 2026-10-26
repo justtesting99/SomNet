@@ -1,8 +1,10 @@
 #include "command_handler.h"
 
+#include "actuator_kind.h"
 #include "device_identity.h"
 #include "execution_context.h"
 #include "modes/automatic/automatic_config.h"
+#include "motor_controller.h"
 #include "nvs_store.h"
 #include "session_accessory_controller.h"
 #include "signalr_client.h"
@@ -39,6 +41,24 @@ bool secureStringEqual(const char* a, const char* b) {
     return result == 0;
 }
 
+bool isRelayMotionCommandKey(const char* commandKey) {
+    if (commandKey == nullptr) {
+        return false;
+    }
+    if (strcmp(commandKey, "stroke") == 0 || strcmp(commandKey, "burst") == 0) {
+        return true;
+    }
+    return isAutomaticStartKey(commandKey) || isAutomaticStopKey(commandKey) ||
+        isAutomaticUpdateKey(commandKey);
+}
+
+bool isMotorMotionCommandKey(const char* commandKey) {
+    if (commandKey == nullptr) {
+        return false;
+    }
+    return strcmp(commandKey, "motor-run") == 0 || strcmp(commandKey, "motor-stop") == 0;
+}
+
 } // namespace
 
 void commandHandlerOnExecuteCommand(const ExecuteCommandPayload& command) {
@@ -52,12 +72,14 @@ void CommandHandler::begin(
     NvsStore* nvsStore,
     DeviceIdentity* identity,
     SignalRClient* signalRClient,
-    SessionAccessoryController* sessionAccessory) {
+    SessionAccessoryController* sessionAccessory,
+    MotorController* motorController) {
     executionContext_ = executionContext;
     nvs_ = nvsStore;
     identity_ = identity;
     signalR_ = signalRClient;
     sessionAccessory_ = sessionAccessory;
+    motor_ = motorController;
     gCommandHandlerInstance = this;
     initialized_ = true;
     if (executionContext_ != nullptr) {
@@ -274,6 +296,18 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
         return;
     }
 
+    const DeviceActuatorKind actuatorKind =
+        nvs_ != nullptr ? nvs_->getActuatorKind() : DeviceActuatorKind_Relay;
+
+    if (actuatorKind == DeviceActuatorKind_Relay && isMotorMotionCommandKey(command.commandKey)) {
+        sendAck(command.correlationId, false, "actuator kind mismatch", nullptr);
+        return;
+    }
+    if (actuatorKind == DeviceActuatorKind_HBridge && isRelayMotionCommandKey(command.commandKey)) {
+        sendAck(command.correlationId, false, "actuator kind mismatch", nullptr);
+        return;
+    }
+
     if (strcmp(command.commandKey, "session-accessory") == 0) {
         if (sessionAccessory_ == nullptr) {
             sendAck(command.correlationId, false, "accessory unavailable", nullptr);
@@ -300,6 +334,11 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
     }
 
     if (strcmp(command.commandKey, "abort") == 0) {
+        if (motor_ != nullptr && motor_->isActive()) {
+            motor_->stop();
+            sendAck(command.correlationId, true, "command aborted", nullptr);
+            return;
+        }
         if (!executionContext_->isActive()) {
             Serial.println(F("[CMD] reject: nothing to abort"));
             sendAck(command.correlationId, false, "nothing to abort", nullptr);
@@ -311,9 +350,48 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
         return;
     }
 
+    if (strcmp(command.commandKey, "motor-stop") == 0) {
+        if (motor_ == nullptr) {
+            sendAck(command.correlationId, false, "motor unavailable", nullptr);
+            return;
+        }
+        motor_->stop();
+        sendAck(command.correlationId, true, "motor stopped", nullptr);
+        return;
+    }
+
     if (sessionAccessory_ == nullptr || !sessionAccessory_->isEnabled()) {
         Serial.println(F("[CMD] reject: session accessory off"));
         sendAck(command.correlationId, false, "session accessory off", nullptr);
+        return;
+    }
+
+    if (strcmp(command.commandKey, "motor-run") == 0) {
+        if (motor_ == nullptr) {
+            sendAck(command.correlationId, false, "motor unavailable", nullptr);
+            return;
+        }
+        if (executionContext_->isActive() || motor_->isActive()) {
+            sendAck(command.correlationId, false, "device busy", nullptr);
+            return;
+        }
+
+        JsonDocument doc;
+        const DeserializationError err = deserializeJson(
+            doc,
+            command.payloadJson[0] != '\0' ? command.payloadJson : "{}");
+        if (err || !doc["dutyPercent"].is<int>()) {
+            sendAck(command.correlationId, false, "invalid motor-run payload", nullptr);
+            return;
+        }
+
+        const int duty = doc["dutyPercent"].as<int>();
+        if (!motor_->setDutyPercent(duty)) {
+            sendAck(command.correlationId, false, "motor run failed", nullptr);
+            return;
+        }
+
+        sendAck(command.correlationId, true, "motor running", nullptr);
         return;
     }
 

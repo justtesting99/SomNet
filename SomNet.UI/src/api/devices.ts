@@ -1,5 +1,6 @@
 import type { SubTargetName } from '@/config/sessionUsers';
 import type {
+  ActuatorKind,
   DeviceStatusResponse,
   PairDeviceResponse,
   SendHardwareCommandResponse,
@@ -19,11 +20,12 @@ export async function fetchUnpairedDevices(): Promise<UnpairedDeviceResponse[]> 
 export async function pairDevice(
   subTarget: SubTargetName,
   deviceId: string,
+  actuatorKind: ActuatorKind = 'relay',
 ): Promise<PairDeviceResponse> {
   const params = new URLSearchParams({ subTarget });
   return apiFetch<PairDeviceResponse>(`/api/devices/pair?${params.toString()}`, {
     method: 'POST',
-    body: JSON.stringify({ deviceId: deviceId.trim() }),
+    body: JSON.stringify({ deviceId: deviceId.trim(), actuatorKind }),
   });
 }
 

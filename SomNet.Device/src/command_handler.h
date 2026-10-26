@@ -7,6 +7,7 @@ class ExecutionContext;
 class NvsStore;
 class SignalRClient;
 class SessionAccessoryController;
+class MotorController;
 
 struct ExecuteCommandPayload {
     char correlationId[64];
@@ -26,7 +27,8 @@ public:
         NvsStore* nvsStore,
         DeviceIdentity* identity,
         SignalRClient* signalRClient,
-        SessionAccessoryController* sessionAccessory);
+        SessionAccessoryController* sessionAccessory,
+        MotorController* motorController);
     void poll();
 
     void enqueueExecuteCommand(const ExecuteCommandPayload& command);
@@ -56,6 +58,7 @@ private:
     DeviceIdentity* identity_ = nullptr;
     SignalRClient* signalR_ = nullptr;
     SessionAccessoryController* sessionAccessory_ = nullptr;
+    MotorController* motor_ = nullptr;
     bool initialized_ = false;
     bool pendingCommandReady_ = false;
     ExecuteCommandPayload pendingCommand_{};

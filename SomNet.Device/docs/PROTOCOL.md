@@ -115,19 +115,23 @@ After an authenticated Dom calls `POST /api/devices/pair`, the server pushes:
       "domTarget": "demo",
       "subTarget": "Slv66",
       "accessToken": "<device-jwt>",
-      "expiresAt": "2027-09-05T02:38:57.6124499+00:00"
+      "expiresAt": "2027-09-05T02:38:57.6124499+00:00",
+      "actuatorKind": "relay"
     }
   ]
 }
 ```
+
+Motor module example: `"actuatorKind": "hbridge"`.
 
 Plus **`0x1E`**.
 
 Field names match `PairDeviceMessageDto` (camelCase). Firmware must:
 
 1. Verify `deviceId` matches local identity.
-2. Persist `accessToken` and `expiresAt` to NVS.
-3. Disconnect and reconnect in **paired** mode (§5).
+2. **`actuatorKind`** (`relay` \| `hbridge`): if NVS has no bound kind, write it; if bound, **reject** pairing on mismatch (see [31 — Motor actuator design](../../Documents/31-Motor-Actuator-Device-Design.md) §6.2).
+3. Persist `accessToken` and `expiresAt` to NVS.
+4. Disconnect and reconnect in **paired** mode (§5).
 
 ### 4.3 Pair REST API (operator — not on ESP32)
 
@@ -138,8 +142,10 @@ POST /api/devices/pair?subTarget=Slv66
 Authorization: Bearer {operator-jwt}
 Content-Type: application/json
 
-{ "deviceId": "esp32-A4C1389F2B01" }
+{ "deviceId": "esp32-A4C1389F2B01", "actuatorKind": "relay" }
 ```
+
+`actuatorKind` is optional on the REST body for older clients (defaults to `relay`).
 
 Example response (tokens redacted in docs):
 
@@ -236,8 +242,8 @@ Plus **`0x1E`**.
 
 1. `deviceId` matches local device.
 2. `accessToken` matches NVS-stored token (string compare).
-3. `commandKey` is supported (`stroke`, `burst`, `abort`, `automatic-start`, `automatic-stop`).
-4. Parse `payloadJson` — see §6.3–§6.5.
+3. `commandKey` is supported for the NVS-bound **`actuatorKind`** (relay: `stroke`, `burst`, …; motor: `motor-run`, `motor-stop`, …). Cross-kind commands are rejected.
+4. Parse `payloadJson` — see §6.3–§6.5 (relay) and §6.9 (motor).
 
 ### 6.3 stroke payload (initial scope)
 
@@ -272,6 +278,28 @@ Plus **`0x1E`**.
 | `powerPercent` | int | Recommended | 0–100 |
 
 Device runs the full sequence locally; one completing ack with `resultJson` when done or aborted.
+
+### 6.9 Motor manual commands (`actuatorKind: hbridge`)
+
+**commandKey** `motor-run` — start or update PWM while armed:
+
+```json
+{ "dutyPercent": 45 }
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `dutyPercent` | int | **Yes** | 0–100; PWM on primary H-bridge path (see `boardDefs.h`) |
+
+**commandKey** `motor-stop` — cooperative stop (payload `{}` or omitted). PWM off, enables inactive (MA-D15).
+
+**Caps** (`GET /api/local/caps` when motor-bound):
+
+```json
+{ "actuatorKind": "hbridge", "minDutyPercent": 0, "maxDutyPercent": 100 }
+```
+
+Relay caps keep `actuatorKind: relay` with stroke limits. Motor **`automatic-start`** / **`resultJson`** schemas are defined in [31 — Motor actuator design](../../Documents/31-Motor-Actuator-Device-Design.md) (M1+).
 
 ### 6.5 automatic-start payload (Phase 9 Part 2)
 

@@ -10,7 +10,7 @@ import {
 import { ApiError } from '@/api/client';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
-import type { DeviceStatusResponse, UnpairedDeviceResponse } from '@/types/device';
+import type { ActuatorKind, DeviceStatusResponse, UnpairedDeviceResponse } from '@/types/device';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { getDeviceTokenExpiryInfo } from '@/utils/deviceTokenExpiry';
@@ -94,6 +94,7 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
   const [unpairedDevices, setUnpairedDevices] = useState<UnpairedDeviceResponse[]>([]);
   const [pairSubTarget, setPairSubTarget] = useState<SubTargetName>(selectedSub);
   const [deviceId, setDeviceId] = useState('');
+  const [pairActuatorKind, setPairActuatorKind] = useState<ActuatorKind>('relay');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -190,7 +191,7 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
     setBusySub(subTarget);
 
     try {
-      const response = await pairDevice(subTarget, trimmedId);
+      const response = await pairDevice(subTarget, trimmedId, pairActuatorKind);
       setMessage(
         response.message ??
           (response.deliveredToDevice
@@ -236,6 +237,21 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
   }
 
   const busy = isLoading || busySub !== null;
+
+  const actuatorKindSelect = (
+    <label className="text-xs text-slate-400">
+      Actuator
+      <select
+        className="ml-2 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-200"
+        value={pairActuatorKind}
+        disabled={busy}
+        onChange={(event) => setPairActuatorKind(event.target.value as ActuatorKind)}
+      >
+        <option value="relay">Relay</option>
+        <option value="hbridge">Motor (H-bridge)</option>
+      </select>
+    </label>
+  );
 
   return (
     <div className="space-y-4">
@@ -346,7 +362,7 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
                       Unpaired · connected {formatSessionDateTimeDisplay(device.connectedAt)}
                     </p>
                   </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                     <label className="text-xs text-slate-400">
                       Pair to Sub
                       <select
@@ -362,6 +378,7 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
                         ))}
                       </select>
                     </label>
+                    {actuatorKindSelect}
                     <Button
                       size="sm"
                       disabled={busy}
@@ -432,6 +449,7 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
             disabled={busy}
             onChange={(event) => setDeviceId(event.target.value)}
           />
+          <div>{actuatorKindSelect}</div>
           <Button disabled={busy} onClick={() => void handlePair(pairSubTarget, deviceId)}>
             {busySub === pairSubTarget ? 'Pairing…' : 'Pair device'}
           </Button>

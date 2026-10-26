@@ -1,3 +1,4 @@
+using SomNet.Shared.Enums;
 using SomNet.Shared.Models;
 
 namespace SomNet.Shared.DTO.Devices;
@@ -5,6 +6,9 @@ namespace SomNet.Shared.DTO.Devices;
 public sealed class PairDeviceRequestDto
 {
     public required string DeviceId { get; init; }
+
+    /// <summary>Relay or motor (H-bridge). Defaults to relay for older clients.</summary>
+    public ActuatorKind ActuatorKind { get; init; } = ActuatorKind.Relay;
 }
 
 public sealed class PairDeviceResponseDto
@@ -41,6 +45,8 @@ public sealed class DeviceStatusResponseDto
     public DateTimeOffset? LastConnectedAt { get; init; }
 
     public DateTimeOffset? TokenExpiresAt { get; init; }
+
+    public ActuatorKind? ActuatorKind { get; init; }
 }
 
 public sealed class PairDeviceMessageDto
@@ -54,6 +60,8 @@ public sealed class PairDeviceMessageDto
     public required string AccessToken { get; init; }
 
     public required DateTimeOffset ExpiresAt { get; init; }
+
+    public ActuatorKind ActuatorKind { get; init; } = ActuatorKind.Relay;
 }
 
 public sealed class HardwareCommandMessageDto

@@ -19,5 +19,6 @@ public static class SomNetJsonOptions
         options.Converters.Add(new JsonStringEnumConverter<VideoFeedBandwidth>(JsonNamingPolicy.CamelCase));
         options.Converters.Add(new JsonStringEnumConverter<HistoryTimelineEntryType>(JsonNamingPolicy.CamelCase));
         options.Converters.Add(new JsonStringEnumConverter<DeviceButtonClickType>(JsonNamingPolicy.CamelCase));
+        options.Converters.Add(new JsonStringEnumConverter<ActuatorKind>(JsonNamingPolicy.CamelCase));
     }
 }

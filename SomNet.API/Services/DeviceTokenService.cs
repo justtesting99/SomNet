@@ -10,6 +10,7 @@ using SomNet.API.Data;
 using SomNet.API.Data.Entities;
 using SomNet.API.Hubs;
 using SomNet.Shared.DTO.Devices;
+using SomNet.Shared.Enums;
 using SomNet.Shared.Models;
 
 namespace SomNet.API.Services;
@@ -20,6 +21,7 @@ public interface IDeviceTokenService
         string domTarget,
         string subTarget,
         string deviceId,
+        ActuatorKind actuatorKind,
         CancellationToken cancellationToken = default);
 
     Task<DeviceStatusResponseDto> GetStatusAsync(
@@ -75,6 +77,7 @@ public sealed class DeviceTokenService : IDeviceTokenService
         string domTarget,
         string subTarget,
         string deviceId,
+        ActuatorKind actuatorKind,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(domTarget))
@@ -118,6 +121,7 @@ public sealed class DeviceTokenService : IDeviceTokenService
                 PairedAt = DateTimeOffset.UtcNow,
                 TokenExpiresAt = expiresAt,
                 IsRevoked = false,
+                ActuatorKind = actuatorKind,
             };
             _db.SubDeviceRegistrations.Add(existing);
         }
@@ -129,6 +133,7 @@ public sealed class DeviceTokenService : IDeviceTokenService
             existing.PairedAt = DateTimeOffset.UtcNow;
             existing.TokenExpiresAt = expiresAt;
             existing.IsRevoked = false;
+            existing.ActuatorKind = actuatorKind;
         }
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -140,6 +145,7 @@ public sealed class DeviceTokenService : IDeviceTokenService
             SubTarget = normalizedSub,
             AccessToken = accessToken,
             ExpiresAt = expiresAt,
+            ActuatorKind = actuatorKind,
         };
 
         var delivered = _connectionRegistry.TryGetUnpairedConnectionId(normalizedDeviceId, out _) ||
@@ -189,6 +195,7 @@ public sealed class DeviceTokenService : IDeviceTokenService
             PairedAt = registration?.PairedAt,
             LastConnectedAt = registration?.LastConnectedAt,
             TokenExpiresAt = registration?.TokenExpiresAt,
+            ActuatorKind = registration?.ActuatorKind,
         };
     }
 
@@ -271,6 +278,7 @@ public sealed class DeviceTokenService : IDeviceTokenService
             SubTarget = registration.SubName,
             AccessToken = registration.AccessToken,
             ExpiresAt = registration.TokenExpiresAt,
+            ActuatorKind = registration.ActuatorKind,
         };
 
         await _hubContext.SendPairDeviceAsync(normalizedDeviceId, pairMessage, cancellationToken);

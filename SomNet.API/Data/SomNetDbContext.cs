@@ -3,6 +3,19 @@ using SomNet.API.Data.Entities;
 
 namespace SomNet.API.Data;
 
+
+/// <summary>
+/// 
+/// 
+/// 
+/// Update-Database -context SomNetDbContext -Project SomNet.API
+/// 
+/// 
+/// 
+/// 
+/// 
+/// 
+/// </summary>
 public sealed class SomNetDbContext : DbContext
 {
     public SomNetDbContext(DbContextOptions<SomNetDbContext> options)
@@ -93,6 +106,9 @@ public sealed class SomNetDbContext : DbContext
             entity.Property(registration => registration.DeviceId).HasMaxLength(64);
             entity.Property(registration => registration.AccessToken).HasMaxLength(2048);
             entity.Property(registration => registration.TokenJti).HasMaxLength(64);
+            entity.Property(registration => registration.ActuatorKind)
+                .HasConversion<string>()
+                .HasMaxLength(16);
             entity.HasIndex(registration => registration.DeviceId);
         });
 

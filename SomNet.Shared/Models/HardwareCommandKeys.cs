@@ -29,6 +29,12 @@ public static class HardwareCommandKeys
     /// <summary>Device + API — session accessory / external lock (GPIO32).</summary>
     public const string SessionAccessory = "session-accessory";
 
+    /// <summary>Device + API — H-bridge PWM run (ExecuteCommand).</summary>
+    public const string MotorRun = "motor-run";
+
+    /// <summary>Device + API — H-bridge stop (ExecuteCommand).</summary>
+    public const string MotorStop = "motor-stop";
+
     public static bool IsManualSnapshotCommand(string commandKey) =>
         string.Equals(commandKey, ManualStroke, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(commandKey, ManualBurst, StringComparison.OrdinalIgnoreCase) ||

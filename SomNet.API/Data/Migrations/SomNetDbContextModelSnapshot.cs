@@ -211,6 +211,11 @@ namespace SomNet.API.Data.Migrations
                         .HasMaxLength(2048)
                         .HasColumnType("nvarchar(2048)");
 
+                    b.Property<string>("ActuatorKind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
                     b.Property<string>("DeviceId")
                         .IsRequired()
                         .HasMaxLength(64)

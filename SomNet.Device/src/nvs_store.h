@@ -1,5 +1,7 @@
 #pragma once
 
+#include "actuator_kind.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -82,6 +84,14 @@ public:
         const char* domTarget,
         const char* subTarget,
         uint64_t expiresAtMs);
+
+    /** Output profile: relay (default) or hbridge motor. Key written on registration (M1). */
+    bool hasActuatorKindBound() const;
+    DeviceActuatorKind getActuatorKind() const;
+    bool setActuatorKind(DeviceActuatorKind kind);
+    bool setActuatorKindFromJson(const char* value);
+    /** PairDevice: bind NVS kind when unset; reject mismatch when already bound. */
+    bool tryBindActuatorKindFromPairJson(const char* jsonKind);
 
 private:
     bool getString(const char* key, char* out, size_t outLen) const;

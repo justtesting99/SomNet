@@ -283,6 +283,17 @@ bool saveConfigFromRequest(AsyncWebServerRequest* request, String& errorOut) {
         return false;
     }
 
+    String actuatorKind = request->arg("actuator_kind");
+    actuatorKind.trim();
+    if (actuatorKind.length() > 0) {
+        if (!gNvs->setActuatorKindFromJson(actuatorKind.c_str())) {
+            errorOut = "actuator_kind must be relay or hbridge";
+            return false;
+        }
+        Serial.print(F("[HTTP] actuator_kind="));
+        Serial.println(actuatorKind);
+    }
+
     Serial.print(F("[HTTP] saved wifi ssid="));
     Serial.print(wifiSsid);
     Serial.print(F(" pass_len="));

@@ -1,5 +1,6 @@
 #include "signalr_client.h"
 
+#include "actuator_kind.h"
 #include "command_handler.h"
 #include "device_identity.h"
 #include "nvs_store.h"
@@ -916,6 +917,15 @@ void handleHubFrame(const char* frame) {
 
         if (accessToken[0] == '\0' || gNvs == nullptr) {
             Serial.println(F("[HUB] PairDevice missing accessToken"));
+            return;
+        }
+
+        const char* actuatorKindJson = payload["actuatorKind"] | "relay";
+        if (!gNvs->tryBindActuatorKindFromPairJson(actuatorKindJson)) {
+            Serial.print(F("[HUB] PairDevice actuatorKind rejected (NVS="));
+            Serial.print(actuatorKindToJson(gNvs->getActuatorKind()));
+            Serial.print(F(" pair="));
+            Serial.println(actuatorKindJson);
             return;
         }
 

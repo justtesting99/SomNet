@@ -9,6 +9,8 @@
 #include "device_mode.h"
 #include "execution_context.h"
 #include "nvs_store.h"
+#include "actuator_kind.h"
+#include "motor_controller.h"
 #include "relay_controller.h"
 #include "session_accessory_controller.h"
 #include "signalr_client.h"
@@ -26,6 +28,7 @@ WifiManager wifiManager;
 DeviceIdentity deviceIdentity;
 NvsStore nvsStore;
 RelayController relayController;
+MotorController motorController;
 SessionAccessoryController sessionAccessoryController;
 ExecutionContext executionContext;
 CommandHandler commandHandler;
@@ -159,6 +162,8 @@ void printSerialBanner() {
     Serial.println(bootMode == DeviceBootMode::Provisioning ? F("PROVISIONING") : F("RUNNING"));
     Serial.print(F(" Device ID: "));
     Serial.println(deviceIdentity.deviceId());
+    Serial.print(F(" Actuator: "));
+    Serial.println(actuatorKindToJson(nvsStore.getActuatorKind()));
     Serial.print(F(" MAC: "));
     Serial.println(deviceIdentity.macAddress());
     if (!kSomNetStandaloneBuild) {
@@ -196,7 +201,7 @@ void printSerialBanner() {
         Serial.print(wifiManager.localIp());
         Serial.println(F("/operate"));
     }
-    Serial.println(F(" Log prefixes: [WIFI] [TIME] [HTTP] [HUB] [CMD] [STROKE] [RELAY] [NVS] [ID]"));
+    Serial.println(F(" Log prefixes: [WIFI] [TIME] [HTTP] [HUB] [CMD] [STROKE] [RELAY] [MOTOR] [NVS] [ID]"));
     Serial.println(F("========================================"));
 }
 
@@ -230,6 +235,7 @@ void setup() {
     }
 
     relayController.begin();
+    motorController.begin();
     sessionAccessoryController.begin();
     executionContext.begin(&relayController);
     buttonInput.begin();
@@ -241,7 +247,8 @@ void setup() {
         &nvsStore,
         &deviceIdentity,
         &signalRClient,
-        &sessionAccessoryController);
+        &sessionAccessoryController,
+        &motorController);
     statusLed.begin();
 
     startNetwork();
@@ -291,6 +298,7 @@ void loop() {
         statusLed.poll(signalRClient.isHubConnected());
     }
     relayController.poll();
+    motorController.poll();
     executionContext.poll();
     commandHandler.poll();
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
