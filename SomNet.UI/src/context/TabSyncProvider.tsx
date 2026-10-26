@@ -38,7 +38,7 @@ const TabSyncContext = createContext<TabSyncContextValue | null>(null);
 
 export function TabSyncProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const { setMode } = useMode();
+  const { mode: operationMode, setMode } = useMode();
   const { selectedSub, applySubFromSync } = useSubTarget();
   const { settings, settingsLoaded, setAutomaticRunningLocal } = useOptions();
   const { activeSession, syncSessionFromRemote, endActiveSessionIfNeeded } = useLiveSession();
@@ -52,10 +52,12 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
   const activeSessionRef = useRef(activeSession);
   const settingsRef = useRef(settings);
   const selectedSubRef = useRef(selectedSub);
+  const operationModeRef = useRef(operationMode);
 
   activeSessionRef.current = activeSession;
   settingsRef.current = settings;
   selectedSubRef.current = selectedSub;
+  operationModeRef.current = operationMode;
 
   const domTarget = user?.displayName ?? user?.username ?? '';
 
@@ -135,6 +137,11 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
         });
       }
 
+      const currentOperationMode = operationModeRef.current;
+      if (currentOperationMode !== null && snapshot.mode !== currentOperationMode) {
+        return;
+      }
+
       try {
         const entry = await fetchActiveSession(snapshot.subTarget);
         if (!entry || entry.id !== snapshot.id) {
@@ -211,6 +218,11 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
       }
 
       if (activeSessionRef.current?.id === entry.id) {
+        return;
+      }
+
+      const currentOperationMode = operationModeRef.current;
+      if (currentOperationMode !== null && entry.mode !== currentOperationMode) {
         return;
       }
 

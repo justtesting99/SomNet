@@ -22,7 +22,7 @@ public:
     bool isActive() const;
 
 private:
-    enum class State { Idle, StartDelay, Running, Gap };
+    enum class State { Idle, StartDelay, RampUp, Running, RampDown, Gap };
 
     void buildResultJson(const char* endReason, bool interrupted);
     void finishSession(bool success, const char* message, const char* endReason, bool interrupted);
@@ -35,6 +35,7 @@ private:
     bool active_ = false;
     bool stopRequested_ = false;
     int dutyPercent_ = 0;
+    unsigned long rampMs_ = 500;
     int runSeconds_ = 0;
     int gapSeconds_ = 0;
     int segmentsCompleted_ = 0;

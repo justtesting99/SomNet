@@ -11,11 +11,9 @@ import { SelectField } from '@/components/ui/RadioGroup';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 import { useHardwareCommand } from '@/context/HardwareCommandProvider';
 import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
+import { useOptions } from '@/context/OptionsProvider';
 import { buildMotorAutomaticStartPayload } from '@/utils/motorAutomaticStartPayload';
-import {
-  defaultMotorAutomaticState,
-  type MotorAutomaticControlState,
-} from '@/types/motorModes';
+import type { MotorAutomaticControlState } from '@/types/motorModes';
 import type { EndSessionMode } from '@/types/modes';
 import { parseAutomaticResultJson } from '@/utils/automaticResultJson';
 import { waitForAutomaticHubFinalize } from '@/utils/automaticSessionFinalize';
@@ -31,7 +29,8 @@ const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
 ];
 
 export function MotorAutomaticControls() {
-  const [state, setState] = useState<MotorAutomaticControlState>(defaultMotorAutomaticState);
+  const { settings, updateMotorAutomatic, setMotorAutomaticRunningLocal } = useOptions();
+  const state = settings.motorAutomatic;
   const { selectedSub } = useSubTarget();
   const { expandOnAction } = useVideoDisplay();
   const { endAutomaticSession, activeSession, markAutomaticDeviceStarted } = useLiveSession();
@@ -72,7 +71,11 @@ export function MotorAutomaticControls() {
     if (configLocked && key !== 'running') {
       return;
     }
-    setState((current) => ({ ...current, [key]: value }));
+    updateMotorAutomatic({ ...state, [key]: value });
+  }
+
+  function setRunningLocal(running: boolean) {
+    setMotorAutomaticRunningLocal(running);
   }
 
   function formatCommandError(error: unknown): string {
@@ -97,7 +100,7 @@ export function MotorAutomaticControls() {
     ) {
       return false;
     }
-    update('running', false);
+    setRunningLocal(false);
     await endAutomaticSession('stopped manually (device already idle)');
     return true;
   }
@@ -113,7 +116,7 @@ export function MotorAutomaticControls() {
       if (sessionId) {
         writeAutomaticDeviceRunningHint({ sessionId, subTarget: selectedSub });
       }
-      update('running', true);
+      setRunningLocal(true);
     } catch (error) {
       setCommandError(formatCommandError(error));
     }
@@ -145,7 +148,7 @@ export function MotorAutomaticControls() {
       }
       const parsed = parseAutomaticResultJson(response.resultJson);
       if (parsed) {
-        update('running', false);
+        setRunningLocal(false);
         await endAutomaticSession('stopped manually', parsed);
         return;
       }
@@ -157,7 +160,7 @@ export function MotorAutomaticControls() {
         await waitForAutomaticHubFinalize(
           isAutomaticSessionPendingFinalize,
           async () => {
-            update('running', false);
+            setRunningLocal(false);
             await endAutomaticSession('stopped manually');
           },
           MOTOR_STOP_GRACE_MS,
@@ -192,7 +195,7 @@ export function MotorAutomaticControls() {
       await waitForAutomaticHubFinalize(
         isAutomaticSessionPendingFinalize,
         async () => {
-          update('running', false);
+          setRunningLocal(false);
           await endAutomaticSession('aborted');
         },
       );
@@ -235,6 +238,15 @@ export function MotorAutomaticControls() {
         disabled={configLocked}
         onMinChange={(value) => update('segmentMinSeconds', value)}
         onMaxChange={(value) => update('segmentMaxSeconds', value)}
+      />
+
+      <NumberField
+        label="Duty ramp (ms)"
+        value={state.rampMs}
+        min={0}
+        max={30_000}
+        disabled={configLocked}
+        onChange={(event) => update('rampMs', Number(event.target.value))}
       />
 
       <NumberField

@@ -53,13 +53,74 @@ void MotorController::begin() {
 }
 
 void MotorController::poll() {
-    // Steady-state PWM — no pulse FSM in M0.
+    if (!initialized_ || !ramping_) {
+        return;
+    }
+
+    const unsigned long now = millis();
+    if (rampDurationMs_ == 0) {
+        ramping_ = false;
+        setDutyPercent(rampToPercent_);
+        return;
+    }
+
+    const unsigned long elapsed = now - rampStartMs_;
+    if (elapsed >= rampDurationMs_) {
+        ramping_ = false;
+        if (rampToPercent_ <= 0) {
+            stop();
+        } else {
+            setDutyPercent(rampToPercent_);
+        }
+        return;
+    }
+
+    const float t = static_cast<float>(elapsed) / static_cast<float>(rampDurationMs_);
+    const int duty = rampFromPercent_ + static_cast<int>((rampToPercent_ - rampFromPercent_) * t);
+    holdSecondaryIdle();
+    writePwmDuty(duty);
+    writeEnable(duty > 0);
+    dutyPercent_ = duty;
+}
+
+bool MotorController::beginRampToDuty(int targetPercent, unsigned long rampMs) {
+    if (!initialized_) {
+        return false;
+    }
+
+    if (targetPercent < 0) {
+        targetPercent = 0;
+    }
+    if (targetPercent > 100) {
+        targetPercent = 100;
+    }
+
+    if (rampMs == 0) {
+        return setDutyPercent(targetPercent);
+    }
+
+    ramping_ = true;
+    rampFromPercent_ = dutyPercent_;
+    rampToPercent_ = targetPercent;
+    rampStartMs_ = millis();
+    rampDurationMs_ = rampMs;
+
+    Serial.print(F("[MOTOR] ramp "));
+    Serial.print(rampFromPercent_);
+    Serial.print(F("% -> "));
+    Serial.print(rampToPercent_);
+    Serial.print(F("% in "));
+    Serial.print(rampMs);
+    Serial.println(F(" ms"));
+    return true;
 }
 
 bool MotorController::setDutyPercent(int dutyPercent) {
     if (!initialized_) {
         return false;
     }
+
+    ramping_ = false;
 
     if (dutyPercent < 0) {
         dutyPercent = 0;
@@ -88,6 +149,7 @@ void MotorController::stop() {
         return;
     }
 
+    ramping_ = false;
     writePwmDuty(0);
     writeEnable(false);
     holdSecondaryIdle();
@@ -98,5 +160,9 @@ void MotorController::stop() {
 }
 
 bool MotorController::isActive() const {
-    return initialized_ && dutyPercent_ > 0;
+    return initialized_ && (dutyPercent_ > 0 || ramping_);
+}
+
+bool MotorController::isRamping() const {
+    return initialized_ && ramping_;
 }

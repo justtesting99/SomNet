@@ -42,7 +42,7 @@ Track once; reference from phase checklists.
 | **X-2** | Motor program DTO sketch (`minimumDutyPercent`, `maximumDutyPercent`, `rampMs`, `endSessionMode` minutes/noAutoEnd — MA-D19, MA-D20) | Shared + PROTOCOL | **Done** (DTO + PROTOCOL) |
 | **X-3** | Motor `resultJson` + summary builder (separate from relay) | Firmware + Shared + API | **Done** (v1 periodic) |
 | **X-4** | Relay regression: relay NVS profile unchanged on same binary | Firmware CI / manual | |
-| **X-5** | `boardDefs.h`: `MOTOR_PWM_FREQUENCY_HZ`, `MOTOR_ENABLE_ACTIVE_HIGH` tuned on module (MA-D18) | Firmware / bench | Constants in tree; bench tune pending |
+| **X-5** | `boardDefs.h`: `MOTOR_PWM_FREQUENCY_HZ`, `MOTOR_ENABLE_ACTIVE_HIGH` tuned on module (MA-D18) | Firmware / bench | 5 kHz PWM validated; duty **>50%** very fast on production motor — operator using **~10%** until max-duty cap/tuning (MA-D18 follow-up) |
 | **X-6** | **Multi-device per Sub** — project remit; **review & correct** API/DB/hub/UI (today: one `deviceId` per Sub). See [31 §12](./31-Motor-Actuator-Device-Design.md). **Interim testing:** two Subs, one ESP each | API + UI + docs | **Not started** |
 
 **Bench note (until X-6):** use **two Subs** (e.g. relay on `Slv66`, motor on `Slv67`) — not two boards on one Sub.
@@ -107,7 +107,7 @@ Track once; reference from phase checklists.
 - [x] **M1-F4** `endSessionMode`: **`minutes`** and **`noAutoEnd`** only — **no** rotation/stroke count (MA-D20).
 - [x] **M1-F5** `automatic-stop` / abort: MA-D4 (PWM off, enables low).
 - [x] **M1-F6** Terminal **`resultJson`** (motor schema — PROTOCOL); hub ack / session complete path like relay.
-- [ ] **M1-F7** Ramp hook in FSM structure (may use fixed `rampMs` default until UI exposes it). **Deferred** — bench motor needed to validate ramp visually; do with **M1b** (not blocking M1 hub sign-off). *(`rampMs` parsed; duty steps instantly today.)*
+- [x] **M1-F7** Ramp hook in FSM structure (`rampMs` in payload; linear ramp up/down per segment on bench motor). *Validate on BTS7960 ESP #2; random modes remain **M1b**.*
 
 ### 4.3 SomNet.Shared & API
 
@@ -119,12 +119,12 @@ Track once; reference from phase checklists.
 
 - [x] **M1-U1** Motor automatic form: duty min/max, segment timing, end session (no stroke-ms; no count end mode).
 - [x] **M1-U2** Hide relay-only controls when device/caps `actuatorKind` = `hbridge`. *(`AutomaticModeControls` switches UI; manual tab still relay — M2/M1 follow-up.)*
-- [x] **M1-U3** Start / Stop / Abort E2E on paired motor device. *(2026-10-26 `sess-173` / `esp32-84CCA85C36B4` → Slv67, hbridge.)*
+- [x] **M1-U3** Start / Stop / Abort E2E on paired motor device. *(Hub: `esp32-84CCA85C36B4` → Slv67; production bench `esp32-7C9EBD398F08` → Slv66, BTS7960, button accessory + periodic ramp + abort.)*
 
 ### 4.5 Tests
 
 - [x] **M1-T1** Unit/integration tests for motor DTO validation (API or Shared).
-- [x] **M1-T2** Manual test script or checklist run recorded (pair → arm → periodic → result). *(Same run as M1-U3.)*
+- [x] **M1-T2** Manual test script or checklist run recorded (pair → arm → periodic → result). *(Slv67 + Slv66 production motor runs 2026-10-26.)*
 
 ### Phase M1 sign-off
 
@@ -262,8 +262,8 @@ Update this table when a phase is signed off.
 | Phase | Status | Sign-off date |
 |-------|--------|----------------|
 | M0 | In progress (firmware + PROTOCOL; verification pending) | |
-| M1 | Ready for sign-off (M1-R5 rebind copy; M1-F7 deferred to M1b) | |
-| M1b | Deferred — motor on bench for ramp tuning | |
+| M1 | Ready for sign-off (M1-R5 rebind copy; M1-F7 ramp on bench ESP) | |
+| M1b | Random modes deferred; ramp implemented in M1-F7 | |
 | M2 | Blocked on M1 | |
 | M3 | Blocked on M2 | |
 | M4 | Optional | |
@@ -280,4 +280,6 @@ Update this table when a phase is signed off.
 | 2026-10-26 | M1: motor periodic FSM, API validation, motor automatic UI, PROTOCOL `resultJson` |
 | 2026-10-26 | M1-U3/T2 E2E: Slv67 motor periodic → history `sess-173` (2 segments / 50 s) |
 | 2026-10-26 | M1-F7 / M1b ramp deferred until motor module on bench for visual tuning |
+| 2026-10-26 | Bench motor ESP: 5 kHz PWM; M1-F7 segment ramp + UI `rampMs` field |
 | 2026-10-26 | X-6 / MA-D21 — document multi-device-per-Sub remit gap; interim dual-Sub bench |
+| 2026-10-26 | Production motor E2E on Slv66: ramp segments, cooperative stop, 30 min end-session clock, abort |

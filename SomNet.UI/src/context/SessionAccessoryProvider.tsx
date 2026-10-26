@@ -78,7 +78,8 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
     isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke) ||
     isCommandPending(HARDWARE_COMMAND_KEYS.manualBurst) ||
     isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart) ||
-    settings.automatic.running;
+    settings.automatic.running ||
+    settings.motorAutomatic.running;
 
   const canEnableSwitch =
     systemStatus.isReady && subPresentAckSub === selectedSub && !workInProgress;

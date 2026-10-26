@@ -1,6 +1,7 @@
 using System.Text.Json;
 using SomNet.API.Configuration;
 using SomNet.API.Services;
+using SomNet.Shared.DTO.Modes;
 using SomNet.Shared.DTO.Options;
 using SomNet.Shared.DTO.Settings;
 using SomNet.Shared.Enums;
@@ -50,6 +51,7 @@ public static class PairingSettingsSerializer
             AppOptions = NormalizeAppOptions(settings.AppOptions),
             Video = NormalizeVideo(settings.Video),
             Manual = manual,
+            MotorAutomatic = NormalizeMotorAutomatic(settings.MotorAutomatic),
             Automatic = new()
             {
                 Running = false,
@@ -146,6 +148,51 @@ public static class PairingSettingsSerializer
             VideoFeedBandwidth = Enum.IsDefined(source.VideoFeedBandwidth)
                 ? source.VideoFeedBandwidth
                 : VideoFeedBandwidth.High,
+        };
+    }
+
+    private static MotorAutomaticControlStateDto NormalizeMotorAutomatic(MotorAutomaticControlStateDto? motor)
+    {
+        var source = motor ?? ControlStateDefaults.MotorAutomatic;
+        var minDuty = Math.Clamp(source.MinimumDutyPercent, 0, 100);
+        var maxDuty = Math.Clamp(source.MaximumDutyPercent, 0, 100);
+        if (minDuty > maxDuty)
+        {
+            (minDuty, maxDuty) = (maxDuty, minDuty);
+        }
+
+        var segmentMin = Math.Clamp(source.SegmentMinSeconds, 1, 3600);
+        var segmentMax = Math.Clamp(source.SegmentMaxSeconds, 1, 3600);
+        if (segmentMin > segmentMax)
+        {
+            (segmentMin, segmentMax) = (segmentMax, segmentMin);
+        }
+
+        var endMode = source.EndSessionMode;
+        if (endMode is not EndSessionMode.Minutes and not EndSessionMode.NoAutoEnd)
+        {
+            endMode = EndSessionMode.NoAutoEnd;
+        }
+
+        var endValue = Math.Clamp(source.EndSessionValue, 1, 1440);
+        if (endMode == EndSessionMode.NoAutoEnd)
+        {
+            endValue = Math.Max(1, source.EndSessionValue);
+        }
+
+        return new MotorAutomaticControlStateDto
+        {
+            Running = false,
+            AutomaticMode = string.IsNullOrWhiteSpace(source.AutomaticMode) ? "periodic" : source.AutomaticMode.Trim(),
+            MinimumDutyPercent = minDuty,
+            MaximumDutyPercent = maxDuty,
+            SegmentMinSeconds = segmentMin,
+            SegmentMaxSeconds = segmentMax,
+            DelayBeforeStartSeconds = Math.Clamp(source.DelayBeforeStartSeconds, 0, 3600),
+            RampMs = Math.Clamp(source.RampMs, 0, 30_000),
+            EndSessionMode = endMode,
+            EndSessionValue = endValue,
+            ActuatorKind = ActuatorKind.Hbridge,
         };
     }
 

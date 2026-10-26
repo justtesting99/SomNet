@@ -34,4 +34,18 @@ public static class ControlStateDefaults
         BurstStrokesMin = 5,
         BurstStrokesMax = 10,
     };
+
+    public static MotorAutomaticControlStateDto MotorAutomatic { get; } = new()
+    {
+        Running = false,
+        AutomaticMode = "periodic",
+        MinimumDutyPercent = 20,
+        MaximumDutyPercent = 80,
+        SegmentMinSeconds = 5,
+        SegmentMaxSeconds = 20,
+        DelayBeforeStartSeconds = 0,
+        RampMs = 500,
+        EndSessionMode = Enums.EndSessionMode.Minutes,
+        EndSessionValue = 30,
+    };
 }

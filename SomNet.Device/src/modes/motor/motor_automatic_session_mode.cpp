@@ -34,6 +34,7 @@ bool MotorAutomaticSessionMode::beginSession(const char* payloadJson) {
     configJson_[sizeof(configJson_) - 1] = '\0';
 
     dutyPercent_ = config.maximumDutyPercent;
+    rampMs_ = static_cast<unsigned long>(config.rampMs);
     endSessionValue_ = config.endSessionValue;
     endSessionModeWire_ = motorEndSessionModeToWire(config.endSessionMode);
     segmentsCompleted_ = 0;
@@ -114,17 +115,19 @@ bool MotorAutomaticSessionMode::beginRunSegment() {
     runSeconds_ = pickSegmentSeconds();
     gapSeconds_ = pickSegmentSeconds();
 
-    if (!motor_->setDutyPercent(dutyPercent_)) {
+    if (!motor_->beginRampToDuty(dutyPercent_, rampMs_)) {
         Serial.println(F("[MOTOR-AUTO] reject: motor busy"));
         return false;
     }
 
-    state_ = State::Running;
-    phaseDeadlineMs_ = millis() + static_cast<unsigned long>(runSeconds_) * 1000UL;
+    state_ = State::RampUp;
+    phaseDeadlineMs_ = 0;
 
     Serial.print(F("[MOTOR-AUTO] run duty="));
     Serial.print(dutyPercent_);
-    Serial.print(F("% runSec="));
+    Serial.print(F("% rampMs="));
+    Serial.print(rampMs_);
+    Serial.print(F(" runSec="));
     Serial.println(runSeconds_);
     return true;
 }
@@ -221,7 +224,7 @@ void MotorAutomaticSessionMode::poll() {
         return;
     }
 
-    if (stopRequested_ && state_ != State::Running) {
+    if (stopRequested_ && state_ != State::Running && state_ != State::RampUp && state_ != State::RampDown) {
         finishSession(true, "automatic session stopped", "manualStop", false);
         return;
     }
@@ -232,6 +235,10 @@ void MotorAutomaticSessionMode::poll() {
     }
 
     const unsigned long now = millis();
+
+    if (motor_ != nullptr) {
+        motor_->poll();
+    }
 
     if (state_ == State::StartDelay) {
         if (now < phaseDeadlineMs_) {
@@ -244,12 +251,41 @@ void MotorAutomaticSessionMode::poll() {
         return;
     }
 
-    if (now < phaseDeadlineMs_) {
+    if (state_ == State::RampUp) {
+        if (motor_ == nullptr || motor_->isRamping()) {
+            return;
+        }
+        if (stopRequested_) {
+            finishSession(true, "automatic session stopped", "manualStop", false);
+            return;
+        }
+        state_ = State::Running;
+        phaseDeadlineMs_ = now + static_cast<unsigned long>(runSeconds_) * 1000UL;
         return;
     }
 
     if (state_ == State::Running) {
-        motor_->stop();
+        if (stopRequested_) {
+            if (motor_ != nullptr) {
+                motor_->beginRampToDuty(0, rampMs_);
+            }
+            state_ = State::RampDown;
+            return;
+        }
+        if (now < phaseDeadlineMs_) {
+            return;
+        }
+        if (motor_ != nullptr) {
+            motor_->beginRampToDuty(0, rampMs_);
+        }
+        state_ = State::RampDown;
+        return;
+    }
+
+    if (state_ == State::RampDown) {
+        if (motor_ != nullptr && motor_->isRamping()) {
+            return;
+        }
         segmentsCompleted_++;
         if (stopRequested_) {
             finishSession(true, "automatic session stopped", "manualStop", false);
@@ -267,6 +303,9 @@ void MotorAutomaticSessionMode::poll() {
     }
 
     if (state_ == State::Gap) {
+        if (now < phaseDeadlineMs_) {
+            return;
+        }
         if (!beginRunSegment()) {
             finishSession(false, "automatic session failed", "error", true);
         }

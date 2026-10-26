@@ -1,6 +1,6 @@
 import type { SubTargetName } from '@/config/sessionUsers';
 import type { PairingSettings } from '@/types/pairingSettings';
-import { DEFAULT_VIDEO_SETTINGS } from '@/types/pairingSettings';
+import { DEFAULT_PAIRING_SETTINGS, DEFAULT_VIDEO_SETTINGS } from '@/types/pairingSettings';
 import {
   DEFAULT_APP_OPTIONS,
   type ActionSnapshotFeeds,
@@ -11,11 +11,13 @@ import { clampVideoFeedTimeoutSeconds } from '@/utils/videoFeedTimeout';
 import { normalizeMobileVideoExpandDefault } from '@/utils/liveVideoFeedPreference';
 import { normalizeVideoFeedBandwidth } from '@/utils/videoFeedBandwidth';
 import { apiFetch } from '@/api/client';
+import { normalizeMotorAutomaticControlState } from '@/utils/motorAutomaticFieldRules';
 
 interface PairingSettingsResponse {
   appOptions: PairingSettings['appOptions'];
   manual: PairingSettings['manual'];
   automatic: PairingSettings['automatic'];
+  motorAutomatic?: PairingSettings['motorAutomatic'];
   video?: PairingSettings['video'];
 }
 
@@ -43,6 +45,9 @@ function normalizeSettings(response: PairingSettingsResponse): PairingSettings {
     appOptions: normalizeAppOptions(response.appOptions),
     manual: response.manual,
     automatic: { ...response.automatic, running: false },
+    motorAutomatic: normalizeMotorAutomaticControlState(
+      response.motorAutomatic ?? DEFAULT_PAIRING_SETTINGS.motorAutomatic,
+    ),
     video: response.video ?? DEFAULT_VIDEO_SETTINGS,
   };
 }
@@ -68,6 +73,7 @@ export async function savePairingSettings(
       appOptions: settings.appOptions,
       manual: settings.manual,
       automatic: { ...settings.automatic, running: false },
+      motorAutomatic: { ...settings.motorAutomatic, running: false },
       video: settings.video,
     }),
   });

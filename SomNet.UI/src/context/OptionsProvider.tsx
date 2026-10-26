@@ -18,6 +18,8 @@ import { DEFAULT_PAIRING_SETTINGS, type PairingSettings } from '@/types/pairingS
 import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
 import { normalizeStrokeMsPair } from '@/utils/strokeMsLimits';
 import { normalizeAutomaticControlState } from '@/utils/automaticFieldRules';
+import { normalizeMotorAutomaticControlState } from '@/utils/motorAutomaticFieldRules';
+import type { MotorAutomaticControlState } from '@/types/motorModes';
 import { clearAutomaticDeviceRunningHint } from '@/utils/automaticDeviceRunningHint';
 import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
 
@@ -31,8 +33,10 @@ interface OptionsContextValue {
   setOptions: (options: AppOptions) => Promise<void>;
   updateManual: (manual: ManualControlState) => void;
   updateAutomatic: (automatic: AutomaticControlState) => void;
+  updateMotorAutomatic: (motorAutomatic: MotorAutomaticControlState) => void;
   /** Set running flag locally without persisting (session rehydration). */
   setAutomaticRunningLocal: (running: boolean) => void;
+  setMotorAutomaticRunningLocal: (running: boolean) => void;
   isDialogOpen: boolean;
   openDialog: () => void;
   closeDialog: () => void;
@@ -148,6 +152,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
               ...loadedSettings.automatic,
               ...automaticStroke,
             }),
+            motorAutomatic: normalizeMotorAutomaticControlState(loadedSettings.motorAutomatic),
           });
           setSettingsLoaded(true);
         }
@@ -293,6 +298,42 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     [applySettings],
   );
 
+  const updateMotorAutomatic = useCallback(
+    (motorAutomatic: MotorAutomaticControlState) => {
+      userEditedRef.current = true;
+      applySettings({
+        ...settingsRef.current,
+        motorAutomatic: normalizeMotorAutomaticControlState(motorAutomatic),
+      });
+    },
+    [applySettings],
+  );
+
+  const setMotorAutomaticRunningLocal = useCallback(
+    (running: boolean) => {
+      if (!running) {
+        clearAutomaticDeviceRunningHint();
+      }
+
+      if (settingsRef.current.motorAutomatic.running === running) {
+        return;
+      }
+
+      applySettings(
+        {
+          ...settingsRef.current,
+          motorAutomatic: {
+            ...settingsRef.current.motorAutomatic,
+            running,
+          },
+        },
+        false,
+        true,
+      );
+    },
+    [applySettings],
+  );
+
   const openDialog = useCallback(() => {
     setIsDialogOpen(true);
   }, []);
@@ -311,7 +352,9 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       setOptions,
       updateManual,
       updateAutomatic,
+      updateMotorAutomatic,
       setAutomaticRunningLocal,
+      setMotorAutomaticRunningLocal,
       isDialogOpen,
       openDialog,
       closeDialog,
@@ -324,7 +367,9 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       setOptions,
       updateManual,
       updateAutomatic,
+      updateMotorAutomatic,
       setAutomaticRunningLocal,
+      setMotorAutomaticRunningLocal,
       isDialogOpen,
       openDialog,
       closeDialog,
