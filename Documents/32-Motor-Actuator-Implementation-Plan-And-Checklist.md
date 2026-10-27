@@ -43,9 +43,24 @@ Track once; reference from phase checklists.
 | **X-3** | Motor `resultJson` + summary builder (separate from relay) | Firmware + Shared + API | **Done** (v1 periodic) |
 | **X-4** | Relay regression: relay NVS profile unchanged on same binary | Firmware CI / manual | In progress — §2.1 runbook |
 | **X-5** | `boardDefs.h`: `MOTOR_PWM_FREQUENCY_HZ`, `MOTOR_ENABLE_ACTIVE_HIGH` tuned on module (MA-D18) | Firmware / bench | 5 kHz PWM validated; duty **>50%** very fast on production motor — operator using **~10%** until max-duty cap/tuning (MA-D18 follow-up) |
-| **X-6** | **Multi-device per Sub** — project remit; **review & correct** API/DB/hub/UI (today: one `deviceId` per Sub). See [31 §12](./31-Motor-Actuator-Device-Design.md). **Interim testing:** two Subs, one ESP each | API + UI + docs | **Not started** |
+| **X-6** | **Multi-device per Sub** — project remit; **review & correct** API/DB/hub/UI (today: one `deviceId` per Sub). See [31 §12](./31-Motor-Actuator-Device-Design.md). **Interim testing:** two Subs, one ESP each | API + UI + docs | **Not started** (API/DB/hub) |
+| **X-6i** | **Dual-Sub bench UI** — switching `selectedSub` must not leak session row, `running`, or Start/Stop state to the other Sub (until true multi-device-per-Sub). See §2.2 | SomNet.UI | **Done** (2026-10-26, operator verified) |
 
-**Bench note (until X-6):** use **two Subs** (e.g. relay on `Slv66`, motor on `Slv67`) — not two boards on one Sub.
+**Bench note (until X-6):** use **two Subs** (e.g. relay on `Slv66`, motor on `Slv67`) — not two boards on one Sub. You may **switch Sub in the UI** while the other device keeps its session; each Sub’s controls reflect **that** pairing only (X-6i).
+
+### 2.2 Dual-Sub UI scoping (X-6i — interim until X-6)
+
+Required for parallel motor + relay regression on one Dom account. **Does not** change hub routing (still one `deviceId` per Sub).
+
+| ID | Behavior | Status |
+|----|----------|--------|
+| **X-6i-1** | `activeSession` in UI applies only when `session.subTarget` matches **selected Sub** | Done |
+| **X-6i-2** | Tab-sync `running` includes **`subTarget`** + **`kind`** (`relay` \| `motor`); ignore foreign Sub | Done |
+| **X-6i-3** | Session accessory “device automatic running” uses **paired actuator** for selected Sub (motor vs relay flag) | Done |
+| **X-6i-4** | Automatic Start/Stop gated on **`settingsLoaded`** for selected Sub (no stale `running` flash on switch) | Done |
+| **X-6i-5** | Operator: motor session on Sub A + switch to Sub B → B shows idle controls; switch back → A still in progress if device still running | **Verified 2026-10-26** |
+
+**Code touchpoints (reference):** `SessionProvider` (`sessionForSub`), `TabSyncProvider` / `tabSync`, `SessionAccessoryProvider`, `MotorAutomaticControls` / `AutomaticControls`, `deviceAutomaticRunning.ts`.
 
 ### 2.1 Relay regression runbook (X-4 / M0-V2)
 
@@ -62,8 +77,9 @@ Same **`pio run -e dev`** binary as the motor ESP; NVS **`actuatorKind` = `relay
 | R6 | **Abort** during automatic | Relay off; `resultJson` / session complete path |
 | R7 | **Negative** — hub must not drive motor on this unit | `motor-run` / motor-shaped automatic → device **`actuator kind mismatch`** (or API blocks before dispatch) |
 | R8 | Idle / sign-off | No motor motion on D25–D27; relay idle when disarmed; optional: `[MOTOR] backend ready` in serial only |
+| R9 | **Dual-Sub UI (optional)** — motor automatic running on motor Sub; switch to relay Sub | Relay Sub: Start enabled, no false “in progress”; switch back restores motor state if still running (X-6i) |
 
-Record deviceId, Sub, and date in **X-4** row when R1–R7 pass.
+Record deviceId, Sub, and date in **X-4** row when R1–R7 pass (R9 recommended when using two-Sub bench).
 
 ---
 
@@ -138,6 +154,7 @@ Record deviceId, Sub, and date in **X-4** row when R1–R7 pass.
 - [x] **M1-U1** Motor automatic form: duty min/max, segment timing, end session (no stroke-ms; no count end mode). *Per-Sub `motorAutomatic` pairing settings + operation mode on refresh (2026-10-26).*
 - [x] **M1-U2** Hide relay-only controls when device/caps `actuatorKind` = `hbridge`. *(`AutomaticModeControls` switches UI; manual tab still relay — M2/M1 follow-up.)*
 - [x] **M1-U3** Start / Stop / Abort E2E on paired motor device. *(Hub: `esp32-84CCA85C36B4` → Slv67; production bench `esp32-7C9EBD398F08` → Slv66, BTS7960, button accessory + periodic ramp + abort.)*
+- [x] **M1-U4** Dual-Sub bench: switch Sub without cross-contaminating the other device’s session / automatic running UI (X-6i). *(Motor + relay Subs; sessions on each; operator verified 2026-10-26.)*
 
 ### 4.5 Tests
 
@@ -280,7 +297,7 @@ Update this table when a phase is signed off.
 | Phase | Status | Sign-off date |
 |-------|--------|----------------|
 | M0 | In progress (firmware + PROTOCOL; verification pending) | |
-| M1 | Ready for sign-off (M1-R5 rebind copy; M1-F7 ramp on bench ESP) | |
+| M1 | Ready for sign-off (M1-R5 rebind; M1-F7 ramp; M1-U4 dual-Sub UI; **X-4** relay runbook pending) | |
 | M1b | Random modes deferred; ramp implemented in M1-F7 | |
 | M2 | Blocked on M1 | |
 | M3 | Blocked on M2 | |
@@ -302,3 +319,4 @@ Update this table when a phase is signed off.
 | 2026-10-26 | X-6 / MA-D21 — document multi-device-per-Sub remit gap; interim dual-Sub bench |
 | 2026-10-26 | Production motor E2E on Slv66: ramp segments, cooperative stop, 30 min end-session clock, abort |
 | 2026-10-26 | Motor UI: `motorAutomatic` in pairing settings; TabSync mode guard — persistence verified on bench |
+| 2026-10-26 | **X-6i / M1-U4** — per-Sub session + running scoping for dual-Sub bench; operator verified switch without cross-contamination |

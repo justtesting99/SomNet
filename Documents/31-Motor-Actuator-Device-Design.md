@@ -410,6 +410,7 @@ So **two ESPs cannot both be registered to the same Sub** in the current product
 ### 12.3 Interim (until corrected)
 
 - **Dual-bench:** flash same firmware to two boards; pair **relay → Sub A**, **motor → Sub B**; regression + motor features in parallel.
+- **UI (2026-10-26):** SomNet.UI scopes live session, automatic `running`, and Start/Stop to **selected Sub** so switching Subs does not mirror the other device’s in-progress state — see [32 §2.2 X-6i](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md). Hub/API still route one device per Sub (§12.1).
 - **Do not** assume one Sub can host both without schema/API work.
 
 ### 12.4 Tracking
@@ -478,3 +479,4 @@ Implementation tracking: [32 — Motor plan & checklists](./32-Motor-Actuator-Im
 | 2026-10-25 | MA-D18–D20; boardDefs PWM/enable constants; motor endSession without count until Hall v2 |
 | 2026-10-25 | [32 — Implementation plan & phase checklists](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) |
 | 2026-10-26 | §12 + MA-D21 — multi-device per Sub remit; current 1:1 Sub↔device gap; interim two-Sub bench |
+| 2026-10-26 | §12.3 — dual-Sub UI scoping (X-6i) documented in [32](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md); does not replace X-6 API work |
