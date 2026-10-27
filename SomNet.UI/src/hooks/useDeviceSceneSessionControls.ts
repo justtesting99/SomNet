@@ -17,7 +17,7 @@ import { deviceAutomaticRunningForDevice } from '@/utils/selectedDeviceAutomatic
 import { automaticRunningKindForActuator, subscribeTabSync } from '@/utils/tabSync';
 import type { AutomaticResultJson } from '@/utils/automaticResultJson';
 import { stopAutomaticForModeSwitch } from '@/utils/stopAutomaticForModeSwitch';
-import { isDeviceConnectionOnline, isHubLinkReady } from '@/utils/commandReadiness';
+import { isHubLinkReady, resolveDeviceConnectionOnline } from '@/utils/commandReadiness';
 import { sessionDeviceKey } from '@/utils/sessionDeviceKey';
 import {
   persistDeviceAccessoryEngaged,
@@ -86,8 +86,7 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
   const deviceStatus = getDeviceStatus(deviceId);
   const subPresentAcknowledged = isDevicePresentAcknowledged(selectedSub, deviceId);
   const hubReady = isHubLinkReady(deviceStatus);
-  const deviceOnline =
-    registration?.isConnected ?? isDeviceConnectionOnline(deviceStatus);
+  const deviceOnline = resolveDeviceConnectionOnline(registration, deviceStatus);
 
   const accessoryTogglePending = isCommandPending(
     HARDWARE_COMMAND_KEYS.sessionAccessory,

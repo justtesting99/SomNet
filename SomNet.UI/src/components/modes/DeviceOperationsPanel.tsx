@@ -12,6 +12,8 @@ import { DeviceAccessoryResync } from '@/components/hardware/DeviceAccessoryResy
 import { DeviceSubSessionControls } from '@/components/hardware/DeviceSubSessionControls';
 import { DeviceModeToggle } from '@/components/modes/DeviceModeToggle';
 import { DeviceTabSyncLockBanner } from '@/components/hardware/DeviceTabSyncLockBanner';
+import { useSystemStatus } from '@/context/SystemStatusProvider';
+import { resolveDeviceConnectionLabel } from '@/utils/commandReadiness';
 
 function sortRegistrations(rows: DeviceRegistration[]): DeviceRegistration[] {
   return [...rows].sort((a, b) => {
@@ -31,13 +33,19 @@ function sortRegistrations(rows: DeviceRegistration[]): DeviceRegistration[] {
   });
 }
 
-function deviceSectionTitle(registration: DeviceRegistration): string {
+function deviceSectionTitle(
+  registration: DeviceRegistration,
+  connection: 'online' | 'offline' | 'connecting' | 'unknown',
+): string {
   const kindLabel = registration.actuatorKind === 'hbridge' ? 'Motor' : 'Relay';
-  const connection = registration.isConnected ? 'online' : 'offline';
-  return `${kindLabel} · ${registration.deviceId} (${connection})`;
+  const connectionLabel =
+    connection === 'connecting' ? 'connecting' : connection === 'online' ? 'online' : 'offline';
+  return `${kindLabel} · ${registration.deviceId} (${connectionLabel})`;
 }
 
 function DeviceOperationSection({ registration }: { registration: DeviceRegistration }) {
+  const { getDeviceStatus } = useSystemStatus();
+  const connection = resolveDeviceConnectionLabel(registration, getDeviceStatus(registration.deviceId));
   const { mode, needsModeChoice } = useDeviceOperationMode(
     registration.deviceId,
     registration.actuatorKind,
@@ -52,7 +60,7 @@ function DeviceOperationSection({ registration }: { registration: DeviceRegistra
         deviceId={registration.deviceId}
         actuatorKind={registration.actuatorKind}
       />
-      <Panel title={deviceSectionTitle(registration)} className="border-slate-800/80">
+      <Panel title={deviceSectionTitle(registration, connection)} className="border-slate-800/80">
         <div className="space-y-4">
           <DeviceTabSyncLockBanner deviceId={registration.deviceId} />
           <DeviceModeToggle deviceId={registration.deviceId} actuatorKind={registration.actuatorKind} />

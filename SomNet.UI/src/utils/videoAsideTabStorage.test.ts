@@ -6,7 +6,7 @@ describe('videoAsideTabStorage', () => {
 
   beforeEach(() => {
     store.clear();
-    vi.stubGlobal('sessionStorage', {
+    vi.stubGlobal('localStorage', {
       getItem: (key: string) => store.get(key) ?? null,
       setItem: (key: string, value: string) => {
         store.set(key, value);
@@ -15,13 +15,18 @@ describe('videoAsideTabStorage', () => {
         store.delete(key);
       },
     });
+    vi.stubGlobal('sessionStorage', {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+    });
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('round-trips tab choice', () => {
+  it('round-trips tab choice in localStorage', () => {
     expect(readVideoAsideTab()).toBeNull();
     writeVideoAsideTab('graph');
     expect(readVideoAsideTab()).toBe('graph');

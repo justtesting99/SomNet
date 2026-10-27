@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { MotorPatternGraphPanel } from '@/components/video/MotorPatternGraphPanel';
 import { useDevicePairingSettings } from '@/context/DevicePairingSettingsProvider';
@@ -15,19 +15,6 @@ import {
 
 type AsideTab = VideoAsideTab;
 
-function initialAsideTab(feedsAvailable: boolean, graphAvailable: boolean): AsideTab {
-  if (!feedsAvailable && graphAvailable) {
-    return 'graph';
-  }
-  if (feedsAvailable && graphAvailable) {
-    const stored = readVideoAsideTab();
-    if (stored === 'feeds' || stored === 'graph') {
-      return stored;
-    }
-  }
-  return feedsAvailable ? 'feeds' : 'graph';
-}
-
 interface VideoAsidePanelProps {
   mode: OperationMode;
   feedsContent: ReactNode;
@@ -35,7 +22,7 @@ interface VideoAsidePanelProps {
 }
 
 export function VideoAsidePanel({ mode, feedsContent, feedsAvailable }: VideoAsidePanelProps) {
-  const { selectedDeviceId, selectedRegistration } = useSubDevice();
+  const { selectedDeviceId, selectedRegistration, isLoading: devicesLoading } = useSubDevice();
   const { selectedSub } = useSubTarget();
   const { sessionsByKey } = useLiveSession();
 
@@ -51,27 +38,50 @@ export function VideoAsidePanel({ mode, feedsContent, feedsAvailable }: VideoAsi
     return sessionsByKey[sessionDeviceKey(selectedSub, selectedDeviceId)] ?? null;
   }, [selectedDeviceId, selectedSub, sessionsByKey]);
 
-  const [tab, setTab] = useState<AsideTab>(() =>
-    initialAsideTab(feedsAvailable, graphAvailable),
-  );
+  const showTabs = feedsAvailable && graphAvailable;
+
+  const [tab, setTab] = useState<AsideTab>('feeds');
+  const storedTabAppliedRef = useRef(false);
+
+  useEffect(() => {
+    storedTabAppliedRef.current = false;
+  }, [selectedSub]);
+
+  useEffect(() => {
+    if (devicesLoading) {
+      return;
+    }
+
+    if (!feedsAvailable && graphAvailable) {
+      setTab('graph');
+      return;
+    }
+
+    if (!showTabs) {
+      if (feedsAvailable && !graphAvailable) {
+        setTab('feeds');
+      }
+      return;
+    }
+
+    if (storedTabAppliedRef.current) {
+      return;
+    }
+
+    storedTabAppliedRef.current = true;
+    const stored = readVideoAsideTab();
+    if (stored === 'feeds' || stored === 'graph') {
+      setTab(stored);
+    }
+  }, [devicesLoading, feedsAvailable, graphAvailable, showTabs]);
 
   const selectTab = (next: AsideTab) => {
     setTab(next);
-    if (feedsAvailable && graphAvailable) {
-      writeVideoAsideTab(next);
-    }
+    writeVideoAsideTab(next);
   };
-
-  useEffect(() => {
-    if (!feedsAvailable && graphAvailable) {
-      setTab('graph');
-    }
-  }, [feedsAvailable, graphAvailable]);
 
   const effectiveTab: AsideTab =
     tab === 'feeds' && !feedsAvailable ? 'graph' : tab === 'graph' && !graphAvailable ? 'feeds' : tab;
-
-  const showTabs = feedsAvailable && graphAvailable;
 
   const motorAutomaticRunning =
     graphAvailable && mode === 'automatic' && panel.settings.motorAutomatic.running;

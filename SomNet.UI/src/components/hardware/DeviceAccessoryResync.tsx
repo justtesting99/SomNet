@@ -7,7 +7,7 @@ import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 import { sendHardwareCommand } from '@/services/hardwareCommand';
 import { readDeviceAccessoryEngaged } from '@/utils/sessionAccessoryStorage';
 import { useAuth } from '@/context/AuthProvider';
-import { isDeviceConnectionOnline, isHubLinkReady } from '@/utils/commandReadiness';
+import { isHubLinkReady, resolveDeviceConnectionOnline } from '@/utils/commandReadiness';
 import { useDeviceSceneSessionActive } from '@/hooks/useDeviceSceneSessionActive';
 
 /** Re-send accessory ON after device reconnect when UI storage says engaged. */
@@ -27,8 +27,7 @@ export function DeviceAccessoryResync({
   const registration = registrations.find((row) => row.deviceId === deviceId);
   const deviceStatus = getDeviceStatus(deviceId);
   const hubReady = isHubLinkReady(deviceStatus);
-  const deviceOnline =
-    registration?.isConnected ?? isDeviceConnectionOnline(deviceStatus);
+  const deviceOnline = resolveDeviceConnectionOnline(registration, deviceStatus);
 
   const accessoryEngaged =
     domTarget && readDeviceAccessoryEngaged(domTarget, selectedSub, deviceId);
