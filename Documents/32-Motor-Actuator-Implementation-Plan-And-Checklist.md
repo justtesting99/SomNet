@@ -7,6 +7,7 @@
 | Related | Link |
 |---------|------|
 | **Design (decisions, MA-D*, payloads)** | [31 — Motor actuator design](./31-Motor-Actuator-Device-Design.md) |
+| **Multi-device per Sub (spike)** | [33 — X-6 spike](./33-Multi-Device-Per-Sub-Spike.md) |
 | Delivery order | **MA-R5:** hub + ESP → standalone → gateway |
 | Pins / PWM tuning | [boardDefs.h](../SomNet.Device/include/boardDefs.h) |
 | Hub pairing wire | [PROTOCOL.md §4.2](../SomNet.Device/docs/PROTOCOL.md) |
@@ -43,7 +44,7 @@ Track once; reference from phase checklists.
 | **X-3** | Motor `resultJson` + summary builder (separate from relay) | Firmware + Shared + API | **Done** (v1 periodic) |
 | **X-4** | Relay regression: relay NVS profile unchanged on same binary | Firmware CI / manual | In progress — §2.1 runbook |
 | **X-5** | `boardDefs.h`: `MOTOR_PWM_FREQUENCY_HZ`, `MOTOR_ENABLE_ACTIVE_HIGH` tuned on module (MA-D18) | Firmware / bench | 5 kHz PWM validated; duty **>50%** very fast on production motor — operator using **~10%** until max-duty cap/tuning (MA-D18 follow-up) |
-| **X-6** | **Multi-device per Sub** — project remit; **review & correct** API/DB/hub/UI (today: one `deviceId` per Sub). See [31 §12](./31-Motor-Actuator-Device-Design.md). **Interim testing:** two Subs, one ESP each | API + UI + docs | **Not started** (API/DB/hub) |
+| **X-6** | **Multi-device per Sub** — [33](./33-Multi-Device-Per-Sub-Spike.md) **signed off** 2026-10-26; implement **X-6.1–X-6.6**. Today: one `deviceId` per Sub. **Interim bench:** two Subs (X-6i) | API + UI + docs | **Impl** — §2.3 S4 |
 | **X-6i** | **Dual-Sub bench UI** — switching `selectedSub` must not leak session row, `running`, or Start/Stop state to the other Sub (until true multi-device-per-Sub). See §2.2 | SomNet.UI | **Done** (2026-10-26, operator verified) |
 
 **Bench note (until X-6):** use **two Subs** (e.g. relay on `Slv66`, motor on `Slv67`) — not two boards on one Sub. You may **switch Sub in the UI** while the other device keeps its session; each Sub’s controls reflect **that** pairing only (X-6i).
@@ -61,6 +62,26 @@ Required for parallel motor + relay regression on one Dom account. **Does not** 
 | **X-6i-5** | Operator: motor session on Sub A + switch to Sub B → B shows idle controls; switch back → A still in progress if device still running | **Verified 2026-10-26** |
 
 **Code touchpoints (reference):** `SessionProvider` (`sessionForSub`), `TabSyncProvider` / `tabSync`, `SessionAccessoryProvider`, `MotorAutomaticControls` / `AutomaticControls`, `deviceAutomaticRunning.ts`.
+
+### 2.3 Spike X-6 — multi-device per Sub (gate before M1b / M2 / M3)
+
+**Treat as a spike, not a side task:** agree how **one Sub** hosts **many `deviceId`s** (two motors in one session, relay vs motor usually exclusive, future linear actuator) **before** expanding motor modes (M1b) or copying patterns to standalone/gateway (M2/M3).
+
+| Step | Action | Status |
+|------|--------|--------|
+| **S1** | Read & review [33 — Multi-device per Sub spike](./33-Multi-Device-Per-Sub-Spike.md) (use cases UC-1–UC-5, §4 model, §5 slices) | ☑ |
+| **S2** | Resolve **Q1–Q7** in [33 §7](./33-Multi-Device-Per-Sub-Spike.md) | ☑ 2026-10-26 |
+| **S3** | **Spike sign-off** ([33 §8](./33-Multi-Device-Per-Sub-Spike.md)) | ☑ 2026-10-26 |
+| **S4** | Implement **X-6.1** → **X-6.6** per agreed order | ☐ |
+
+**Phase gates (until S3 complete):**
+
+| Phase | Rule |
+|-------|------|
+| **M1b** | **Blocked** — new motor modes/patterns should not assume single-device-per-Sub UI/settings |
+| **M2** | **Blocked** — standalone API parity should follow **deviceId** routing from X-6.2 |
+| **M3** | **Blocked on M2**; gateway already has P7-D2 — align session/history with spike §4.6 |
+| **M1 / X-4** | **Allowed** — finish relay regression and M1 sign-off on dual-Sub bench (X-6i) |
 
 ### 2.1 Relay regression runbook (X-4 / M0-V2)
 
@@ -178,6 +199,8 @@ Record deviceId, Sub, and date in **X-4** row when R1–R7 pass (R9 recommended 
 
 **Planned after motor module on bench** (operator: defer until hardware can show duty/speed ramping — MA-D14).
 
+**Prerequisite:** [X-6 spike sign-off](./33-Multi-Device-Per-Sub-Spike.md) (§2.3) — avoid baking single-device-per-Sub assumptions into new mode UI/settings.
+
 **Exit:** Random power/timing (motor analog of relay) with **duty ramp** between targets — no instant duty jumps (MA-D14).
 
 - [ ] **M1b-F1** Motor random mode(s) in FSM with ramp state machine.
@@ -198,7 +221,7 @@ Record deviceId, Sub, and date in **X-4** row when R1–R7 pass (R9 recommended 
 
 ## 6. Phase M2 — SomEsp standalone (local API)
 
-**Prerequisite:** **M1 sign-off** complete.
+**Prerequisite:** **M1 sign-off** complete **and** [X-6 spike sign-off](./33-Multi-Device-Per-Sub-Spike.md) (§2.3). Implementation should follow **X-6.2** `deviceId` routing semantics where applicable.
 
 **Exit:** Motor unit with `actuatorKind=hbridge` in NVS operates via **`/api/local/*`** and **`/operate`** without hub — behavior matches M1 hub path (MA-R6 shell, motor program body).
 
@@ -298,8 +321,9 @@ Update this table when a phase is signed off.
 |-------|--------|----------------|
 | M0 | In progress (firmware + PROTOCOL; verification pending) | |
 | M1 | Ready for sign-off (M1-R5 rebind; M1-F7 ramp; M1-U4 dual-Sub UI; **X-4** relay runbook pending) | |
-| M1b | Random modes deferred; ramp implemented in M1-F7 | |
-| M2 | Blocked on M1 | |
+| M1b | **Blocked on X-6 impl (§2.3 S4)** until host patterns land; ramp in M1-F7 | |
+| M2 | Blocked on M1 + **X-6 impl** | |
+| **X-6** | Spike signed off; **X-6.1–X-6.6** implementation | |
 | M3 | Blocked on M2 | |
 | M4 | Optional | |
 
@@ -320,3 +344,7 @@ Update this table when a phase is signed off.
 | 2026-10-26 | Production motor E2E on Slv66: ramp segments, cooperative stop, 30 min end-session clock, abort |
 | 2026-10-26 | Motor UI: `motorAutomatic` in pairing settings; TabSync mode guard — persistence verified on bench |
 | 2026-10-26 | **X-6i / M1-U4** — per-Sub session + running scoping for dual-Sub bench; operator verified switch without cross-contamination |
+| 2026-10-26 | **[33](./33-Multi-Device-Per-Sub-Spike.md)** — X-6 spike (UC-4 dual-motor, slices X-6.1–X-6.6); gates M1b/M2/M3 |
+| 2026-10-26 | Spike decisions: relay-only session accessory (MA-D22); independent motors; no v1 relay+motor lockout; gateway super-session future |
+| 2026-10-26 | Spike **§8 sign-off** — Q2 always `deviceId`; Q5 max 8 (MA-D13); Q6 one relay/Sub; Q7 migration; begin X-6.1 |
+| 2026-10-26 | [33 §1.1](./33-Multi-Device-Per-Sub-Spike.md) vision — gateway orchestration; per-device UI; Q8 no session block without accessory (MA-D24) |

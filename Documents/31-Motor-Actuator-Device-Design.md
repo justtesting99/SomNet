@@ -415,7 +415,8 @@ So **two ESPs cannot both be registered to the same Sub** in the current product
 
 ### 12.4 Tracking
 
-- Implementation backlog: [32 — Motor plan §2 X-6](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md).
+- **Spike (review first):** [33 — Multi-device per Sub](./33-Multi-Device-Per-Sub-Spike.md).
+- Implementation backlog: [32 — Motor plan §2.3 X-6](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md).
 - Schema doc note: [04 — Database schema](./04-Database-Schema.md) (`SubDeviceRegistrations`).
 - Gateway / TheSystem: [30 — Main app integration](./30-Main-App-Device-Gateway-Integration.md) when multi-device Sub affects presets and schedules.
 
@@ -445,7 +446,10 @@ So **two ESPs cannot both be registered to the same Sub** in the current product
 | **MA-D10** | FSM structure | **Separate** relay vs motor automatic FSMs; **gated** init from NVS/handshake (MA-R7) | 2026-10-25 |
 | **MA-D8** | Host coverage (end state) | Hub/web, standalone, and gateway **all** required when motor product is complete (MA-R4) | 2026-10-25 |
 | **MA-D9** | Delivery order | **Hub + ESP first** → **standalone** → **gateway** (MA-R5); matches relay development sequence | 2026-10-25 |
-| **MA-D21** | **Multi-device per Sub** | **Remit:** one Sub registers **multiple** ESPs — **not implemented**; review API/DB/UI/hub routing (§12). **Interim:** two Subs for bench | 2026-10-26 |
+| **MA-D21** | **Multi-device per Sub** | **Remit:** one Sub registers **multiple** ESPs — **not implemented**; spike [33](./33-Multi-Device-Per-Sub-Spike.md) then X-6.1–X-6.6. **Interim:** two Subs + X-6i UI | 2026-10-26 |
+| **MA-D22** | **Session accessory scope** | **Relay ESP only** for hub `session-accessory` / Session in Progress; motor auxiliary I/O in **motor program** only. Per-device FSMs; no v1 host lockout relay+motor; gateway **super-session** later ([33 §4.3.1, §4.8](./33-Multi-Device-Per-Sub-Spike.md)) | 2026-10-26 |
+| **MA-D23** | **Multi-device host routing** | **`deviceId` always required** on hub/API commands and history; **≤8 devices/Sub** (MA-D13 strap ceiling, straps optional); **one relay/Sub** v1; PK migration per [33 Q2,Q5–Q7](./33-Multi-Device-Per-Sub-Spike.md) | 2026-10-26 |
+| **MA-D24** | **Multi-device product shape** | Concurrent multi-device runs driven by **gateway** orchestration; hub/API = per-device routing + independent FSMs; UI = **no lockout** on a device’s tab; **session not blocked** without relay accessory ([33 §1.1, §4.3.2, §4.8](./33-Multi-Device-Per-Sub-Spike.md)) | 2026-10-26 |
 
 Update this table when choices are made; move settled items to firmware `config.h` / PROTOCOL and Shared enums.
 
@@ -480,3 +484,6 @@ Implementation tracking: [32 — Motor plan & checklists](./32-Motor-Actuator-Im
 | 2026-10-25 | [32 — Implementation plan & phase checklists](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) |
 | 2026-10-26 | §12 + MA-D21 — multi-device per Sub remit; current 1:1 Sub↔device gap; interim two-Sub bench |
 | 2026-10-26 | §12.3 — dual-Sub UI scoping (X-6i) documented in [32](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md); does not replace X-6 API work |
+| 2026-10-26 | [33](./33-Multi-Device-Per-Sub-Spike.md) — target model, dual-motor UC-4, implementation slices; gates M1b/M2 |
+| 2026-10-26 | **MA-D22** — relay-only session accessory; motor outputs in program; per-device FSMs + future super-session |
+| 2026-10-26 | **MA-D24** — gateway-led multi-device concurrency; UI per-device non-lockout; session without relay accessory |
