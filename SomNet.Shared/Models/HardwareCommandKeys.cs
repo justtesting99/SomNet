@@ -6,6 +6,9 @@ namespace SomNet.Shared.Models;
 public static class HardwareCommandKeys
 {
     public const string AutomaticSessionCompleteCorrelationId = "automatic-session-complete";
+
+    /// <summary>Device hub ack when a motor automatic speed ramp segment begins.</summary>
+    public const string MotorAutomaticSegmentCorrelationId = "motor-automatic-segment";
     /// <summary>UI / tab-sync pending key.</summary>
     public const string ManualStroke = "manual:stroke";
 

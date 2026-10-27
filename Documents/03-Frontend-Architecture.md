@@ -272,6 +272,20 @@ Page load (authenticated; last mode may restore from localStorage)
 - **SessionSnapshotGallery** / **AuthenticatedSnapshotImage** — action stills grouped by `actionIndex`; captions from API `actionSummary` (`captionForSnapshotGroup`, `modeForSnapshotGroup` in `utils/snapshotActionCaption.ts`); JWT blob fetch via `apiFetchBlob` + object URL
 - **SnapshotLightbox** — full-screen still viewer (double-click in gallery; Close / Esc)
 - **SiteUserReadyBanner** — banner when device double-click reports site user ready ([23](./23-Device-Button-Clicks-Checklist.md))
+- **Motor pattern graph** (`MotorPatternGraphPanel`, video column **Feeds | Graph**) — **SomNet.API + operator UI only** today. See below.
+
+### Motor pattern graph (scope)
+
+| Phase | Behavior |
+|-------|----------|
+| **Idle / before Start** | Planned **commanded speed %** from current motor automatic settings (for random modes, a stable **example** path — device choices are unknown until run). |
+| **Running (API path)** | Live curve built from hub acks `correlationId: motor-automatic-segment` (device reports each ramp: from/to speed %, duration, `programElapsedMs`). Requires paired device → API → `AutomaticSessionHubListener` → in-memory segment store. **Now** marker uses UI Start anchor + interpolated position on that live curve. |
+| **Standalone / Mode A** ([26](./26-ESP32-Local-Offline-Mode-Design.md)) | **Not a product goal** for the ESP `/operate` panel unless standalone later exposes the same telemetry to a browser (e.g. local WebSocket or polled status). Firmware may still emit segment JSON for API use when SignalR is connected. |
+| **Relay** | Graph tab is motor-only; relay automatic timeline graphs deferred. |
+
+**Why API-centric:** Random (and timing-random) programs are decided on the device at segment boundaries. A truthful running graph **must** consume device-reported targets, not UI guesses. Preview remains useful for reasoning about settings; live graph is an **operator session tool** alongside video/history, not firmware-local UI.
+
+**Code:** `utils/motorSpeedSchedule.ts` (preview + `buildMotorSpeedScheduleFromLiveSegments`), `utils/motorAutomaticSegmentStore.ts`, firmware `emitSegmentRamp` in `motor_automatic_session_mode.cpp`.
 
 **Live video feeds (Options → General):** `appOptions.mobileVideoExpandDefault` — `"both"` \| `"monitor1"` (front) \| `"monitor2"` (rear). Implemented in `utils/liveVideoFeedPreference.ts` + `useSessionVideoSources` — disabled cameras do not mount iframes or connect to go2rtc (bandwidth/CPU savings on mobile/tunnel). **`actionSnapshotFeeds`** is separate (stills only). On mobile, `appOptions.autoExpandVideoOnMobile` opens the selected feed full screen after commands. Rebuild **`SomNet.UI/dist`** after UI changes when using integrated API hosting.
 

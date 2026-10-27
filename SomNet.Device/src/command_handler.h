@@ -48,6 +48,8 @@ public:
         const char* message,
         const char* resultJson);
 
+    static void onMotorAutomaticSegment(void* context, const char* resultJson);
+
 private:
     void handleExecuteCommand(const ExecuteCommandPayload& command);
     void pollMotorManualRun();

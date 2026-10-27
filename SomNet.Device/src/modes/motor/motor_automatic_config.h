@@ -47,3 +47,6 @@ int motorResolveSpeedPercentForSegment(
     int segmentIndex,
     unsigned long sessionStartMs,
     unsigned long nowMs);
+
+/** Hub correlationId for live segment telemetry (commanded speed ramps). */
+constexpr const char* kMotorAutomaticSegmentCorrelationId = "motor-automatic-segment";

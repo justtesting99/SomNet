@@ -1,5 +1,6 @@
 import type { MotorAutomaticControlState, MotorManualControlState } from '@/types/motorModes';
 import type { MotorAutomaticRunMode } from '@/types/motorAutomaticModes';
+import type { MotorAutomaticSegmentEvent } from '@/utils/motorAutomaticSegmentJson';
 
 export const MOTOR_PATTERN_PREVIEW_NO_AUTO_END_SEC = 180;
 
@@ -110,11 +111,21 @@ export function motorResolveSpeedPercentForSegment(
   }
 }
 
-function pickSegmentSeconds(
-  mode: MotorAutomaticRunMode,
+function segmentSeed(scheduleSeed: number, segmentIndex: number, channel: number): number {
+  return (scheduleSeed + segmentIndex * 9973 + channel * 0x9e3779b9) >>> 0;
+}
+
+/** Stable per-segment random unit (preview + Now dot); not shared across segments. */
+function segmentRandomUnit(scheduleSeed: number, segmentIndex: number, channel: number): () => number {
+  return createSeededRandom(segmentSeed(scheduleSeed, segmentIndex, channel));
+}
+
+function previewSegmentDurationSec(
   state: MotorAutomaticControlState,
-  randomUnit: () => number,
+  segmentIndex: number,
+  scheduleSeed: number,
 ): number {
+  const mode = state.automaticMode;
   if (
     mode === 'periodic' ||
     mode === 'randomSpeed' ||
@@ -127,7 +138,26 @@ function pickSegmentSeconds(
     return state.segmentMinSeconds;
   }
   const span = state.segmentMaxSeconds - state.segmentMinSeconds + 1;
-  return state.segmentMinSeconds + Math.floor(randomUnit() * span);
+  const random = segmentRandomUnit(scheduleSeed, segmentIndex, 1);
+  return state.segmentMinSeconds + Math.floor(random() * span);
+}
+
+function previewSegmentTargetSpeedPercent(
+  state: MotorAutomaticControlState,
+  segmentIndex: number,
+  sessionStartSec: number,
+  elapsedSinceSessionStartSec: number,
+  scheduleSeed: number,
+): number {
+  const random = segmentRandomUnit(scheduleSeed, segmentIndex, 2);
+  return motorResolveSpeedPercentForSegment(
+    state.automaticMode,
+    segmentIndex,
+    state,
+    sessionStartSec,
+    elapsedSinceSessionStartSec,
+    random,
+  );
 }
 
 function pushPoint(points: MotorSpeedSchedulePoint[], tSec: number, speedPercent: number) {
@@ -150,7 +180,7 @@ export function buildMotorAutomaticSpeedSchedule(
   const illustrativeRandom =
     state.automaticMode === 'randomSpeed' || state.automaticMode === 'randomSpeedAndTiming';
 
-  const random = createSeededRandom(hashMotorAutomaticScheduleSeed(state));
+  const scheduleSeed = hashMotorAutomaticScheduleSeed(state);
   const points: MotorSpeedSchedulePoint[] = [];
   pushPoint(points, 0, 0);
 
@@ -164,13 +194,12 @@ export function buildMotorAutomaticSpeedSchedule(
   const sessionStartSec = tSec;
 
   if (state.automaticMode === 'periodic') {
-    const target = motorResolveSpeedPercentForSegment(
-      state.automaticMode,
-      0,
+    const target = previewSegmentTargetSpeedPercent(
       state,
+      0,
       sessionStartSec,
       0,
-      random,
+      scheduleSeed,
     );
     const rampSec = Math.max(state.rampMs / 1000, 0.001);
     pushPoint(points, tSec, 0);
@@ -181,27 +210,20 @@ export function buildMotorAutomaticSpeedSchedule(
   }
 
   let segmentIndex = 0;
+  let commandedSpeed = 0;
   while (tSec < horizonSec && segmentIndex < MAX_SEGMENTS) {
-    const durationSec = Math.max(pickSegmentSeconds(state.automaticMode, state, random), 0.001);
+    const durationSec = Math.max(
+      previewSegmentDurationSec(state, segmentIndex, scheduleSeed),
+      0.001,
+    );
     const elapsedAtStart = Math.max(0, tSec - sessionStartSec);
-    const fromSpeed =
-      segmentIndex === 0
-        ? 0
-        : motorResolveSpeedPercentForSegment(
-            state.automaticMode,
-            segmentIndex - 1,
-            state,
-            sessionStartSec,
-            elapsedAtStart,
-            random,
-          );
-    const toSpeed = motorResolveSpeedPercentForSegment(
-      state.automaticMode,
-      segmentIndex,
+    const fromSpeed = commandedSpeed;
+    const toSpeed = previewSegmentTargetSpeedPercent(
       state,
+      segmentIndex,
       sessionStartSec,
       elapsedAtStart,
-      random,
+      scheduleSeed,
     );
 
     const segmentEnd = Math.min(tSec + durationSec, horizonSec);
@@ -210,11 +232,48 @@ export function buildMotorAutomaticSpeedSchedule(
 
     pushPoint(points, tSec, fromSpeed);
     pushPoint(points, segmentEnd, endSpeed);
+    commandedSpeed = endSpeed;
     tSec = segmentEnd;
     segmentIndex += 1;
   }
 
   return { points, horizonSec, illustrativeRandom };
+}
+
+/** Build commanded-speed graph from device-reported segment ramps (live automatic session). */
+export function buildMotorSpeedScheduleFromLiveSegments(
+  segments: MotorAutomaticSegmentEvent[],
+  horizonSec: number,
+): MotorSpeedSchedule {
+  const sorted = [...segments].sort(
+    (left, right) => left.programElapsedMs - right.programElapsedMs,
+  );
+
+  const points: MotorSpeedSchedulePoint[] = [];
+  pushPoint(points, 0, 0);
+
+  if (sorted.length === 0) {
+    return { points, horizonSec, illustrativeRandom: false };
+  }
+
+  const firstStartSec = sorted[0].programElapsedMs / 1000;
+  if (firstStartSec > 0) {
+    pushPoint(points, firstStartSec, 0);
+  }
+
+  for (const segment of sorted) {
+    const tStartSec = segment.programElapsedMs / 1000;
+    const tEndSec = tStartSec + segment.durationMs / 1000;
+    pushPoint(points, tStartSec, segment.fromSpeedPercent);
+    pushPoint(points, tEndSec, segment.toSpeedPercent);
+  }
+
+  const last = points[points.length - 1];
+  if (last.tSec < horizonSec) {
+    pushPoint(points, horizonSec, last.speedPercent);
+  }
+
+  return { points, horizonSec, illustrativeRandom: false };
 }
 
 export function buildMotorManualSpeedSchedule(

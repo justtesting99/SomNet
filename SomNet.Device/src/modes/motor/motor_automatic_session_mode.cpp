@@ -126,6 +126,40 @@ void MotorAutomaticSessionMode::setSessionNotifier(
     sessionNotify_ = onNotify;
 }
 
+void MotorAutomaticSessionMode::setSegmentNotifier(
+    void* callbackContext,
+    MotorAutomaticSegmentCallback onNotify) {
+    segmentNotifyContext_ = callbackContext;
+    segmentNotify_ = onNotify;
+}
+
+void MotorAutomaticSessionMode::emitSegmentRamp(
+    int segmentIndex,
+    int fromSpeedPercent,
+    int toSpeedPercent,
+    unsigned long durationMs) {
+    if (segmentNotify_ == nullptr || segmentNotifyContext_ == nullptr || !active_) {
+        return;
+    }
+
+    const unsigned long programElapsedMs =
+        delayStartMs_ > 0UL ? millis() - delayStartMs_ : 0UL;
+
+    char segmentJson[320];
+    snprintf(
+        segmentJson,
+        sizeof(segmentJson),
+        "{\"commandKey\":\"motor-automatic-segment\",\"actuatorKind\":\"hbridge\","
+        "\"segmentIndex\":%d,\"fromSpeedPercent\":%d,\"toSpeedPercent\":%d,"
+        "\"durationMs\":%lu,\"programElapsedMs\":%lu}",
+        segmentIndex,
+        fromSpeedPercent,
+        toSpeedPercent,
+        durationMs,
+        programElapsedMs);
+    segmentNotify_(segmentNotifyContext_, segmentJson);
+}
+
 bool MotorAutomaticSessionMode::requestStop(
     const char* correlationId,
     void* callbackContext,
@@ -191,6 +225,8 @@ bool MotorAutomaticSessionMode::beginSetSpeedHold() {
     state_ = State::SetSpeedHold;
     segmentsCompleted_ = 1;
 
+    emitSegmentRamp(0, 0, toSpeedPercent, rampMs);
+
     Serial.print(F("[MOTOR-AUTO] set-speed hold duty="));
     Serial.print(dutyPercent_);
     Serial.print(F("% rampMs="));
@@ -236,6 +272,12 @@ bool MotorAutomaticSessionMode::beginSegmentTransition() {
     }
 
     state_ = State::SegmentRamp;
+
+    emitSegmentRamp(
+        segmentsCompleted_,
+        fromSpeedPercent,
+        toSpeedPercent,
+        segmentDurationMs_);
 
     Serial.print(F("[MOTOR-AUTO] segment #"));
     Serial.print(segmentsCompleted_);
@@ -333,6 +375,8 @@ void MotorAutomaticSessionMode::finishSession(
     callbackContext_ = nullptr;
     sessionNotifyContext_ = nullptr;
     sessionNotify_ = nullptr;
+    segmentNotifyContext_ = nullptr;
+    segmentNotify_ = nullptr;
     stopCorrelationId_[0] = '\0';
     segmentsCompleted_ = 0;
     sessionStartMs_ = 0;

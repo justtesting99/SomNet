@@ -5,6 +5,7 @@
 #include "execution_context.h"
 #include "modes/automatic/automatic_config.h"
 #include "motor_controller.h"
+#include "modes/motor/motor_automatic_config.h"
 #include "modes/motor/motor_automatic_session_mode.h"
 #include "nvs_store.h"
 #include "session_accessory_controller.h"
@@ -230,7 +231,8 @@ void CommandHandler::sendAck(
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
     if (correlationId != nullptr &&
         (strncmp(correlationId, "local-", 6) == 0 ||
-            strcmp(correlationId, "automatic-session-complete") == 0)) {
+            strcmp(correlationId, "automatic-session-complete") == 0 ||
+            strcmp(correlationId, kMotorAutomaticSegmentCorrelationId) == 0)) {
         Serial.print(F("[CMD] local ack correlationId="));
         Serial.print(correlationId != nullptr ? correlationId : "");
         Serial.print(F(" success="));
@@ -336,6 +338,18 @@ void CommandHandler::onAutomaticComplete(
         return;
     }
     static_cast<CommandHandler*>(context)->sendAck(correlationId, success, message, resultJson);
+}
+
+void CommandHandler::onMotorAutomaticSegment(void* context, const char* resultJson) {
+    if (context == nullptr || resultJson == nullptr || resultJson[0] == '\0') {
+        return;
+    }
+
+    static_cast<CommandHandler*>(context)->sendAck(
+        kMotorAutomaticSegmentCorrelationId,
+        true,
+        "motor automatic segment",
+        resultJson);
 }
 
 void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) {
@@ -551,6 +565,7 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
                 return;
             }
             motorAutomatic_->setSessionNotifier(this, &CommandHandler::onAutomaticComplete);
+            motorAutomatic_->setSegmentNotifier(this, &CommandHandler::onMotorAutomaticSegment);
             if (!motorAutomatic_->beginSession(command.payloadJson)) {
                 sendAck(command.correlationId, false, "invalid automatic-start payload", nullptr);
                 return;

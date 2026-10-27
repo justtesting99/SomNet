@@ -45,6 +45,7 @@ import {
 } from '@/utils/burstFieldRules';
 import { applyMotorAutomaticModeChange } from '@/utils/motorAutomaticFieldRules';
 import { getMotorAutomaticModeInfo } from '@/utils/motorAutomaticModeInfo';
+import { clearMotorAutomaticSegments } from '@/utils/motorAutomaticSegmentStore';
 
 const MOTOR_STOP_GRACE_MS = 60_000;
 const DUTY_MIN = 0;
@@ -78,7 +79,7 @@ export function MotorAutomaticControls() {
     endAutomaticSession,
     activeSession,
     markAutomaticDeviceStarted,
-    syncActiveSessionMode,
+    ensureAutomaticSessionForDeviceStart,
   } = useOperationSession();
   const { isCommandPending } = useHardwareCommand();
   const { getDeviceStatus } = useSystemStatus();
@@ -197,7 +198,8 @@ export function MotorAutomaticControls() {
       return;
     }
 
-    if (sceneSessionActive && activeSession?.deviceId === commandDeviceId) {
+    // Scene stays on after automatic stop; history row is recreated on the next Start.
+    if (sceneSessionActive) {
       return;
     }
 
@@ -318,6 +320,7 @@ export function MotorAutomaticControls() {
 
   async function handleStart() {
     setCommandError('');
+    clearMotorAutomaticSegments(commandDeviceId);
     expandOnAction(commandDeviceId);
     const payloadJson = buildMotorAutomaticStartPayload(state);
     try {
@@ -327,9 +330,7 @@ export function MotorAutomaticControls() {
         HARDWARE_COMMAND_KEYS.automaticStart,
         payloadJson,
       );
-      if (activeSessionRef.current?.mode !== 'automatic') {
-        await syncActiveSessionMode('automatic');
-      }
+      await ensureAutomaticSessionForDeviceStart();
       markAutomaticDeviceStarted();
       const sessionId = activeSessionRef.current?.id;
       if (sessionId) {

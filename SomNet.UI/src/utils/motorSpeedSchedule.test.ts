@@ -3,6 +3,7 @@ import { defaultMotorAutomaticState, defaultMotorManualState } from '@/types/mot
 import {
   buildMotorAutomaticSpeedSchedule,
   buildMotorManualSpeedSchedule,
+  buildMotorSpeedScheduleFromLiveSegments,
   MOTOR_PATTERN_PREVIEW_NO_AUTO_END_SEC,
   speedAtScheduleTime,
 } from '@/utils/motorSpeedSchedule';
@@ -34,6 +35,35 @@ describe('buildMotorAutomaticSpeedSchedule', () => {
 
     expect(schedule.horizonSec).toBe(MOTOR_PATTERN_PREVIEW_NO_AUTO_END_SEC);
     expect(schedule.points.length).toBeGreaterThan(2);
+  });
+});
+
+describe('buildMotorSpeedScheduleFromLiveSegments', () => {
+  it('ramps between device-reported segment targets', () => {
+    const schedule = buildMotorSpeedScheduleFromLiveSegments(
+      [
+        {
+          segmentIndex: 0,
+          fromSpeedPercent: 0,
+          toSpeedPercent: 60,
+          durationMs: 10_000,
+          programElapsedMs: 5000,
+        },
+        {
+          segmentIndex: 1,
+          fromSpeedPercent: 60,
+          toSpeedPercent: 30,
+          durationMs: 10_000,
+          programElapsedMs: 15_000,
+        },
+      ],
+      60,
+    );
+
+    expect(speedAtScheduleTime(schedule, 5)).toBe(0);
+    expect(speedAtScheduleTime(schedule, 10)).toBe(30);
+    expect(speedAtScheduleTime(schedule, 15)).toBe(60);
+    expect(speedAtScheduleTime(schedule, 20)).toBe(45);
   });
 });
 

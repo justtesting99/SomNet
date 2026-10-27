@@ -40,5 +40,17 @@ export function useOperationSession() {
     markAutomaticDeviceStarted: () => session.markAutomaticDeviceStartedForDevice(deviceId),
     syncActiveSessionMode: (mode: OperationMode) =>
       session.syncActiveSessionModeForDevice(deviceId, mode),
+    /** Scene can stay on after automatic stop clears the in-progress history row. */
+    ensureAutomaticSessionForDeviceStart: async () => {
+      const key = sessionDeviceKey(selectedSub, deviceId);
+      const current = session.sessionsByKey[key] ?? null;
+      if (!current) {
+        await session.startSessionForDevice(deviceId, 'automatic');
+        return;
+      }
+      if (current.mode !== 'automatic') {
+        await session.syncActiveSessionModeForDevice(deviceId, 'automatic');
+      }
+    },
   };
 }

@@ -78,7 +78,7 @@ export function AutomaticControls() {
     endAutomaticSession,
     activeSession,
     markAutomaticDeviceStarted,
-    syncActiveSessionMode,
+    ensureAutomaticSessionForDeviceStart,
   } = useOperationSession();
   const { isCommandPending } = useHardwareCommand();
   const { getDeviceStatus } = useSystemStatus();
@@ -210,8 +210,8 @@ export function AutomaticControls() {
       return;
     }
 
-    // V2 per-device scene: don't clear running while this device's scene is on (session mode may still be syncing).
-    if (sceneSessionActive && activeSession?.deviceId === commandDeviceId) {
+    // Scene stays on after automatic stop; history row is recreated on the next Start.
+    if (sceneSessionActive) {
       return;
     }
 
@@ -308,9 +308,7 @@ export function AutomaticControls() {
         HARDWARE_COMMAND_KEYS.automaticStart,
         payloadJson,
       );
-      if (activeSessionRef.current?.mode !== 'automatic') {
-        await syncActiveSessionMode('automatic');
-      }
+      await ensureAutomaticSessionForDeviceStart();
       markAutomaticDeviceStarted();
       const sessionId = activeSessionRef.current?.id;
       if (sessionId) {

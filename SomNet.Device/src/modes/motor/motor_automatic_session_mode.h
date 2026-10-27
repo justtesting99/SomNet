@@ -19,6 +19,8 @@ public:
 
     void setSessionNotifier(void* callbackContext, AutomaticCompleteCallback onNotify);
 
+    void setSegmentNotifier(void* callbackContext, MotorAutomaticSegmentCallback onNotify);
+
     void poll();
     void abort();
     bool isActive() const;
@@ -43,6 +45,11 @@ private:
     int pickSegmentSeconds() const;
     bool applyPendingUpdate();
     void requestRampToStop();
+    void emitSegmentRamp(
+        int segmentIndex,
+        int fromSpeedPercent,
+        int toSpeedPercent,
+        unsigned long durationMs);
 
     MotorController* motor_ = nullptr;
     State state_ = State::Idle;
@@ -67,4 +74,6 @@ private:
     AutomaticCompleteCallback onComplete_ = nullptr;
     void* sessionNotifyContext_ = nullptr;
     AutomaticCompleteCallback sessionNotify_ = nullptr;
+    void* segmentNotifyContext_ = nullptr;
+    MotorAutomaticSegmentCallback segmentNotify_ = nullptr;
 };

@@ -25,6 +25,10 @@ import type { MotorAutomaticControlState, MotorManualControlState } from '@/type
 import { normalizeMotorManualControlState } from '@/utils/motorManualFieldRules';
 import { clearAutomaticDeviceRunningHint } from '@/utils/automaticDeviceRunningHint';
 import {
+  clearMotorPatternRunAnchor,
+  writeMotorPatternRunAnchor,
+} from '@/utils/motorPatternRunAnchor';
+import {
   readDeviceAutomaticRunningLocal,
   writeDeviceAutomaticRunningLocal,
 } from '@/utils/deviceAutomaticRunningLocal';
@@ -416,6 +420,14 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
       if (!running) {
         clearAutomaticDeviceRunningHint(selectedSubRef.current, deviceId);
+      }
+
+      if (kind === 'motor') {
+        if (running) {
+          writeMotorPatternRunAnchor(selectedSubRef.current, deviceId);
+        } else {
+          clearMotorPatternRunAnchor(selectedSubRef.current, deviceId);
+        }
       }
 
       writeDeviceAutomaticRunningLocal(selectedSubRef.current, deviceId, kind, running);

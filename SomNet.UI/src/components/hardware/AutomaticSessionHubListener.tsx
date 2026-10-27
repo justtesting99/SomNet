@@ -4,8 +4,14 @@ import { useOptions } from '@/context/OptionsProvider';
 import { useLiveSession } from '@/context/SessionProvider';
 import {
   AUTOMATIC_SESSION_COMPLETE_CORRELATION_ID,
+  MOTOR_AUTOMATIC_SEGMENT_CORRELATION_ID,
   type HardwareCommandAck,
 } from '@/types/hardwareHub';
+import { parseMotorAutomaticSegmentJson } from '@/utils/motorAutomaticSegmentJson';
+import {
+  clearMotorAutomaticSegments,
+  recordMotorAutomaticSegment,
+} from '@/utils/motorAutomaticSegmentStore';
 import { useSiteUserReady } from '@/context/SiteUserReadyProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useSubDevice } from '@/context/SubDeviceProvider';
@@ -97,11 +103,30 @@ export function AutomaticSessionHubListener() {
 
     const connection = createOperatorHardwareHub({
       onAck: (ack) => {
+        const deviceId = ack.deviceId?.trim();
+
+        if (ack.correlationId === MOTOR_AUTOMATIC_SEGMENT_CORRELATION_ID) {
+          if (!deviceId) {
+            return;
+          }
+
+          const segment = parseMotorAutomaticSegmentJson(ack.resultJson);
+          if (!segment) {
+            return;
+          }
+
+          if (segment.segmentIndex === 0) {
+            clearMotorAutomaticSegments(deviceId);
+          }
+
+          recordMotorAutomaticSegment(deviceId, segment);
+          return;
+        }
+
         if (!shouldHandleAutomaticSessionComplete(ack)) {
           return;
         }
 
-        const deviceId = ack.deviceId?.trim();
         if (!deviceId) {
           if (import.meta.env.DEV) {
             console.warn(
@@ -109,6 +134,11 @@ export function AutomaticSessionHubListener() {
             );
           }
           return;
+        }
+
+        const parsedComplete = parseAutomaticResultJson(ack.resultJson);
+        if (parsedComplete?.actuatorKind === 'hbridge') {
+          clearMotorAutomaticSegments(deviceId);
         }
 
         const registration = registrationsRef.current.find((row) => row.deviceId === deviceId);

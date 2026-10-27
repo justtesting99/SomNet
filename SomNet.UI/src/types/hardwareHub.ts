@@ -11,4 +11,7 @@ export interface HardwareCommandAck {
 /** Unsolicited automatic session complete (end-rule / abort) — not tied to automatic-stop REST. */
 export const AUTOMATIC_SESSION_COMPLETE_CORRELATION_ID = 'automatic-session-complete';
 
+/** Device-reported motor automatic segment ramp (commanded speeds). */
+export const MOTOR_AUTOMATIC_SEGMENT_CORRELATION_ID = 'motor-automatic-segment';
+
 export const HARDWARE_HUB_COMMAND_ACKNOWLEDGED = 'CommandAcknowledged';
