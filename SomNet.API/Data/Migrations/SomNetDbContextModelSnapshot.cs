@@ -72,6 +72,30 @@ namespace SomNet.API.Data.Migrations
                     b.ToTable("DomSubSettings", (string)null);
                 });
 
+            modelBuilder.Entity("SomNet.API.Data.Entities.DomSubDeviceSettings", b =>
+                {
+                    b.Property<string>("DomTarget")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("SubName")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("DeviceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SettingsJson")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("DomTarget", "SubName", "DeviceId");
+
+                    b.ToTable("DomSubDeviceSettings", (string)null);
+                });
+
             modelBuilder.Entity("SomNet.API.Data.Entities.NotificationHistoryEntry", b =>
                 {
                     b.Property<string>("Id")

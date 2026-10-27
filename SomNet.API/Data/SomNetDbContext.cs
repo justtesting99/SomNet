@@ -29,6 +29,8 @@ public sealed class SomNetDbContext : DbContext
 
     public DbSet<DomSubSettings> DomSubSettings => Set<DomSubSettings>();
 
+    public DbSet<DomSubDeviceSettings> DomSubDeviceSettings => Set<DomSubDeviceSettings>();
+
     public DbSet<DomSubAssignment> DomSubAssignments => Set<DomSubAssignment>();
 
     public DbSet<DomSubExclusion> DomSubExclusions => Set<DomSubExclusion>();
@@ -71,6 +73,16 @@ public sealed class SomNetDbContext : DbContext
             entity.HasKey(settings => new { settings.DomTarget, settings.SubName });
             entity.Property(settings => settings.DomTarget).HasMaxLength(128);
             entity.Property(settings => settings.SubName).HasMaxLength(32);
+            entity.Property(settings => settings.SettingsJson).HasMaxLength(8000);
+        });
+
+        modelBuilder.Entity<DomSubDeviceSettings>(entity =>
+        {
+            entity.ToTable("DomSubDeviceSettings");
+            entity.HasKey(settings => new { settings.DomTarget, settings.SubName, settings.DeviceId });
+            entity.Property(settings => settings.DomTarget).HasMaxLength(128);
+            entity.Property(settings => settings.SubName).HasMaxLength(32);
+            entity.Property(settings => settings.DeviceId).HasMaxLength(64);
             entity.Property(settings => settings.SettingsJson).HasMaxLength(8000);
         });
 

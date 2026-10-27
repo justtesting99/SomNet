@@ -57,9 +57,22 @@ Per Dom+Sub pairing configuration stored as JSON.
 |--------|------|-------|
 | DomTarget | string (PK part) | |
 | SubName | string (PK part) | Renamed from SubTarget in migration |
-| SettingsJson | string (max 8000) | Serialized `PairingSettingsDto` |
+| SettingsJson | string (max 8000) | Serialized `PairingSettingsDto` (Sub-level; **appOptions** + **video** authoritative here) |
 
 **Serializer:** `PairingSettingsSerializer.cs` handles legacy ms→percent migration on read.
+
+### DomSubDeviceSettings
+
+Per **paired `deviceId`** control profiles (`manual` / `automatic` / `motorAutomatic`). **App options** and **video** on GET/PUT are merged from `DomSubSettings`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| DomTarget | string (PK part) | |
+| SubName | string (PK part) | |
+| DeviceId | string (PK part) | `esp32-…` |
+| SettingsJson | string (max 8000) | Serialized `PairingSettingsDto` |
+
+**Migration:** `20261027143000_AddDomSubDeviceSettings` copies existing Sub JSON to each non-revoked registration.
 
 ### DomSubAssignments
 

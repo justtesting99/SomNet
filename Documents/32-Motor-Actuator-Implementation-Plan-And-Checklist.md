@@ -43,12 +43,12 @@ Track once; reference from phase checklists.
 | **X-1** | `ActuatorKind` enum in `SomNet.Shared` (`relay`, `hbridge`) | Shared | **Done** |
 | **X-2** | Motor program DTO sketch (`minimumDutyPercent`, `maximumDutyPercent`, `rampMs`, `endSessionMode` minutes/noAutoEnd — MA-D19, MA-D20) | Shared + PROTOCOL | **Done** (DTO + PROTOCOL) |
 | **X-3** | Motor `resultJson` + summary builder (separate from relay) | Firmware + Shared + API | **Done** (v1 periodic) |
-| **X-4** | Relay regression: relay NVS profile unchanged on same binary | Firmware CI / manual | In progress — §2.1 runbook |
+| **X-4** | Relay regression: relay NVS profile unchanged on same binary | Firmware CI / manual | **Done** — Run A R0–R11 **2026-10-27** (operator) |
 | **X-5** | `boardDefs.h`: `MOTOR_PWM_FREQUENCY_HZ`, `MOTOR_ENABLE_ACTIVE_HIGH` tuned on module (MA-D18) | Firmware / bench | 5 kHz PWM validated; duty **>50%** very fast on production motor — operator using **~10%** until max-duty cap/tuning (MA-D18 follow-up) |
-| **X-6** | **Multi-device per Sub** — [33](./33-Multi-Device-Per-Sub-Spike.md) **signed off** 2026-10-26; **X-6.1–X-6.2** in tree; **X-6.3–X-6.6** open. **Interim bench:** two Subs (X-6i) until same-Sub multi-pair verified | API + UI + docs | **In progress** — §2.3 S4 |
+| **X-6** | **Multi-device per Sub** — [33](./33-Multi-Device-Per-Sub-Spike.md) **signed off** 2026-10-26; **X-6.1–X-6.3** + **X-6.5** + same-Sub bench; **X-6.4**, **X-6.6** remain | API + UI + docs | **In progress** — §2.3 S4 |
 | **X-6i** | **Dual-Sub bench UI** — switching `selectedSub` must not leak session row, `running`, or Start/Stop state to the other Sub (until true multi-device-per-Sub). See §2.2 | SomNet.UI | **Done** (2026-10-26, operator verified) |
 
-**Bench note (until X-6):** use **two Subs** (e.g. relay on `Slv66`, motor on `Slv67`) — not two boards on one Sub. You may **switch Sub in the UI** while the other device keeps its session; each Sub’s controls reflect **that** pairing only (X-6i).
+**Bench note:** **Primary** regression path is **relay + motor on the same Sub** (`Slv66`, device picker) — operator verified independent scene/motion **2026-10-27**. **X-6i** dual-Sub switching remains valid for Sub-isolation tests.
 
 ### 2.2 Dual-Sub UI scoping (X-6i — interim until X-6)
 
@@ -73,7 +73,7 @@ Required for parallel motor + relay regression on one Dom account. **Does not** 
 | **S1** | Read & review [33 — Multi-device per Sub spike](./33-Multi-Device-Per-Sub-Spike.md) (use cases UC-1–UC-5, §4 model, §5 slices) | ☑ |
 | **S2** | Resolve **Q1–Q7** in [33 §7](./33-Multi-Device-Per-Sub-Spike.md) | ☑ 2026-10-26 |
 | **S3** | **Spike sign-off** ([33 §8](./33-Multi-Device-Per-Sub-Spike.md)) | ☑ 2026-10-26 |
-| **S4** | Implement **X-6.1** → **X-6.6** per agreed order | **In progress** — X-6.1 + X-6.2 (API/UI `deviceId`) landed 2026-10-26; X-6.3–X-6.6 remain |
+| **S4** | Implement **X-6.1** → **X-6.6** per agreed order | **In progress** — **X-6.3** `DomSubDeviceSettings` + UI load/save per `deviceId` **2026-10-27**; X-6.4 (history), X-6.6 (`running` + `deviceId`) remain |
 
 **Phase gates (until S3 complete):**
 
@@ -82,7 +82,7 @@ Required for parallel motor + relay regression on one Dom account. **Does not** 
 | **M1b** | **Blocked** — new motor modes/patterns should not assume single-device-per-Sub UI/settings |
 | **M2** | **Blocked** — standalone API parity should follow **deviceId** routing from X-6.2 |
 | **M3** | **Blocked on M2**; gateway already has P7-D2 — align session/history with spike §4.6 |
-| **M1 / X-4** | **Allowed** — finish relay regression and M1 sign-off on dual-Sub bench (X-6i) |
+| **M1 / X-4** | **Complete** — Run A + Run B signed off **2026-10-27** |
 
 ### 2.1 Relay regression runbook (X-4 / M0-V2)
 
@@ -101,7 +101,65 @@ Same **`pio run -e dev`** binary as the motor ESP; NVS **`actuatorKind` = `relay
 | R8 | Idle / sign-off | No motor motion on D25–D27; relay idle when disarmed; optional: `[MOTOR] backend ready` in serial only |
 | R9 | **Dual-Sub UI (optional)** — motor automatic running on motor Sub; switch to relay Sub | Relay Sub: Start enabled, no false “in progress”; switch back restores motor state if still running (X-6i) |
 
-Record deviceId, Sub, and date in **X-4** row when R1–R7 pass (R9 recommended when using two-Sub bench).
+Record deviceId, Sub, and date in **X-4** row when **Run A** (§2.4) passes.
+
+#### X-4 sign-off record
+
+| Field | Value |
+|-------|--------|
+| **Date** | 2026-10-27 |
+| **Signed by** | Operator (bench) |
+| **Sub** | `Slv66` (same-Sub relay + motor) |
+| **Relay `deviceId`** | *(relay unit on roster — paired as relay)* |
+| **Firmware** | Unified `env:dev`; `feature/motor-actuator` @ `5b407ec` |
+| **Runbook** | R0–R8 ☑; R10–R11 ☑ (same-Sub); R9 N/A |
+| **Notes** | V2: motion with scene on, accessory optional. Operator: all Run A steps pass. |
+
+### 2.4 Operator sign-off runs (execute on bench)
+
+Use these **in order** for option **A** (formal sign-off). Check each box in your notes; only then complete the sign-off tables above/below and update §9.
+
+#### Run A — **X-4** relay regression (same binary as motor)
+
+**Unit under test:** relay-profile ESP only. **Binary:** `pio run -e dev` (same image flashed to motor units).
+
+| ☐ | Step | What to do | Pass |
+|---|------|------------|------|
+| ☑ | **R0** | If pair/kind errors | Revoke → re-pair as **relay** while hub connected |
+| ☑ | **R1** | Flash relay ESP | Serial: `Actuator: relay`; hub connects |
+| ☑ | **R2** | Hardware pairing | UI shows `actuatorKind: relay` for this `deviceId` on intended Sub |
+| ☑ | **R3** | **Accessory** ON (optional) | `[ACCESSORY] ON`; **V2:** stroke/automatic still allowed with accessory **OFF** (scene on + ready) |
+| ☑ | **R4** | Manual stroke (± burst) | Relay actuates; command ack success |
+| ☑ | **R5** | Automatic — short program | Segments run; history/summary on stop or end |
+| ☑ | **R6** | **Abort** during automatic | Relay stops; session/result path completes |
+| ☑ | **R7** | Negative | Motor-shaped command to **this** `deviceId` rejected (device or API) |
+| ☑ | **R8** | Idle | No motor pins active; relay idle when disarmed |
+
+**Same-Sub bench (recommended with motor paired):**
+
+| ☑ | **R10** | Motor automatic **running** on motor `deviceId`; switch picker to **relay** | Relay panel idle; relay **Start** works; **Abort** visible while relay automatic runs |
+| ☑ | **R11** | Switch back to motor while relay idle | Motor state still correct (not cleared by relay tab) |
+
+When all required rows pass → fill **§2.1 X-4 sign-off record** and set **X-4** row in §2 to **Done**.
+
+#### Run B — **M1** hub motor sign-off (after Run A recommended)
+
+**Unit under test:** motor-profile ESP (`actuatorKind: hbridge`). **Exit:** periodic automatic via **SomNet UI/API** + `resultJson`.
+
+| ☐ | Step | What to do | Pass |
+|---|------|------------|------|
+| ☑ | **M1-B1** | Pair/rebind | Register as **motor**; revoke+motor re-pair works if needed |
+| ☑ | **M1-B2** | Scene + ready | Double-click device; **Scene** on; motion not blocked by accessory off |
+| ☑ | **M1-B3** | Periodic automatic | Start → duty ramp/segments visible on bench; **Stop** cooperative path OK |
+| ☑ | **M1-B4** | **Abort** | PWM off; session completes |
+| ☑ | **M1-B5** | History | Completed session shows motor summary / `segmentsCompleted` (or equivalent) |
+| ☑ | **M1-B6** | UI kind | Relay-only automatic controls hidden when motor selected |
+| ☑ | **M1-B7** | Negative | Relay automatic payload to motor `deviceId` rejected |
+| ☑ | **M1-B8** | Same-Sub | With relay on same Sub: independent start/stop per device (UC-1) |
+
+When **M1-B1–B8** pass → fill **§4 Phase M1 sign-off** (☑ all M1 items) and update §9 **M1** row.
+
+**Not part of M1 sign-off:** M0 phase sign-off (M0-F2/F5 still open), M1b random modes, M2 standalone.
 
 ---
 
@@ -126,8 +184,8 @@ Record deviceId, Sub, and date in **X-4** row when R1–R7 pass (R9 recommended 
 
 ### 3.3 Verification
 
-- [ ] **M0-V1** Flash **same** `env:dev` binary; set NVS to `hbridge` (config tool or temporary API); manual stop clears PWM + enable.
-- [ ] **M0-V2** Relay-profile device on same binary: relay behavior unchanged (X-4).
+- [x] **M0-V1** Flash **same** `env:dev` binary; set NVS to `hbridge` (config tool or temporary API); manual stop clears PWM + enable. *(Run B M1-B3/B4 — **2026-10-27**.)*
+- [x] **M0-V2** Relay-profile device on same binary: relay behavior unchanged (X-4). *(Run A — **2026-10-27**.)*
 
 ### Phase M0 sign-off
 
@@ -176,23 +234,23 @@ Record deviceId, Sub, and date in **X-4** row when R1–R7 pass (R9 recommended 
 - [x] **M1-U1** Motor automatic form: duty min/max, segment timing, end session (no stroke-ms; no count end mode). *Per-Sub `motorAutomatic` pairing settings + operation mode on refresh (2026-10-26).*
 - [x] **M1-U2** Hide relay-only controls when device/caps `actuatorKind` = `hbridge`. *(`AutomaticModeControls` switches UI; manual tab still relay — M2/M1 follow-up.)*
 - [x] **M1-U3** Start / Stop / Abort E2E on paired motor device. *(Hub: `esp32-84CCA85C36B4` → Slv67; production bench `esp32-7C9EBD398F08` → Slv66, BTS7960, button accessory + periodic ramp + abort.)*
-- [x] **M1-U4** Dual-Sub bench: switch Sub without cross-contaminating the other device’s session / automatic running UI (X-6i). *(Motor + relay Subs; sessions on each; operator verified 2026-10-26.)*
+- [x] **M1-U4** Dual-Sub bench: switch Sub without cross-contaminating the other device’s session / automatic running UI (X-6i). *(Dual-Sub **2026-10-26**; same-Sub relay+motor device switch **2026-10-27** — independent scene/motion.)*
 
 ### 4.5 Tests
 
 - [x] **M1-T1** Unit/integration tests for motor DTO validation (API or Shared).
-- [x] **M1-T2** Manual test script or checklist run recorded (pair → arm → periodic → result). *(Slv67 + Slv66 production motor runs 2026-10-26.)*
+- [x] **M1-T2** Manual test script or checklist run recorded (pair → arm → periodic → result). *(2026-10-26 Slv67/Slv66; **2026-10-27** Run B M1-B1–B8 operator pass.)*
 
 ### Phase M1 sign-off
 
 | Field | Value |
 |-------|--------|
-| **Date** | |
-| **Signed by** | |
-| **Firmware / API / UI versions** | |
-| **Test deviceId** | |
-| **Notes** | |
-| **All M1 items complete** | ☐ |
+| **Date** | 2026-10-27 |
+| **Signed by** | Operator (bench) |
+| **Firmware / API / UI versions** | `feature/motor-actuator` @ `5b407ec`; unified `env:dev` ESP image |
+| **Test deviceId** | Motor `esp32-7C9EBD398F08`; relay on same Sub `Slv66` (Run A) |
+| **Notes** | Periodic + ramp + Stop/Abort + history; V2 scene per device; UC-1 same-Sub with relay. M1b/M2 still gated on X-6.3–X-6.6 for host polish / dual-motor settings. |
+| **All M1 items complete** | ☑ |
 
 ---
 
@@ -200,7 +258,7 @@ Record deviceId, Sub, and date in **X-4** row when R1–R7 pass (R9 recommended 
 
 **Planned after motor module on bench** (operator: defer until hardware can show duty/speed ramping — MA-D14).
 
-**Prerequisite:** [X-6 spike sign-off](./33-Multi-Device-Per-Sub-Spike.md) (§2.3) — avoid baking single-device-per-Sub assumptions into new mode UI/settings.
+**Prerequisite:** [X-6](./33-Multi-Device-Per-Sub-Spike.md) host slices **X-6.3** (per-device settings) before UI assumes two independent motor profiles on one Sub.
 
 **Exit:** Random power/timing (motor analog of relay) with **duty ramp** between targets — no instant duty jumps (MA-D14).
 
@@ -320,11 +378,12 @@ Update this table when a phase is signed off.
 
 | Phase | Status | Sign-off date |
 |-------|--------|----------------|
-| M0 | In progress (firmware + PROTOCOL; verification pending) | |
-| M1 | Ready for sign-off (M1-R5 rebind; M1-F7 ramp; M1-U4 dual-Sub UI; **X-4** relay runbook pending) | |
-| M1b | **Blocked on X-6 impl (§2.3 S4)** until host patterns land; ramp in M1-F7 | |
-| M2 | Blocked on M1 + **X-6 impl** | |
-| **X-6** | Spike signed off; **X-6.1–X-6.6** implementation | |
+| M0 | In progress (M0-F2/M0-F5 open; **M0-V1/V2** done) | |
+| M1 | **Signed off** (Run B) | 2026-10-27 |
+| M1b | **Schedulable** — optional; prefer **X-6.3** before dual-motor UC-4 | |
+| M2 | Blocked on **X-6.3–X-6.6** (M1 done) | |
+| **X-6** | Spike signed off; impl **partial** (see §2.3 S4) | |
+| **X-4** | **Done** (Run A) | 2026-10-27 |
 | M3 | Blocked on M2 | |
 | M4 | Optional | |
 
@@ -351,3 +410,6 @@ Update this table when a phase is signed off.
 | 2026-10-26 | [33 §1.1](./33-Multi-Device-Per-Sub-Spike.md) vision — gateway orchestration; per-device UI; Q8 no session block without accessory (MA-D24) |
 | 2026-10-26 | **X-6.1–X-6.2** — composite PK `(Dom, Sub, DeviceId)`; list/pair/revoke per device; hub unicast; UI `deviceId` + device picker |
 | 2026-10-27 | **[34](./34-Operator-Session-And-Accessory-V2-Rules.md)** — V2 operator norm (Scene + voluntary Accessory; motion decoupled); do not bleed P16/V1 into X-6 changes |
+| 2026-10-27 | **§2.4** operator runs (Run A X-4, Run B M1) — executable sign-off; revert premature doc-only sign-off |
+| 2026-10-27 | Operator: Run A **R0–R11** + Run B **M1-B1–B8** all pass — **X-4** + **M1** sign-off recorded |
+| 2026-10-27 | **X-6.3** — `DomSubDeviceSettings`; settings API requires `deviceId`; UI reload/save per device picker |

@@ -172,8 +172,8 @@ Per Dom+Sub pairing settings stored as JSON.
 
 | Method | Route | Query | Description |
 |--------|-------|-------|-------------|
-| GET | `/api/settings` | `subTarget` | Load `PairingSettingsDto` |
-| PUT | `/api/settings` | `subTarget` | Save `PairingSettingsDto` |
+| GET | `/api/settings` | `subTarget`, **`deviceId`** (required) | Load `PairingSettingsDto` for paired device; `appOptions` / `video` from Sub row |
+| PUT | `/api/settings` | `subTarget`, **`deviceId`** (required) | Save device control settings; updates Sub-level `appOptions` / `video` |
 
 ### PairingSettingsDto Structure
 

@@ -31,10 +31,14 @@ public interface ISomNetDataStore
     /// <summary>Removes a session row that is still at the initial in-progress placeholder (P16 accessory off with no activity).</summary>
     void DeleteInProgressSession(string domTarget, string sessionId);
 
+    /// <summary>Sub-scoped app/video settings (legacy DomSubSettings row).</summary>
     PairingSettingsDto GetPairingSettings(string domTarget, string subTarget);
+
+    PairingSettingsDto GetPairingSettings(string domTarget, string subTarget, string deviceId);
 
     PairingSettingsDto SavePairingSettings(
         string domTarget,
         string subTarget,
+        string deviceId,
         PairingSettingsDto settings);
 }

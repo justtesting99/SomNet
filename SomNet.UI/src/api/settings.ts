@@ -52,8 +52,11 @@ function normalizeSettings(response: PairingSettingsResponse): PairingSettings {
   };
 }
 
-export async function fetchPairingSettings(subTarget: SubTargetName): Promise<PairingSettings> {
-  const params = new URLSearchParams({ subTarget });
+export async function fetchPairingSettings(
+  subTarget: SubTargetName,
+  deviceId: string,
+): Promise<PairingSettings> {
+  const params = new URLSearchParams({ subTarget, deviceId });
   const response = await apiFetch<PairingSettingsResponse>(`/api/settings?${params.toString()}`);
   return normalizeSettings(response);
 }
@@ -64,9 +67,10 @@ export async function fetchStrokeLimits(): Promise<StrokeMsLimits> {
 
 export async function savePairingSettings(
   subTarget: SubTargetName,
+  deviceId: string,
   settings: PairingSettings,
 ): Promise<PairingSettings> {
-  const params = new URLSearchParams({ subTarget });
+  const params = new URLSearchParams({ subTarget, deviceId });
   const response = await apiFetch<PairingSettingsResponse>(`/api/settings?${params.toString()}`, {
     method: 'PUT',
     body: JSON.stringify({

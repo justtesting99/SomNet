@@ -11,6 +11,7 @@ import {
 import { fetchPairingSettings, fetchStrokeLimits, savePairingSettings } from '@/api/settings';
 import { useAuth } from '@/context/AuthProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 import { DEFAULT_STROKE_MS_LIMITS } from '@/config/strokeLimits';
 import type { AppOptions } from '@/types/options';
 import type { AutomaticControlState, ManualControlState } from '@/types/modes';
@@ -49,8 +50,10 @@ const SAVE_DEBOUNCE_MS = 400;
 export function OptionsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { selectedSub } = useSubTarget();
+  const { selectedDeviceId, isLoading: devicesLoading } = useSubDevice();
   const selectedSubRef = useRef(selectedSub);
   selectedSubRef.current = selectedSub;
+  const persistDeviceIdRef = useRef<string | null>(null);
   const domTarget = user?.displayName ?? user?.username ?? '';
   const [settings, setSettings] = useState<PairingSettings>(DEFAULT_PAIRING_SETTINGS);
   const [strokeLimits, setStrokeLimits] = useState<StrokeMsLimits>(DEFAULT_STROKE_MS_LIMITS);
@@ -70,12 +73,12 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
   }, [settingsLoaded]);
 
   const persistSettings = useCallback(
-    async (nextSettings: PairingSettings, generation: number) => {
+    async (deviceId: string, nextSettings: PairingSettings, generation: number) => {
       if (!domTarget) {
         return nextSettings;
       }
 
-      const savedSettings = await savePairingSettings(selectedSub, nextSettings);
+      const savedSettings = await savePairingSettings(selectedSub, deviceId, nextSettings);
       if (generation !== persistGenerationRef.current) {
         return savedSettings;
       }
@@ -83,6 +86,31 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       return savedSettings;
     },
     [domTarget, selectedSub],
+  );
+
+  const flushPendingSaveForDevice = useCallback(
+    (deviceId: string | null) => {
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+
+      if (
+        !deviceId ||
+        !domTarget ||
+        !settingsLoadedRef.current ||
+        !userEditedRef.current
+      ) {
+        return;
+      }
+
+      const generation = persistGenerationRef.current;
+      const snapshot = settingsRef.current;
+      void persistSettings(deviceId, snapshot, generation).catch(() => {
+        // Keep local state; the next change or dialog save can retry.
+      });
+    },
+    [domTarget, persistSettings],
   );
 
   const queuePersist = useCallback(
@@ -97,9 +125,14 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
       const generation = persistGenerationRef.current;
 
+      const deviceId = persistDeviceIdRef.current;
+      if (!deviceId) {
+        return;
+      }
+
       saveTimerRef.current = window.setTimeout(() => {
         saveTimerRef.current = null;
-        void persistSettings(nextSettings, generation).catch(() => {
+        void persistSettings(deviceId, nextSettings, generation).catch(() => {
           // Keep local state; the next change or dialog save can retry.
         });
       }, SAVE_DEBOUNCE_MS);
@@ -108,19 +141,42 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    return () => {
+      flushPendingSaveForDevice(persistDeviceIdRef.current);
+    };
+  }, [flushPendingSaveForDevice]);
+
+  useEffect(() => {
     if (!domTarget) {
       persistGenerationRef.current += 1;
       userEditedRef.current = false;
+      persistDeviceIdRef.current = null;
       setSettings(DEFAULT_PAIRING_SETTINGS);
       setSettingsLoaded(false);
       setIsLoading(false);
       return;
     }
 
-    let cancelled = false;
+    if (devicesLoading) {
+      return;
+    }
 
+    if (!selectedDeviceId) {
+      persistGenerationRef.current += 1;
+      userEditedRef.current = false;
+      persistDeviceIdRef.current = null;
+      setSettingsLoaded(false);
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const deviceIdForLoad = selectedDeviceId;
+
+    flushPendingSaveForDevice(persistDeviceIdRef.current);
     persistGenerationRef.current += 1;
     userEditedRef.current = false;
+    persistDeviceIdRef.current = deviceIdForLoad;
 
     if (saveTimerRef.current !== null) {
       window.clearTimeout(saveTimerRef.current);
@@ -135,7 +191,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       motorAutomatic: { ...current.motorAutomatic, running: false },
     }));
 
-    Promise.all([fetchPairingSettings(selectedSub), fetchStrokeLimits()])
+    Promise.all([fetchPairingSettings(selectedSub, deviceIdForLoad), fetchStrokeLimits()])
       .then(([loadedSettings, loadedStrokeLimits]) => {
         if (!cancelled) {
           setStrokeLimits(loadedStrokeLimits);
@@ -179,7 +235,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [domTarget, selectedSub]);
+  }, [domTarget, selectedSub, selectedDeviceId, devicesLoading, flushPendingSaveForDevice]);
 
   useEffect(
     () => () => {
@@ -232,8 +288,13 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
           saveTimerRef.current = null;
         }
 
+        const deviceId = persistDeviceIdRef.current;
+        if (!deviceId) {
+          return;
+        }
+
         const generation = persistGenerationRef.current;
-        void persistSettings(nextSettings, generation).then((savedSettings) => {
+        void persistSettings(deviceId, nextSettings, generation).then((savedSettings) => {
           if (generation === persistGenerationRef.current) {
             setSettings(savedSettings);
           }

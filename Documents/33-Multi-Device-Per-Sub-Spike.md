@@ -2,9 +2,9 @@
 
 **Operator session / accessory:** **V2 rules** in [34 — Operator session & accessory V2](./34-Operator-Session-And-Accessory-V2-Rules.md) supersede P16 (V1) and older rows in this doc (e.g. Q1 relay-only accessory). Implement and review against **V2**, not V1.
 
-**Status:** **Spike signed off** (2026-10-26) — implement **X-6.1–X-6.6** before M1b / M2 / M3 expansion that depends on stable multi-device host patterns.
+**Status:** **Spike signed off** (2026-10-26) — implement **X-6.1–X-6.6** before M1b / M2 / M3 expansion that depends on stable multi-device host patterns. **Bench:** same-Sub relay+motor exercised informally; formal **M1/X-4** via [32 §2.4](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md).
 
-**Problem:** Today each **Sub** has at most **one** paired ESP (`SubDeviceRegistrations` PK = `DomTarget` + `SubName`). Bench used **two Subs** (two users) as a workaround ([32 §2.2 X-6i](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md)). The **product remit** is **one Sub, many devices** during the **same session**.
+**Problem:** PK is now `(Dom, Sub, DeviceId)` in tree; **one Sub, many devices** is the target. Dual-Sub ([32 §2.2 X-6i](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md)) remains for Sub-isolation tests.
 
 | Related | Link |
 |---------|------|
@@ -224,9 +224,9 @@ Treat as **X-6** sub-deliverables (order matters).
 |-------|-------------|---------|
 | **X-6.1** | DB migration + pair/revoke/list **per device**; registry multi-connection | Two ESPs paired to **same** Sub |
 | **X-6.2** | API/UI `deviceId` on **all** hardware commands; hub unicast | Correct routing |
-| **X-6.3** | UI device roster + per-motor controls; settings per device or slot | **UC-4** bench |
+| **X-6.3** | UI device roster + per-motor controls; settings per device or slot | **Done** 2026-10-27 — `DomSubDeviceSettings`; `/api/settings?deviceId=`; Options reload on picker |
 | **X-6.4** | Session/history per-device results (H1 or H2) | Auditable dual-motor sessions |
-| **X-6.5** | V2 accessory model (voluntary, per `deviceId`, motion decoupled) | [34](./34-Operator-Session-And-Accessory-V2-Rules.md) §3.2; §4.3.1 |
+| **X-6.5** | V2 accessory model (voluntary, per `deviceId`, motion decoupled) | In tree — verify on **Run A/B** ([34](./34-Operator-Session-And-Accessory-V2-Rules.md) §3.2) |
 | **X-6.6** | Tab-sync + session providers keyed by `(sub, deviceId)` | Multi-tab parity |
 
 **Firmware / standalone / gateway:** No new motor features required for X-6.1–X-6.2 beyond hub delivery assumptions already met (`deviceId` filter). **M2** should copy the **same `deviceId` routing** semantics in local API only after X-6.2 is stable.
@@ -283,3 +283,4 @@ Treat as **X-6** sub-deliverables (order matters).
 | 2026-10-26 | §1.1 vision — gateway-driven concurrency; UI per-device non-lockout; Q8 session not blocked without accessory; Q9 |
 | 2026-10-27 | §4.3.1 — **Accessory** naming; same accessory rules for relay + motor boards; per-`deviceId` `session-accessory` (supersedes relay-only routing note) |
 | 2026-10-27 | §4.3.1 — Accessory **voluntary**; motion **not** gated on accessory (relay or motor) |
+| 2026-10-27 | [32 §2.4](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) — operator Run A (X-4) / Run B (M1) sign-off runs |
