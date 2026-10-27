@@ -70,8 +70,8 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
   const {
     manualVideoActivitySeq,
     manualVideoRehydrateSeq,
-    prepareManualSession,
-    prepareAutomaticSession,
+    prepareManualSessionForDevice,
+    prepareAutomaticSessionForDevice,
   } = useLiveSession();
   const { selectedSub } = useSubTarget();
   const { options, settings, settingsLoaded, isLoading: settingsLoading } = useOptions();
@@ -199,10 +199,14 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
 
     setPreviewStarting(true);
     try {
+      if (!selectedDeviceId) {
+        return;
+      }
+
       if (mode === 'manual') {
-        await prepareManualSession();
+        await prepareManualSessionForDevice(selectedDeviceId);
       } else {
-        await prepareAutomaticSession();
+        await prepareAutomaticSessionForDevice(selectedDeviceId);
       }
 
       setFeedVisible(true);
@@ -217,8 +221,9 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     commandPending,
     feedVisible,
     mode,
-    prepareAutomaticSession,
-    prepareManualSession,
+    prepareAutomaticSessionForDevice,
+    prepareManualSessionForDevice,
+    selectedDeviceId,
     previewStarting,
     previewTimeoutSeconds,
     scheduleHideAfter,

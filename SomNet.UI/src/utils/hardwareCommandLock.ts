@@ -33,3 +33,11 @@ export function hasRemoteLockForDevice(
   }
   return false;
 }
+
+/** Device ids with at least one remote tab-sync command lock (subset of known roster). */
+export function remoteLockedDeviceIds(
+  remoteLockKeys: ReadonlySet<string>,
+  knownDeviceIds: readonly string[],
+): string[] {
+  return knownDeviceIds.filter((deviceId) => hasRemoteLockForDevice(remoteLockKeys, deviceId));
+}

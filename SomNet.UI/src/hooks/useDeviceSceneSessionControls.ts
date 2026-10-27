@@ -39,7 +39,7 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
   const { executeCommand, isCommandPending } = useHardwareCommand();
   const {
     sessionsByKey,
-    startSessionForAccessory,
+    startSessionForDevice,
     endAutomaticSessionForDevice,
     endSessionForAccessoryForDevice,
     syncActiveSessionModeForDevice,
@@ -195,7 +195,7 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
             dismissReadyBanner: () => dismissReadyBannerForSub(selectedSub),
           });
           syncFromStorage();
-          await startSessionForAccessory(mode!, deviceId);
+          await startSessionForDevice(deviceId, mode!);
           return;
         }
 
@@ -274,7 +274,7 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
       panelSettings,
       runningKind,
       selectedSub,
-      startSessionForAccessory,
+      startSessionForDevice,
       syncFromStorage,
     ],
   );

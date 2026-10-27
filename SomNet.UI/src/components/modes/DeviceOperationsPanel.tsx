@@ -9,6 +9,7 @@ import { MotorAutomaticControls } from '@/components/modes/MotorAutomaticControl
 import { DeviceAccessoryResync } from '@/components/hardware/DeviceAccessoryResync';
 import { DeviceSubSessionControls } from '@/components/hardware/DeviceSubSessionControls';
 import { DeviceModeToggle } from '@/components/modes/DeviceModeToggle';
+import { DeviceTabSyncLockBanner } from '@/components/hardware/DeviceTabSyncLockBanner';
 
 function sortRegistrations(rows: DeviceRegistration[]): DeviceRegistration[] {
   return [...rows].sort((a, b) => {
@@ -51,6 +52,7 @@ function DeviceOperationSection({ registration }: { registration: DeviceRegistra
       />
       <Panel title={deviceSectionTitle(registration)} className="border-slate-800/80">
         <div className="space-y-4">
+          <DeviceTabSyncLockBanner deviceId={registration.deviceId} />
           <DeviceModeToggle deviceId={registration.deviceId} actuatorKind={registration.actuatorKind} />
           <DeviceSubSessionControls
             deviceId={registration.deviceId}
