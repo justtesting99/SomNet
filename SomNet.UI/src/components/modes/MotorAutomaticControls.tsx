@@ -553,11 +553,12 @@ export function MotorAutomaticControls() {
               </div>
               <div className="mt-3 max-w-xs">
                 <ClampedNumberField
-                  label="Duty ramp (ms)"
+                  label="Stop ramp (ms)"
                   value={state.rampMs}
                   min={0}
                   max={30_000}
                   disabled={configLocked}
+                  title="Ramp down to zero on Stop or end session. Speed changes between graph points use the segment interval."
                   onCommit={(value) => update('rampMs', value)}
                 />
               </div>

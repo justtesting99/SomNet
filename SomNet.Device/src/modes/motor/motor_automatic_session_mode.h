@@ -24,23 +24,31 @@ public:
     bool isActive() const;
 
 private:
-    enum class State { Idle, StartDelay, RampUp, Running, RampDown, Gap };
+    enum class State {
+        Idle,
+        StartDelay,
+        /** Linear ramp from segment start speed to segment end speed over the segment interval. */
+        SegmentRamp,
+        /** Cooperative stop / end session — ramp to zero using configured stop rampMs. */
+        RampToStop,
+    };
 
     void buildResultJson(const char* endReason, bool interrupted);
     void finishSession(bool success, const char* message, const char* endReason, bool interrupted);
     bool shouldEndSession() const;
-    bool beginRunSegment();
+    bool beginSegmentTransition();
     int pickSegmentSeconds() const;
     bool applyPendingUpdate();
+    void requestRampToStop();
 
     MotorController* motor_ = nullptr;
     State state_ = State::Idle;
     bool active_ = false;
     bool stopRequested_ = false;
     int dutyPercent_ = 0;
-    unsigned long rampMs_ = 500;
-    int runSeconds_ = 0;
-    int gapSeconds_ = 0;
+    /** Used for stop/abort ramps (payload rampMs). Between-segment ramps use segment duration. */
+    unsigned long stopRampMs_ = 500;
+    unsigned long segmentDurationMs_ = 0;
     int segmentsCompleted_ = 0;
     int endSessionValue_ = 0;
     int endSessionModeWire_ = 0;
