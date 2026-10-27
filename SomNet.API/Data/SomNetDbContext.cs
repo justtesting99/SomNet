@@ -48,8 +48,10 @@ public sealed class SomNetDbContext : DbContext
             entity.Property(session => session.Id).HasMaxLength(32);
             entity.Property(session => session.DomTarget).HasMaxLength(128);
             entity.Property(session => session.SubTarget).HasMaxLength(32);
+            entity.Property(session => session.DeviceId).HasMaxLength(64);
             entity.Property(session => session.Summary).HasMaxLength(2000);
             entity.HasIndex(session => new { session.DomTarget, session.SubTarget, session.StartedAt });
+            entity.HasIndex(session => new { session.DomTarget, session.SubTarget, session.DeviceId, session.StartedAt });
         });
 
         modelBuilder.Entity<NotificationHistoryEntry>(entity =>

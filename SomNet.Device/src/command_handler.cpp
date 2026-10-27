@@ -399,14 +399,6 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
         return;
     }
 
-    // Session accessory (GPIO) is relay-only in multi-device Subs; H-bridge motion is independent.
-    if (actuatorKind == DeviceActuatorKind_Relay &&
-        (sessionAccessory_ == nullptr || !sessionAccessory_->isEnabled())) {
-        Serial.println(F("[CMD] reject: session accessory off"));
-        sendAck(command.correlationId, false, "session accessory off", nullptr);
-        return;
-    }
-
     if (strcmp(command.commandKey, "motor-run") == 0) {
         if (motor_ == nullptr) {
             sendAck(command.correlationId, false, "motor unavailable", nullptr);

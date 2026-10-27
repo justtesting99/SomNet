@@ -222,7 +222,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
         return ToDto(notification);
     }
 
-    public SessionHistoryEntryDto? GetActiveSession(string domTarget, string subTarget)
+    public SessionHistoryEntryDto? GetActiveSession(string domTarget, string subTarget, string? deviceId = null)
     {
         if (string.IsNullOrWhiteSpace(domTarget))
         {
@@ -230,14 +230,29 @@ public sealed class SomNetDataStore : ISomNetDataStore
         }
 
         var normalizedSub = SubTargetValidation.Normalize(subTarget);
-        var session = _db.Sessions
+        var normalizedDeviceId = string.IsNullOrWhiteSpace(deviceId) ? null : deviceId.Trim();
+
+        var candidates = _db.Sessions
             .AsNoTracking()
             .Where(entry =>
                 entry.DomTarget == domTarget.Trim() &&
                 entry.SubTarget == normalizedSub)
             .OrderByDescending(entry => entry.StartedAt)
             .AsEnumerable()
-            .FirstOrDefault(entry => SessionProgressHelper.IsInProgress(entry.Summary));
+            .Where(entry => SessionProgressHelper.IsInProgress(entry.Summary))
+            .ToList();
+
+        SessionHistoryEntry? session = null;
+        if (normalizedDeviceId is not null)
+        {
+            session = candidates.FirstOrDefault(entry =>
+                string.Equals(entry.DeviceId, normalizedDeviceId, StringComparison.OrdinalIgnoreCase));
+            session ??= candidates.FirstOrDefault(entry => string.IsNullOrWhiteSpace(entry.DeviceId));
+        }
+        else
+        {
+            session = candidates.FirstOrDefault();
+        }
 
         return session is null ? null : ToDto(session);
     }
@@ -275,12 +290,18 @@ public sealed class SomNetDataStore : ISomNetDataStore
             throw new ArgumentException("DomTarget is required.", nameof(domTarget));
         }
 
+        if (string.IsNullOrWhiteSpace(request.DeviceId))
+        {
+            throw new ArgumentException("DeviceId is required.", nameof(request));
+        }
+
         var session = new SessionHistoryEntry
         {
             Id = $"sess-{GetNextSessionSequence():D3}",
             StartedAt = DateTimeOffset.Now,
             DomTarget = domTarget.Trim(),
             SubTarget = SubTargetValidation.Normalize(request.SubTarget),
+            DeviceId = request.DeviceId.Trim(),
             Mode = request.Mode,
             Summary = "In progress",
         };
@@ -541,6 +562,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
         StartedAt = session.StartedAt,
         DomTarget = session.DomTarget,
         SubTarget = session.SubTarget,
+        DeviceId = session.DeviceId,
         Mode = session.Mode,
         Summary = session.Summary,
     };

@@ -9,6 +9,7 @@ export interface ActiveSessionSnapshot {
   startedAt: string;
   mode: OperationMode;
   subTarget: SubTargetName;
+  deviceId: string;
 }
 
 export type AutomaticRunningKind = 'relay' | 'motor';
@@ -35,12 +36,20 @@ export type TabSyncMessage =
       tabId: string;
       active: boolean;
       subTarget: SubTargetName;
+      deviceId?: string;
     }
   | {
       type: 'relay-lock';
       tabId: string;
       engaged: boolean;
       subTarget: SubTargetName;
+    }
+  | {
+      type: 'device-accessory';
+      tabId: string;
+      engaged: boolean;
+      subTarget: SubTargetName;
+      deviceId: string;
     }
   | { type: 'request-sync'; tabId: string };
 

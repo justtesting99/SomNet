@@ -60,4 +60,5 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Main app device gateway integration](./30-Main-App-Device-Gateway-Integration.md) | Developers | TheSystem / scheduler → `IDeviceGatewayClient`, config, persisted run fields; §5 device registry (DB) |
 | [Motor (H-bridge) actuator — design](./31-Motor-Actuator-Device-Design.md) | Developers | Platform board, payloads, MA-D* decisions |
 | [Motor actuator — implementation plan & checklists](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) | Developers | **M0–M4** tasks, sign-off gates, MA-R5 order |
+| [Operator session & accessory — V2 rules](./34-Operator-Session-And-Accessory-V2-Rules.md) | Developers / operators | **Canonical** Scene + Accessory + multi-device gating; supersedes P16 (V1) for new work |
 | [SomNet integration runbook](./SomNetIntegrationRunbook.md) | Developers / operators | Admin test bed, gateway payloads, TheSystem recipes |

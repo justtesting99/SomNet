@@ -5,7 +5,8 @@ import { useOptions } from '@/context/OptionsProvider';
 import { useLiveSession } from '@/context/SessionProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { reconcileActiveSessionForMode } from '@/utils/sessionReconcile';
-import { readSceneSessionActive } from '@/utils/sessionAccessoryStorage';
+import { readDeviceSceneSessionActive } from '@/utils/sessionAccessoryStorage';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 
 /**
  * Restores SessionProvider when entering a mode or after browser refresh (P13/P14).
@@ -15,6 +16,7 @@ export function SessionRehydrator() {
   const { user } = useAuth();
   const { mode } = useMode();
   const { selectedSub } = useSubTarget();
+  const { selectedDeviceId } = useSubDevice();
   const { isLoading, settingsLoaded, settings, setAutomaticRunningLocal } = useOptions();
   const { activeSession, rehydrateSession } = useLiveSession();
   const settingsRef = useRef(settings);
@@ -31,7 +33,7 @@ export function SessionRehydrator() {
       return;
     }
 
-    if (!readSceneSessionActive(domTarget, selectedSub)) {
+    if (!selectedDeviceId || !readDeviceSceneSessionActive(domTarget, selectedSub, selectedDeviceId)) {
       return;
     }
 
@@ -40,7 +42,7 @@ export function SessionRehydrator() {
       return;
     }
 
-    const rehydrationKey = `${domTarget}:${selectedSub}:${mode}`;
+    const rehydrationKey = `${domTarget}:${selectedSub}:${selectedDeviceId}:${mode}`;
     if (attemptedRehydrationKeyRef.current === rehydrationKey) {
       return;
     }
@@ -55,6 +57,7 @@ export function SessionRehydrator() {
       void reconcileActiveSessionForMode({
         mode,
         selectedSub,
+        deviceId: selectedDeviceId,
         automaticSettings: settingsRef.current.automatic,
         rehydrateSession,
         setAutomaticRunningLocal,
@@ -80,6 +83,7 @@ export function SessionRehydrator() {
     isLoading,
     mode,
     rehydrateSession,
+    selectedDeviceId,
     selectedSub,
     setAutomaticRunningLocal,
     settingsLoaded,

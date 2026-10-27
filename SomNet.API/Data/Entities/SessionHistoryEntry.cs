@@ -12,6 +12,9 @@ public sealed class SessionHistoryEntry
 
     public required string SubTarget { get; set; }
 
+    /// <summary>V2: ESP that owns this scene session; null = legacy Sub-wide row.</summary>
+    public string? DeviceId { get; set; }
+
     public OperationMode Mode { get; set; }
 
     public required string Summary { get; set; }

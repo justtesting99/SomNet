@@ -8,6 +8,7 @@
 |---------|------|
 | **Design (decisions, MA-D*, payloads)** | [31 — Motor actuator design](./31-Motor-Actuator-Device-Design.md) |
 | **Multi-device per Sub (spike)** | [33 — X-6 spike](./33-Multi-Device-Per-Sub-Spike.md) |
+| **Operator session / accessory (V2 norm)** | [34 — V2 rules](./34-Operator-Session-And-Accessory-V2-Rules.md) — supersedes P16 / MA-D22 relay-only text for new work |
 | Delivery order | **MA-R5:** hub + ESP → standalone → gateway |
 | Pins / PWM tuning | [boardDefs.h](../SomNet.Device/include/boardDefs.h) |
 | Hub pairing wire | [PROTOCOL.md §4.2](../SomNet.Device/docs/PROTOCOL.md) |
@@ -349,3 +350,4 @@ Update this table when a phase is signed off.
 | 2026-10-26 | Spike **§8 sign-off** — Q2 always `deviceId`; Q5 max 8 (MA-D13); Q6 one relay/Sub; Q7 migration; begin X-6.1 |
 | 2026-10-26 | [33 §1.1](./33-Multi-Device-Per-Sub-Spike.md) vision — gateway orchestration; per-device UI; Q8 no session block without accessory (MA-D24) |
 | 2026-10-26 | **X-6.1–X-6.2** — composite PK `(Dom, Sub, DeviceId)`; list/pair/revoke per device; hub unicast; UI `deviceId` + device picker |
+| 2026-10-27 | **[34](./34-Operator-Session-And-Accessory-V2-Rules.md)** — V2 operator norm (Scene + voluntary Accessory; motion decoupled); do not bleed P16/V1 into X-6 changes |

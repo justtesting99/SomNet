@@ -2,7 +2,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -10,8 +9,12 @@ import {
 import type { SubTargetName } from '@/config/sessionUsers';
 import { useAuth } from '@/context/AuthProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
-import { readSubPresentAck, writeSubPresentAck } from '@/utils/subPresentAckStorage';
-import { readSceneSessionActive } from '@/utils/sessionAccessoryStorage';
+import {
+  readDevicePresentAck,
+  writeDevicePresentAck,
+  writeSubPresentAck,
+} from '@/utils/subPresentAckStorage';
+import { readDeviceSceneSessionActive } from '@/utils/sessionAccessoryStorage';
 import {
   readReadyBannerDismissed,
   subTargetsMatch,
@@ -20,20 +23,29 @@ import {
 
 interface SiteUserReadyState {
   subTarget: string;
+  deviceId?: string;
   message: string;
   requestStartFeed: boolean;
 }
 
 interface SiteUserReadyContextValue {
   notification: SiteUserReadyState | null;
-  notifySiteUserReady: (subTarget: string, requestStartFeed: boolean) => void;
+  notifySiteUserReady: (
+    subTarget: string,
+    requestStartFeed: boolean,
+    deviceId?: string,
+  ) => void;
   clearNotification: () => void;
-  /** Hide “Ready for session” when Session in Progress starts (same as Dismiss). */
   dismissReadyBannerForSub: (subTarget: SubTargetName) => void;
   isReadyBannerDismissedForSub: (subTarget: SubTargetName) => boolean;
-  /** Sub double-click ack for Session in Progress (P16-D1). Persists per Sub until Sub changes. */
+  isDevicePresentAcknowledged: (subTarget: SubTargetName, deviceId: string | null) => boolean;
+  markDevicePresentAck: (subTarget: SubTargetName, deviceId: string) => void;
+  clearDevicePresentAck: (subTarget: SubTargetName, deviceId: string) => void;
+  /** @deprecated Use isDevicePresentAcknowledged */
   subPresentAckSub: SubTargetName | null;
+  /** @deprecated Use markDevicePresentAck */
   markSubPresentAck: (subTarget: SubTargetName) => void;
+  /** @deprecated Use clearDevicePresentAck */
   clearSubPresentAck: (subTarget?: SubTargetName) => void;
 }
 
@@ -44,20 +56,23 @@ export function SiteUserReadyProvider({ children }: { children: ReactNode }) {
   const { selectedSub } = useSubTarget();
   const domTarget = user?.displayName ?? user?.username ?? '';
   const [notification, setNotification] = useState<SiteUserReadyState | null>(null);
-  const [subPresentAckSub, setSubPresentAckSub] = useState<SubTargetName | null>(() =>
-    readSubPresentAck(selectedSub) ? selectedSub : null,
-  );
+  const [presentAckRevision, setPresentAckRevision] = useState(0);
   const [dismissedSubs, setDismissedSubs] = useState<Set<string>>(() => new Set());
 
-  useEffect(() => {
-    setSubPresentAckSub(readSubPresentAck(selectedSub) ? selectedSub : null);
-  }, [selectedSub]);
+  const isDevicePresentAcknowledged = useCallback(
+    (subTarget: SubTargetName, deviceId: string | null) => {
+      void presentAckRevision;
+      return readDevicePresentAck(subTarget, deviceId);
+    },
+    [presentAckRevision],
+  );
 
   const notifySiteUserReady = useCallback(
-    (subTarget: string, requestStartFeed: boolean) => {
+    (subTarget: string, requestStartFeed: boolean, deviceId?: string) => {
       if (
         domTarget &&
-        readSceneSessionActive(domTarget, subTarget)
+        deviceId &&
+        readDeviceSceneSessionActive(domTarget, subTarget, deviceId)
       ) {
         return;
       }
@@ -70,25 +85,47 @@ export function SiteUserReadyProvider({ children }: { children: ReactNode }) {
       });
       setNotification({
         subTarget,
+        deviceId,
         requestStartFeed,
         message: requestStartFeed
-          ? `${subTarget} is  Ready For Session.`
+          ? `${subTarget} is Ready For Session.`
           : `Device button pressed on ${subTarget}.`,
       });
     },
     [domTarget],
   );
 
-  const markSubPresentAck = useCallback((subTarget: SubTargetName) => {
-    writeSubPresentAck(subTarget, true);
-    setSubPresentAckSub(subTarget.trim());
+  const markDevicePresentAck = useCallback((subTarget: SubTargetName, deviceId: string) => {
+    writeDevicePresentAck(subTarget, deviceId, true);
+    setPresentAckRevision((value) => value + 1);
   }, []);
 
-  const clearSubPresentAck = useCallback((subTarget?: SubTargetName) => {
-    const target = subTarget ?? selectedSub;
-    writeSubPresentAck(target, false);
-    setSubPresentAckSub((current) => (current === target ? null : current));
-  }, [selectedSub]);
+  const clearDevicePresentAck = useCallback((subTarget: SubTargetName, deviceId: string) => {
+    writeDevicePresentAck(subTarget, deviceId, false);
+    setPresentAckRevision((value) => value + 1);
+  }, []);
+
+  const markSubPresentAck = useCallback(
+    (subTarget: SubTargetName) => {
+      writeSubPresentAck(subTarget, true);
+      setPresentAckRevision((value) => value + 1);
+    },
+    [],
+  );
+
+  const clearSubPresentAck = useCallback(
+    (subTarget?: SubTargetName) => {
+      const target = subTarget ?? selectedSub;
+      writeSubPresentAck(target, false);
+      setPresentAckRevision((value) => value + 1);
+    },
+    [selectedSub],
+  );
+
+  const subPresentAckSub = useMemo(() => {
+    void presentAckRevision;
+    return null;
+  }, [presentAckRevision]);
 
   const clearNotification = useCallback(() => {
     setNotification(null);
@@ -122,15 +159,21 @@ export function SiteUserReadyProvider({ children }: { children: ReactNode }) {
       clearNotification,
       dismissReadyBannerForSub,
       isReadyBannerDismissedForSub,
+      isDevicePresentAcknowledged,
+      markDevicePresentAck,
+      clearDevicePresentAck,
       subPresentAckSub,
       markSubPresentAck,
       clearSubPresentAck,
     }),
     [
+      clearDevicePresentAck,
       clearNotification,
       clearSubPresentAck,
       dismissReadyBannerForSub,
+      isDevicePresentAcknowledged,
       isReadyBannerDismissedForSub,
+      markDevicePresentAck,
       markSubPresentAck,
       notification,
       notifySiteUserReady,

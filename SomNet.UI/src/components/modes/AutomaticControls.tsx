@@ -72,16 +72,15 @@ export function AutomaticControls() {
   const { selectedSub } = useSubTarget();
   const commandDeviceId = useCommandDeviceId();
   const { expandOnAction } = useVideoDisplay();
-  const { endAutomaticSession, activeSession, markAutomaticDeviceStarted } = useLiveSession();
+  const {
+    endAutomaticSession,
+    activeSession,
+    markAutomaticDeviceStarted,
+    syncActiveSessionMode,
+  } = useLiveSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
-  const {
-    relayLockEngaged,
-    sceneSessionActive,
-    relayLockError,
-    sceneSessionError,
-    ensureRelaySessionAccessoryOn,
-  } = useSessionAccessory();
+  const { sceneSessionActive, accessoryError, sceneSessionError } = useSessionAccessory();
   const [commandError, setCommandError] = useState('');
   const [cooperativeStopInProgress, setCooperativeStopInProgress] = useState(false);
   const runningRef = useRef(state.running);
@@ -113,20 +112,19 @@ export function AutomaticControls() {
   /** Master gate for burst sub-controls — Bursts On must be checked (Phase 10). */
   const burstSettingsDisabled = configLocked || !state.burstsOn;
   const delayStartLocked = sessionRunning;
-  const hardwareReady =
-    isHardwareCommandReady(systemStatus) && relayLockEngaged && sceneSessionActive;
+  const hardwareReady = isHardwareCommandReady(systemStatus) && sceneSessionActive;
   const lastPushedUpdateRef = useRef<string | null>(null);
   const updateDebounceRef = useRef<number | null>(null);
   const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);
   const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop);
   const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
+  const showAbortControl =
+    sessionRunning || automaticSessionActive || startPending || cooperativeStopInProgress;
   const hardwareDisabledReason = !sceneSessionActive
     ? 'Turn Scene session on before Start (history / video).'
-    : !relayLockEngaged
-      ? 'Turn Relay lock on before Start.'
-      : hardwareReady
-        ? undefined
-        : systemStatus.detail || systemStatus.summary;
+    : hardwareReady
+      ? undefined
+      : systemStatus.detail || systemStatus.summary;
 
   useEffect(() => {
     if (!automaticSessionActive && !state.running) {
@@ -196,17 +194,31 @@ export function AutomaticControls() {
   }, [commandDeviceId, isLoading, settingsLoaded, liveOverridesActive, selectedSub, state]);
 
   useEffect(() => {
-    if (isLoading || !settingsLoaded || automaticSessionActive || startPending) {
+    if (isLoading || !settingsLoaded || startPending) {
       return;
     }
 
-    if (state.running) {
-      setAutomaticRunningLocal(false);
+    if (!state.running) {
+      return;
     }
+
+    if (automaticSessionActive) {
+      return;
+    }
+
+    // V2 per-device scene: don't clear running while this device's scene is on (session mode may still be syncing).
+    if (sceneSessionActive && activeSession?.deviceId === commandDeviceId) {
+      return;
+    }
+
+    setAutomaticRunningLocal(false);
   }, [
-    isLoading,
-    settingsLoaded,
+    activeSession?.deviceId,
     automaticSessionActive,
+    commandDeviceId,
+    isLoading,
+    sceneSessionActive,
+    settingsLoaded,
     startPending,
     state.running,
     setAutomaticRunningLocal,
@@ -286,13 +298,15 @@ export function AutomaticControls() {
     const payloadJson = buildAutomaticStartPayload(state);
 
     try {
-      await ensureRelaySessionAccessoryOn();
       await sendHardwareCommand(
         selectedSub,
         commandDeviceId,
         HARDWARE_COMMAND_KEYS.automaticStart,
         payloadJson,
       );
+      if (activeSessionRef.current?.mode !== 'automatic') {
+        await syncActiveSessionMode('automatic');
+      }
       markAutomaticDeviceStarted();
       const sessionId = activeSessionRef.current?.id;
       if (sessionId) {
@@ -697,9 +711,9 @@ export function AutomaticControls() {
 
         <Panel title="Controls">
           <div className="flex h-full flex-col justify-center gap-3">
-            {relayLockError || sceneSessionError ? (
+            {accessoryError || sceneSessionError ? (
               <p className="text-sm text-red-400" role="alert">
-                {relayLockError || sceneSessionError}
+                {accessoryError || sceneSessionError}
               </p>
             ) : null}
             {!hardwareReady && !commandError && !startPending && !stopPending && !abortPending ? (
@@ -753,7 +767,7 @@ export function AutomaticControls() {
             >
               Stop
             </CommandButton>
-            {sessionRunning ? (
+            {showAbortControl ? (
               <CommandButton
                 commandKey={HARDWARE_COMMAND_KEYS.manualAbort}
                 size="lg"

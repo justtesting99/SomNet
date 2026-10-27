@@ -28,7 +28,11 @@ export interface ReconcileActiveSessionOptions {
 export async function reconcileActiveSessionForMode(
   options: ReconcileActiveSessionOptions,
 ): Promise<void> {
-  const entry = await fetchActiveSession(options.selectedSub);
+  if (!options.deviceId) {
+    return;
+  }
+
+  const entry = await fetchActiveSession(options.selectedSub, options.deviceId);
   if (!entry) {
     return;
   }

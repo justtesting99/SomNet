@@ -8,6 +8,7 @@ import {
 } from '@/types/hardwareHub';
 import { useSiteUserReady } from '@/context/SiteUserReadyProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 import type { SubTargetName } from '@/config/sessionUsers';
 import { subTargetsMatch } from '@/utils/readyBannerStorage';
 import {
@@ -36,17 +37,19 @@ function shouldHandleAutomaticSessionComplete(ack: HardwareCommandAck): boolean 
  */
 function handleDeviceButtonEvent(
   event: DeviceButtonEvent,
-  notifySiteUserReady: (subTarget: string, requestStartFeed: boolean) => void,
-  markSubPresentAck: (subTarget: string) => void,
+  notifySiteUserReady: (subTarget: string, requestStartFeed: boolean, deviceId?: string) => void,
+  markDevicePresentAck: (subTarget: SubTargetName, deviceId: string) => void,
   alignSelectedSub: (subTarget: SubTargetName) => void,
+  selectDeviceId: (deviceId: string) => void,
   selectedSub: string,
 ) {
   if (event.clickType === 'double') {
     if (!subTargetsMatch(event.subTarget, selectedSub)) {
       alignSelectedSub(event.subTarget);
     }
-    notifySiteUserReady(event.subTarget, true);
-    markSubPresentAck(event.subTarget);
+    selectDeviceId(event.deviceId);
+    notifySiteUserReady(event.subTarget, true, event.deviceId);
+    markDevicePresentAck(event.subTarget, event.deviceId);
     return;
   }
 
@@ -59,14 +62,16 @@ export function AutomaticSessionHubListener() {
   const { isAuthenticated } = useAuth();
   const { settings, setAutomaticRunningLocal } = useOptions();
   const { activeSession, endAutomaticSession } = useLiveSession();
-  const { notifySiteUserReady, markSubPresentAck } = useSiteUserReady();
+  const { notifySiteUserReady, markDevicePresentAck } = useSiteUserReady();
   const { selectedSub, applySubFromSync } = useSubTarget();
+  const { setSelectedDeviceId } = useSubDevice();
   const automaticRef = useRef(settings.automatic);
   const activeSessionRef = useRef(activeSession);
   const endAutomaticSessionRef = useRef(endAutomaticSession);
   const clearAutomaticRunningRef = useRef<() => void>(() => setAutomaticRunningLocal(false));
   const notifySiteUserReadyRef = useRef(notifySiteUserReady);
-  const markSubPresentAckRef = useRef(markSubPresentAck);
+  const markDevicePresentAckRef = useRef(markDevicePresentAck);
+  const setSelectedDeviceIdRef = useRef(setSelectedDeviceId);
   const applySubFromSyncRef = useRef(applySubFromSync);
   const selectedSubRef = useRef(selectedSub);
 
@@ -75,7 +80,8 @@ export function AutomaticSessionHubListener() {
   endAutomaticSessionRef.current = endAutomaticSession;
   clearAutomaticRunningRef.current = () => setAutomaticRunningLocal(false);
   notifySiteUserReadyRef.current = notifySiteUserReady;
-  markSubPresentAckRef.current = markSubPresentAck;
+  markDevicePresentAckRef.current = markDevicePresentAck;
+  setSelectedDeviceIdRef.current = setSelectedDeviceId;
   applySubFromSyncRef.current = applySubFromSync;
   selectedSubRef.current = selectedSub;
 
@@ -113,8 +119,9 @@ export function AutomaticSessionHubListener() {
         handleDeviceButtonEvent(
           event,
           notifySiteUserReadyRef.current,
-          markSubPresentAckRef.current,
+          markDevicePresentAckRef.current,
           applySubFromSyncRef.current,
+          setSelectedDeviceIdRef.current,
           selectedSubRef.current,
         );
       },

@@ -1259,6 +1259,7 @@ void SignalRClient::markHandshakeComplete() {
     } else {
         state_ = HubConnectionState::Unpaired;
     }
+    flushPendingButtonEvent();
 }
 
 void SignalRClient::clearHandshakeState() {
@@ -1570,6 +1571,7 @@ void SignalRClient::poll() {
         lastStallRecoveryMs_ = 0;
         state_ = (gUsePairedConnect && nvs_->isPaired()) ? HubConnectionState::Paired : HubConnectionState::Unpaired;
         pendingConnect_ = false;
+        flushPendingButtonEvent();
         return;
     }
 
@@ -1803,7 +1805,40 @@ bool SignalRClient::sendAckCommand(
     return true;
 }
 
-bool SignalRClient::sendReportButtonEvent(const char* clickType) {
+bool SignalRClient::queuePendingButtonClick(const char* clickType) {
+    if (clickType == nullptr || strcmp(clickType, "double") != 0) {
+        return false;
+    }
+
+    strncpy(pendingButtonClick_, clickType, sizeof(pendingButtonClick_) - 1);
+    pendingButtonClick_[sizeof(pendingButtonClick_) - 1] = '\0';
+    pendingButtonClickUntilMs_ = millis() + 60000UL;
+    return true;
+}
+
+void SignalRClient::clearPendingButtonClick() {
+    pendingButtonClick_[0] = '\0';
+    pendingButtonClickUntilMs_ = 0;
+}
+
+void SignalRClient::flushPendingButtonEvent() {
+    if (pendingButtonClick_[0] == '\0') {
+        return;
+    }
+
+    if (pendingButtonClickUntilMs_ != 0 && millis() > pendingButtonClickUntilMs_) {
+        Serial.println(F("[BTN] queued double-click expired (hub)"));
+        clearPendingButtonClick();
+        return;
+    }
+
+    if (sendReportButtonEvent(pendingButtonClick_, false)) {
+        Serial.println(F("[BTN] queued double-click sent"));
+        clearPendingButtonClick();
+    }
+}
+
+bool SignalRClient::sendReportButtonEvent(const char* clickType, bool allowQueue) {
     if (clickType == nullptr || clickType[0] == '\0') {
         return false;
     }
@@ -1815,6 +1850,10 @@ bool SignalRClient::sendReportButtonEvent(const char* clickType) {
     // leave state_ at Backoff while SNTP/boot settle even though the hub is live.
     handshakeComplete_ = gHandshakeComplete;
     if (!gWs.isConnected() || !handshakeComplete_) {
+        if (allowQueue && queuePendingButtonClick(clickType)) {
+            Serial.println(F("[HUB] ReportButtonEvent queued (hub not ready)"));
+            return true;
+        }
         Serial.println(F("[HUB] ReportButtonEvent skipped - hub not ready"));
         return false;
     }

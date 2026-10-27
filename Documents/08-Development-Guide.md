@@ -339,6 +339,7 @@ These should describe **today’s** behavior, not a past phase:
 | [03-Frontend-Architecture.md](./03-Frontend-Architecture.md) | Provider tree (`App.tsx`), dialogs, gating |
 | [06-SignalR-And-Hardware.md](./06-SignalR-And-Hardware.md) | Command keys, hub events, firmware capability table |
 | [07-Session-And-History.md](./07-Session-And-History.md) | Session start/end, rehydration, history |
+| [34-Operator-Session-And-Accessory-V2-Rules.md](./34-Operator-Session-And-Accessory-V2-Rules.md) | Scene session vs Accessory, V1 vs V2, multi-device gating (X-6) |
 | [User-Guide.md](./User-Guide.md) | Operator steps (header, modes, Options tabs) |
 | [Hardware-User-Guide.md](./Hardware-User-Guide.md) | GPIO, pairing, firmware status line |
 | [09-ESP32-Device-Plan.md](./09-ESP32-Device-Plan.md) | Plan header + “current firmware” readiness list |

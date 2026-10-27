@@ -13,8 +13,9 @@ function normalizeSessionEntry(entry: SessionHistoryEntry): SessionHistoryEntry 
 
 export async function fetchActiveSession(
   subTarget: SubTargetName,
+  deviceId: string,
 ): Promise<SessionHistoryEntry | null> {
-  const params = new URLSearchParams({ subTarget });
+  const params = new URLSearchParams({ subTarget, deviceId });
 
   try {
     const entry = await apiFetch<SessionHistoryEntry>(`/api/sessions/active?${params.toString()}`);
@@ -30,11 +31,12 @@ export async function fetchActiveSession(
 
 export async function startSession(
   subTarget: SubTargetName,
+  deviceId: string,
   mode: OperationMode,
 ): Promise<SessionHistoryEntry> {
   return apiFetch<SessionHistoryEntry>('/api/sessions', {
     method: 'POST',
-    body: JSON.stringify({ subTarget, mode }),
+    body: JSON.stringify({ subTarget, deviceId, mode }),
   });
 }
 

@@ -18,7 +18,7 @@ public interface ISomNetDataStore
 
     NotificationHistoryEntryDto AddNotification(SendSessionNotificationRequestDto request);
 
-    SessionHistoryEntryDto? GetActiveSession(string domTarget, string subTarget);
+    SessionHistoryEntryDto? GetActiveSession(string domTarget, string subTarget, string? deviceId = null);
 
     SessionHistoryEntryDto GetSession(string domTarget, string sessionId);
 

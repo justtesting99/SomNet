@@ -3,8 +3,9 @@ import { useAuth } from '@/context/AuthProvider';
 import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 import { useSiteUserReady } from '@/context/SiteUserReadyProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 import { subTargetsMatch } from '@/utils/readyBannerStorage';
-import { readSceneSessionActive } from '@/utils/sessionAccessoryStorage';
+import { readDeviceSceneSessionActive } from '@/utils/sessionAccessoryStorage';
 import { Button } from '@/components/ui/Button';
 
 export function SiteUserReadyBanner() {
@@ -13,6 +14,7 @@ export function SiteUserReadyBanner() {
   const { notification, dismissReadyBannerForSub, isReadyBannerDismissedForSub } =
     useSiteUserReady();
   const { selectedSub } = useSubTarget();
+  const { selectedDeviceId } = useSubDevice();
   const {
     sceneSessionActive,
     sceneTogglePending,
@@ -20,10 +22,13 @@ export function SiteUserReadyBanner() {
     sceneSessionError,
   } = useSessionAccessory();
 
+  const sceneDeviceId = notification?.deviceId ?? selectedDeviceId;
   const accessoryActive =
     sceneSessionActive ||
     sceneTogglePending ||
-    (domTarget ? readSceneSessionActive(domTarget, selectedSub) : false);
+    (domTarget && sceneDeviceId
+      ? readDeviceSceneSessionActive(domTarget, selectedSub, sceneDeviceId)
+      : false);
 
   const bannerDismissed = isReadyBannerDismissedForSub(selectedSub);
 

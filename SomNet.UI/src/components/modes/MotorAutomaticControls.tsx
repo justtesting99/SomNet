@@ -22,6 +22,7 @@ import { writeAutomaticDeviceRunningHint } from '@/utils/automaticDeviceRunningH
 import { ApiError } from '@/api/client';
 import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCommand';
 import { isHardwareCommandReady } from '@/utils/commandReadiness';
+import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 const MOTOR_STOP_GRACE_MS = 60_000;
 
 const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
@@ -36,9 +37,15 @@ export function MotorAutomaticControls() {
   const { selectedSub } = useSubTarget();
   const commandDeviceId = useCommandDeviceId();
   const { expandOnAction } = useVideoDisplay();
-  const { endAutomaticSession, activeSession, markAutomaticDeviceStarted } = useLiveSession();
+  const {
+    endAutomaticSession,
+    activeSession,
+    markAutomaticDeviceStarted,
+    syncActiveSessionMode,
+  } = useLiveSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
+  const { sceneSessionActive, sceneSessionError } = useSessionAccessory();
   const [commandError, setCommandError] = useState('');
   const [cooperativeStopInProgress, setCooperativeStopInProgress] = useState(false);
   const runningRef = useRef(state.running);
@@ -49,13 +56,17 @@ export function MotorAutomaticControls() {
   const automaticSessionActive = activeSession?.mode === 'automatic';
   const sessionRunning = settingsLoaded && state.running;
   const configLocked = sessionRunning;
-  const hardwareReady = isHardwareCommandReady(systemStatus);
+  const hardwareReady = isHardwareCommandReady(systemStatus) && sceneSessionActive;
   const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);
   const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop);
   const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
-  const hardwareDisabledReason = hardwareReady
-    ? undefined
-    : systemStatus.detail || systemStatus.summary;
+  const showAbortControl =
+    sessionRunning || automaticSessionActive || startPending || cooperativeStopInProgress;
+  const hardwareDisabledReason = !sceneSessionActive
+    ? 'Turn Scene session on before Start (history / video).'
+    : hardwareReady
+      ? undefined
+      : systemStatus.detail || systemStatus.summary;
 
   useEffect(() => {
     if (!automaticSessionActive && !state.running) {
@@ -116,6 +127,9 @@ export function MotorAutomaticControls() {
         HARDWARE_COMMAND_KEYS.automaticStart,
         payloadJson,
       );
+      if (activeSessionRef.current?.mode !== 'automatic') {
+        await syncActiveSessionMode('automatic');
+      }
       markAutomaticDeviceStarted();
       const sessionId = activeSessionRef.current?.id;
       if (sessionId) {
@@ -222,7 +236,9 @@ export function MotorAutomaticControls() {
           {hardwareDisabledReason}
         </p>
       ) : null}
-      {commandError ? <p className="mb-2 text-sm text-red-400">{commandError}</p> : null}
+      {sceneSessionError || commandError ? (
+        <p className="mb-2 text-sm text-red-400">{sceneSessionError || commandError}</p>
+      ) : null}
       {cooperativeStopInProgress ? (
         <p className="mb-2 text-sm text-amber-300">Stopping after current motor segment…</p>
       ) : null}
@@ -316,7 +332,7 @@ export function MotorAutomaticControls() {
         >
           Stop
         </CommandButton>
-        {sessionRunning ? (
+        {showAbortControl ? (
           <CommandButton
             commandKey={HARDWARE_COMMAND_KEYS.manualAbort}
             size="lg"

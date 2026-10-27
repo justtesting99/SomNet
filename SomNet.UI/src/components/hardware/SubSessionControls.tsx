@@ -98,27 +98,31 @@ export function SubSessionControls() {
   const { activeSession } = useLiveSession();
   const { options } = useOptions();
   const { selectedSub } = useSubTarget();
-  const { relayRegistration } = useSubDevice();
+  const { selectedDeviceId } = useSubDevice();
   const { dismissReadyBannerForSub } = useSiteUserReady();
   const {
     sceneSessionActive,
-    relayLockEngaged,
+    accessoryEngaged,
     sceneSwitchDisabled,
     sceneSwitchDisabledReason,
-    relaySwitchDisabled,
-    relaySwitchDisabledReason,
+    accessorySwitchDisabled,
+    accessorySwitchDisabledReason,
     sceneTogglePending,
-    relayTogglePending,
+    accessoryTogglePending,
     sceneSessionError,
-    relayLockError,
+    accessoryError,
     setSceneSessionActive,
-    setRelayLockEngaged,
+    setAccessoryEngaged,
   } = useSessionAccessory();
+
+  const deviceShort = selectedDeviceId ? `${selectedDeviceId.slice(0, 8)}…` : null;
+  const sceneLabel = deviceShort ? `Scene (${deviceShort})` : 'Scene session';
+  const accessoryLabel = deviceShort ? `Accessory (${deviceShort})` : 'Accessory';
 
   return (
     <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-start">
       <HeaderToggle
-        label="Scene session"
+        label={sceneLabel}
         shortLabel="Scene"
         active={sceneSessionActive}
         disabled={sceneSwitchDisabled}
@@ -135,22 +139,20 @@ export function SubSessionControls() {
           void setSceneSessionActive(turningOn);
         }}
       />
-      {relayRegistration ? (
-        <HeaderToggle
-          label="Relay lock"
-          shortLabel="Relay"
-          active={relayLockEngaged}
-          disabled={relaySwitchDisabled}
-          pending={relayTogglePending}
-          disabledReason={relayLockError || relaySwitchDisabledReason}
-          ariaLabel="Relay lock"
-          dataUi="relay-lock-switch"
-          toneActive="amber"
-          onToggle={() => {
-            void setRelayLockEngaged(!relayLockEngaged);
-          }}
-        />
-      ) : null}
+      <HeaderToggle
+        label={accessoryLabel}
+        shortLabel="Accessory"
+        active={accessoryEngaged}
+        disabled={accessorySwitchDisabled}
+        pending={accessoryTogglePending}
+        disabledReason={accessoryError || accessorySwitchDisabledReason}
+        ariaLabel="Accessory output"
+        dataUi="device-accessory-switch"
+        toneActive="amber"
+        onToggle={() => {
+          void setAccessoryEngaged(!accessoryEngaged);
+        }}
+      />
       {options.showActiveSessionIdInHeader && sceneSessionActive && activeSession ? (
         <p
           className="min-w-0 self-center truncate font-mono text-xs text-indigo-100 lg:max-w-[12rem]"

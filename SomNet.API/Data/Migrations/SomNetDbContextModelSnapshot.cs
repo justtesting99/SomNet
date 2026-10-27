@@ -173,6 +173,10 @@ namespace SomNet.API.Data.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<string>("DeviceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<int>("Mode")
                         .HasColumnType("int");
 
@@ -192,6 +196,8 @@ namespace SomNet.API.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DomTarget", "SubTarget", "StartedAt");
+
+                    b.HasIndex("DomTarget", "SubTarget", "DeviceId", "StartedAt");
 
                     b.ToTable("Sessions", (string)null);
                 });

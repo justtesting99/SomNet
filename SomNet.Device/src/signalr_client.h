@@ -40,7 +40,7 @@ public:
         bool success,
         const char* message,
         const char* resultJson = nullptr);
-    bool sendReportButtonEvent(const char* clickType);
+    bool sendReportButtonEvent(const char* clickType, bool allowQueue = true);
 
     void onTransportLost(bool immediateRetry = false);
     void markHandshakeComplete();
@@ -80,4 +80,9 @@ private:
     ExecutionActiveProbe executionActiveProbe_ = nullptr;
     bool negotiateFsmActive_ = false;
     bool tcpProbeFsmActive_ = false;
+    char pendingButtonClick_[8] = {};
+    unsigned long pendingButtonClickUntilMs_ = 0;
+    bool queuePendingButtonClick(const char* clickType);
+    void clearPendingButtonClick();
+    void flushPendingButtonEvent();
 };

@@ -1,5 +1,7 @@
 # Spike X-6 — Multi-device per Sub
 
+**Operator session / accessory:** **V2 rules** in [34 — Operator session & accessory V2](./34-Operator-Session-And-Accessory-V2-Rules.md) supersede P16 (V1) and older rows in this doc (e.g. Q1 relay-only accessory). Implement and review against **V2**, not V1.
+
 **Status:** **Spike signed off** (2026-10-26) — implement **X-6.1–X-6.6** before M1b / M2 / M3 expansion that depends on stable multi-device host patterns.
 
 **Problem:** Today each **Sub** has at most **one** paired ESP (`SubDeviceRegistrations` PK = `DomTarget` + `SubName`). Bench used **two Subs** (two users) as a workaround ([32 §2.2 X-6i](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md)). The **product remit** is **one Sub, many devices** during the **same session**.
@@ -101,8 +103,7 @@ Dom ── assigns ──► Sub (session identity: Slv66)
 | **Device** | Physical ESP (`deviceId`), **one** `actuatorKind` in NVS, **one** hub connection, **one** token row. |
 | **Session** | **One in-progress session per Sub** (recommend **keep**) for **scene** / video / history. Not tied to every device’s motion state. |
 | **Motion** | **Per device** FSM; UC-4 = two independent motor tracks; payloads + acks per `deviceId`. |
-| **Session accessory (hub)** | **Relay device only** — Sub-level **Session in Progress** drives the relay **`session-accessory`** path. **Not** sent to motor ESPs (§4.3.1). |
-| **Motor accessory I/O** | Part of **that motor’s** plan/program/pattern on the motor ESP — not the global relay session-accessory switch. |
+| **Accessory (hub)** | Optional **`session-accessory`** per **selected** `deviceId` (§4.3.1). Independent of motion. |
 
 ### 4.2 Registration & tokens
 
@@ -129,23 +130,29 @@ Align with **P7-D2**: **`deviceId` is always required** on operator → API comm
 
 **UI:** Every hardware action is issued in context of a **selected `deviceId`** (explicit picker or panel binding). Session/history child rows (§4.6) always store `deviceId`.
 
-#### 4.3.1 Session accessory vs motor program outputs (**agreed 2026-10-26**)
+#### 4.3.1 Accessory On/Off (`session-accessory`) — **revised 2026-10-27**
 
-| Output | Host command | Device | When it runs |
-|--------|----------------|--------|----------------|
-| **Relay session accessory** | `session-accessory` (Session in Progress) | **Relay** `deviceId` only | Operator toggle; gates relay manual/automatic as today |
-| **Motor accessory / auxiliary** | *(none at Sub level)* | Motor `deviceId` | Defined in **motor** manual/automatic **program**; starts/stops with that device’s FSM |
+**Naming:** UI and operator docs use **Accessory** (on/off), not “relay lock.” Same hub command: `session-accessory`.
 
-**X-6 routing:** `session-accessory` resolves to the Sub’s **single relay** registration (**Q6:** multiple relays per Sub **not** in scope). Motor units never receive `session-accessory` for Sub “session on.”
+**Unified rules (relay + motor boards):**
 
-**Today’s bench note:** Motor E2E temporarily reused relay-style Session in Progress + `session-accessory` on motor-only Subs. **Target (X-6):** motor Sub panels gate on **device arm / motor rules**, not relay session-accessory — migrate UI when multi-device work lands.
+| Rule | Relay board | Motor board |
+|------|-------------|-------------|
+| Operator **Accessory** toggle in header | Yes — targets **selected** `deviceId` | Yes — same toggle, same prerequisites |
+| Requires **Scene session** on | Yes | Yes |
+| Stored / tab-synced per | `(subTarget, deviceId)` | `(subTarget, deviceId)` |
+| Motion gated on accessory | **No** — strokes / automatic run only need **Scene session** (+ device ready) | **No** — same rule set |
+| Accessory use | **Voluntary** — operator turns on only when external output is needed | **Voluntary** — GPIO may be unwired on some builds |
+
+**Routing:** `session-accessory` is sent to whichever `deviceId` the operator selected (unicast). Both board types **may** implement the command even if a given motor build does not wire accessory output yet — keeps one product rule set.
+
+**Motor program auxiliary outputs** (future): additional GPIO timed with a motor FSM remain separate from this operator **Accessory** line; they do not replace the shared toggle above.
 
 #### 4.3.2 Session without relay accessory (**agreed 2026-10-26**, Q8)
 
 | Roster | Sub session (video, history, server row) | `session-accessory` |
 |--------|------------------------------------------|---------------------|
-| **Relay present** | Allowed; relay manual/automatic gated by Session in Progress + accessory as today | Sent to **relay** `deviceId` when operator turns session on |
-| **No relay** (motor-only, etc.) | **Must not be blocked** — operator can run motor programs / scene without a relay accessory | **Not sent**; absence of accessory **does not** disable session or motor controls |
+| **Any roster** | Scene / motion **not** blocked when Accessory is off | Only when operator enables **Accessory** for that `deviceId` |
 
 ### 4.4 Pairing settings
 
@@ -166,7 +173,7 @@ Align with **P7-D2**: **`deviceId` is always required** on operator → API comm
 |------|--------|
 | **Hardware** | List **all** devices on Sub; pair/add/revoke **per** `deviceId`. |
 | **Controls** | **Separate panels per `deviceId`** — relay (manual/automatic + Session in Progress) vs each motor (motor automatic, independent Start/Stop). |
-| **Session** | Sub-level session/scene **never blocked** for lack of relay (§4.3.2). **Session in Progress** switch drives **relay** `session-accessory` when a relay exists; motors **Start/Stop** on their own preconditions. |
+| **Session** | Sub-level **Scene session** gates motion/history (§4.3.2). **Accessory** is optional and per-device (§4.3.1). |
 | **State** | Replace X-6i scoping with **`(subTarget, deviceId)`** for `activeSession` automatic tracks, `running`, tab-sync. |
 | **System status** | Ready = **selected device** ready (or worst-of roster — **recommend selected device**). |
 
@@ -219,7 +226,7 @@ Treat as **X-6** sub-deliverables (order matters).
 | **X-6.2** | API/UI `deviceId` on **all** hardware commands; hub unicast | Correct routing |
 | **X-6.3** | UI device roster + per-motor controls; settings per device or slot | **UC-4** bench |
 | **X-6.4** | Session/history per-device results (H1 or H2) | Auditable dual-motor sessions |
-| **X-6.5** | Relay-only `session-accessory` routing; motor controls decoupled from Session in Progress | Accessory model §4.3.1 |
+| **X-6.5** | V2 accessory model (voluntary, per `deviceId`, motion decoupled) | [34](./34-Operator-Session-And-Accessory-V2-Rules.md) §3.2; §4.3.1 |
 | **X-6.6** | Tab-sync + session providers keyed by `(sub, deviceId)` | Multi-tab parity |
 
 **Firmware / standalone / gateway:** No new motor features required for X-6.1–X-6.2 beyond hub delivery assumptions already met (`deviceId` filter). **M2** should copy the **same `deviceId` routing** semantics in local API only after X-6.2 is stable.
@@ -241,7 +248,7 @@ Treat as **X-6** sub-deliverables (order matters).
 
 | # | Question | Status | Decision |
 |---|----------|--------|----------|
-| **Q1** | Session accessory scope | **Agreed** | **Relay device only** at Sub level (`session-accessory`). Motor accessory I/O belongs to **motor program/pattern** on that motor ESP (§4.3.1). |
+| **Q1** | Session accessory scope | **Superseded by V2** | Per [34](./34-Operator-Session-And-Accessory-V2-Rules.md): `session-accessory` per selected `deviceId`; voluntary; not motion gate. *(2026-10-26 row was relay-only — historical.)* |
 | **Q2** | `deviceId` when Sub has one device? | **Agreed** | **Always required** on commands and in history — no omit-when-count=1 shortcut (standardized data end-to-end) |
 | **Q3** | Two motors: same program or independent? | **Agreed** | **Independent** start/stop per motor; **Start both** optional later |
 | **Q4** | Relay + motor same time | **Agreed** | **No v1 UI/API lockout**; separate device UIs; physical constraint is operator’s; gateway **super-session** later (§4.8) |
@@ -274,3 +281,5 @@ Treat as **X-6** sub-deliverables (order matters).
 | 2026-10-26 | Operator decisions: Q1 relay-only session accessory; Q3 independent motors + Start both later; Q4 no host exclusivity; §4.8 super-session future |
 | 2026-10-26 | Q2 always `deviceId`; Q5 max 8 (MA-D13 ceiling, straps optional); Q6 one relay/Sub; Q7 migration yes — **§8 sign-off complete** |
 | 2026-10-26 | §1.1 vision — gateway-driven concurrency; UI per-device non-lockout; Q8 session not blocked without accessory; Q9 |
+| 2026-10-27 | §4.3.1 — **Accessory** naming; same accessory rules for relay + motor boards; per-`deviceId` `session-accessory` (supersedes relay-only routing note) |
+| 2026-10-27 | §4.3.1 — Accessory **voluntary**; motion **not** gated on accessory (relay or motor) |
