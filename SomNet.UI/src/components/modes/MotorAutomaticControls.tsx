@@ -118,7 +118,7 @@ export function MotorAutomaticControls() {
   const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart, commandDeviceId);
   const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop, commandDeviceId);
   const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort, commandDeviceId);
-  const showAbortControl =
+  const canAbort =
     sessionRunning || automaticSessionActive || startPending || cooperativeStopInProgress;
   const hardwareDisabledReason = !sceneSessionActive
     ? 'Turn Scene session on before Start (history / video).'
@@ -730,7 +730,7 @@ export function MotorAutomaticControls() {
         </Panel>
 
         <Panel title="Controls">
-          <div className="flex h-full flex-col justify-center gap-3">
+          <div className="flex flex-col gap-3">
             {!hardwareReady && !commandError && !startPending && !stopPending && !abortPending ? (
               <p className="text-sm text-amber-400/90" role="status">
                 {hardwareDisabledReason}
@@ -782,20 +782,22 @@ export function MotorAutomaticControls() {
             >
               Stop
             </CommandButton>
-            {showAbortControl ? (
-              <CommandButton
-                commandKey={HARDWARE_COMMAND_KEYS.manualAbort}
-                size="lg"
-                fullWidth
-                variant="secondary"
-                className="py-4 text-base"
-                disabled={!hardwareReady || startPending || abortPending}
-                title={hardwareDisabledReason}
-                onCommand={handleAbort}
-              >
-                Abort
-              </CommandButton>
-            ) : null}
+            <CommandButton
+              commandKey={HARDWARE_COMMAND_KEYS.manualAbort}
+              size="lg"
+              fullWidth
+              variant="secondary"
+              className="py-4 text-base"
+              disabled={!hardwareReady || startPending || abortPending || !canAbort}
+              title={
+                canAbort
+                  ? hardwareDisabledReason
+                  : 'Available while a session is starting or running.'
+              }
+              onCommand={handleAbort}
+            >
+              Abort
+            </CommandButton>
           </div>
         </Panel>
       </div>

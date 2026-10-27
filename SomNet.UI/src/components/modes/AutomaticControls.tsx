@@ -122,7 +122,7 @@ export function AutomaticControls() {
   const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart, commandDeviceId);
   const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop, commandDeviceId);
   const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort, commandDeviceId);
-  const showAbortControl =
+  const canAbort =
     sessionRunning || automaticSessionActive || startPending || cooperativeStopInProgress;
   const hardwareDisabledReason = !sceneSessionActive
     ? 'Turn Scene session on before Start (history / video).'
@@ -718,7 +718,7 @@ export function AutomaticControls() {
         </Panel>
 
         <Panel title="Controls">
-          <div className="flex h-full flex-col justify-center gap-3">
+          <div className="flex flex-col gap-3">
             {accessoryError || sceneSessionError ? (
               <p className="text-sm text-red-400" role="alert">
                 {accessoryError || sceneSessionError}
@@ -775,20 +775,22 @@ export function AutomaticControls() {
             >
               Stop
             </CommandButton>
-            {showAbortControl ? (
-              <CommandButton
-                commandKey={HARDWARE_COMMAND_KEYS.manualAbort}
-                size="lg"
-                fullWidth
-                variant="secondary"
-                disabled={!hardwareReady || startPending || abortPending}
-                title={hardwareDisabledReason}
-                onCommand={handleAbort}
-                className="py-4 text-base"
-              >
-                Abort
-              </CommandButton>
-            ) : null}
+            <CommandButton
+              commandKey={HARDWARE_COMMAND_KEYS.manualAbort}
+              size="lg"
+              fullWidth
+              variant="secondary"
+              disabled={!hardwareReady || startPending || abortPending || !canAbort}
+              title={
+                canAbort
+                  ? hardwareDisabledReason
+                  : 'Available while a session is starting or running.'
+              }
+              onCommand={handleAbort}
+              className="py-4 text-base"
+            >
+              Abort
+            </CommandButton>
           </div>
         </Panel>
       </div>
