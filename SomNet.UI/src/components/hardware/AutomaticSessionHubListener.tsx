@@ -22,6 +22,8 @@ import {
   parseAutomaticResultJson,
 } from '@/utils/automaticResultJson';
 import { applyAutomaticDeviceComplete } from '@/utils/automaticSessionFinalize';
+import { readDeviceAutomaticRunningLocal } from '@/utils/deviceAutomaticRunningLocal';
+import { automaticRunningKindForActuator } from '@/utils/tabSync';
 
 function shouldHandleAutomaticSessionComplete(ack: HardwareCommandAck): boolean {
   if (ack.correlationId !== AUTOMATIC_SESSION_COMPLETE_CORRELATION_ID) {
@@ -60,25 +62,27 @@ function handleDeviceButtonEvent(
 
 export function AutomaticSessionHubListener() {
   const { isAuthenticated } = useAuth();
-  const { settings, setAutomaticRunningLocal } = useOptions();
-  const { activeSession, endAutomaticSession } = useLiveSession();
+  const { settings, setDeviceAutomaticRunning } = useOptions();
+  const { endAutomaticSessionForDevice, isAutomaticSessionActiveForDevice } = useLiveSession();
   const { notifySiteUserReady, markDevicePresentAck } = useSiteUserReady();
   const { selectedSub, applySubFromSync } = useSubTarget();
-  const { setSelectedDeviceId } = useSubDevice();
-  const automaticRef = useRef(settings.automatic);
-  const activeSessionRef = useRef(activeSession);
-  const endAutomaticSessionRef = useRef(endAutomaticSession);
-  const clearAutomaticRunningRef = useRef<() => void>(() => setAutomaticRunningLocal(false));
+  const { setSelectedDeviceId, registrations } = useSubDevice();
+  const settingsRef = useRef(settings);
+  const registrationsRef = useRef(registrations);
+  const endAutomaticSessionForDeviceRef = useRef(endAutomaticSessionForDevice);
+  const isAutomaticSessionActiveForDeviceRef = useRef(isAutomaticSessionActiveForDevice);
+  const setDeviceAutomaticRunningRef = useRef(setDeviceAutomaticRunning);
   const notifySiteUserReadyRef = useRef(notifySiteUserReady);
   const markDevicePresentAckRef = useRef(markDevicePresentAck);
   const setSelectedDeviceIdRef = useRef(setSelectedDeviceId);
   const applySubFromSyncRef = useRef(applySubFromSync);
   const selectedSubRef = useRef(selectedSub);
 
-  automaticRef.current = settings.automatic;
-  activeSessionRef.current = activeSession;
-  endAutomaticSessionRef.current = endAutomaticSession;
-  clearAutomaticRunningRef.current = () => setAutomaticRunningLocal(false);
+  settingsRef.current = settings;
+  registrationsRef.current = registrations;
+  endAutomaticSessionForDeviceRef.current = endAutomaticSessionForDevice;
+  isAutomaticSessionActiveForDeviceRef.current = isAutomaticSessionActiveForDevice;
+  setDeviceAutomaticRunningRef.current = setDeviceAutomaticRunning;
   notifySiteUserReadyRef.current = notifySiteUserReady;
   markDevicePresentAckRef.current = markDevicePresentAck;
   setSelectedDeviceIdRef.current = setSelectedDeviceId;
@@ -96,23 +100,45 @@ export function AutomaticSessionHubListener() {
           return;
         }
 
-        const automatic = automaticRef.current;
-        const sessionActive = activeSessionRef.current?.mode === 'automatic';
-        if (!automatic.running && !sessionActive) {
+        const deviceId = ack.deviceId?.trim();
+        if (!deviceId) {
+          if (import.meta.env.DEV) {
+            console.warn(
+              '[SomNet] Ignoring automatic-session-complete without deviceId (multi-device requires API-forwarded deviceId)',
+            );
+          }
           return;
         }
+
+        const registration = registrationsRef.current.find((row) => row.deviceId === deviceId);
+        if (!registration) {
+          return;
+        }
+
+        const subTarget = registration.subTarget as SubTargetName;
+        const kind = automaticRunningKindForActuator(registration.actuatorKind);
+        const deviceSessionRunning = readDeviceAutomaticRunningLocal(subTarget, deviceId, kind);
+        const automatic = settingsRef.current.automatic;
 
         const parsed = parseAutomaticResultJson(ack.resultJson);
         if (!parsed) {
           return;
         }
 
+        const sessionActive = isAutomaticSessionActiveForDeviceRef.current(subTarget, deviceId);
         void applyAutomaticDeviceComplete(
           automatic,
           parsed,
-          clearAutomaticRunningRef.current,
-          endAutomaticSessionRef.current,
+          () => setDeviceAutomaticRunningRef.current(deviceId, kind, false),
+          (reason, deviceResult) =>
+            endAutomaticSessionForDeviceRef.current(
+              subTarget,
+              deviceId,
+              reason,
+              deviceResult,
+            ),
           sessionActive,
+          deviceSessionRunning,
         );
       },
       onButtonEvent: (event) => {

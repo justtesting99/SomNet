@@ -225,9 +225,9 @@ Treat as **X-6** sub-deliverables (order matters).
 | **X-6.1** | DB migration + pair/revoke/list **per device**; registry multi-connection | Two ESPs paired to **same** Sub |
 | **X-6.2** | API/UI `deviceId` on **all** hardware commands; hub unicast | Correct routing |
 | **X-6.3** | UI device roster + per-motor controls; settings per device or slot | **Done** 2026-10-27 — `DomSubDeviceSettings`; `/api/settings?deviceId=`; Options reload on picker |
-| **X-6.4** | Session/history per-device results (H1 or H2) | Auditable dual-motor sessions |
+| **X-6.4** | Session/history per-device results (H1 or H2) | **Done** 2026-10-27 — H1: `Sessions.DeviceId` + API/UI filter & labels (H2 child table deferred) |
 | **X-6.5** | V2 accessory model (voluntary, per `deviceId`, motion decoupled) | In tree — verify on **Run A/B** ([34](./34-Operator-Session-And-Accessory-V2-Rules.md) §3.2) |
-| **X-6.6** | Tab-sync + session providers keyed by `(sub, deviceId)` | Multi-tab parity |
+| **X-6.6** | Tab-sync + session providers keyed by `(sub, deviceId)` | **Done** 2026-10-27 — `running` includes `deviceId`; apply only when picker matches |
 
 **Firmware / standalone / gateway:** No new motor features required for X-6.1–X-6.2 beyond hub delivery assumptions already met (`deviceId` filter). **M2** should copy the **same `deviceId` routing** semantics in local API only after X-6.2 is stable.
 

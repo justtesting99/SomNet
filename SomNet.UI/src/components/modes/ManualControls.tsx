@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { type ManualControlState } from '@/types/modes';
-import { useOptions } from '@/context/OptionsProvider';
+import { useControlPanelSettings } from '@/hooks/useControlPanelSettings';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
-import { useCommandDeviceId } from '@/context/SubDeviceProvider';
+import { useOperationDeviceId } from '@/context/DeviceOperationScope';
+import { useDeviceSceneSessionActive } from '@/hooks/useDeviceSceneSessionActive';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
-import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 import { isHardwareCommandReady } from '@/utils/commandReadiness';
 import { Panel } from '@/components/ui/Panel';
 import { CommandButton } from '@/components/ui/CommandButton';
 import { NumberField } from '@/components/ui/NumberField';
 import { StrokeMsInput } from '@/components/modes/StrokeMsInput';
 import { StrokePowerSlider } from '@/components/modes/StrokePowerSlider';
-import { useLiveSession } from '@/context/SessionProvider';
+import { useOperationSession } from '@/hooks/useOperationSession';
 import { useHardwareCommand } from '@/context/HardwareCommandProvider';
 import { computeStrokeMs } from '@/utils/stroke';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
@@ -36,17 +36,19 @@ function clampBurstValue(key: 'burstStrokes' | 'burstDelaySeconds', value: numbe
 }
 
 export function ManualControls() {
-  const { settings, updateManual, isLoading, strokeLimits } = useOptions();
+  const { settings, updateManual, isLoading, strokeLimits } = useControlPanelSettings();
   const state = settings.manual;
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { selectedSub } = useSubTarget();
-  const commandDeviceId = useCommandDeviceId();
+  const commandDeviceId = useOperationDeviceId();
+  const sceneSessionActive = useDeviceSceneSessionActive(commandDeviceId);
   const { expandOnAction } = useVideoDisplay();
   const { prepareManualSession, recordManualStroke, recordManualBurst, recordManualAbort } =
-    useLiveSession();
+    useOperationSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
-  const { sceneSessionActive, accessoryError, sceneSessionError } = useSessionAccessory();
+  const accessoryError = '';
+  const sceneSessionError = '';
   const [commandError, setCommandError] = useState('');
 
   useEffect(() => {

@@ -57,7 +57,7 @@ SubTargetProvider
 | **SubTargetProvider** | `context/SubTargetProvider.tsx` | Current sub name; opens `SubSelectionDialog` |
 | **SessionProvider** | `context/SessionProvider.tsx` | Creates/updates/ends sessions via API; maintains manual event log for summaries |
 | **DomSessionsProvider** | `context/DomSessionsProvider.tsx` | Dom sessions dialog open state |
-| **OptionsProvider** | `context/OptionsProvider.tsx` | Loads/saves `PairingSettingsDto` via `/api/settings`; **persists only after explicit user edit** (`userEditedRef`); 400 ms debounce; `running` never persisted |
+| **OptionsProvider** | `context/OptionsProvider.tsx` | Loads/saves `PairingSettingsDto` via `/api/settings?deviceId=` (per paired device); **persists only after explicit user edit** (`userEditedRef`); 400 ms debounce; `running` never persisted; tab-sync `running` includes `deviceId` |
 | **SessionRehydrator** | `components/hardware/SessionRehydrator.tsx` | On load (when Session in Progress hint set): `GET /api/sessions/active`, automatic device probe, restore `activeSession` + local `running` |
 | **SessionAccessoryProvider** | `context/SessionAccessoryProvider.tsx` | **Session in Progress** switch state, `session-accessory` command, session start/end on OFF↔ON, tab-sync `session-accessory` |
 | **AutomaticSessionHubListener** | `components/hardware/AutomaticSessionHubListener.tsx` | Finalizes automatic sessions on hub `automatic-session-complete`; handles `ButtonEventReceived` → `SiteUserReadyProvider` |

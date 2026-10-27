@@ -1,5 +1,4 @@
 import { useAuth } from '@/context/AuthProvider';
-import { useMode } from '@/context/ModeProvider';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { AppShell } from '@/components/layout/AppShell';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -14,9 +13,9 @@ import { NotifyProvider } from '@/context/NotifyProvider';
 import { VideoDisplayProvider } from '@/context/VideoDisplayProvider';
 import { SessionProvider } from '@/context/SessionProvider';
 import { HardwareCommandProvider } from '@/context/HardwareCommandProvider';
-import { ModeSelector } from '@/components/modes/ModeSelector';
-import { ManualControls } from '@/components/modes/ManualControls';
-import { AutomaticModeControls } from '@/components/modes/AutomaticModeControls';
+import { DeviceOperationsPanel } from '@/components/modes/DeviceOperationsPanel';
+import { DevicePairingSettingsProvider } from '@/context/DevicePairingSettingsProvider';
+import { DeviceOperationModeProvider } from '@/context/DeviceOperationModeProvider';
 import { AutomaticSessionHubListener } from '@/components/hardware/AutomaticSessionHubListener';
 import { SiteUserReadyBanner } from '@/components/hardware/SiteUserReadyBanner';
 import { SessionRehydrator } from '@/components/hardware/SessionRehydrator';
@@ -26,35 +25,36 @@ import { TabSyncProvider } from '@/context/TabSyncProvider';
 import { SessionAccessoryProvider } from '@/context/SessionAccessoryProvider';
 import { TabSyncBanner } from '@/components/layout/TabSyncBanner';
 import { useSessionVideoSources } from '@/hooks/useSessionVideoSources';
+import { useFocusDeviceOperationMode } from '@/hooks/useFocusDeviceOperationMode';
 
-function DashboardLayoutWithSessionVideo({ mode }: { mode: 'manual' | 'automatic' }) {
+function DashboardLayoutWithSessionVideo() {
   const { sources, videoPreview } = useSessionVideoSources();
+  const focusMode = useFocusDeviceOperationMode();
   useSiteUserReadyStartFeed(videoPreview);
 
   return (
     <>
       <SiteUserReadyBanner />
       <DashboardLayout
-        controls={mode === 'manual' ? <ManualControls /> : <AutomaticModeControls />}
+        controls={<DeviceOperationsPanel />}
         videoSources={sources}
-        mode={mode}
+        mode={focusMode ?? 'manual'}
         videoPreview={videoPreview}
       />
     </>
   );
 }
 
-function DashboardWithVideo({ mode }: { mode: 'manual' | 'automatic' }) {
+function DashboardWithVideo() {
   return (
     <VideoDisplayProvider>
-      <DashboardLayoutWithSessionVideo mode={mode} />
+      <DashboardLayoutWithSessionVideo />
     </VideoDisplayProvider>
   );
 }
 
 export function App() {
   const { isAuthenticated, isRestoring } = useAuth();
-  const { mode } = useMode();
 
   if (isRestoring) {
     return (
@@ -71,38 +71,38 @@ export function App() {
   return (
     <SubTargetProvider>
       <SubDeviceProvider>
-      <SessionProvider>
-        <DomSessionsProvider>
-          <HardwareProvider>
-            <OptionsProvider>
-              <TabSyncProvider>
-                <NotifyProvider>
-                  <SiteUserReadyProvider>
-                    <HardwareCommandProvider>
-                      <SystemStatusProvider enabled>
-                        <SessionAccessoryProvider>
-                          <AutomaticSessionHubListener />
-                          <SessionRehydrator />
-                          <HistoryProvider>
-                            <AppShell wide={mode !== null}>
-                              <TabSyncBanner />
-                              {!mode ? (
-                                <ModeSelector />
-                              ) : (
-                                <DashboardWithVideo mode={mode} />
-                              )}
-                            </AppShell>
-                          </HistoryProvider>
-                        </SessionAccessoryProvider>
-                      </SystemStatusProvider>
-                    </HardwareCommandProvider>
-                  </SiteUserReadyProvider>
-                </NotifyProvider>
-              </TabSyncProvider>
-            </OptionsProvider>
-          </HardwareProvider>
-        </DomSessionsProvider>
-      </SessionProvider>
+        <SessionProvider>
+          <DomSessionsProvider>
+            <HardwareProvider>
+              <OptionsProvider>
+                <DevicePairingSettingsProvider>
+                  <DeviceOperationModeProvider>
+                    <TabSyncProvider>
+                      <NotifyProvider>
+                        <SiteUserReadyProvider>
+                          <HardwareCommandProvider>
+                            <SystemStatusProvider enabled>
+                              <SessionAccessoryProvider>
+                                <AutomaticSessionHubListener />
+                                <SessionRehydrator />
+                                <HistoryProvider>
+                                  <AppShell wide>
+                                    <TabSyncBanner />
+                                    <DashboardWithVideo />
+                                  </AppShell>
+                                </HistoryProvider>
+                              </SessionAccessoryProvider>
+                            </SystemStatusProvider>
+                          </HardwareCommandProvider>
+                        </SiteUserReadyProvider>
+                      </NotifyProvider>
+                    </TabSyncProvider>
+                  </DeviceOperationModeProvider>
+                </DevicePairingSettingsProvider>
+              </OptionsProvider>
+            </HardwareProvider>
+          </DomSessionsProvider>
+        </SessionProvider>
       </SubDeviceProvider>
     </SubTargetProvider>
   );

@@ -22,7 +22,18 @@ import { normalizeAutomaticControlState } from '@/utils/automaticFieldRules';
 import { normalizeMotorAutomaticControlState } from '@/utils/motorAutomaticFieldRules';
 import type { MotorAutomaticControlState } from '@/types/motorModes';
 import { clearAutomaticDeviceRunningHint } from '@/utils/automaticDeviceRunningHint';
-import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
+import {
+  readDeviceAutomaticRunningLocal,
+  writeDeviceAutomaticRunningLocal,
+} from '@/utils/deviceAutomaticRunningLocal';
+import { cacheDeviceSettings } from '@/utils/deviceSettingsCache';
+import {
+  automaticRunningKindForActuator,
+  getTabId,
+  postTabSync,
+  shouldBroadcastLocalChange,
+  type AutomaticRunningKind,
+} from '@/utils/tabSync';
 
 interface OptionsContextValue {
   settings: PairingSettings;
@@ -38,6 +49,12 @@ interface OptionsContextValue {
   /** Set running flag locally without persisting (session rehydration). */
   setAutomaticRunningLocal: (running: boolean) => void;
   setMotorAutomaticRunningLocal: (running: boolean) => void;
+  /** Update running for any device (hub / cross-device); syncs UI only when selected. */
+  setDeviceAutomaticRunning: (
+    deviceId: string,
+    kind: AutomaticRunningKind,
+    running: boolean,
+  ) => void;
   isDialogOpen: boolean;
   openDialog: () => void;
   closeDialog: () => void;
@@ -50,7 +67,12 @@ const SAVE_DEBOUNCE_MS = 400;
 export function OptionsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { selectedSub } = useSubTarget();
-  const { selectedDeviceId, isLoading: devicesLoading } = useSubDevice();
+  const {
+    selectedDeviceId,
+    selectedActuatorKind,
+    registrations,
+    isLoading: devicesLoading,
+  } = useSubDevice();
   const selectedSubRef = useRef(selectedSub);
   selectedSubRef.current = selectedSub;
   const persistDeviceIdRef = useRef<string | null>(null);
@@ -67,6 +89,30 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
   const persistGenerationRef = useRef(0);
 
   settingsRef.current = settings;
+
+  const actuatorKindForDevice = useCallback(
+    (deviceId: string): AutomaticRunningKind => {
+      const registration = registrations.find((row) => row.deviceId === deviceId);
+      return automaticRunningKindForActuator(registration?.actuatorKind ?? null);
+    },
+    [registrations],
+  );
+
+  const rememberRunningForDevice = useCallback(
+    (deviceId: string | null) => {
+      if (!deviceId) {
+        return;
+      }
+
+      const kind = actuatorKindForDevice(deviceId);
+      const running =
+        kind === 'motor'
+          ? settingsRef.current.motorAutomatic.running
+          : settingsRef.current.automatic.running;
+      writeDeviceAutomaticRunningLocal(selectedSubRef.current, deviceId, kind, running);
+    },
+    [actuatorKindForDevice],
+  );
 
   useEffect(() => {
     settingsLoadedRef.current = settingsLoaded;
@@ -172,8 +218,14 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
     let cancelled = false;
     const deviceIdForLoad = selectedDeviceId;
+    const previousDeviceId = persistDeviceIdRef.current;
 
-    flushPendingSaveForDevice(persistDeviceIdRef.current);
+    if (previousDeviceId && previousDeviceId !== deviceIdForLoad) {
+      rememberRunningForDevice(previousDeviceId);
+      cacheDeviceSettings(selectedSub, previousDeviceId, settingsRef.current);
+    }
+
+    flushPendingSaveForDevice(previousDeviceId);
     persistGenerationRef.current += 1;
     userEditedRef.current = false;
     persistDeviceIdRef.current = deviceIdForLoad;
@@ -185,11 +237,13 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
     setIsLoading(true);
     setSettingsLoaded(false);
-    setSettings((current) => ({
-      ...current,
-      automatic: { ...current.automatic, running: false },
-      motorAutomatic: { ...current.motorAutomatic, running: false },
-    }));
+
+    const kindForLoad = actuatorKindForDevice(deviceIdForLoad);
+    const restoredRunning = readDeviceAutomaticRunningLocal(
+      selectedSub,
+      deviceIdForLoad,
+      kindForLoad,
+    );
 
     Promise.all([fetchPairingSettings(selectedSub, deviceIdForLoad), fetchStrokeLimits()])
       .then(([loadedSettings, loadedStrokeLimits]) => {
@@ -214,8 +268,12 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
             automatic: normalizeAutomaticControlState({
               ...loadedSettings.automatic,
               ...automaticStroke,
+              running: kindForLoad === 'relay' ? restoredRunning : false,
             }),
-            motorAutomatic: normalizeMotorAutomaticControlState(loadedSettings.motorAutomatic),
+            motorAutomatic: normalizeMotorAutomaticControlState({
+              ...loadedSettings.motorAutomatic,
+              running: kindForLoad === 'motor' ? restoredRunning : false,
+            }),
           });
           setSettingsLoaded(true);
         }
@@ -235,7 +293,15 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [domTarget, selectedSub, selectedDeviceId, devicesLoading, flushPendingSaveForDevice]);
+  }, [
+    actuatorKindForDevice,
+    domTarget,
+    rememberRunningForDevice,
+    selectedSub,
+    selectedDeviceId,
+    devicesLoading,
+    flushPendingSaveForDevice,
+  ]);
 
   useEffect(
     () => () => {
@@ -245,34 +311,6 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
-
-  useEffect(() => {
-    if (!shouldBroadcastLocalChange()) {
-      return;
-    }
-
-    postTabSync({
-      type: 'running',
-      tabId: getTabId(),
-      subTarget: selectedSubRef.current,
-      kind: 'relay',
-      running: settings.automatic.running,
-    });
-  }, [settings.automatic.running]);
-
-  useEffect(() => {
-    if (!shouldBroadcastLocalChange()) {
-      return;
-    }
-
-    postTabSync({
-      type: 'running',
-      tabId: getTabId(),
-      subTarget: selectedSubRef.current,
-      kind: 'motor',
-      running: settings.motorAutomatic.running,
-    });
-  }, [settings.motorAutomatic.running]);
 
   const applySettings = useCallback(
     (nextSettings: PairingSettings, persistImmediately = false, skipPersist = false) => {
@@ -357,10 +395,55 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     [applySettings, strokeLimits],
   );
 
-  const setAutomaticRunningLocal = useCallback(
-    (running: boolean) => {
+  const setDeviceAutomaticRunning = useCallback(
+    (deviceId: string, kind: AutomaticRunningKind, running: boolean) => {
+      if (!deviceId) {
+        return;
+      }
+
       if (!running) {
-        clearAutomaticDeviceRunningHint();
+        clearAutomaticDeviceRunningHint(selectedSubRef.current, deviceId);
+      }
+
+      writeDeviceAutomaticRunningLocal(selectedSubRef.current, deviceId, kind, running);
+
+      if (shouldBroadcastLocalChange()) {
+        postTabSync({
+          type: 'running',
+          tabId: getTabId(),
+          subTarget: selectedSubRef.current,
+          deviceId,
+          kind,
+          running,
+        });
+      }
+
+      if (persistDeviceIdRef.current !== deviceId) {
+        return;
+      }
+
+      const selectedKind = automaticRunningKindForActuator(selectedActuatorKind);
+      if (selectedKind !== kind) {
+        return;
+      }
+
+      if (kind === 'motor') {
+        if (settingsRef.current.motorAutomatic.running === running) {
+          return;
+        }
+
+        applySettings(
+          {
+            ...settingsRef.current,
+            motorAutomatic: {
+              ...settingsRef.current.motorAutomatic,
+              running,
+            },
+          },
+          false,
+          true,
+        );
+        return;
       }
 
       if (settingsRef.current.automatic.running === running) {
@@ -379,7 +462,19 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
         true,
       );
     },
-    [applySettings],
+    [applySettings, selectedActuatorKind],
+  );
+
+  const setAutomaticRunningLocal = useCallback(
+    (running: boolean) => {
+      const deviceId = persistDeviceIdRef.current;
+      if (!deviceId) {
+        return;
+      }
+
+      setDeviceAutomaticRunning(deviceId, 'relay', running);
+    },
+    [setDeviceAutomaticRunning],
   );
 
   const updateMotorAutomatic = useCallback(
@@ -395,27 +490,14 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
   const setMotorAutomaticRunningLocal = useCallback(
     (running: boolean) => {
-      if (!running) {
-        clearAutomaticDeviceRunningHint();
-      }
-
-      if (settingsRef.current.motorAutomatic.running === running) {
+      const deviceId = persistDeviceIdRef.current;
+      if (!deviceId) {
         return;
       }
 
-      applySettings(
-        {
-          ...settingsRef.current,
-          motorAutomatic: {
-            ...settingsRef.current.motorAutomatic,
-            running,
-          },
-        },
-        false,
-        true,
-      );
+      setDeviceAutomaticRunning(deviceId, 'motor', running);
     },
-    [applySettings],
+    [setDeviceAutomaticRunning],
   );
 
   const openDialog = useCallback(() => {
@@ -439,6 +521,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       updateMotorAutomatic,
       setAutomaticRunningLocal,
       setMotorAutomaticRunningLocal,
+      setDeviceAutomaticRunning,
       isDialogOpen,
       openDialog,
       closeDialog,
@@ -454,6 +537,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       updateMotorAutomatic,
       setAutomaticRunningLocal,
       setMotorAutomaticRunningLocal,
+      setDeviceAutomaticRunning,
       isDialogOpen,
       openDialog,
       closeDialog,

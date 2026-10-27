@@ -109,6 +109,9 @@ public sealed class HardwareCommandAckDto
     public string? Message { get; init; }
 
     public string? ResultJson { get; init; }
+
+    /// <summary>Paired device that sent the ack (set by API when forwarding to operators).</summary>
+    public string? DeviceId { get; init; }
 }
 
 public sealed class SendHardwareCommandRequestDto

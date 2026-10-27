@@ -117,17 +117,35 @@ public sealed class HardwareHub : Hub
         var subTarget = Context.User?.FindFirstValue(DeviceClaimTypes.SubTarget);
         if (!string.IsNullOrWhiteSpace(domTarget))
         {
+            var operatorAck = acknowledgement;
+            if (string.IsNullOrWhiteSpace(operatorAck.DeviceId) &&
+                _connectionRegistry.TryGetPairedDeviceByConnectionId(
+                    Context.ConnectionId,
+                    out var pairedDeviceId,
+                    out _,
+                    out _))
+            {
+                operatorAck = new HardwareCommandAckDto
+                {
+                    CorrelationId = acknowledgement.CorrelationId,
+                    Success = acknowledgement.Success,
+                    Message = acknowledgement.Message,
+                    ResultJson = acknowledgement.ResultJson,
+                    DeviceId = pairedDeviceId,
+                };
+            }
+
             if (!string.IsNullOrWhiteSpace(subTarget))
             {
                 _videoActionSnapshotTrigger.TryCaptureAfterAutomaticSessionCompleteAsync(
                     domTarget.Trim(),
                     subTarget.Trim(),
-                    acknowledgement);
+                    operatorAck);
             }
 
             await Clients
                 .Group(HardwareHubGroups.Operator(domTarget.Trim()))
-                .SendAsync(HardwareHubMethods.CommandAcknowledged, acknowledgement);
+                .SendAsync(HardwareHubMethods.CommandAcknowledged, operatorAck);
         }
     }
 

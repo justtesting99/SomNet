@@ -27,6 +27,12 @@ public interface IDeviceConnectionRegistry
 
     RemovedHardwareConnection? Unregister(string connectionId);
 
+    bool TryGetPairedDeviceByConnectionId(
+        string connectionId,
+        out string deviceId,
+        out string domTarget,
+        out string subTarget);
+
     bool TryGetUnpairedConnectionId(string deviceId, out string connectionId);
 
     bool TryGetPairedConnectionId(string domTarget, string subTarget, string deviceId, out string connectionId);
@@ -87,6 +93,31 @@ public sealed class DeviceConnectionRegistry : IDeviceConnectionRegistry
     public void RegisterOperator(string domTarget, string connectionId)
     {
         _operatorConnections[connectionId] = 0;
+    }
+
+    public bool TryGetPairedDeviceByConnectionId(
+        string connectionId,
+        out string deviceId,
+        out string domTarget,
+        out string subTarget)
+    {
+        foreach (var entry in _pairedConnections.Values)
+        {
+            if (!string.Equals(entry.ConnectionId, connectionId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            deviceId = entry.DeviceId;
+            domTarget = entry.DomTarget;
+            subTarget = entry.SubTarget;
+            return true;
+        }
+
+        deviceId = string.Empty;
+        domTarget = string.Empty;
+        subTarget = string.Empty;
+        return false;
     }
 
     public RemovedHardwareConnection? Unregister(string connectionId)

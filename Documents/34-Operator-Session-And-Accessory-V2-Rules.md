@@ -5,6 +5,7 @@
 | Related | Link |
 |---------|------|
 | Multi-device spike (routing, X-6) | [33 — Multi-device per Sub](./33-Multi-Device-Per-Sub-Spike.md) |
+| **Shared vs per-device audit** | [35 — Device independence audit](./35-Device-Independence-Audit.md) |
 | Motor / X-6 implementation | [32 — Motor plan](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) |
 | **Historical** P16 sign-off (V1) | [25 — Session accessory checklist](./25-Session-Accessory-In-Progress-Checklist.md) |
 | Doc hygiene | [08 — Development Guide § Documentation maintenance](./08-Development-Guide.md#documentation-maintenance-recurring) |
@@ -78,6 +79,18 @@ V2 is the **target norm** for SomNet hub + web UI + unified ESP firmware on the 
 | Double-click before scene/accessory | Per **`deviceId`** on the selected device | **Yes** — hub `ButtonEventReceived` includes `deviceId` |
 | Fail-safe accessory off on transport loss | Firmware de-energize on hub/Wi‑Fi loss | **Retained** from P16 hardware safety |
 
+### 3.5 Device-isolated operator runtime (no shared relay state)
+
+| Rule | Detail |
+|------|--------|
+| **Automatic `running`** | Authoritative per **`(subTarget, deviceId, relay\|motor)`** — in-memory map + per-device refresh hint; **never** one global `sessionStorage` key for the whole app |
+| **Settings UI** | `OptionsProvider` loads/saves **one selected device** at a time; on device switch, cache running + flush debounced save for the previous device |
+| **Hub `automatic-session-complete`** | Must include **`deviceId`** on operator `CommandAcknowledged`; listener finalizes **that device’s** session and clears **that device’s** running only |
+| **Mode switch / sign-out** | Stop cooperative automatic using **selected device** actuator plane (relay vs motor), not `settings.automatic` only |
+| **Anti-pattern** | Reading `settings.automatic.running` when the selected device is **motor**, or clearing motor running via relay-only hub paths |
+| **Control panel** | **One** dashboard column lists **every** paired device on the Sub; each block has its own Scene/Accessory + motion controls. Header **Focus** only affects video/status — not which devices appear in the panel |
+| **Operation mode** | **Per `deviceId`** (manual vs automatic). **No** global “choose mode” gate. Relay picks manual/automatic per device; motor is automatic-only until manual exists. One device may run automatic while another is in manual |
+
 ---
 
 ## 4. V1 → V2 mapping (migration cheat sheet)
@@ -105,7 +118,9 @@ Update this table when milestones land; it is a **guide**, not a second checklis
 | Hub `deviceId` on commands | **Yes** | X-6.1–X-6.2 |
 | Per-device scene session | **Yes** | API `DeviceId`, UI storage + header per selected device |
 | Per-device ready ack | **Yes** | `sessionStorage` per `(sub, deviceId)`; double-click selects device |
-| Doc [06](./06-SignalR-And-Hardware.md) / User Guide | **Partial** | Sweep when operator docs next edited |
+| Per-device automatic `running` + hub complete | **Yes** | Map + per-device hint; API stamps `deviceId` on forwarded acks |
+| Per-device pairing settings (X-6.3) | **Yes** | `DomSubDeviceSettings` |
+| Doc [06](./06-SignalR-And-Hardware.md) / User Guide | **Partial** | Sweep when operator docs next edited; note `HardwareCommandAckDto.deviceId` |
 
 ---
 
@@ -117,3 +132,4 @@ Update this table when milestones land; it is a **guide**, not a second checklis
 | 2026-10-27 | Operator confirmed §3 summary (accessory optional; scene gates motion; unified accessory per `deviceId`; multi-device no lockout; V2-only forward work) |
 | 2026-10-27 | Per-device **scene session** — API/UI implementation started |
 | 2026-10-27 | Per-device **ready ack** (double-click) |
+| 2026-10-27 | §3.5 device-isolated automatic running + hub `deviceId` on session complete |

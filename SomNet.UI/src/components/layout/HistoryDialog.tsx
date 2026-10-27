@@ -9,16 +9,22 @@ import { CONTROLLER_ROLE, SUB_ROLE } from '@/config/sessionUsers';
 import { useAuth } from '@/context/AuthProvider';
 import { useHistory } from '@/context/HistoryProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 import type { HistoryTimelineEntry } from '@/types/sessionHistory';
+import { formatSessionDeviceLabel } from '@/utils/sessionHistoryDevice';
 import { Button } from '@/components/ui/Button';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { SessionSnapshotGallery } from '@/components/video/SessionSnapshotGallery';
 
+type HistoryDeviceScope = 'all' | 'selected';
+
 export function HistoryDialog() {
   const { isDialogOpen, closeDialog } = useHistory();
   const { selectedSub } = useSubTarget();
+  const { registrations, selectedDeviceId } = useSubDevice();
   const { user } = useAuth();
   const domName = user?.displayName ?? 'Unknown';
+  const [deviceScope, setDeviceScope] = useState<HistoryDeviceScope>('selected');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [timeline, setTimeline] = useState<HistoryTimelineEntry[]>([]);
@@ -34,12 +40,15 @@ export function HistoryDialog() {
     return filterHistoryTimelineByDateRange(timeline, fromDate, toDate);
   }, [timeline, fromDate, toDate, dateRangeInvalid]);
 
+  const multiDeviceOnSub = registrations.length > 1;
+
   useEffect(() => {
     if (isDialogOpen) {
       setFromDate('');
       setToDate('');
+      setDeviceScope(multiDeviceOnSub ? 'selected' : 'all');
     }
-  }, [isDialogOpen]);
+  }, [isDialogOpen, multiDeviceOnSub]);
 
   useEffect(() => {
     if (!isDialogOpen) {
@@ -50,7 +59,10 @@ export function HistoryDialog() {
     setIsLoading(true);
     setLoadError('');
 
-    fetchHistoryTimeline(domName, selectedSub)
+    const deviceId =
+      deviceScope === 'selected' && selectedDeviceId ? selectedDeviceId : undefined;
+
+    fetchHistoryTimeline(domName, selectedSub, deviceId)
       .then((entries) => {
         if (!cancelled) {
           setTimeline(entries);
@@ -71,7 +83,7 @@ export function HistoryDialog() {
     return () => {
       cancelled = true;
     };
-  }, [isDialogOpen, domName, selectedSub]);
+  }, [isDialogOpen, domName, selectedSub, deviceScope, selectedDeviceId]);
 
   useEffect(() => {
     if (!isDialogOpen) {
@@ -112,8 +124,55 @@ export function HistoryDialog() {
           <p className="mt-1 text-sm text-slate-400">
             Sessions and notifications for {CONTROLLER_ROLE}{' '}
             <span className="text-slate-300">{domName}</span> and {SUB_ROLE}{' '}
-            <span className="text-slate-300">{selectedSub}</span> only.
+            <span className="text-slate-300">{selectedSub}</span>
+            {deviceScope === 'selected' && selectedDeviceId ? (
+              <>
+                {' '}
+                · device{' '}
+                <span className="font-mono text-slate-300">
+                  {formatSessionDeviceLabel(selectedDeviceId, registrations, selectedSub)}
+                </span>
+              </>
+            ) : null}
+            .
           </p>
+          {multiDeviceOnSub ? (
+            <div
+              className="mt-3 flex flex-wrap gap-2"
+              role="tablist"
+              aria-label="Session device filter"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={deviceScope === 'selected'}
+                className={[
+                  'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                  deviceScope === 'selected'
+                    ? 'bg-indigo-500/20 text-indigo-300'
+                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200',
+                ].join(' ')}
+                onClick={() => setDeviceScope('selected')}
+                disabled={!selectedDeviceId}
+              >
+                Selected device
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={deviceScope === 'all'}
+                className={[
+                  'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                  deviceScope === 'all'
+                    ? 'bg-indigo-500/20 text-indigo-300'
+                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200',
+                ].join(' ')}
+                onClick={() => setDeviceScope('all')}
+              >
+                All devices on Sub
+              </button>
+            </div>
+          ) : null}
           <div className="mt-4">
             <DateRangePicker
               fromDate={fromDate}
@@ -169,10 +228,17 @@ export function HistoryDialog() {
                           </p>
                         ) : null}
                       </div>
-                      <p className="mt-1 text-xs text-slate-400">
-                        <span className="font-medium text-slate-500">Session ID: </span>
-                        <span className="font-mono text-slate-200">{session.id}</span>
-                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                        <span>
+                          <span className="font-medium text-slate-500">Session ID: </span>
+                          <span className="font-mono text-slate-200">{session.id}</span>
+                        </span>
+                        {multiDeviceOnSub || session.deviceId ? (
+                          <span className="rounded-md bg-slate-800 px-2 py-0.5 font-medium text-slate-300">
+                            {formatSessionDeviceLabel(session.deviceId, registrations, selectedSub)}
+                          </span>
+                        ) : null}
+                      </div>
                       <p className="mt-2 text-sm leading-relaxed text-slate-400">
                         {session.summary}
                       </p>

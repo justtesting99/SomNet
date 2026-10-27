@@ -10,20 +10,24 @@ import {
 } from 'react';
 import { fetchActiveSession } from '@/api/sessions';
 import { useAuth } from '@/context/AuthProvider';
-import { useMode } from '@/context/ModeProvider';
+import { useDeviceOperationModeApi } from '@/context/DeviceOperationModeProvider';
 import { useOptions } from '@/context/OptionsProvider';
 import { useLiveSession } from '@/context/SessionProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useSubDevice } from '@/context/SubDeviceProvider';
 import type { HardwareCommandKey } from '@/types/hardwareCommand';
 import {
+  hasRemoteLockForDevice,
+  isRemoteLockForCommand,
+} from '@/utils/hardwareCommandLock';
+import {
   isRehydratableAutomaticSession,
   isRehydratableManualSession,
 } from '@/utils/sessionProgress';
 import { shouldRestoreAutomaticDeviceRunning } from '@/utils/automaticDeviceRunningHint';
 import { subTargetsMatch } from '@/utils/readyBannerStorage';
-import { useDeviceActuatorKind } from '@/hooks/useDeviceActuatorKind';
 import {
+  automaticRunningKindForActuator,
   getTabId,
   postTabSync,
   subscribeTabSync,
@@ -33,46 +37,49 @@ import {
   withRemoteSyncApplyAsync,
 } from '@/utils/tabSync';
 interface TabSyncContextValue {
-  hasRemoteCommandLock: boolean;
-  isRemoteCommandPending: (commandKey: HardwareCommandKey) => boolean;
+  hasRemoteCommandLock: (deviceId: string) => boolean;
+  isRemoteCommandPending: (commandKey: HardwareCommandKey, deviceId: string) => boolean;
 }
 
 const TabSyncContext = createContext<TabSyncContextValue | null>(null);
 
 export function TabSyncProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const { mode: operationMode, setMode } = useMode();
+  const { setDeviceOperationMode } = useDeviceOperationModeApi();
   const { selectedSub, applySubFromSync } = useSubTarget();
-  const { selectedDeviceId } = useSubDevice();
+  const { selectedDeviceId, registrations } = useSubDevice();
   const {
     settings,
     settingsLoaded,
-    setAutomaticRunningLocal,
-    setMotorAutomaticRunningLocal,
+    setDeviceAutomaticRunning,
   } = useOptions();
-  const { actuatorKind } = useDeviceActuatorKind();
-  const { activeSession, syncSessionFromRemote, endActiveSessionIfNeeded } = useLiveSession();
+  const registrationsRef = useRef(registrations);
+  registrationsRef.current = registrations;
+  const {
+    activeSession,
+    sessionsByKey,
+    syncSessionFromRemote,
+    endAllInProgressSessionsForSub,
+  } = useLiveSession();
 
-  const [remotePendingKeys, setRemotePendingKeys] = useState<ReadonlySet<HardwareCommandKey>>(
-    () => new Set(),
-  );
+  const [remotePendingKeys, setRemotePendingKeys] = useState<ReadonlySet<string>>(() => new Set());
 
-  const remoteLocksRef = useRef(new Map<string, ReadonlySet<HardwareCommandKey>>());
+  const remoteLocksRef = useRef(new Map<string, ReadonlySet<string>>());
   const applyingSessionIdRef = useRef<string | null>(null);
   const activeSessionRef = useRef(activeSession);
   const settingsRef = useRef(settings);
   const selectedSubRef = useRef(selectedSub);
-  const operationModeRef = useRef(operationMode);
+  const selectedDeviceIdRef = useRef(selectedDeviceId);
 
   activeSessionRef.current = activeSession;
   settingsRef.current = settings;
   selectedSubRef.current = selectedSub;
-  operationModeRef.current = operationMode;
+  selectedDeviceIdRef.current = selectedDeviceId;
 
   const domTarget = user?.displayName ?? user?.username ?? '';
 
   const mergeRemoteLocks = useCallback(() => {
-    const merged = new Set<HardwareCommandKey>();
+    const merged = new Set<string>();
     const selfId = getTabId();
 
     for (const [tabId, keys] of remoteLocksRef.current.entries()) {
@@ -88,38 +95,25 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
     setRemotePendingKeys(merged);
   }, []);
 
+  const sessionsByKeyRef = useRef(sessionsByKey);
+  sessionsByKeyRef.current = sessionsByKey;
+
   const broadcastLocalState = useCallback(() => {
-    const session = activeSessionRef.current;
-
-    postTabSync({
-      type: 'session',
-      tabId: getTabId(),
-      session: session
-        ? {
-            id: session.id,
-            startedAt: session.startedAt,
-            mode: session.mode,
-            subTarget: session.subTarget,
-            deviceId: session.deviceId,
-          }
-        : null,
-    });
-
-    postTabSync({
-      type: 'running',
-      tabId: getTabId(),
-      subTarget: selectedSubRef.current,
-      kind: 'relay',
-      running: settingsRef.current.automatic.running,
-    });
-
-    postTabSync({
-      type: 'running',
-      tabId: getTabId(),
-      subTarget: selectedSubRef.current,
-      kind: 'motor',
-      running: settingsRef.current.motorAutomatic.running,
-    });
+    for (const session of Object.values(sessionsByKeyRef.current)) {
+      postTabSync({
+        type: 'device-session',
+        tabId: getTabId(),
+        subTarget: session.subTarget,
+        deviceId: session.deviceId,
+        session: {
+          id: session.id,
+          startedAt: session.startedAt,
+          mode: session.mode,
+          subTarget: session.subTarget,
+          deviceId: session.deviceId,
+        },
+      });
+    }
 
     postTabSync({
       type: 'sub',
@@ -129,17 +123,19 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const applySessionSnapshot = useCallback(
-    async (snapshot: ActiveSessionSnapshot | null) => {
+    async (snapshot: ActiveSessionSnapshot | null, deviceIdForClear?: string) => {
       if (snapshot === null) {
-        if (!activeSessionRef.current) {
+        const deviceId =
+          deviceIdForClear ??
+          activeSessionRef.current?.deviceId ??
+          selectedDeviceIdRef.current ??
+          undefined;
+        if (!deviceId) {
           return;
         }
 
         withRemoteSyncApply(() => {
-          syncSessionFromRemote(
-            null,
-            activeSessionRef.current?.deviceId ?? selectedDeviceId ?? undefined,
-          );
+          syncSessionFromRemote(null, deviceId);
         });
         return;
       }
@@ -155,15 +151,10 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
       applyingSessionIdRef.current = snapshot.id;
 
       if (snapshot.subTarget !== selectedSubRef.current) {
-        await endActiveSessionIfNeeded('sub-change');
+        await endAllInProgressSessionsForSub('sub-change');
         withRemoteSyncApply(() => {
           applySubFromSync(snapshot.subTarget);
         });
-      }
-
-      const currentOperationMode = operationModeRef.current;
-      if (currentOperationMode !== null && snapshot.mode !== currentOperationMode) {
-        return;
       }
 
       try {
@@ -192,20 +183,17 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
         // Multi-tab sync: trust peer + server row — never probe device (automatic-update).
         await withRemoteSyncApplyAsync(() => {
           syncSessionFromRemote(entry);
-          setMode(entry.mode);
+          setDeviceOperationMode(snapshot.deviceId, entry.mode);
 
-          if (entry.mode === 'automatic' && shouldRestoreAutomaticDeviceRunning(entry.id, entry.subTarget)) {
-            const restoreMotor = actuatorKind === 'hbridge';
-            const alreadyRunning = restoreMotor
-              ? settingsRef.current.motorAutomatic.running
-              : settingsRef.current.automatic.running;
-            if (!alreadyRunning) {
-              if (restoreMotor) {
-                setMotorAutomaticRunningLocal(true);
-              } else {
-                setAutomaticRunningLocal(true);
-              }
-            }
+          if (
+            entry.mode === 'automatic' &&
+            shouldRestoreAutomaticDeviceRunning(entry.id, entry.subTarget, snapshot.deviceId)
+          ) {
+            const registration = registrationsRef.current.find(
+              (row) => row.deviceId === snapshot.deviceId,
+            );
+            const restoreKind = automaticRunningKindForActuator(registration?.actuatorKind ?? null);
+            setDeviceAutomaticRunning(snapshot.deviceId, restoreKind, true);
           }
         });
       } catch {
@@ -218,11 +206,9 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
     },
     [
       applySubFromSync,
-      endActiveSessionIfNeeded,
-      actuatorKind,
-      setAutomaticRunningLocal,
-      setMotorAutomaticRunningLocal,
-      setMode,
+      endAllInProgressSessionsForSub,
+      setDeviceAutomaticRunning,
+      setDeviceOperationMode,
       syncSessionFromRemote,
     ],
   );
@@ -258,11 +244,6 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const currentOperationMode = operationModeRef.current;
-      if (currentOperationMode !== null && entry.mode !== currentOperationMode) {
-        return;
-      }
-
       if (
         (entry.mode === 'manual' && isRehydratableManualSession(entry)) ||
         (entry.mode === 'automatic' && isRehydratableAutomaticSession(entry))
@@ -291,9 +272,18 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
         case 'session':
           void applySessionSnapshot(message.session);
           break;
+        case 'device-session':
+          if (!subTargetsMatch(message.subTarget, selectedSubRef.current)) {
+            break;
+          }
+          void applySessionSnapshot(message.session, message.deviceId);
+          break;
         case 'running':
           if (
             !('subTarget' in message) ||
+            !('deviceId' in message) ||
+            typeof message.deviceId !== 'string' ||
+            !message.deviceId ||
             !('kind' in message) ||
             (message.kind !== 'relay' && message.kind !== 'motor')
           ) {
@@ -303,27 +293,30 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
             break;
           }
           withRemoteSyncApply(() => {
-            if (message.kind === 'motor') {
-              setMotorAutomaticRunningLocal(message.running);
-            } else {
-              setAutomaticRunningLocal(message.running);
-            }
+            setDeviceAutomaticRunning(message.deviceId, message.kind, message.running);
           });
           break;
         case 'sub':
           if (message.subTarget !== selectedSubRef.current) {
             void (async () => {
-              await endActiveSessionIfNeeded('sub-change');
+              await endAllInProgressSessionsForSub('sub-change');
               withRemoteSyncApply(() => {
                 applySubFromSync(message.subTarget);
               });
             })();
           }
           break;
-        case 'command-lock':
-          remoteLocksRef.current.set(message.tabId, new Set(message.keys));
+        case 'command-lock': {
+          const lockKeys =
+            'lockKeys' in message && Array.isArray(message.lockKeys)
+              ? message.lockKeys
+              : 'keys' in message && Array.isArray((message as { keys?: string[] }).keys)
+                ? (message as { keys: string[] }).keys
+                : [];
+          remoteLocksRef.current.set(message.tabId, new Set(lockKeys));
           mergeRemoteLocks();
           break;
+        }
         case 'request-sync':
           broadcastLocalState();
           break;
@@ -335,10 +328,9 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
     applySessionSnapshot,
     applySubFromSync,
     broadcastLocalState,
-    endActiveSessionIfNeeded,
+    endAllInProgressSessionsForSub,
     mergeRemoteLocks,
-    setAutomaticRunningLocal,
-    setMotorAutomaticRunningLocal,
+    setDeviceAutomaticRunning,
   ]);
 
   useEffect(() => {
@@ -356,10 +348,14 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [reconcileFromServer]);
 
-  const hasRemoteCommandLock = remotePendingKeys.size > 0;
+  const hasRemoteCommandLock = useCallback(
+    (deviceId: string) => hasRemoteLockForDevice(remotePendingKeys, deviceId),
+    [remotePendingKeys],
+  );
 
   const isRemoteCommandPending = useCallback(
-    (commandKey: HardwareCommandKey) => remotePendingKeys.has(commandKey),
+    (commandKey: HardwareCommandKey, deviceId: string) =>
+      isRemoteLockForCommand(remotePendingKeys, deviceId, commandKey),
     [remotePendingKeys],
   );
 

@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { useOperationDeviceId } from '@/context/DeviceOperationScope';
 import { useHardwareCommand } from '@/context/HardwareCommandProvider';
 import { useTabSync } from '@/context/TabSyncProvider';
 import type { HardwareCommandKey } from '@/types/hardwareCommand';
@@ -20,17 +21,19 @@ export function CommandButton({
   children,
   ...props
 }: CommandButtonProps) {
+  const deviceId = useOperationDeviceId();
   const { executeCommand, isCommandPending } = useHardwareCommand();
-  const { hasRemoteCommandLock } = useTabSync();
-  const pending = isCommandPending(commandKey);
+  const { hasRemoteCommandLock, isRemoteCommandPending } = useTabSync();
+  const pending = isCommandPending(commandKey, deviceId);
+  const remotePending = isRemoteCommandPending(commandKey, deviceId);
 
   return (
     <Button
       {...props}
       pending={pending}
-      disabled={disabled || pending || hasRemoteCommandLock}
+      disabled={disabled || pending || remotePending || hasRemoteCommandLock(deviceId)}
       aria-busy={pending}
-      onClick={() => void executeCommand(commandKey, onCommand)}
+      onClick={() => void executeCommand(commandKey, onCommand, deviceId)}
     >
       {children}
     </Button>

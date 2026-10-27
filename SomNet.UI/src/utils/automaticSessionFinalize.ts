@@ -61,8 +61,10 @@ export async function applyAutomaticDeviceComplete(
     deviceResult?: AutomaticResultJson | null,
   ) => Promise<void>,
   sessionActive = false,
+  deviceSessionRunning = false,
 ): Promise<void> {
-  if (!automatic.running && !sessionActive) {
+  const running = deviceSessionRunning || automatic.running;
+  if (!running && !sessionActive) {
     return;
   }
 

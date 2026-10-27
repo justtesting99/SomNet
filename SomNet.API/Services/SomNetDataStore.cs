@@ -21,7 +21,10 @@ public sealed class SomNetDataStore : ISomNetDataStore
         _strokeMsLimits = strokeMsLimits.Value;
     }
 
-    public IReadOnlyList<SessionHistoryEntryDto> GetSessionsForDom(string domTarget, string? subTarget = null)
+    public IReadOnlyList<SessionHistoryEntryDto> GetSessionsForDom(
+        string domTarget,
+        string? subTarget = null,
+        string? deviceId = null)
     {
         IQueryable<SessionHistoryEntry> query = _db.Sessions
             .AsNoTracking()
@@ -31,6 +34,12 @@ public sealed class SomNetDataStore : ISomNetDataStore
         {
             var normalizedSub = SubTargetValidation.Normalize(subTarget);
             query = query.Where(session => session.SubTarget == normalizedSub);
+        }
+
+        if (!string.IsNullOrWhiteSpace(deviceId))
+        {
+            var normalizedDeviceId = deviceId.Trim();
+            query = query.Where(session => session.DeviceId == normalizedDeviceId);
         }
 
         return query
@@ -47,7 +56,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
             throw new ArgumentException("FromDate must be on or before ToDate.");
         }
 
-        var sessionEntries = GetSessionsForDom(query.DomTarget, query.SubTarget);
+        var sessionEntries = GetSessionsForDom(query.DomTarget, query.SubTarget, query.DeviceId);
         var lastSnapshotAt = GetLastSnapshotTimes(sessionEntries.Select(session => session.Id));
         var sessions = sessionEntries
             .Select(session => (HistoryTimelineItemDto)new SessionHistoryTimelineItemDto
@@ -650,6 +659,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
             LastActivityAt = capturedAt,
             DomTarget = session.DomTarget,
             SubTarget = session.SubTarget,
+            DeviceId = session.DeviceId,
             Mode = session.Mode,
             Summary = session.Summary,
         };

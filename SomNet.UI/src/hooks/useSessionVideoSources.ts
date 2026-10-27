@@ -5,8 +5,11 @@ import { useHardwareCommand } from '@/context/HardwareCommandProvider';
 import { useLiveSession } from '@/context/SessionProvider';
 import { useOptions } from '@/context/OptionsProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
-import { useMode } from '@/context/ModeProvider';
-import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
+import { useFocusDeviceOperationMode } from '@/hooks/useFocusDeviceOperationMode';
+import { useDeviceSceneSessionActive } from '@/hooks/useDeviceSceneSessionActive';
+import { useSubDevice } from '@/context/SubDeviceProvider';
+import { useDeviceActuatorKind } from '@/hooks/useDeviceActuatorKind';
+import { selectedDeviceAutomaticRunning } from '@/utils/selectedDeviceAutomatic';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 import { consumeManualVideoPendingNotify } from '@/utils/manualVideoCommandNotify';
@@ -60,7 +63,7 @@ export interface SessionVideoSourcesResult {
 
 /** Session-scoped video URLs (Phase 3) with idle / post-session timeout (V3-D6). */
 export function useSessionVideoSources(): SessionVideoSourcesResult {
-  const { mode } = useMode();
+  const mode = useFocusDeviceOperationMode() ?? 'manual';
   const {
     activeSession,
     manualVideoActivitySeq,
@@ -69,10 +72,12 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     prepareAutomaticSession,
   } = useLiveSession();
   const { selectedSub } = useSubTarget();
-  const { options, settings } = useOptions();
+  const { options, settings, settingsLoaded, isLoading: settingsLoading } = useOptions();
+  const { selectedDeviceId } = useSubDevice();
+  const { actuatorKind } = useDeviceActuatorKind();
   const { expandForPlaybackStart } = useVideoDisplay();
   const { isCommandPending } = useHardwareCommand();
-  const { sceneSessionActive } = useSessionAccessory();
+  const sceneSessionActive = useDeviceSceneSessionActive(selectedDeviceId ?? '');
   const videoFeedBandwidth = normalizeVideoFeedBandwidth(options.videoFeedBandwidth);
 
   const timeoutSeconds = clampVideoFeedTimeoutSeconds(options.videoFeedTimeoutSeconds);
@@ -92,7 +97,14 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
   const commandPending =
     mode === 'manual' ? manualCommandPending : automaticCommandPending;
 
-  const automaticRunning = settings.automatic.running;
+  const automaticRunning = selectedDeviceAutomaticRunning(
+    selectedSub,
+    selectedDeviceId,
+    actuatorKind,
+    settings,
+    settingsLoaded,
+    settingsLoading,
+  );
 
   const [sources, setSources] = useState<VideoSourcePair>([undefined, undefined]);
   const [feedVisible, setFeedVisible] = useState(false);

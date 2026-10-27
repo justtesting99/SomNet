@@ -36,6 +36,7 @@ describe('tabSync', () => {
         type: 'running',
         tabId: 'a',
         subTarget: 'Slv66',
+        deviceId: 'esp32-ABCDEF123456',
         kind: 'motor',
         running: true,
       }),
@@ -43,6 +44,7 @@ describe('tabSync', () => {
       type: 'running',
       tabId: 'a',
       subTarget: 'Slv66',
+      deviceId: 'esp32-ABCDEF123456',
       kind: 'motor',
       running: true,
     });

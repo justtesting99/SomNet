@@ -5,7 +5,7 @@ import { useSubTarget } from '@/context/SubTargetProvider';
 import { useSubDevice } from '@/context/SubDeviceProvider';
 import { useOptions } from '@/context/OptionsProvider';
 
-function HeaderToggle({
+export function HeaderToggle({
   label,
   shortLabel,
   active,

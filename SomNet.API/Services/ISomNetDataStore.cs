@@ -6,7 +6,10 @@ namespace SomNet.API.Services;
 
 public interface ISomNetDataStore
 {
-    IReadOnlyList<SessionHistoryEntryDto> GetSessionsForDom(string domTarget, string? subTarget = null);
+    IReadOnlyList<SessionHistoryEntryDto> GetSessionsForDom(
+        string domTarget,
+        string? subTarget = null,
+        string? deviceId = null);
 
     IReadOnlyList<HistoryTimelineItemDto> GetTimeline(HistoryQueryDto query);
 

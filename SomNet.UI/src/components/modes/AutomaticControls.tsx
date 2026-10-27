@@ -6,13 +6,14 @@ import {
   type AutomaticRunMode,
   type EndSessionMode,
 } from '@/types/modes';
-import { useLiveSession } from '@/context/SessionProvider';
 import { useOptions } from '@/context/OptionsProvider';
+import { useControlPanelSettings } from '@/hooks/useControlPanelSettings';
+import { useOperationSession } from '@/hooks/useOperationSession';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
-import { useCommandDeviceId } from '@/context/SubDeviceProvider';
+import { useOperationDeviceId } from '@/context/DeviceOperationScope';
+import { useDeviceSceneSessionActive } from '@/hooks/useDeviceSceneSessionActive';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
-import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 import { Panel } from '@/components/ui/Panel';
 import { CommandButton } from '@/components/ui/CommandButton';
 import { StrokePowerSlider } from '@/components/modes/StrokePowerSlider';
@@ -60,27 +61,29 @@ const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
 export function AutomaticControls() {
   const {
     settings,
-    options,
     updateAutomatic,
     setAutomaticRunningLocal,
     isLoading,
     settingsLoaded,
     strokeLimits,
-  } = useOptions();
+  } = useControlPanelSettings();
+  const { options } = useOptions();
   const state = settings.automatic;
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { selectedSub } = useSubTarget();
-  const commandDeviceId = useCommandDeviceId();
+  const commandDeviceId = useOperationDeviceId();
+  const sceneSessionActive = useDeviceSceneSessionActive(commandDeviceId);
   const { expandOnAction } = useVideoDisplay();
   const {
     endAutomaticSession,
     activeSession,
     markAutomaticDeviceStarted,
     syncActiveSessionMode,
-  } = useLiveSession();
+  } = useOperationSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
-  const { sceneSessionActive, accessoryError, sceneSessionError } = useSessionAccessory();
+  const accessoryError = '';
+  const sceneSessionError = '';
   const [commandError, setCommandError] = useState('');
   const [cooperativeStopInProgress, setCooperativeStopInProgress] = useState(false);
   const runningRef = useRef(state.running);
@@ -115,9 +118,9 @@ export function AutomaticControls() {
   const hardwareReady = isHardwareCommandReady(systemStatus) && sceneSessionActive;
   const lastPushedUpdateRef = useRef<string | null>(null);
   const updateDebounceRef = useRef<number | null>(null);
-  const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);
-  const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop);
-  const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
+  const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart, commandDeviceId);
+  const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop, commandDeviceId);
+  const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort, commandDeviceId);
   const showAbortControl =
     sessionRunning || automaticSessionActive || startPending || cooperativeStopInProgress;
   const hardwareDisabledReason = !sceneSessionActive
@@ -310,7 +313,11 @@ export function AutomaticControls() {
       markAutomaticDeviceStarted();
       const sessionId = activeSessionRef.current?.id;
       if (sessionId) {
-        writeAutomaticDeviceRunningHint({ sessionId, subTarget: selectedSub });
+        writeAutomaticDeviceRunningHint({
+          sessionId,
+          subTarget: selectedSub,
+          deviceId: commandDeviceId,
+        });
       }
       lastPushedUpdateRef.current = payloadJson;
       update('running', true);

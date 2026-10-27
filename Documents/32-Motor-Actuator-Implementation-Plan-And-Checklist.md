@@ -45,7 +45,7 @@ Track once; reference from phase checklists.
 | **X-3** | Motor `resultJson` + summary builder (separate from relay) | Firmware + Shared + API | **Done** (v1 periodic) |
 | **X-4** | Relay regression: relay NVS profile unchanged on same binary | Firmware CI / manual | **Done** — Run A R0–R11 **2026-10-27** (operator) |
 | **X-5** | `boardDefs.h`: `MOTOR_PWM_FREQUENCY_HZ`, `MOTOR_ENABLE_ACTIVE_HIGH` tuned on module (MA-D18) | Firmware / bench | 5 kHz PWM validated; duty **>50%** very fast on production motor — operator using **~10%** until max-duty cap/tuning (MA-D18 follow-up) |
-| **X-6** | **Multi-device per Sub** — [33](./33-Multi-Device-Per-Sub-Spike.md) **signed off** 2026-10-26; **X-6.1–X-6.3** + **X-6.5** + same-Sub bench; **X-6.4**, **X-6.6** remain | API + UI + docs | **In progress** — §2.3 S4 |
+| **X-6** | **Multi-device per Sub** — [33](./33-Multi-Device-Per-Sub-Spike.md) **signed off** 2026-10-26; **X-6.1–X-6.6** + same-Sub bench (H1 per-device session rows) | API + UI + docs | **Done** — §2.3 S4 **2026-10-27** |
 | **X-6i** | **Dual-Sub bench UI** — switching `selectedSub` must not leak session row, `running`, or Start/Stop state to the other Sub (until true multi-device-per-Sub). See §2.2 | SomNet.UI | **Done** (2026-10-26, operator verified) |
 
 **Bench note:** **Primary** regression path is **relay + motor on the same Sub** (`Slv66`, device picker) — operator verified independent scene/motion **2026-10-27**. **X-6i** dual-Sub switching remains valid for Sub-isolation tests.
@@ -57,7 +57,7 @@ Required for parallel motor + relay regression on one Dom account. **Does not** 
 | ID | Behavior | Status |
 |----|----------|--------|
 | **X-6i-1** | `activeSession` in UI applies only when `session.subTarget` matches **selected Sub** | Done |
-| **X-6i-2** | Tab-sync `running` includes **`subTarget`** + **`kind`** (`relay` \| `motor`); ignore foreign Sub | Done |
+| **X-6i-2** | Tab-sync `running` includes **`subTarget`** + **`deviceId`** + **`kind`**; ignore foreign Sub/device | Done (X-6.6) |
 | **X-6i-3** | Session accessory “device automatic running” uses **paired actuator** for selected Sub (motor vs relay flag) | Done |
 | **X-6i-4** | Automatic Start/Stop gated on **`settingsLoaded`** for selected Sub (no stale `running` flash on switch) | Done |
 | **X-6i-5** | Operator: motor session on Sub A + switch to Sub B → B shows idle controls; switch back → A still in progress if device still running | **Verified 2026-10-26** |
@@ -73,7 +73,7 @@ Required for parallel motor + relay regression on one Dom account. **Does not** 
 | **S1** | Read & review [33 — Multi-device per Sub spike](./33-Multi-Device-Per-Sub-Spike.md) (use cases UC-1–UC-5, §4 model, §5 slices) | ☑ |
 | **S2** | Resolve **Q1–Q7** in [33 §7](./33-Multi-Device-Per-Sub-Spike.md) | ☑ 2026-10-26 |
 | **S3** | **Spike sign-off** ([33 §8](./33-Multi-Device-Per-Sub-Spike.md)) | ☑ 2026-10-26 |
-| **S4** | Implement **X-6.1** → **X-6.6** per agreed order | **In progress** — **X-6.3** `DomSubDeviceSettings` + UI load/save per `deviceId` **2026-10-27**; X-6.4 (history), X-6.6 (`running` + `deviceId`) remain |
+| **S4** | Implement **X-6.1** → **X-6.6** per agreed order | ☑ **2026-10-27** — all slices landed (history **X-6.4** H1: filter + display `deviceId`) |
 
 **Phase gates (until S3 complete):**
 
@@ -381,8 +381,8 @@ Update this table when a phase is signed off.
 | M0 | In progress (M0-F2/M0-F5 open; **M0-V1/V2** done) | |
 | M1 | **Signed off** (Run B) | 2026-10-27 |
 | M1b | **Schedulable** — optional; prefer **X-6.3** before dual-motor UC-4 | |
-| M2 | Blocked on **X-6.3–X-6.6** (M1 done) | |
-| **X-6** | Spike signed off; impl **partial** (see §2.3 S4) | |
+| M2 | **Unblocked** — begin standalone parity (M1 + X-6 done) | |
+| **X-6** | **Complete** (§2.3 S4) | 2026-10-27 |
 | **X-4** | **Done** (Run A) | 2026-10-27 |
 | M3 | Blocked on M2 | |
 | M4 | Optional | |
@@ -413,3 +413,5 @@ Update this table when a phase is signed off.
 | 2026-10-27 | **§2.4** operator runs (Run A X-4, Run B M1) — executable sign-off; revert premature doc-only sign-off |
 | 2026-10-27 | Operator: Run A **R0–R11** + Run B **M1-B1–B8** all pass — **X-4** + **M1** sign-off recorded |
 | 2026-10-27 | **X-6.3** — `DomSubDeviceSettings`; settings API requires `deviceId`; UI reload/save per device picker |
+| 2026-10-27 | **X-6.6** — tab-sync `running` keyed by `(subTarget, deviceId, kind)`; legacy running without `deviceId` ignored |
+| 2026-10-27 | **X-6.4** — history/timeline optional `deviceId` filter; UI device badges + multi-device scope; fix `DeviceId` on timeline enrich |

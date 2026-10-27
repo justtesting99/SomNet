@@ -6,7 +6,10 @@ import { CONTROLLER_ROLE, SUB_ROLE, type SubTargetName } from '@/config/sessionU
 import { useAuth } from '@/context/AuthProvider';
 import { useDomSessions } from '@/context/DomSessionsProvider';
 import type { SessionHistoryEntry } from '@/types/sessionHistory';
+import { formatSessionDeviceLabel } from '@/utils/sessionHistoryDevice';
 import { Button } from '@/components/ui/Button';
+import { fetchDeviceRegistrations } from '@/api/devices';
+import type { DeviceRegistration } from '@/types/device';
 
 export function DomSessionsDialog() {
   const { isDialogOpen, closeDialog } = useDomSessions();
@@ -15,6 +18,9 @@ export function DomSessionsDialog() {
   const [subFilter, setSubFilter] = useState<SubTargetName | null>(null);
   const [allSessions, setAllSessions] = useState<SessionHistoryEntry[]>([]);
   const [subsUnderDom, setSubsUnderDom] = useState<SubTargetName[]>([]);
+  const [registrationsBySub, setRegistrationsBySub] = useState<
+    Record<string, DeviceRegistration[]>
+  >({});
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
 
@@ -38,16 +44,34 @@ export function DomSessionsDialog() {
     setLoadError('');
 
     Promise.all([fetchSessionHistory(domName), fetchSubs()])
-      .then(([sessionsResult, subsResult]) => {
+      .then(async ([sessionsResult, subsResult]) => {
+        if (cancelled) {
+          return;
+        }
+
+        setAllSessions(sessionsResult);
+        setSubsUnderDom(subsResult);
+
+        const registrationEntries = await Promise.all(
+          subsResult.map(async (sub) => {
+            try {
+              const rows = await fetchDeviceRegistrations(sub);
+              return [sub, rows] as const;
+            } catch {
+              return [sub, []] as const;
+            }
+          }),
+        );
+
         if (!cancelled) {
-          setAllSessions(sessionsResult);
-          setSubsUnderDom(subsResult);
+          setRegistrationsBySub(Object.fromEntries(registrationEntries));
         }
       })
       .catch(() => {
         if (!cancelled) {
           setAllSessions([]);
           setSubsUnderDom([]);
+          setRegistrationsBySub({});
           setLoadError('Unable to load sessions from the API.');
         }
       })
@@ -173,10 +197,19 @@ export function DomSessionsDialog() {
                       </span>
                     ) : null}
                   </div>
-                  <p className="mt-1 text-xs text-slate-400">
-                    <span className="font-medium text-slate-500">Session ID: </span>
-                    <span className="font-mono text-slate-200">{session.id}</span>
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                    <span>
+                      <span className="font-medium text-slate-500">Session ID: </span>
+                      <span className="font-mono text-slate-200">{session.id}</span>
+                    </span>
+                    <span className="rounded-md bg-slate-800 px-2 py-0.5 font-medium text-slate-300">
+                      {formatSessionDeviceLabel(
+                        session.deviceId,
+                        registrationsBySub[session.subTarget] ?? [],
+                        session.subTarget,
+                      )}
+                    </span>
+                  </div>
                   <p className="mt-2 text-sm leading-relaxed text-slate-400">{session.summary}</p>
                 </li>
               ))}

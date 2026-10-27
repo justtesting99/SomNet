@@ -1,9 +1,11 @@
+import { useSubDevice } from '@/context/SubDeviceProvider';
 import { useTabSync } from '@/context/TabSyncProvider';
 
 export function TabSyncBanner() {
+  const { selectedDeviceId } = useSubDevice();
   const { hasRemoteCommandLock } = useTabSync();
 
-  if (!hasRemoteCommandLock) {
+  if (!selectedDeviceId || !hasRemoteCommandLock(selectedDeviceId)) {
     return null;
   }
 

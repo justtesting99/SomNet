@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLiveSession } from '@/context/SessionProvider';
+import { useOperationSession } from '@/hooks/useOperationSession';
+import { useControlPanelSettings } from '@/hooks/useControlPanelSettings';
 import { useSubTarget } from '@/context/SubTargetProvider';
-import { useCommandDeviceId } from '@/context/SubDeviceProvider';
+import { useOperationDeviceId } from '@/context/DeviceOperationScope';
+import { useDeviceSceneSessionActive } from '@/hooks/useDeviceSceneSessionActive';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { Panel } from '@/components/ui/Panel';
@@ -11,7 +13,6 @@ import { SelectField } from '@/components/ui/RadioGroup';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 import { useHardwareCommand } from '@/context/HardwareCommandProvider';
 import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
-import { useOptions } from '@/context/OptionsProvider';
 import { buildMotorAutomaticStartPayload } from '@/utils/motorAutomaticStartPayload';
 import type { MotorAutomaticControlState } from '@/types/motorModes';
 import type { EndSessionMode } from '@/types/modes';
@@ -22,7 +23,6 @@ import { writeAutomaticDeviceRunningHint } from '@/utils/automaticDeviceRunningH
 import { ApiError } from '@/api/client';
 import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCommand';
 import { isHardwareCommandReady } from '@/utils/commandReadiness';
-import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 const MOTOR_STOP_GRACE_MS = 60_000;
 
 const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
@@ -32,20 +32,21 @@ const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
 
 export function MotorAutomaticControls() {
   const { settings, settingsLoaded, updateMotorAutomatic, setMotorAutomaticRunningLocal } =
-    useOptions();
+    useControlPanelSettings();
   const state = settings.motorAutomatic;
   const { selectedSub } = useSubTarget();
-  const commandDeviceId = useCommandDeviceId();
+  const commandDeviceId = useOperationDeviceId();
+  const sceneSessionActive = useDeviceSceneSessionActive(commandDeviceId);
   const { expandOnAction } = useVideoDisplay();
   const {
     endAutomaticSession,
     activeSession,
     markAutomaticDeviceStarted,
     syncActiveSessionMode,
-  } = useLiveSession();
+  } = useOperationSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
-  const { sceneSessionActive, sceneSessionError } = useSessionAccessory();
+  const sceneSessionError = '';
   const [commandError, setCommandError] = useState('');
   const [cooperativeStopInProgress, setCooperativeStopInProgress] = useState(false);
   const runningRef = useRef(state.running);
@@ -57,9 +58,9 @@ export function MotorAutomaticControls() {
   const sessionRunning = settingsLoaded && state.running;
   const configLocked = sessionRunning;
   const hardwareReady = isHardwareCommandReady(systemStatus) && sceneSessionActive;
-  const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);
-  const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop);
-  const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
+  const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart, commandDeviceId);
+  const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop, commandDeviceId);
+  const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort, commandDeviceId);
   const showAbortControl =
     sessionRunning || automaticSessionActive || startPending || cooperativeStopInProgress;
   const hardwareDisabledReason = !sceneSessionActive
@@ -133,7 +134,11 @@ export function MotorAutomaticControls() {
       markAutomaticDeviceStarted();
       const sessionId = activeSessionRef.current?.id;
       if (sessionId) {
-        writeAutomaticDeviceRunningHint({ sessionId, subTarget: selectedSub });
+        writeAutomaticDeviceRunningHint({
+          sessionId,
+          subTarget: selectedSub,
+          deviceId: commandDeviceId,
+        });
       }
       setRunningLocal(true);
     } catch (error) {

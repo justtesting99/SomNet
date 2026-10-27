@@ -1,6 +1,5 @@
 import type { SubTargetName } from '@/config/sessionUsers';
 import type { OperationMode } from '@/types/modes';
-import type { HardwareCommandKey } from '@/types/hardwareCommand';
 
 export const TAB_SYNC_CHANNEL = 'somnet-tab-sync';
 
@@ -14,17 +13,31 @@ export interface ActiveSessionSnapshot {
 
 export type AutomaticRunningKind = 'relay' | 'motor';
 
+export function automaticRunningKindForActuator(
+  actuatorKind: 'relay' | 'hbridge' | null | undefined,
+): AutomaticRunningKind {
+  return actuatorKind === 'hbridge' ? 'motor' : 'relay';
+}
+
 export type TabSyncMessage =
   | { type: 'session'; tabId: string; session: ActiveSessionSnapshot | null }
+  | {
+      type: 'device-session';
+      tabId: string;
+      subTarget: SubTargetName;
+      deviceId: string;
+      session: ActiveSessionSnapshot | null;
+    }
   | {
       type: 'running';
       tabId: string;
       subTarget: SubTargetName;
+      deviceId: string;
       kind: AutomaticRunningKind;
       running: boolean;
     }
   | { type: 'sub'; tabId: string; subTarget: SubTargetName }
-  | { type: 'command-lock'; tabId: string; keys: HardwareCommandKey[] }
+  | { type: 'command-lock'; tabId: string; lockKeys: string[] }
   | {
       type: 'session-accessory';
       tabId: string;
@@ -51,7 +64,14 @@ export type TabSyncMessage =
       subTarget: SubTargetName;
       deviceId: string;
     }
-  | { type: 'request-sync'; tabId: string };
+  | { type: 'request-sync'; tabId: string }
+  | {
+      type: 'device-mode';
+      tabId: string;
+      subTarget: SubTargetName;
+      deviceId: string;
+      mode: OperationMode;
+    };
 
 let tabId: string | null = null;
 let applyingRemoteSync = false;

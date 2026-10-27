@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useAuth } from '@/context/AuthProvider';
-import { useMode } from '@/context/ModeProvider';
+import { useDeviceOperationModeApi } from '@/context/DeviceOperationModeProvider';
 import { useOptions } from '@/context/OptionsProvider';
 import { useLiveSession } from '@/context/SessionProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
@@ -88,9 +88,9 @@ const SessionAccessoryContext = createContext<SessionAccessoryContextValue | nul
 
 export function SessionAccessoryProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const { mode } = useMode();
+  const { getDeviceOperationMode } = useDeviceOperationModeApi();
   const { selectedSub } = useSubTarget();
-  const { relayRegistration, registrations, selectedDeviceId } = useSubDevice();
+  const { relayRegistration, registrations, selectedDeviceId, selectedRegistration } = useSubDevice();
   const { status: systemStatus } = useSystemStatus();
   const { actuatorKind } = useDeviceActuatorKind();
   const { isDevicePresentAcknowledged, dismissReadyBannerForSub } = useSiteUserReady();
@@ -110,6 +110,10 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
   const { isCommandPending, executeCommand } = useHardwareCommand();
 
   const domTarget = user?.displayName ?? user?.username ?? '';
+  const focusOperationMode =
+    selectedDeviceId && selectedRegistration
+      ? getDeviceOperationMode(selectedDeviceId, selectedRegistration.actuatorKind)
+      : null;
   const [sceneSessionActive, setSceneSessionActiveState] = useState(() =>
     domTarget ? readDeviceSceneSessionActive(domTarget, selectedSub, selectedDeviceId) : false,
   );
@@ -520,14 +524,14 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
   ]);
 
   useEffect(() => {
-    if (!sceneSessionActive || !mode || !activeSession) {
+    if (!sceneSessionActive || !focusOperationMode || !activeSession) {
       return;
     }
 
-    if (activeSession.mode !== mode) {
-      void syncActiveSessionMode(mode);
+    if (activeSession.mode !== focusOperationMode) {
+      void syncActiveSessionMode(focusOperationMode);
     }
-  }, [activeSession, mode, sceneSessionActive, syncActiveSessionMode]);
+  }, [activeSession, focusOperationMode, sceneSessionActive, syncActiveSessionMode]);
 
   const stopAutomaticOnSelectedDevice = useCallback(async (): Promise<AutomaticResultJson | null> => {
     const deviceId = selectedDeviceId;
@@ -615,8 +619,8 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
     async (active: boolean) => {
       setSceneSessionError('');
 
-      if (active && !mode) {
-        setSceneSessionError('Choose Manual or Automatic mode first.');
+      if (active && !focusOperationMode) {
+        setSceneSessionError('Choose Manual or Automatic for this device first.');
         return;
       }
 
@@ -635,7 +639,7 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
         if (active) {
           persistScene(deviceId, true);
           try {
-            await startSessionForAccessory(mode!, deviceId);
+            await startSessionForAccessory(focusOperationMode!, deviceId);
           } catch (sessionError) {
             const message =
               sessionError instanceof Error
@@ -667,7 +671,7 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
     [
       dismissReadyBannerForSub,
       endSessionForAccessory,
-      mode,
+      focusOperationMode,
       persistScene,
       selectedSub,
       selectedDeviceId,

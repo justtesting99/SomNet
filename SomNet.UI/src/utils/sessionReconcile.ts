@@ -67,7 +67,7 @@ export async function reconcileActiveSessionForMode(
 
   if (
     !options.automaticSettings.running &&
-    shouldRestoreAutomaticDeviceRunning(entry.id, options.selectedSub)
+    shouldRestoreAutomaticDeviceRunning(entry.id, options.selectedSub, options.deviceId)
   ) {
     options.setAutomaticRunningLocal(true);
   }

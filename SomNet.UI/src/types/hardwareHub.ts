@@ -4,6 +4,8 @@ export interface HardwareCommandAck {
   success: boolean;
   message?: string | null;
   resultJson?: string | null;
+  /** Set by API when forwarding device acks to operators (V2 multi-device). */
+  deviceId?: string | null;
 }
 
 /** Unsolicited automatic session complete (end-rule / abort) — not tied to automatic-stop REST. */

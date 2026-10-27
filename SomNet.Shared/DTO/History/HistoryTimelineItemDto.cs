@@ -23,6 +23,9 @@ public sealed class HistoryQueryDto
 
     public required string SubTarget { get; init; }
 
+    /// <summary>When set, only sessions for this paired device are included (notifications unchanged).</summary>
+    public string? DeviceId { get; init; }
+
     public DateOnly? FromDate { get; init; }
 
     public DateOnly? ToDate { get; init; }
