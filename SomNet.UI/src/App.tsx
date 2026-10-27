@@ -22,7 +22,7 @@ import { SessionRehydrator } from '@/components/hardware/SessionRehydrator';
 import { SiteUserReadyProvider } from '@/context/SiteUserReadyProvider';
 import { useSiteUserReadyStartFeed } from '@/hooks/useSiteUserReadyStartFeed';
 import { TabSyncProvider } from '@/context/TabSyncProvider';
-import { SessionAccessoryProvider } from '@/context/SessionAccessoryProvider';
+import { DeviceSceneAccessoryBootstrap } from '@/components/hardware/DeviceSceneAccessoryBootstrap';
 import { TabSyncBanner } from '@/components/layout/TabSyncBanner';
 import { useSessionVideoSources } from '@/hooks/useSessionVideoSources';
 import { useFocusDeviceOperationMode } from '@/hooks/useFocusDeviceOperationMode';
@@ -82,16 +82,15 @@ export function App() {
                         <SiteUserReadyProvider>
                           <HardwareCommandProvider>
                             <SystemStatusProvider enabled>
-                              <SessionAccessoryProvider>
-                                <AutomaticSessionHubListener />
-                                <SessionRehydrator />
-                                <HistoryProvider>
-                                  <AppShell wide>
-                                    <TabSyncBanner />
-                                    <DashboardWithVideo />
-                                  </AppShell>
-                                </HistoryProvider>
-                              </SessionAccessoryProvider>
+                              <DeviceSceneAccessoryBootstrap />
+                              <AutomaticSessionHubListener />
+                              <SessionRehydrator />
+                              <HistoryProvider>
+                                <AppShell wide>
+                                  <TabSyncBanner />
+                                  <DashboardWithVideo />
+                                </AppShell>
+                              </HistoryProvider>
                             </SystemStatusProvider>
                           </HardwareCommandProvider>
                         </SiteUserReadyProvider>

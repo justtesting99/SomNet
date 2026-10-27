@@ -3,6 +3,7 @@ import { fetchSessionVideoTokensSafe, isVideoConfigured } from '@/api/video';
 import { withGo2RtcViewerMode, type VideoSourcePair } from '@/config/videoSources';
 import { useHardwareCommand } from '@/context/HardwareCommandProvider';
 import { useLiveSession } from '@/context/SessionProvider';
+import { useFocusSession } from '@/hooks/useFocusSession';
 import { useOptions } from '@/context/OptionsProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useFocusDeviceOperationMode } from '@/hooks/useFocusDeviceOperationMode';
@@ -31,7 +32,8 @@ import {
 } from '@/utils/videoFeedRestoreHint';
 import {
   applyLiveVideoFeedPreference,
-  normalizeMobileVideoExpandDefault,
+  areLiveVideoFeedsHidden,
+  normalizeLiveVideoFeeds,
 } from '@/utils/liveVideoFeedPreference';
 import {
   applyVideoFeedBandwidthToPair,
@@ -64,8 +66,8 @@ export interface SessionVideoSourcesResult {
 /** Session-scoped video URLs (Phase 3) with idle / post-session timeout (V3-D6). */
 export function useSessionVideoSources(): SessionVideoSourcesResult {
   const mode = useFocusDeviceOperationMode() ?? 'manual';
+  const focusSession = useFocusSession();
   const {
-    activeSession,
     manualVideoActivitySeq,
     manualVideoRehydrateSeq,
     prepareManualSession,
@@ -78,6 +80,8 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
   const { expandForPlaybackStart } = useVideoDisplay();
   const { isCommandPending } = useHardwareCommand();
   const sceneSessionActive = useDeviceSceneSessionActive(selectedDeviceId ?? '');
+  const liveVideoFeeds = normalizeLiveVideoFeeds(options.liveVideoFeeds);
+  const liveFeedsHidden = areLiveVideoFeedsHidden(liveVideoFeeds);
   const videoFeedBandwidth = normalizeVideoFeedBandwidth(options.videoFeedBandwidth);
 
   const timeoutSeconds = clampVideoFeedTimeoutSeconds(options.videoFeedTimeoutSeconds);
@@ -115,14 +119,15 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
   const hideWatchRef = useRef<number>();
   const postSessionGraceRef = useRef(false);
   const prevSessionIdRef = useRef<string | undefined>();
-  const prevSessionModeRef = useRef(activeSession?.mode);
-  const prevSessionSubRef = useRef(activeSession?.subTarget);
+  const prevSessionModeRef = useRef(focusSession?.mode);
+  const prevSessionSubRef = useRef(focusSession?.subTarget);
   const tokensLoadedSessionRef = useRef<string | null>(null);
   const restoredManualRehydrateSeqRef = useRef(0);
 
-  const sessionId = activeSession?.id;
-  const sessionMode = activeSession?.mode;
-  const sessionSub = activeSession?.subTarget;
+  const sessionId = focusSession?.id;
+  const sessionMode = focusSession?.mode;
+  const sessionSub = focusSession?.subTarget;
+  const focusDeviceId = selectedDeviceId ?? '';
 
   const stopHideWatch = useCallback(() => {
     if (hideWatchRef.current !== undefined) {
@@ -139,7 +144,9 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
       stopHideWatch();
       postSessionGraceRef.current = false;
       tokensLoadedSessionRef.current = null;
-      clearVideoFeedRestoreHint();
+      if (focusDeviceId) {
+        clearVideoFeedRestoreHint(focusDeviceId);
+      }
       setPreviewActive(false);
       setFeedVisible(false);
       setSources([undefined, undefined]);
@@ -233,10 +240,10 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     prevSessionModeRef.current = sessionMode;
     prevSessionSubRef.current = sessionSub;
 
-    if (activeSession?.subTarget === selectedSub) {
+    if (focusSession?.subTarget === selectedSub) {
       postSessionGraceRef.current = false;
 
-      if (activeSession.mode === 'automatic' && automaticRunning) {
+      if (focusSession.mode === 'automatic' && automaticRunning) {
         setPreviewActive(false);
         setFeedVisible(true);
         pauseHideDeadline();
@@ -265,7 +272,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
       hideFeeds('session-transition');
     }
   }, [
-    activeSession,
+    focusSession,
     automaticRunning,
     sessionId,
     sessionMode,
@@ -305,26 +312,38 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
   ]);
 
   useEffect(() => {
-    if (!feedVisible || !sessionId || !sessionMode || sessionSub !== selectedSub) {
+    if (
+      !feedVisible ||
+      !sessionId ||
+      !sessionMode ||
+      sessionSub !== selectedSub ||
+      !focusDeviceId
+    ) {
       return;
     }
 
     writeVideoFeedRestoreHint({
       sessionId,
       subTarget: selectedSub,
+      deviceId: focusDeviceId,
       mode: sessionMode,
       preview: previewActive,
     });
-  }, [feedVisible, previewActive, sessionId, sessionMode, sessionSub, selectedSub]);
+  }, [feedVisible, focusDeviceId, previewActive, sessionId, sessionMode, sessionSub, selectedSub]);
 
   useEffect(() => {
     if (feedVisible || !sessionId || !sessionMode || sessionSub !== selectedSub) {
       return;
     }
 
-    const hint = readVideoFeedRestoreHint();
+    if (!focusDeviceId) {
+      return;
+    }
+
+    const hint = readVideoFeedRestoreHint(focusDeviceId);
     const hintMatches =
-      hint !== null && matchesVideoFeedRestoreHint(hint, sessionId, selectedSub, sessionMode);
+      hint !== null &&
+      matchesVideoFeedRestoreHint(hint, sessionId, selectedSub, focusDeviceId, sessionMode);
     const shouldRestoreFromRehydrate =
       sessionMode === 'manual' &&
       manualVideoRehydrateSeq > restoredManualRehydrateSeqRef.current;
@@ -441,19 +460,21 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
   );
 
   const filteredSources = useMemo(
-    () =>
-      applyLiveVideoFeedPreference(
-        bandwidthSources,
-        normalizeMobileVideoExpandDefault(options.mobileVideoExpandDefault),
-      ),
-    [options.mobileVideoExpandDefault, bandwidthSources],
+    () => applyLiveVideoFeedPreference(bandwidthSources, liveVideoFeeds),
+    [bandwidthSources, liveVideoFeeds],
   );
+
+  useEffect(() => {
+    if (liveFeedsHidden && feedVisible) {
+      hideFeeds('live-feeds-disabled');
+    }
+  }, [feedVisible, hideFeeds, liveFeedsHidden]);
 
   const hasLoadedSources = Boolean(filteredSources[0] || filteredSources[1]);
 
   const videoPreview = useMemo(
     (): VideoPreviewControls => ({
-      available: mode !== null && isVideoConfigured(),
+      available: mode !== null && isVideoConfigured() && !liveFeedsHidden,
       canStart:
         sceneSessionActive &&
         (!feedVisible || !hasLoadedSources) &&
@@ -475,6 +496,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     previewActive,
     previewStarting,
     previewTimeoutSeconds,
+    liveFeedsHidden,
     sceneSessionActive,
     startPreview,
   ],

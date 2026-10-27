@@ -46,7 +46,8 @@ export function ManualControls() {
   const { prepareManualSession, recordManualStroke, recordManualBurst, recordManualAbort } =
     useOperationSession();
   const { isCommandPending } = useHardwareCommand();
-  const { status: systemStatus } = useSystemStatus();
+  const { getDeviceStatus } = useSystemStatus();
+  const systemStatus = getDeviceStatus(commandDeviceId);
   const accessoryError = '';
   const sceneSessionError = '';
   const [commandError, setCommandError] = useState('');
@@ -66,9 +67,9 @@ export function ManualControls() {
     [state.powerPercent, state.minimumStrokeMs, state.maximumStrokeMs],
   );
 
-  const strokePending = isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke);
-  const burstPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualBurst);
-  const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
+  const strokePending = isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke, commandDeviceId);
+  const burstPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualBurst, commandDeviceId);
+  const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort, commandDeviceId);
   const hardwareReady = isHardwareCommandReady(systemStatus) && sceneSessionActive;
   const strokeDisabledReason = !sceneSessionActive
     ? 'Turn Scene session on before stroke or burst.'
@@ -114,7 +115,7 @@ export function ManualControls() {
 
   async function handleStroke() {
     setCommandError('');
-    expandOnAction();
+    expandOnAction(commandDeviceId);
 
     const payloadJson = JSON.stringify({
       powerPercent: state.powerPercent,
@@ -145,7 +146,7 @@ export function ManualControls() {
 
   async function handleBurst() {
     setCommandError('');
-    expandOnAction();
+    expandOnAction(commandDeviceId);
 
     const payloadJson = JSON.stringify({
       powerPercent: state.powerPercent,

@@ -45,7 +45,8 @@ export function MotorAutomaticControls() {
     syncActiveSessionMode,
   } = useOperationSession();
   const { isCommandPending } = useHardwareCommand();
-  const { status: systemStatus } = useSystemStatus();
+  const { getDeviceStatus } = useSystemStatus();
+  const systemStatus = getDeviceStatus(commandDeviceId);
   const sceneSessionError = '';
   const [commandError, setCommandError] = useState('');
   const [cooperativeStopInProgress, setCooperativeStopInProgress] = useState(false);
@@ -119,7 +120,7 @@ export function MotorAutomaticControls() {
 
   async function handleStart() {
     setCommandError('');
-    expandOnAction();
+    expandOnAction(commandDeviceId);
     const payloadJson = buildMotorAutomaticStartPayload(state);
     try {
       await sendHardwareCommand(

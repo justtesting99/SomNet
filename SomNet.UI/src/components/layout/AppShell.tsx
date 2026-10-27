@@ -16,8 +16,6 @@ import { useOptions } from '@/context/OptionsProvider';
 import { useHardwareDialog } from '@/context/HardwareProvider';
 import { useNotify } from '@/context/NotifyProvider';
 import { useSubDevice } from '@/context/SubDeviceProvider';
-import { SubSessionControls } from '@/components/hardware/SubSessionControls';
-
 interface AppShellProps {
   children: ReactNode;
   wide?: boolean;
@@ -31,7 +29,6 @@ export function AppShell({ children, wide = false }: AppShellProps) {
   const { openDialog: openNotify } = useNotify();
   const { selectedSub } = useSubTarget();
   const { registrations } = useSubDevice();
-  const multiDevice = registrations.length > 1;
   const domTarget = user?.displayName ?? user?.username ?? '';
 
   function anyDeviceSceneSessionActive(): boolean {
@@ -72,11 +69,6 @@ export function AppShell({ children, wide = false }: AppShellProps) {
               <Button variant="ghost" size="sm" className="shrink-0" onClick={openNotify}>
                 Notify
               </Button>
-              {!multiDevice ? (
-                <div className="shrink-0">
-                  <SubSessionControls />
-                </div>
-              ) : null}
               <div className="min-w-0 flex-1">
                 <SystemStatusDisplay />
               </div>

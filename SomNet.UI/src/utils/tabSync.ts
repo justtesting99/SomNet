@@ -20,7 +20,6 @@ export function automaticRunningKindForActuator(
 }
 
 export type TabSyncMessage =
-  | { type: 'session'; tabId: string; session: ActiveSessionSnapshot | null }
   | {
       type: 'device-session';
       tabId: string;
@@ -39,23 +38,11 @@ export type TabSyncMessage =
   | { type: 'sub'; tabId: string; subTarget: SubTargetName }
   | { type: 'command-lock'; tabId: string; lockKeys: string[] }
   | {
-      type: 'session-accessory';
-      tabId: string;
-      inProgress: boolean;
-      subTarget: SubTargetName;
-    }
-  | {
       type: 'scene-session';
       tabId: string;
       active: boolean;
       subTarget: SubTargetName;
-      deviceId?: string;
-    }
-  | {
-      type: 'relay-lock';
-      tabId: string;
-      engaged: boolean;
-      subTarget: SubTargetName;
+      deviceId: string;
     }
   | {
       type: 'device-accessory';

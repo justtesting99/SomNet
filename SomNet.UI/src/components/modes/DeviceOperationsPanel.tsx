@@ -6,6 +6,7 @@ import { Panel } from '@/components/ui/Panel';
 import { ManualControls } from '@/components/modes/ManualControls';
 import { AutomaticControls } from '@/components/modes/AutomaticControls';
 import { MotorAutomaticControls } from '@/components/modes/MotorAutomaticControls';
+import { DeviceAccessoryResync } from '@/components/hardware/DeviceAccessoryResync';
 import { DeviceSubSessionControls } from '@/components/hardware/DeviceSubSessionControls';
 import { DeviceModeToggle } from '@/components/modes/DeviceModeToggle';
 
@@ -44,6 +45,10 @@ function DeviceOperationSection({ registration }: { registration: DeviceRegistra
       deviceId={registration.deviceId}
       actuatorKind={registration.actuatorKind}
     >
+      <DeviceAccessoryResync
+        deviceId={registration.deviceId}
+        actuatorKind={registration.actuatorKind}
+      />
       <Panel title={deviceSectionTitle(registration)} className="border-slate-800/80">
         <div className="space-y-4">
           <DeviceModeToggle deviceId={registration.deviceId} actuatorKind={registration.actuatorKind} />

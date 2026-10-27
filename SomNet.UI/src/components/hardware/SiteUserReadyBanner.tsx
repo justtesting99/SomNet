@@ -1,28 +1,34 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthProvider';
-import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 import { useSiteUserReady } from '@/context/SiteUserReadyProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useSubDevice } from '@/context/SubDeviceProvider';
 import { subTargetsMatch } from '@/utils/readyBannerStorage';
 import { readDeviceSceneSessionActive } from '@/utils/sessionAccessoryStorage';
+import type { ActuatorKind } from '@/types/device';
+import { useDeviceSceneSessionControls } from '@/hooks/useDeviceSceneSessionControls';
 import { Button } from '@/components/ui/Button';
 
-export function SiteUserReadyBanner() {
+function SiteUserReadyBannerBody({
+  sceneDeviceId,
+  actuatorKind,
+}: {
+  sceneDeviceId: string;
+  actuatorKind: ActuatorKind;
+}) {
   const { user } = useAuth();
   const domTarget = user?.displayName ?? user?.username ?? '';
   const { notification, dismissReadyBannerForSub, isReadyBannerDismissedForSub } =
     useSiteUserReady();
   const { selectedSub } = useSubTarget();
-  const { selectedDeviceId } = useSubDevice();
+
   const {
     sceneSessionActive,
     sceneTogglePending,
     setSceneSessionActive,
     sceneSessionError,
-  } = useSessionAccessory();
+  } = useDeviceSceneSessionControls(sceneDeviceId, actuatorKind);
 
-  const sceneDeviceId = notification?.deviceId ?? selectedDeviceId;
   const accessoryActive =
     sceneSessionActive ||
     sceneTogglePending ||
@@ -40,12 +46,7 @@ export function SiteUserReadyBanner() {
     if (subTargetsMatch(notification.subTarget, selectedSub)) {
       dismissReadyBannerForSub(selectedSub);
     }
-  }, [
-    accessoryActive,
-    dismissReadyBannerForSub,
-    notification,
-    selectedSub,
-  ]);
+  }, [accessoryActive, dismissReadyBannerForSub, notification, selectedSub]);
 
   if (
     !notification ||
@@ -90,5 +91,27 @@ export function SiteUserReadyBanner() {
         </Button>
       </div>
     </div>
+  );
+}
+
+export function SiteUserReadyBanner() {
+  const { notification } = useSiteUserReady();
+  const { selectedDeviceId, registrations } = useSubDevice();
+
+  const sceneDeviceId = notification?.deviceId ?? selectedDeviceId ?? '';
+  const registration = useMemo(
+    () => registrations.find((row) => row.deviceId === sceneDeviceId),
+    [registrations, sceneDeviceId],
+  );
+
+  if (!sceneDeviceId || !registration) {
+    return null;
+  }
+
+  return (
+    <SiteUserReadyBannerBody
+      sceneDeviceId={sceneDeviceId}
+      actuatorKind={registration.actuatorKind}
+    />
   );
 }

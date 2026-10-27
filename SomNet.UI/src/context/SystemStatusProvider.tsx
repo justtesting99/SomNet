@@ -18,9 +18,9 @@ const STATUS_ENDPOINT = '/api/system/status';
 const POLL_INTERVAL_MS = 10_000;
 
 interface SystemStatusContextValue {
+  /** Focus device status (header / video shell). */
   status: SystemStatusSnapshot;
-  /** Relay device status when it differs from the header-selected device. */
-  relayStatus: SystemStatusSnapshot | null;
+  getDeviceStatus: (deviceId: string) => SystemStatusSnapshot;
   refresh: () => Promise<void>;
 }
 
@@ -56,40 +56,39 @@ export function SystemStatusProvider({
   enabled?: boolean;
 }) {
   const { selectedSub } = useSubTarget();
-  const { selectedDeviceId, relayRegistration } = useSubDevice();
-  const [status, setStatus] = useState<SystemStatusSnapshot>(initialSystemStatus);
-  const [relayStatus, setRelayStatus] = useState<SystemStatusSnapshot | null>(null);
+  const { selectedDeviceId, registrations } = useSubDevice();
+  const [statusByDeviceId, setStatusByDeviceId] = useState<Record<string, SystemStatusSnapshot>>(
+    {},
+  );
 
   const refresh = useCallback(async () => {
     if (!enabled) {
       return;
     }
 
-    setStatus((current) => ({
-      ...current,
-      api: current.api === 'unknown' ? 'connecting' : current.api,
-      summary: current.lastChecked ? current.summary : 'Checking system status…',
-    }));
+    const deviceIds = registrations.map((row) => row.deviceId);
+    if (deviceIds.length === 0) {
+      setStatusByDeviceId({});
+      return;
+    }
 
-    const relayDeviceId = relayRegistration?.deviceId ?? null;
-    const needsRelayPoll =
-      relayDeviceId !== null &&
-      relayDeviceId !== selectedDeviceId &&
-      relayDeviceId.length > 0;
+    const results = await Promise.all(
+      deviceIds.map(async (deviceId) => {
+        const snapshot = await fetchSystemStatus(selectedSub, deviceId);
+        return [deviceId, snapshot] as const;
+      }),
+    );
 
-    const [nextStatus, nextRelayStatus] = await Promise.all([
-      fetchSystemStatus(selectedSub, selectedDeviceId),
-      needsRelayPoll
-        ? fetchSystemStatus(selectedSub, relayDeviceId)
-        : Promise.resolve(null as SystemStatusSnapshot | null),
-    ]);
-    setStatus(nextStatus);
-    setRelayStatus(nextRelayStatus);
-  }, [enabled, relayRegistration?.deviceId, selectedSub, selectedDeviceId]);
+    const next: Record<string, SystemStatusSnapshot> = {};
+    for (const [deviceId, snapshot] of results) {
+      next[deviceId] = snapshot;
+    }
+    setStatusByDeviceId(next);
+  }, [enabled, registrations, selectedSub]);
 
   useEffect(() => {
     if (!enabled) {
-      setStatus(initialSystemStatus);
+      setStatusByDeviceId({});
       return;
     }
 
@@ -102,13 +101,33 @@ export function SystemStatusProvider({
     return () => window.clearInterval(intervalId);
   }, [enabled, refresh]);
 
+  const getDeviceStatus = useCallback(
+    (deviceId: string): SystemStatusSnapshot => {
+      return statusByDeviceId[deviceId] ?? initialSystemStatus;
+    },
+    [statusByDeviceId],
+  );
+
+  const status = useMemo(() => {
+    if (selectedDeviceId && statusByDeviceId[selectedDeviceId]) {
+      return statusByDeviceId[selectedDeviceId];
+    }
+
+    const first = registrations[0]?.deviceId;
+    if (first && statusByDeviceId[first]) {
+      return statusByDeviceId[first];
+    }
+
+    return initialSystemStatus;
+  }, [registrations, selectedDeviceId, statusByDeviceId]);
+
   const value = useMemo(
     () => ({
       status,
-      relayStatus,
+      getDeviceStatus,
       refresh,
     }),
-    [relayStatus, status, refresh],
+    [getDeviceStatus, refresh, status],
   );
 
   return (

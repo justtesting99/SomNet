@@ -3,7 +3,8 @@ import { useOptions } from '@/context/OptionsProvider';
 import type { OperationMode } from '@/types/modes';
 import type { VideoPreviewControls } from '@/hooks/useSessionVideoSources';
 import {
-  normalizeMobileVideoExpandDefault,
+  areLiveVideoFeedsHidden,
+  normalizeLiveVideoFeeds,
   usesSingleLiveFeed,
 } from '@/utils/liveVideoFeedPreference';
 
@@ -14,9 +15,13 @@ interface VideoFeedStartPanelProps {
 
 export function VideoFeedStartPanel({ mode, preview }: VideoFeedStartPanelProps) {
   const { options } = useOptions();
-  const singleFeed = usesSingleLiveFeed(
-    normalizeMobileVideoExpandDefault(options.mobileVideoExpandDefault),
-  );
+  const liveFeeds = normalizeLiveVideoFeeds(options.liveVideoFeeds);
+
+  if (areLiveVideoFeedsHidden(liveFeeds)) {
+    return null;
+  }
+
+  const singleFeed = usesSingleLiveFeed(liveFeeds);
 
   if (!preview.available) {
     return (

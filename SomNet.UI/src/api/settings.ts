@@ -8,7 +8,10 @@ import {
 } from '@/types/options';
 import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
 import { clampVideoFeedTimeoutSeconds } from '@/utils/videoFeedTimeout';
-import { normalizeMobileVideoExpandDefault } from '@/utils/liveVideoFeedPreference';
+import {
+  normalizeLiveVideoFeeds,
+  normalizeMobileVideoExpandDefault,
+} from '@/utils/liveVideoFeedPreference';
 import { normalizeVideoFeedBandwidth } from '@/utils/videoFeedBandwidth';
 import { apiFetch } from '@/api/client';
 import { normalizeMotorAutomaticControlState } from '@/utils/motorAutomaticFieldRules';
@@ -33,6 +36,9 @@ function normalizeAppOptions(appOptions: PairingSettingsResponse['appOptions']):
       appOptions.videoFeedTimeoutSeconds ?? DEFAULT_APP_OPTIONS.videoFeedTimeoutSeconds,
     ),
     actionSnapshotFeeds: normalizeActionSnapshotFeeds(appOptions.actionSnapshotFeeds),
+    liveVideoFeeds: normalizeLiveVideoFeeds(
+      appOptions.liveVideoFeeds ?? appOptions.mobileVideoExpandDefault,
+    ),
     mobileVideoExpandDefault: normalizeMobileVideoExpandDefault(
       appOptions.mobileVideoExpandDefault,
     ),

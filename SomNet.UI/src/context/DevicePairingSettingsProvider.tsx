@@ -23,6 +23,7 @@ import {
   readDeviceAutomaticRunningLocal,
   writeDeviceAutomaticRunningLocal,
 } from '@/utils/deviceAutomaticRunningLocal';
+import { cacheDeviceSettings } from '@/utils/deviceSettingsCache';
 import { automaticRunningKindForActuator } from '@/utils/tabSync';
 import type { ActuatorKind } from '@/types/device';
 
@@ -157,10 +158,7 @@ export function DevicePairingSettingsProvider({ children }: { children: ReactNod
           strokeLimits,
         );
 
-        setRows((prev) => ({
-          ...prev,
-          [registration.deviceId]: {
-            settings: {
+        const mergedSettings = {
               ...loadedSettings,
               manual: { ...loadedSettings.manual, ...manualStroke },
               automatic: normalizeAutomaticControlState({
@@ -172,7 +170,12 @@ export function DevicePairingSettingsProvider({ children }: { children: ReactNod
                 ...loadedSettings.motorAutomatic,
                 running: kind === 'motor' ? restoredRunning : false,
               }),
-            },
+            };
+        cacheDeviceSettings(selectedSub, registration.deviceId, mergedSettings);
+        setRows((prev) => ({
+          ...prev,
+          [registration.deviceId]: {
+            settings: mergedSettings,
             loaded: true,
             loading: false,
             userEdited: false,
@@ -222,6 +225,7 @@ export function DevicePairingSettingsProvider({ children }: { children: ReactNod
           queuePersist(deviceId, nextSettings, nextRow.generation);
         }
 
+        cacheDeviceSettings(selectedSub, deviceId, nextSettings);
         return { ...prev, [deviceId]: nextRow };
       });
     },
@@ -278,6 +282,10 @@ export function DevicePairingSettingsProvider({ children }: { children: ReactNod
           }));
         },
         updateAutomatic: (automatic) => {
+          if (kind === 'motor') {
+            return;
+          }
+
           const normalizedStroke = normalizeStrokeMsPair(
             automatic.minimumStrokeMs,
             automatic.maximumStrokeMs,
@@ -292,6 +300,10 @@ export function DevicePairingSettingsProvider({ children }: { children: ReactNod
           }));
         },
         updateMotorAutomatic: (motorAutomatic) => {
+          if (kind === 'relay') {
+            return;
+          }
+
           applyPatch(deviceId, (settings) => ({
             ...settings,
             motorAutomatic: normalizeMotorAutomaticControlState(motorAutomatic),

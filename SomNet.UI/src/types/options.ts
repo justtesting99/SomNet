@@ -2,6 +2,9 @@ import type { VideoExpandMode } from '@/types/videoDisplay';
 
 export type MobileVideoExpandDefault = Exclude<VideoExpandMode, 'none'>;
 
+/** Dashboard live feeds visibility (front / rear / both / none). */
+export type LiveVideoFeeds = VideoExpandMode;
+
 export type ActionSnapshotFeeds = 'both' | 'rear';
 
 export type VideoFeedBandwidth = 'high' | 'medium' | 'low';
@@ -11,6 +14,8 @@ export interface AppOptions {
   confirmBeforeCommands: boolean;
   allowAutomaticModeOverrides: boolean;
   autoExpandVideoOnMobile: boolean;
+  /** Which live feeds appear on the dashboard (none hides the video column). */
+  liveVideoFeeds: LiveVideoFeeds;
   mobileVideoExpandDefault: MobileVideoExpandDefault;
   showSessionTimestamps: boolean;
   /** When true, show session id under the header Session in Progress control (debugging). */
@@ -22,6 +27,16 @@ export interface AppOptions {
   actionSnapshotFeeds: ActionSnapshotFeeds;
   videoFeedBandwidth: VideoFeedBandwidth;
 }
+
+export const LIVE_VIDEO_FEEDS_OPTIONS: {
+  value: LiveVideoFeeds;
+  label: string;
+}[] = [
+  { value: 'none', label: 'None (hide all live feeds)' },
+  { value: 'both', label: 'Both (front + rear)' },
+  { value: 'monitor1', label: 'Front only' },
+  { value: 'monitor2', label: 'Rear only' },
+];
 
 export const MOBILE_VIDEO_EXPAND_OPTIONS: {
   value: MobileVideoExpandDefault;
@@ -55,6 +70,7 @@ export const DEFAULT_GENERAL_APP_OPTIONS: Pick<
   | 'confirmBeforeCommands'
   | 'allowAutomaticModeOverrides'
   | 'autoExpandVideoOnMobile'
+  | 'liveVideoFeeds'
   | 'mobileVideoExpandDefault'
   | 'reconnectIntervalSeconds'
   | 'videoFeedTimeoutSeconds'
@@ -66,6 +82,7 @@ export const DEFAULT_GENERAL_APP_OPTIONS: Pick<
   confirmBeforeCommands: false,
   allowAutomaticModeOverrides: false,
   autoExpandVideoOnMobile: true,
+  liveVideoFeeds: 'both',
   mobileVideoExpandDefault: 'both',
   reconnectIntervalSeconds: 10,
   videoFeedTimeoutSeconds: 30,

@@ -14,6 +14,11 @@ public sealed class AppOptionsDto
 
     public VideoExpandMode MobileVideoExpandDefault { get; init; } = VideoExpandMode.Both;
 
+    /// <summary>
+    /// Which live feeds appear on the operator dashboard (None hides all).
+    /// </summary>
+    public VideoExpandMode LiveVideoFeeds { get; init; } = VideoExpandMode.Both;
+
     public bool ShowSessionTimestamps { get; init; } = true;
 
     /// <summary>

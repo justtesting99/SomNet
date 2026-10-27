@@ -134,6 +134,9 @@ public static class PairingSettingsSerializer
             AllowAutomaticModeOverrides = source.AllowAutomaticModeOverrides,
             AutoExpandVideoOnMobile = source.AutoExpandVideoOnMobile,
             MobileVideoExpandDefault = source.MobileVideoExpandDefault,
+            LiveVideoFeeds = Enum.IsDefined(source.LiveVideoFeeds)
+                ? source.LiveVideoFeeds
+                : VideoExpandMode.Both,
             ShowSessionTimestamps = source.ShowSessionTimestamps,
             ShowActiveSessionIdInHeader = source.ShowActiveSessionIdInHeader,
             OperatorDisplayName = source.OperatorDisplayName?.Trim() ?? string.Empty,

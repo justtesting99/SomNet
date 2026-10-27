@@ -20,7 +20,6 @@ import { useSubTarget } from '@/context/SubTargetProvider';
 import { useSubDevice } from '@/context/SubDeviceProvider';
 import type { SubTargetName } from '@/config/sessionUsers';
 import { deviceIdFromSessionKey, sessionDeviceKey } from '@/utils/sessionDeviceKey';
-import { activeSessionForSubAndDevice } from '@/utils/sessionForSub';
 import type { OperationMode } from '@/types/modes';
 import {
   buildAutomaticSessionSummary,
@@ -34,7 +33,7 @@ import { parseManualInProgressSummary } from '@/utils/manualSessionRehydrate';
 import { isRehydratableManualSession } from '@/utils/sessionProgress';
 import { markManualVideoCommandComplete } from '@/utils/manualVideoCommandNotify';
 import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
-interface ActiveSessionState {
+export interface ActiveSessionState {
   id: string;
   startedAt: string;
   mode: OperationMode;
@@ -52,7 +51,6 @@ export interface EndSessionForAccessoryOptions {
 }
 
 interface SessionContextValue {
-  activeSession: ActiveSessionState | null;
   sessionsByKey: Record<string, ActiveSessionState>;
   /** Incremented when a manual stroke/burst/abort completes or manual session rehydrates (video idle timer). */
   manualVideoActivitySeq: number;
@@ -106,6 +104,10 @@ interface SessionContextValue {
   /** V2 — new server row when scene session turns on for a device. */
   startSessionForAccessory: (mode: OperationMode, deviceId: string) => Promise<void>;
   endSessionForAccessory: (options: EndSessionForAccessoryOptions) => Promise<void>;
+  endSessionForAccessoryForDevice: (
+    deviceId: string,
+    options: EndSessionForAccessoryOptions,
+  ) => Promise<void>;
   syncActiveSessionMode: (mode: OperationMode) => Promise<void>;
   syncActiveSessionModeForDevice: (deviceId: string, mode: OperationMode) => Promise<void>;
   markAutomaticDeviceStarted: () => void;
@@ -727,24 +729,31 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [buildManualSummary, finalizeSessionFor, selectedSub],
   );
 
-  const discardActiveSession = useCallback(async () => {
-    const current = activeSessionRef.current;
-    if (!current) {
-      return;
-    }
+  const discardSessionForDevice = useCallback(
+    async (deviceId: string) => {
+      const current = sessionsByKeyRef.current[sessionDeviceKey(selectedSub, deviceId)];
+      if (!current) {
+        return;
+      }
 
-    try {
-      await discardInProgressSessionApi(current.id);
-      setSessionForDevice(current.subTarget, current.deviceId, null);
-    } catch {
-      // Row may have progressed — fall back to a normal end below.
-      await endActiveSessionIfNeeded('session-accessory-off');
-    }
-  }, [endActiveSessionIfNeeded, setSessionForDevice]);
+      try {
+        await discardInProgressSessionApi(current.id);
+        setSessionForDevice(current.subTarget, current.deviceId, null);
+      } catch {
+        if (current.deviceId === activeSessionRef.current?.deviceId) {
+          await endActiveSessionIfNeeded('session-accessory-off');
+        } else {
+          const summary = buildManualSummary(current, current.abortCount, false);
+          await finalizeSessionFor(current, summary);
+        }
+      }
+    },
+    [buildManualSummary, endActiveSessionIfNeeded, finalizeSessionFor, selectedSub, setSessionForDevice],
+  );
 
-  const endSessionForAccessory = useCallback(
-    async (options: EndSessionForAccessoryOptions) => {
-      const current = activeSessionRef.current;
+  const endSessionForAccessoryForDevice = useCallback(
+    async (deviceId: string, options: EndSessionForAccessoryOptions) => {
+      const current = sessionsByKeyRef.current[sessionDeviceKey(selectedSub, deviceId)];
       if (!current) {
         return;
       }
@@ -754,28 +763,46 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const discardAutomatic = current.mode === 'automatic' && !options.automaticDeviceStarted;
 
       if (discardManual || discardAutomatic) {
-        await discardActiveSession();
+        await discardSessionForDevice(deviceId);
         return;
       }
 
       if (current.mode === 'automatic') {
-        await endAutomaticSession('session-accessory-off', options.automaticDeviceResult ?? null);
+        await endAutomaticSessionForDevice(
+          selectedSub,
+          deviceId,
+          'session-accessory-off',
+          options.automaticDeviceResult ?? null,
+        );
         return;
       }
 
-      await endActiveSessionIfNeeded('session-accessory-off');
+      const summary = buildManualSummary(current, current.abortCount, false);
+      await finalizeSessionFor(current, summary);
     },
-    [discardActiveSession, endActiveSessionIfNeeded, endAutomaticSession],
+    [
+      buildManualSummary,
+      discardSessionForDevice,
+      endAutomaticSessionForDevice,
+      finalizeSessionFor,
+      selectedSub,
+    ],
   );
 
-  const activeSessionForSelectedSub = useMemo(
-    () => activeSessionForSubAndDevice(activeSession, selectedSub, selectedDeviceId),
-    [activeSession, selectedDeviceId, selectedSub],
+  const endSessionForAccessory = useCallback(
+    async (options: EndSessionForAccessoryOptions) => {
+      const deviceId = activeSessionRef.current?.deviceId;
+      if (!deviceId) {
+        return;
+      }
+
+      await endSessionForAccessoryForDevice(deviceId, options);
+    },
+    [endSessionForAccessoryForDevice],
   );
 
   const value = useMemo(
     () => ({
-      activeSession: activeSessionForSelectedSub,
       sessionsByKey,
       manualVideoActivitySeq,
       manualVideoRehydrateSeq,
@@ -798,6 +825,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       prepareAutomaticSession: beginAutomaticSession,
       startSessionForAccessory,
       endSessionForAccessory,
+      endSessionForAccessoryForDevice,
       syncActiveSessionMode,
       syncActiveSessionModeForDevice,
       markAutomaticDeviceStarted,
@@ -805,7 +833,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       isAutomaticSessionActiveForDevice,
     }),
     [
-      activeSessionForSelectedSub,
       sessionsByKey,
       manualVideoActivitySeq,
       manualVideoRehydrateSeq,
@@ -816,6 +843,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       endAutomaticSessionForDevice,
       endManualSession,
       endSessionForAccessory,
+      endSessionForAccessoryForDevice,
       prepareManualSession,
       prepareManualSessionForDevice,
       rehydrateSession,

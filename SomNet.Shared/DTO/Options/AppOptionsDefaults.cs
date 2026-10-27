@@ -11,6 +11,7 @@ public static class AppOptionsDefaults
         AllowAutomaticModeOverrides = false,
         AutoExpandVideoOnMobile = true,
         MobileVideoExpandDefault = VideoExpandMode.Both,
+        LiveVideoFeeds = VideoExpandMode.Both,
         ShowSessionTimestamps = true,
         ShowActiveSessionIdInHeader = false,
         OperatorDisplayName = string.Empty,

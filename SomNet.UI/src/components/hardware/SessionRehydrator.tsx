@@ -1,94 +1,111 @@
 import { useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthProvider';
-import { useOptions } from '@/context/OptionsProvider';
+import { useDevicePairingSettings } from '@/context/DevicePairingSettingsProvider';
 import { useLiveSession } from '@/context/SessionProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { reconcileActiveSessionForMode } from '@/utils/sessionReconcile';
 import { readDeviceSceneSessionActive } from '@/utils/sessionAccessoryStorage';
-import { useSubDevice } from '@/context/SubDeviceProvider';
 import { useDeviceOperationModeApi } from '@/context/DeviceOperationModeProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 import { sessionDeviceKey } from '@/utils/sessionDeviceKey';
+import type { ActuatorKind } from '@/types/device';
+import { automaticRunningKindForActuator } from '@/utils/tabSync';
 
-/**
- * Restores SessionProvider per device when scene session is on (P13/P14).
- * Each device has its own operation mode and server session row.
- */
-export function SessionRehydrator() {
+function DeviceSessionRehydrateEffect({
+  deviceId,
+  actuatorKind,
+}: {
+  deviceId: string;
+  actuatorKind: ActuatorKind;
+}) {
   const { user } = useAuth();
   const { selectedSub } = useSubTarget();
-  const { registrations } = useSubDevice();
   const { getDeviceOperationMode } = useDeviceOperationModeApi();
-  const { isLoading, settingsLoaded, settings, setAutomaticRunningLocal, setMotorAutomaticRunningLocal } =
-    useOptions();
+  const panelSettings = useDevicePairingSettings(deviceId, actuatorKind);
   const { sessionsByKey, rehydrateSession } = useLiveSession();
-  const settingsRef = useRef(settings);
-  const attemptedKeysRef = useRef<Set<string>>(new Set());
-
-  settingsRef.current = settings;
+  const attemptedRef = useRef(false);
 
   const domTarget = user?.displayName ?? user?.username ?? '';
+  const runningKind = automaticRunningKindForActuator(actuatorKind);
 
   useEffect(() => {
-    if (!domTarget || isLoading || !settingsLoaded || registrations.length === 0) {
+    attemptedRef.current = false;
+  }, [deviceId, domTarget, selectedSub]);
+
+  useEffect(() => {
+    if (!domTarget || !panelSettings.settingsLoaded || panelSettings.isLoading) {
       return;
     }
 
-    for (const registration of registrations) {
-      const { deviceId, actuatorKind } = registration;
-      if (!readDeviceSceneSessionActive(domTarget, selectedSub, deviceId)) {
-        continue;
-      }
-
-      const mode = getDeviceOperationMode(deviceId, actuatorKind);
-      const sessionKey = `${domTarget}:${selectedSub}:${deviceId}:${mode}`;
-      if (attemptedKeysRef.current.has(sessionKey)) {
-        continue;
-      }
-
-      if (sessionsByKey[sessionDeviceKey(selectedSub, deviceId)]) {
-        attemptedKeysRef.current.add(sessionKey);
-        continue;
-      }
-
-      const timer = window.setTimeout(() => {
-        const panelSettings = settingsRef.current;
-        const automaticSettings = panelSettings.automatic;
-        const setRunningLocal =
-          actuatorKind === 'hbridge' ? setMotorAutomaticRunningLocal : setAutomaticRunningLocal;
-
-        void reconcileActiveSessionForMode({
-          mode,
-          selectedSub,
-          deviceId,
-          automaticSettings,
-          rehydrateSession,
-          setAutomaticRunningLocal: setRunningLocal,
-          probeDevice: false,
-        })
-          .catch(() => {
-            // Leave UI idle for this device.
-          })
-          .finally(() => {
-            attemptedKeysRef.current.add(sessionKey);
-          });
-      }, 400);
-
-      return () => {
-        window.clearTimeout(timer);
-      };
+    if (!readDeviceSceneSessionActive(domTarget, selectedSub, deviceId)) {
+      return;
     }
+
+    if (sessionsByKey[sessionDeviceKey(selectedSub, deviceId)]) {
+      return;
+    }
+
+    if (attemptedRef.current) {
+      return;
+    }
+
+    const mode = getDeviceOperationMode(deviceId, actuatorKind);
+    const timer = window.setTimeout(() => {
+      attemptedRef.current = true;
+      const automaticSettings = panelSettings.settings.automatic;
+      const setRunningLocal =
+        runningKind === 'motor'
+          ? panelSettings.setMotorAutomaticRunningLocal
+          : panelSettings.setAutomaticRunningLocal;
+
+      void reconcileActiveSessionForMode({
+        mode,
+        selectedSub,
+        deviceId,
+        automaticSettings,
+        rehydrateSession,
+        setAutomaticRunningLocal: setRunningLocal,
+        probeDevice: false,
+      }).catch(() => {
+        // Leave UI idle for this device.
+      });
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [
+    actuatorKind,
+    deviceId,
     domTarget,
     getDeviceOperationMode,
-    isLoading,
-    registrations,
+    panelSettings.isLoading,
+    panelSettings.settings.automatic,
+    panelSettings.settingsLoaded,
+    panelSettings.setAutomaticRunningLocal,
+    panelSettings.setMotorAutomaticRunningLocal,
     rehydrateSession,
+    runningKind,
     selectedSub,
     sessionsByKey,
-    setAutomaticRunningLocal,
-    setMotorAutomaticRunningLocal,
-    settingsLoaded,
   ]);
 
   return null;
+}
+
+/** Restores SessionProvider per device when scene session is on. */
+export function SessionRehydrator() {
+  const { registrations } = useSubDevice();
+
+  return (
+    <>
+      {registrations.map((registration) => (
+        <DeviceSessionRehydrateEffect
+          key={registration.deviceId}
+          deviceId={registration.deviceId}
+          actuatorKind={registration.actuatorKind}
+        />
+      ))}
+    </>
+  );
 }

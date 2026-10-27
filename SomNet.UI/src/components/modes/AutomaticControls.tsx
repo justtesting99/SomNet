@@ -81,7 +81,8 @@ export function AutomaticControls() {
     syncActiveSessionMode,
   } = useOperationSession();
   const { isCommandPending } = useHardwareCommand();
-  const { status: systemStatus } = useSystemStatus();
+  const { getDeviceStatus } = useSystemStatus();
+  const systemStatus = getDeviceStatus(commandDeviceId);
   const accessoryError = '';
   const sceneSessionError = '';
   const [commandError, setCommandError] = useState('');
@@ -296,7 +297,7 @@ export function AutomaticControls() {
 
   async function handleStart() {
     setCommandError('');
-    expandOnAction();
+    expandOnAction(commandDeviceId);
 
     const payloadJson = buildAutomaticStartPayload(state);
 

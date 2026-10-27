@@ -1,6 +1,7 @@
 import type { OperationMode } from '@/types/modes';
 import type { ActuatorKind } from '@/types/device';
 import { useDeviceOperationMode } from '@/context/DeviceOperationModeProvider';
+import { useRelayModeChange } from '@/hooks/useRelayModeChange';
 import { Button } from '@/components/ui/Button';
 
 interface DeviceModeToggleProps {
@@ -10,6 +11,11 @@ interface DeviceModeToggleProps {
 
 export function DeviceModeToggle({ deviceId, actuatorKind }: DeviceModeToggleProps) {
   const { mode, needsModeChoice, setMode } = useDeviceOperationMode(deviceId, actuatorKind);
+  const changeRelayMode = useRelayModeChange(deviceId);
+
+  function selectMode(next: OperationMode) {
+    void changeRelayMode(mode, next, () => setMode(next));
+  }
 
   if (actuatorKind === 'hbridge') {
     return (
@@ -25,10 +31,10 @@ export function DeviceModeToggle({ deviceId, actuatorKind }: DeviceModeTogglePro
       <div className="space-y-2 rounded-lg border border-slate-700/80 bg-slate-950/40 p-3">
         <p className="text-sm text-slate-300">Choose how to operate this relay device.</p>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="secondary" onClick={() => setMode('manual')}>
+          <Button size="sm" variant="secondary" onClick={() => selectMode('manual')}>
             Manual
           </Button>
-          <Button size="sm" onClick={() => setMode('automatic')}>
+          <Button size="sm" onClick={() => selectMode('automatic')}>
             Automatic
           </Button>
         </div>
@@ -50,7 +56,7 @@ export function DeviceModeToggle({ deviceId, actuatorKind }: DeviceModeTogglePro
                 ? 'bg-indigo-600 text-white'
                 : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200',
             ].join(' ')}
-            onClick={() => setMode(option)}
+            onClick={() => selectMode(option)}
           >
             {option}
           </button>

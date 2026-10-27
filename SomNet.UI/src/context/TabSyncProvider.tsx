@@ -15,6 +15,7 @@ import { useOptions } from '@/context/OptionsProvider';
 import { useLiveSession } from '@/context/SessionProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useSubDevice } from '@/context/SubDeviceProvider';
+import { sessionDeviceKey } from '@/utils/sessionDeviceKey';
 import type { HardwareCommandKey } from '@/types/hardwareCommand';
 import {
   hasRemoteLockForDevice,
@@ -55,23 +56,17 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
   } = useOptions();
   const registrationsRef = useRef(registrations);
   registrationsRef.current = registrations;
-  const {
-    activeSession,
-    sessionsByKey,
-    syncSessionFromRemote,
-    endAllInProgressSessionsForSub,
-  } = useLiveSession();
+  const { sessionsByKey, syncSessionFromRemote, endAllInProgressSessionsForSub } =
+    useLiveSession();
 
   const [remotePendingKeys, setRemotePendingKeys] = useState<ReadonlySet<string>>(() => new Set());
 
   const remoteLocksRef = useRef(new Map<string, ReadonlySet<string>>());
   const applyingSessionIdRef = useRef<string | null>(null);
-  const activeSessionRef = useRef(activeSession);
   const settingsRef = useRef(settings);
   const selectedSubRef = useRef(selectedSub);
   const selectedDeviceIdRef = useRef(selectedDeviceId);
 
-  activeSessionRef.current = activeSession;
   settingsRef.current = settings;
   selectedSubRef.current = selectedSub;
   selectedDeviceIdRef.current = selectedDeviceId;
@@ -97,6 +92,12 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
 
   const sessionsByKeyRef = useRef(sessionsByKey);
   sessionsByKeyRef.current = sessionsByKey;
+
+  const getLocalSession = useCallback((deviceId: string) => {
+    return (
+      sessionsByKeyRef.current[sessionDeviceKey(selectedSubRef.current, deviceId)] ?? null
+    );
+  }, []);
 
   const broadcastLocalState = useCallback(() => {
     for (const session of Object.values(sessionsByKeyRef.current)) {
@@ -126,10 +127,7 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
     async (snapshot: ActiveSessionSnapshot | null, deviceIdForClear?: string) => {
       if (snapshot === null) {
         const deviceId =
-          deviceIdForClear ??
-          activeSessionRef.current?.deviceId ??
-          selectedDeviceIdRef.current ??
-          undefined;
+          deviceIdForClear ?? selectedDeviceIdRef.current ?? undefined;
         if (!deviceId) {
           return;
         }
@@ -140,7 +138,8 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (activeSessionRef.current?.id === snapshot.id && snapshot.mode !== 'manual') {
+      const localSession = getLocalSession(snapshot.deviceId);
+      if (localSession?.id === snapshot.id && snapshot.mode !== 'manual') {
         return;
       }
 
@@ -168,14 +167,14 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
 
         if (entry.mode === 'manual' && !isRehydratableManualSession(entry)) {
           withRemoteSyncApply(() => {
-            syncSessionFromRemote(null);
+            syncSessionFromRemote(null, snapshot.deviceId);
           });
           return;
         }
 
         if (entry.mode === 'automatic' && !isRehydratableAutomaticSession(entry)) {
           withRemoteSyncApply(() => {
-            syncSessionFromRemote(null);
+            syncSessionFromRemote(null, snapshot.deviceId);
           });
           return;
         }
@@ -207,6 +206,7 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
     [
       applySubFromSync,
       endAllInProgressSessionsForSub,
+      getLocalSession,
       setDeviceAutomaticRunning,
       setDeviceOperationMode,
       syncSessionFromRemote,
@@ -218,60 +218,54 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    try {
-      const deviceId = selectedDeviceId;
-      if (!deviceId) {
-        return;
-      }
+    for (const registration of registrationsRef.current) {
+      const deviceId = registration.deviceId;
+      try {
+        const localSession = getLocalSession(deviceId);
+        const entry = await fetchActiveSession(selectedSubRef.current, deviceId);
+        if (!entry) {
+          if (localSession?.mode === 'manual') {
+            continue;
+          }
 
-      const entry = await fetchActiveSession(selectedSubRef.current, deviceId);
-      if (!entry) {
-        // Manual sessions are client-authoritative while in progress; a transient 404 on
-        // /api/sessions/active must not clear local state (that unmounts video iframes).
-        if (activeSessionRef.current?.mode === 'manual') {
-          return;
+          if (localSession) {
+            withRemoteSyncApply(() => {
+              syncSessionFromRemote(null, deviceId);
+            });
+          }
+          continue;
         }
 
-        if (activeSessionRef.current) {
-          withRemoteSyncApply(() => {
-            syncSessionFromRemote(null, deviceId);
+        if (localSession?.id === entry.id) {
+          continue;
+        }
+
+        if (
+          (entry.mode === 'manual' && isRehydratableManualSession(entry)) ||
+          (entry.mode === 'automatic' && isRehydratableAutomaticSession(entry))
+        ) {
+          const snapshotDeviceId = entry.deviceId ?? deviceId;
+          if (!snapshotDeviceId) {
+            continue;
+          }
+
+          await applySessionSnapshot({
+            id: entry.id,
+            startedAt: entry.startedAt,
+            mode: entry.mode,
+            subTarget: entry.subTarget,
+            deviceId: snapshotDeviceId,
           });
         }
-        return;
+      } catch {
+        // Ignore reconcile errors for this device.
       }
-
-      if (activeSessionRef.current?.id === entry.id) {
-        return;
-      }
-
-      if (
-        (entry.mode === 'manual' && isRehydratableManualSession(entry)) ||
-        (entry.mode === 'automatic' && isRehydratableAutomaticSession(entry))
-      ) {
-        const snapshotDeviceId = entry.deviceId ?? deviceId;
-        if (!snapshotDeviceId) {
-          return;
-        }
-
-        await applySessionSnapshot({
-          id: entry.id,
-          startedAt: entry.startedAt,
-          mode: entry.mode,
-          subTarget: entry.subTarget,
-          deviceId: snapshotDeviceId,
-        });
-      }
-    } catch {
-      // Ignore reconcile errors.
     }
-  }, [applySessionSnapshot, domTarget, selectedDeviceId, settingsLoaded, syncSessionFromRemote]);
+  }, [applySessionSnapshot, domTarget, getLocalSession, settingsLoaded, syncSessionFromRemote]);
 
   useEffect(() => {
     return subscribeTabSync((message: TabSyncMessage) => {
       switch (message.type) {
-        case 'session':
-          void applySessionSnapshot(message.session);
-          break;
         case 'device-session':
           if (!subTargetsMatch(message.subTarget, selectedSubRef.current)) {
             break;

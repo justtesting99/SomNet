@@ -23,6 +23,7 @@ import {
 } from '@/utils/automaticResultJson';
 import { applyAutomaticDeviceComplete } from '@/utils/automaticSessionFinalize';
 import { readDeviceAutomaticRunningLocal } from '@/utils/deviceAutomaticRunningLocal';
+import { readCachedDeviceSettings } from '@/utils/deviceSettingsCache';
 import { automaticRunningKindForActuator } from '@/utils/tabSync';
 
 function shouldHandleAutomaticSessionComplete(ack: HardwareCommandAck): boolean {
@@ -117,8 +118,12 @@ export function AutomaticSessionHubListener() {
 
         const subTarget = registration.subTarget as SubTargetName;
         const kind = automaticRunningKindForActuator(registration.actuatorKind);
-        const deviceSessionRunning = readDeviceAutomaticRunningLocal(subTarget, deviceId, kind);
-        const automatic = settingsRef.current.automatic;
+        const pairing =
+          readCachedDeviceSettings(subTarget, deviceId) ?? settingsRef.current;
+        const deviceSessionRunning =
+          readDeviceAutomaticRunningLocal(subTarget, deviceId, kind) ||
+          (kind === 'motor' ? pairing.motorAutomatic.running : pairing.automatic.running);
+        const automatic = pairing.automatic;
 
         const parsed = parseAutomaticResultJson(ack.resultJson);
         if (!parsed) {

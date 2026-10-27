@@ -1,6 +1,6 @@
 # Device independence audit (operator UI)
 
-**Status:** Living audit — update when adding operator state.  
+**Status:** Section 4 coupling items **resolved** (2026-10-27).  
 **Rule:** Each physical ESP (`deviceId`) is a **separate instance**. The only intentional coupling is **one signed-in operator shell** (Dom, Sub, layout, dialogs).
 
 Normative rules: [34 — Operator V2](./34-Operator-Session-And-Accessory-V2-Rules.md).
@@ -12,17 +12,19 @@ Normative rules: [34 — Operator V2](./34-Operator-Session-And-Accessory-V2-Rul
 | Concern | Storage / authority | UI entry |
 |--------|---------------------|----------|
 | Operation mode (manual / automatic) | `deviceOperationModeStorage` + `DeviceOperationModeProvider` | `DeviceModeToggle` per panel |
-| Scene session | `sessionAccessoryStorage` `(dom, sub, deviceId)` | `DeviceSubSessionControls` |
-| Accessory output | same | `DeviceSubSessionControls` |
-| Pairing / control settings | API `DomSubDeviceSettings` + `DevicePairingSettingsProvider` | Controls in `DeviceOperationScope` |
-| Automatic **running** (runtime) | `deviceAutomaticRunningLocal` map + per-device hint | `setDeviceAutomaticRunning` |
-| Server session row | `SessionProvider.sessionsByKey` `(sub, deviceId)` | `useOperationSession()` |
-| Ready ack (double-click) | `subPresentAckStorage` per device | `SiteUserReadyProvider` |
-| Hardware commands | Unicast `deviceId` on REST | `useOperationDeviceId()` |
+| Scene session | `sessionAccessoryStorage` `(dom, sub, deviceId)` | `useDeviceSceneSessionControls` / `DeviceSubSessionControls` |
+| Accessory output | same | same |
+| Pairing / control settings | `DevicePairingSettingsProvider` (actuator-scoped updates) | `useControlPanelSettings` in scope |
+| Automatic **running** | `deviceAutomaticRunningLocal` + `setDeviceAutomaticRunning` | Options broadcast + panel |
+| Server session row | `SessionProvider.sessionsByKey` | `useOperationSession()` |
+| Ready ack | `subPresentAckStorage` per device | `SiteUserReadyProvider` |
+| Hardware commands | Unicast `deviceId` | `useOperationDeviceId()` |
 | Command pending locks | `deviceId::commandKey` | `HardwareCommandProvider` |
-| Hub automatic complete | `ack.deviceId` (API) | `AutomaticSessionHubListener` |
+| Hub automatic complete | `ack.deviceId` | `AutomaticSessionHubListener` |
+| Status poll | `SystemStatusProvider.getDeviceStatus(deviceId)` | Panel + header focus |
+| Video restore hint | `videoFeedRestoreHint` per `deviceId` | `useSessionVideoSources` (focus device) |
 
-Tab-sync messages that are **per device:** `device-session`, `running` (with `deviceId`), `device-mode`, `scene-session`, `device-accessory`.
+Tab-sync (per device): `device-session`, `running`, `device-mode`, `scene-session`, `device-accessory`, scoped `command-lock`.
 
 ---
 
@@ -32,62 +34,71 @@ Tab-sync messages that are **per device:** `device-session`, `running` (with `de
 |--------|------------|
 | Auth / Dom identity | One operator login |
 | Selected **Sub** | One video/site context at a time |
-| **Focus** device (`selectedDeviceId`) | Which device drives **header status** and **live video** preview tokens |
-| Dom-level app options (notifications, video bandwidth, etc.) | Install/operator prefs — not motion |
-| `OptionsProvider` while dialog open | Edits **Focus** device row only (by design); motion uses `DevicePairingSettingsProvider` |
-| History dialog default filter | UX filter; API supports per-`deviceId` |
-| Sub-level ready banner dismiss | `readyBannerStorage` (cosmetic; does not gate motion per device) |
+| **Focus** `deviceId` | Header status chip, live video tokens, Options dialog row for focus device |
+| Dom-level app options | Notifications, bandwidth, mobile expand prefs |
+| History dialog default filter | UX filter |
+| Sub-level ready banner dismiss | Cosmetic |
+| `VideoDisplayProvider` expand UI | Single video column; `expandOnAction` only when source device is focus |
 
-**Not shared:** manual vs automatic, scene, accessory, running, session history row in progress, stroke/automatic parameters.
-
----
-
-## 3. Fixed in this audit (were incorrectly shared)
-
-| Issue | Fix |
-|-------|-----|
-| Global `ModeProvider` / mode picker gate | Removed from `main.tsx`; per-device mode only |
-| Tab-sync `session: null` cleared **all** tabs when Focus had no session | `device-session` per `deviceId` from `sessionsByKey` |
-| Tab-sync `running` applied only to Focus device | `setDeviceAutomaticRunning(deviceId, …)` for any device |
-| Pending commands cleared on Focus change | Clear only on **Sub** change |
-| Sub change ended only Focus session | `endAllInProgressSessionsForSub` |
-| Running tab-sync only from Focus `OptionsProvider` effect | Broadcast from `setDeviceAutomaticRunning` |
-| Tab-sync `command-lock` blocked **all** devices | `hardwareCommandLockKey` + per-device `CommandButton` / banner |
+**Not shared:** manual/automatic mode, scene, accessory, running, in-progress session, stroke/auto parameters.
 
 ---
 
-## 4. Known remaining coupling (documented, not motion-critical)
+## 3. Removed / replaced (was shared)
 
-| Area | Behavior | Risk | Follow-up |
-|------|----------|------|-----------|
-| `SessionAccessoryProvider` | React state mirrors **Focus** device (single-device header path) | Multi-device uses `DeviceSubSessionControls`; header path legacy | Split provider or remove header controls entirely |
-| `useLiveSession().activeSession` | Alias of Focus device session | Callers must use `useOperationSession()` / `sessionsByKey` in panels | Deprecate direct `activeSession` in controls (mostly done) |
-| `SystemStatusProvider` | Polls Focus (+ relay if different) | Status chip is Focus-only by design | Per-device status chips in panel if needed |
-| `VideoDisplayProvider` / expand | One expand target | Video is Focus device | Optional per-device video later |
-| Tab-sync `command-lock` | ~~Keys not scoped~~ | — | **Fixed** — `deviceId::commandKey`; UI locks per device |
-| `videoFeedRestoreHint` | Global sessionStorage | Video rehydrate for Focus | Acceptable for shared monitors |
-| `PairingSettings` DTO | Both `automatic` + `motorAutomatic` fields per row | API shape; only one plane used per `actuatorKind` | Server already per `deviceId` |
-| `reconcileFromServer` (TabSync) | Still probes **Focus** `fetchActiveSession` on visibility | Other devices rely on `device-session` + rehydrator | Extend reconcile loop all registrations |
-| `SessionRehydrator` | One-shot per device in loop (first match returns timer) | May miss parallel rehydrate on load | Refactor to per-device effects |
+| Was | Now |
+|-----|-----|
+| `SessionAccessoryProvider` + header `SubSessionControls` | `useDeviceSceneSessionControls` + panel only |
+| `useLiveSession().activeSession` | `sessionsByKey` + `useOperationSession()`; video uses `useFocusSession()` |
+| Focus-only status poll + relay side poll | Poll **every** registration; `getDeviceStatus(deviceId)` |
+| Global video restore hint | Keyed by `deviceId` |
+| `reconcileFromServer` one device | All registrations on tab focus |
+| `SessionRehydrator` single early-return loop | One effect per device |
+| Legacy tab-sync `session`, `session-accessory`, `relay-lock` | Removed; use `device-session`, `scene-session`, `device-accessory` |
+| `ModeProvider` / `ModeSelector` / `AutomaticModeControls` | Deleted |
+| Motor UI touching relay `automatic` plane | `updateAutomatic` / `updateMotorAutomatic` guarded by `actuatorKind` |
 
 ---
 
-## 5. API / firmware (out of UI scope but same rule)
+## 4. API / firmware (unchanged rule)
 
 - Commands require `deviceId` (X-6).
 - Session rows carry `deviceId`.
 - No API mutex between relay and motor on same Sub.
 - Hub forwards `deviceId` on operator acks.
 
+`PairingSettings` DTO still contains both `automatic` and `motorAutomatic` fields per API row; UI only mutates the plane for that device's `actuatorKind`.
+
 ---
 
-## 6. PR checklist (device work)
+## 5. PR checklist (device work)
 
-- [ ] No new global `useMode()` or Sub-level motion flags  
-- [ ] State keyed by `(subTarget, deviceId)` at minimum  
+- [ ] No new global motion state  
+- [ ] State keyed by `(subTarget, deviceId)`  
 - [ ] Tab-sync includes `deviceId` for motion/session/running  
-- [ ] Controls run inside `DeviceOperationScope`  
-- [ ] Tests: two devices, different modes, no cross-clear on Focus change  
+- [ ] Controls inside `DeviceOperationScope`  
+- [ ] Scene/accessory via `useDeviceSceneSessionControls`, not focus provider  
+
+---
+
+## 6. Re-audit (2026-10-27) — gaps found and disposition
+
+| Finding | Severity | Disposition |
+|---------|----------|-------------|
+| Orphan `SessionAccessoryProvider.tsx` in tree | Low | **Removed** (App no longer mounted it) |
+| Hub complete used **Focus** `Options.automatic` for all `deviceId`s | **High** | **Fixed** — `readCachedDeviceSettings` + per-kind running; `applyAutomaticDeviceComplete` ignores relay `running` bit |
+| `deviceSettingsCache` only filled on Focus change in Options | **High** | **Fixed** — `DevicePairingSettingsProvider` caches every loaded/updated row |
+| Relay **mode toggle** did not stop automatic on that device | **High** | **Fixed** — `useRelayModeChange` in `DeviceModeToggle` |
+| Panel controls used **header** `systemStatus` instead of per-device poll | Medium | **Fixed** — `getDeviceStatus(commandDeviceId)` in manual/auto/motor controls |
+| `ManualControls` pending keys without `deviceId` | Medium | **Fixed** |
+| `SessionProvider` still exposes focus-only APIs (`endActiveSessionIfNeeded`, `recordManualStroke`, …) | Low | **Accepted** — only used internally / video `prepareManualSession`; motion uses `useOperationSession` |
+| `OptionsProvider` still loads/saves **Focus** row (Options dialog) | Low | **Accepted** — shell; motion is `DevicePairingSettingsProvider` |
+| `useControlPanelSettings` falls back to Options outside `DeviceOperationScope` | Low | **Accepted** — no production path outside panel |
+| Video (`useSessionVideoSources`) is **Focus-only** by design | Low | **Accepted** — single preview column |
+| Double-click changes **Focus** + Sub | Low | **Accepted** — V2 ready ack (doc 34) |
+| `config/operationMode.ts` global `localStorage` | Low | **Dead** — `ModeProvider` removed; safe to delete in cleanup |
+| Motor cold rehydrate `probeDeviceAutomaticSessionActive` uses relay payload | Low | **Mitigated** — `SessionRehydrator` passes `probeDevice: false` |
+| `TabSyncBanner` only shows remote lock for Focus device | Low | **Accepted** — other devices still lock locally via `CommandButton` |
 
 ---
 
@@ -95,4 +106,6 @@ Tab-sync messages that are **per device:** `device-session`, `running` (with `de
 
 | Date | Change |
 |------|--------|
-| 2026-10-27 | Initial audit after per-device mode + tab-sync fixes |
+| 2026-10-27 | Initial audit |
+| 2026-10-27 | §4 coupling table cleared — implementation complete |
+| 2026-10-27 | §6 re-audit + hub cache, mode-switch stop, per-device status in controls |
