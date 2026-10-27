@@ -62,7 +62,7 @@ Required for parallel motor + relay regression on one Dom account. **Does not** 
 | **X-6i-4** | Automatic Start/Stop gated on **`settingsLoaded`** for selected Sub (no stale `running` flash on switch) | Done |
 | **X-6i-5** | Operator: motor session on Sub A + switch to Sub B → B shows idle controls; switch back → A still in progress if device still running | **Verified 2026-10-26** |
 
-**Code touchpoints (reference):** `SessionProvider` (`sessionForSub`), `TabSyncProvider` / `tabSync`, `SessionAccessoryProvider`, `MotorAutomaticControls` / `AutomaticControls`, `deviceAutomaticRunning.ts`.
+**Code touchpoints (reference):** `SessionProvider` (`sessionForSub`), `TabSyncProvider` / `tabSync`, `DeviceSubSessionControls`, `DeviceOperationsPanel`, `MotorAutomaticControls` / `MotorManualControls` / `AutomaticControls`, `OptionsProvider.setDeviceAutomaticRunning`, `useOperationSession.ensureAutomaticSessionForDeviceStart`.
 
 ### 2.3 Spike X-6 — multi-device per Sub (gate before M1b / M2 / M3)
 
@@ -79,8 +79,8 @@ Required for parallel motor + relay regression on one Dom account. **Does not** 
 
 | Phase | Rule |
 |-------|------|
-| **M1b** | **Blocked** — new motor modes/patterns should not assume single-device-per-Sub UI/settings |
-| **M2** | **Blocked** — standalone API parity should follow **deviceId** routing from X-6.2 |
+| **M1b / M1c** | **Unblocked** — X-6 complete; modes + pattern graph shipped on hub path |
+| **M2** | **Unblocked** — standalone API parity should follow **deviceId** routing from X-6.2 |
 | **M3** | **Blocked on M2**; gateway already has P7-D2 — align session/history with spike §4.6 |
 | **M1 / X-4** | **Complete** — Run A + Run B signed off **2026-10-27** |
 
@@ -144,7 +144,7 @@ When all required rows pass → fill **§2.1 X-4 sign-off record** and set **X-4
 
 #### Run B — **M1** hub motor sign-off (after Run A recommended)
 
-**Unit under test:** motor-profile ESP (`actuatorKind: hbridge`). **Exit:** periodic automatic via **SomNet UI/API** + `resultJson`.
+**Unit under test:** motor-profile ESP (`actuatorKind: hbridge`). **Exit (M1):** periodic automatic via **SomNet UI/API** + `resultJson`. **Extended:** M1b modes + M1c graph — see §5 / §5.1.
 
 | ☐ | Step | What to do | Pass |
 |---|------|------------|------|
@@ -217,7 +217,7 @@ When **M1-B1–B8** pass → fill **§4 Phase M1 sign-off** (☑ all M1 items) a
 
 - [x] **M1-F1** Separate **motor automatic FSM** (do not overload relay-only `AutomaticSessionMode` indefinitely) — MA-D10. *(`MotorAutomaticSessionMode`.)*
 - [x] **M1-F2** `automatic-start` validation: NVS `hbridge` + motor JSON schema.
-- [x] **M1-F3** **Periodic** mode only for v1 sign-off (MA-D14 first ship).
+- [x] **M1-F3** **Periodic** mode for first bench sign-off (MA-D14 first ship). *Extended in **M1b** to all motor modes below.*
 - [x] **M1-F4** `endSessionMode`: **`minutes`** and **`noAutoEnd`** only — **no** rotation/stroke count (MA-D20).
 - [x] **M1-F5** `automatic-stop` / abort: MA-D4 (PWM off, enables low).
 - [x] **M1-F6** Terminal **`resultJson`** (motor schema — PROTOCOL); hub ack / session complete path like relay.
@@ -232,7 +232,7 @@ When **M1-B1–B8** pass → fill **§4 Phase M1 sign-off** (☑ all M1 items) a
 ### 4.4 SomNet.UI
 
 - [x] **M1-U1** Motor automatic form: duty min/max, segment timing, end session (no stroke-ms; no count end mode). *Per-Sub `motorAutomatic` pairing settings + operation mode on refresh (2026-10-26).*
-- [x] **M1-U2** Hide relay-only controls when device/caps `actuatorKind` = `hbridge`. *(`AutomaticModeControls` switches UI; manual tab still relay — M2/M1 follow-up.)*
+- [x] **M1-U2** Hide relay-only controls when device/caps `actuatorKind` = `hbridge`. *(`DeviceOperationsPanel` + `MotorAutomaticControls` / `MotorManualControls` per device scope.)*
 - [x] **M1-U3** Start / Stop / Abort E2E on paired motor device. *(Hub: `esp32-84CCA85C36B4` → Slv67; production bench `esp32-7C9EBD398F08` → Slv66, BTS7960, button accessory + periodic ramp + abort.)*
 - [x] **M1-U4** Dual-Sub bench: switch Sub without cross-contaminating the other device’s session / automatic running UI (X-6i). *(Dual-Sub **2026-10-26**; same-Sub relay+motor device switch **2026-10-27** — independent scene/motion.)*
 
@@ -254,27 +254,50 @@ When **M1-B1–B8** pass → fill **§4 Phase M1 sign-off** (☑ all M1 items) a
 
 ---
 
-## 5. Phase M1b — Random mode + ramp (optional before M2)
+## 5. Phase M1b — Motor program modes + ramp (hub path)
 
-**Planned after motor module on bench** (operator: defer until hardware can show duty/speed ramping — MA-D14).
+**Prerequisite:** [X-6](./33-Multi-Device-Per-Sub-Spike.md) **X-6.3** (per-device settings) — **done 2026-10-27**.
 
-**Prerequisite:** [X-6](./33-Multi-Device-Per-Sub-Spike.md) host slices **X-6.3** (per-device settings) before UI assumes two independent motor profiles on one Sub.
+**Exit:** Motor programs beyond periodic — random speed/timing, wave, build-up — with **linear speed ramps** between segment targets (MA-D14). **Not included:** motor burst sub-FSM (UI fields persist; firmware **M4**).
 
-**Exit:** Random power/timing (motor analog of relay) with **duty ramp** between targets — no instant duty jumps (MA-D14).
-
-- [ ] **M1b-F1** Motor random mode(s) in FSM with ramp state machine.
-- [ ] **M1b-F2** Caps / DTO: `rampMs` or slew defaults documented.
-- [ ] **M1b-U1** UI mode selector entry for motor random (field rules like relay where applicable).
-- [ ] **M1b-V1** E2E random session + `resultJson`.
+- [x] **M1b-F1** Motor modes in `MotorAutomaticSessionMode`: `randomSpeed`, `randomSpeedAndTiming`, `powerWave`, `buildUp` (+ `periodic`).
+- [x] **M1b-F2** DTO + PROTOCOL: `minimumSpeedPercent` / `maximumSpeedPercent`, `rampMs`, segment seconds; API motor mode validation.
+- [x] **M1b-F3** Motor **`automatic-update`** (`queueSessionUpdate`) while session active.
+- [x] **M1b-U1** `MotorAutomaticControls` mode selector + `motorAutomaticFieldRules.ts` (mode-specific min/max segment rules, wave/build-up end-session constraints).
+- [x] **M1b-U2** `MotorManualControls` + hub `motor-run` / `motor-stop` (M0 manual path on hub).
+- [ ] **M1b-F4** Motor automatic **bursts** on device (relay-style burst FSM) — **deferred M4**; burst toggles in UI are settings-only today.
+- [x] **M1b-V1** E2E random/wave sessions on bench + history `resultJson`.
 
 ### Phase M1b sign-off (optional)
 
 | Field | Value |
 |-------|--------|
-| **Date** | |
-| **Signed by** | |
-| **Skipped for MVP?** | ☑ Yes — defer until motor on bench (then M1b or post-M2) |
-| **All M1b items complete** | ☐ |
+| **Date** | 2026-10-27 |
+| **Signed by** | Operator (bench) |
+| **Skipped for MVP?** | ☐ — modes shipped; **M1b-F4** bursts explicitly deferred |
+| **All M1b items complete** | ☑ (except **M1b-F4**) |
+
+---
+
+## 5.1 Phase M1c — Pattern graph & segment telemetry (hub UI)
+
+**Exit:** Operator **commanded speed %** graph in video column; live curve from device segment acks during automatic run.
+
+- [x] **M1c-F1** Firmware `emitSegmentRamp` → hub ack `correlationId: motor-automatic-segment` ([PROTOCOL §6.9](./../SomNet.Device/docs/PROTOCOL.md)).
+- [x] **M1c-S1** `HardwareCommandKeys.MotorAutomaticSegmentCorrelationId` in Shared.
+- [x] **M1c-U1** `AutomaticSessionHubListener` → `motorAutomaticSegmentStore`; `MotorPatternGraphPanel` + `MotorSpeedPatternChart`.
+- [x] **M1c-U2** Preview schedule (`motorSpeedSchedule.ts`); **Now** marker + zoom/pan (`motorPatternRunAnchor.ts`, `motorChartViewRange.ts`).
+- [x] **M1c-U3** Video aside **Feeds \| Graph** tab; `videoAsideTabStorage.ts` (`localStorage`, hydrate after device roster loaded).
+- [x] **M1c-D1** Scope documented in [03 — Frontend § Motor pattern graph](./03-Frontend-Architecture.md#motor-pattern-graph-scope) and [31 §13](./31-Motor-Actuator-Device-Design.md#13-as-built--hub-path-motor-programs-ui-telemetry).
+
+### Phase M1c sign-off
+
+| Field | Value |
+|-------|--------|
+| **Date** | 2026-10-27 |
+| **Signed by** | Operator (API/UI path) |
+| **Requires** | Motor firmware flashed with segment notifier; UI `dist` rebuilt when API hosts static bundle |
+| **All M1c items complete** | ☑ |
 
 ---
 
@@ -380,7 +403,8 @@ Update this table when a phase is signed off.
 |-------|--------|----------------|
 | M0 | In progress (M0-F2/M0-F5 open; **M0-V1/V2** done) | |
 | M1 | **Signed off** (Run B) | 2026-10-27 |
-| M1b | **Schedulable** — optional; prefer **X-6.3** before dual-motor UC-4 | |
+| M1b | **Done** (modes + ramp + manual; bursts **M4**) | 2026-10-27 |
+| M1c | **Done** (pattern graph + segment telemetry) | 2026-10-27 |
 | M2 | **Unblocked** — begin standalone parity (M1 + X-6 done) | |
 | **X-6** | **Complete** (§2.3 S4) | 2026-10-27 |
 | **X-4** | **Done** (Run A) | 2026-10-27 |
@@ -415,3 +439,5 @@ Update this table when a phase is signed off.
 | 2026-10-27 | **X-6.3** — `DomSubDeviceSettings`; settings API requires `deviceId`; UI reload/save per device picker |
 | 2026-10-27 | **X-6.6** — tab-sync `running` keyed by `(subTarget, deviceId, kind)`; legacy running without `deviceId` ignored |
 | 2026-10-27 | **X-6.4** — history/timeline optional `deviceId` filter; UI device badges + multi-device scope; fix `DeviceId` on timeline enrich |
+| 2026-10-27 | **M1b** — motor automatic modes + `automatic-update` + manual `motor-run`; bursts deferred **M4** |
+| 2026-10-27 | **M1c** — segment hub telemetry + operator pattern graph (Feeds \| Graph) |

@@ -1,6 +1,6 @@
 # Motor (H-bridge) actuator — early design
 
-**Status:** **Design approved for implementation** — execute via [32 — Motor implementation plan & checklists](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md). Pin map provisional in `boardDefs.h` until unified PCB exists.
+**Status:** **Hub path implemented** (M1 + M1b + M1c — see [§13](#13-as-built--hub-path-motor-programs-ui-telemetry)). Standalone/gateway remain MA-R5 steps 2–3. Pin map provisional in `boardDefs.h` until unified PCB exists. Checklists: [32](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md).
 
 **Audience:** Firmware (`SomNet.Device`), `SomNet.Shared`, `SomNet.Device.LocalClient` / **LocalGateway**, main app (TheSystem), and eventually SomNet.API / UI if the motor device joins the hub path.
 
@@ -45,7 +45,7 @@ Goals:
 
 Non-goals: **concurrent relay + motor automatic sessions** on one ESP; **two output modules active at once** in v1; multi-motor on one ESP; OTA policy unchanged unless added later.
 
-> **Remit correction (2026-10-26):** A **single Sub** must be able to register **multiple** hardware devices (e.g. relay ESP + motor ESP for the same session identity). **Today’s hub/API model does not support this** — see [§12 — Multi-device per Sub](#12-multi-device-per-sub-remit--review-required). Until that is designed and implemented, **bench testing uses two Subs** (one board per Sub).
+> **Remit correction (2026-10-26):** A **single Sub** must host **multiple** hardware devices (relay + motor, etc.). **Implemented** on the hub path via spike **X-6** — see [§12 — Multi-device per Sub](#12-multi-device-per-sub).
 
 **Signed product rules (2026-10-25):**
 
@@ -211,16 +211,23 @@ Similar **operator concepts** do not imply a **shared JSON schema**. Relay and m
 ```json
 {
   "actuatorKind": "hbridge",
-  "automaticMode": "periodic",
-  "rampMs": 500,
+  "automaticMode": "randomSpeedAndTiming",
   "minimumDutyPercent": 20,
   "maximumDutyPercent": 80,
+  "minimumSpeedPercent": 10,
+  "maximumSpeedPercent": 90,
   "segmentMinSeconds": 5,
   "segmentMaxSeconds": 20,
+  "delayBeforeStartSeconds": 0,
+  "rampMs": 500,
   "endSessionMode": "minutes",
   "endSessionValue": 30
 }
 ```
+
+**Motor `automaticMode` (hub path — as built):** `periodic` (UI: **Set Speed**), `randomSpeed`, `randomSpeedAndTiming`, `powerWave`, `buildUp`. Legacy aliases `randomPowerOnly` / `randomPowerAndTiming` parse on the device. Relay-only modes (`randomTimingOnly`, `powerAndTimingWave`, …) are rejected for motor profiles.
+
+**Speed vs duty:** Programs carry **both** `minimumDutyPercent` / `maximumDutyPercent` (PWM ceiling for the H-bridge path) and `minimumSpeedPercent` / `maximumSpeedPercent` (program target envelope). The operator **pattern graph** plots **commanded speed %**; firmware maps speed → duty when applying ramps.
 
 **Motor `endSessionMode` (v1 — MA-D20):** Support **`minutes`** and **`noAutoEnd`** (motor-specific names in PROTOCOL when written). **Do not** offer **stroke/rotation count** end modes until a **Hall sensor** (or similar) exists — **v2** hardware may add **`rotationCount`** (or equivalent) as a valid end mode. Relay **`EndSessionMode.Strokes`** does not apply to motor v1.
 
@@ -286,7 +293,7 @@ Every command:  validate vs NVS kind  →  accept | reject
 
 **Rationale:** One platform PCB and one firmware for two module SKUs; **binding during registration** stops “wrong preset reached the wrong device” when DHCP, `deviceId`, or operator error would otherwise mix relay and motor message shapes.
 
-### 6.2 Device registration — “relay or motor?” (planned)
+### 6.2 Device registration — “relay or motor?” (hub path — implemented)
 
 Binding **`actuatorKind`** is part of **completing registration**, not an afterthought on random commands.
 
@@ -382,43 +389,85 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 
 ---
 
-## 12. Multi-device per Sub (remit — review required)
+## 12. Multi-device per Sub
 
-**Status:** **Gap / not implemented** — must be **reviewed and corrected** to match project remit (forgotten constraint surfaced during motor bench planning).
+**Status:** **Implemented on hub path** (X-6.1–X-6.6, signed off **2026-10-27**). Design: [33 — Multi-device per Sub](./33-Multi-Device-Per-Sub-Spike.md). Operator rules: [34 — V2 rules](./34-Operator-Session-And-Accessory-V2-Rules.md).
 
-### 12.1 Current behavior (SomNet.API + UI)
+### 12.1 SomNet.API + database (today)
 
-| Area | Today |
-|------|--------|
-| **DB** | `SubDeviceRegistrations` primary key **`(DomTarget, SubName)`** — **at most one** `deviceId` (and one `actuatorKind`) per Sub. Re-pair **replaces** the row. |
-| **Device JWT** | One active token per Sub registration; `sub_target` identifies the Sub, not a device slot. |
-| **Hub commands** | Operator sends `subTarget` only; dispatcher delivers to **the** paired connection for that Sub. |
-| **ESP NVS** | Each unit stores **one** pairing (`dom` + `sub` + token). |
+| Area | Behavior |
+|------|----------|
+| **DB** | `SubDeviceRegistrations` PK **`(DomTarget, SubName, DeviceId)`** — many devices per Sub (cap **8**). Revoke is per `deviceId`. |
+| **Settings** | `DomSubDeviceSettings` — pairing JSON (**relay `automatic`**, **`motorAutomatic`**, **`motorManual`**, …) **per `deviceId`**. |
+| **Hub commands** | `deviceId` **required**; dispatcher unicasts to the paired connection for that id. |
+| **ESP NVS** | Each unit still stores **one** pairing (`dom` + `sub` + token); many ESPs may share the same Sub name. |
 
-So **two ESPs cannot both be registered to the same Sub** in the current product. Motor + relay on one “session” requires **two Subs** (e.g. `Slv66` relay, `Slv67` motor) and switching Sub in the UI — workable for **testing**, not the end-state remit.
+### 12.2 SomNet.UI (today)
 
-### 12.2 Target behavior (to design)
+| Area | Behavior |
+|------|----------|
+| **Device roster** | Hardware pairing lists all registrations; header **Focus** picks the active `deviceId` for video/status and the operations column. |
+| **Operations panel** | `DeviceOperationsPanel` renders **one block per Focus device** — Scene/Accessory, per-device manual/automatic mode, motion controls (`DeviceOperationScope`). |
+| **Scene session** | Server session row + UI state **per `deviceId`**; automatic `running` map keyed by **`(subTarget, deviceId, relay\|motor)`**. |
+| **Connection label** | Panel online/offline from **polled** `SystemStatusProvider`, not stale registration flags (`resolveDeviceConnectionLabel`). |
 
-| Need | Notes |
-|------|--------|
-| **Multiple `deviceId`s per Sub** | Register relay + motor (or more) under **one** Sub; stable routing per device. |
-| **Command routing** | Hub/API must target **`deviceId`** (or role/slot), not Sub alone — align with gateway **P7-D2** multi-`deviceId` patterns where possible. |
-| **UI** | Session/controls must know **which** device(s) on the Sub are in scope (picker, per-actuator panels, or explicit device binding). |
-| **Pairing** | `PairDevice` / `POST /api/devices/pair` likely becomes **add or update device on Sub**, not overwrite sole registration. |
-| **Unchanged per ESP** | Still **one output profile per ESP** (`actuatorKind` in NVS); remit is **many ESPs per Sub**, not two actuators on one ESP. |
+### 12.3 Not in scope (unchanged)
 
-### 12.3 Interim (until corrected)
-
-- **Dual-bench:** flash same firmware to two boards; pair **relay → Sub A**, **motor → Sub B**; regression + motor features in parallel.
-- **UI (2026-10-26):** SomNet.UI scopes live session, automatic `running`, and Start/Stop to **selected Sub** so switching Subs does not mirror the other device’s in-progress state — see [32 §2.2 X-6i](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md). Hub/API still route one device per Sub (§12.1).
-- **Do not** assume one Sub can host both without schema/API work.
+- **One ESP** still runs **one** actuator profile and **one** automatic FSM at a time (MA-D7).
+- **Gateway / TheSystem** multi-device orchestration remains **M3** — hub path does not block M2 standalone work.
 
 ### 12.4 Tracking
 
-- **Spike (review first):** [33 — Multi-device per Sub](./33-Multi-Device-Per-Sub-Spike.md).
-- Implementation backlog: [32 — Motor plan §2.3 X-6](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md).
-- Schema doc note: [04 — Database schema](./04-Database-Schema.md) (`SubDeviceRegistrations`).
-- Gateway / TheSystem: [30 — Main app integration](./30-Main-App-Device-Gateway-Integration.md) when multi-device Sub affects presets and schedules.
+- Spike + decisions: [33](./33-Multi-Device-Per-Sub-Spike.md).
+- Checklists: [32 §2.3](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md).
+- Schema: [04 — Database schema](./04-Database-Schema.md).
+
+---
+
+## 13. As-built — hub path (motor programs, UI, telemetry)
+
+**Status:** **Signed M1** (periodic + ramp, **2026-10-27**). **M1b modes**, **live `automatic-update`**, **segment graph telemetry**, and **manual `motor-run`** are implemented on the same hub path; bursts in motor automatic UI are **stored only** (firmware **M4**).
+
+### 13.1 Firmware (`MotorAutomaticSessionMode`)
+
+| Topic | Behavior |
+|-------|----------|
+| **Motion model** | Continuous run — **no relay-style stroke/gap** main program. Each segment **linearly ramps** commanded speed between targets over `rampMs` (MA-D14). |
+| **Modes** | `periodic`, `randomSpeed`, `randomSpeedAndTiming`, `powerWave`, `buildUp` — see §5.3 mode list. |
+| **End session** | `minutes` or `noAutoEnd` only (MA-D20). UI coerces stored `strokes` → `noAutoEnd` in start payload. |
+| **Stop / abort** | Cooperative `automatic-stop`; `abort` → PWM off, enables inactive (MA-D4/D15). |
+| **`automatic-update`** | Queued replan via `queueSessionUpdate` when session active (same JSON shape as start). |
+| **PWM init** | Motor hardware init **deferred until Wi‑Fi up** (`main.cpp`) to avoid LEDC/Wi‑Fi contention on boot. |
+| **Segment telemetry** | At each ramp, unsolicited hub ack `correlationId: motor-automatic-segment` with `fromSpeedPercent`, `toSpeedPercent`, `durationMs`, `programElapsedMs` (`emitSegmentRamp`). |
+| **Bursts** | **Not implemented** on motor FSM — UI burst fields persist in settings but are not sent as a motor burst program. |
+
+### 13.2 SomNet.API / Shared
+
+| Topic | Behavior |
+|-------|----------|
+| **DTO** | `MotorAutomaticControlStateDto` in pairing settings; separate from `AutomaticControlStateDto` (MA-R6). |
+| **Validation** | `HardwareCommandPayloadValidator` — motor profile accepts `motor-run`, `motor-stop`, `automatic-start` / `stop` / `update` with motor mode set. |
+| **History** | Motor `resultJson` + `AutomaticSessionSummaryBuilder` motor branch (`segmentsCompleted`, duty, duration, `endReason`). |
+| **Hub forward** | `CommandAcknowledged` includes **`deviceId`**; segment acks use `HardwareCommandKeys.MotorAutomaticSegmentCorrelationId`. |
+
+### 13.3 SomNet.UI
+
+| Area | Components / utils |
+|------|---------------------|
+| **Automatic** | `MotorAutomaticControls.tsx` — mode selector (Set Speed / Random / Wave / Build-Up), field rules (`motorAutomaticFieldRules.ts`), start payload (`motorAutomaticStartPayload.ts`). **Abort** always visible (disabled when idle). **Start** calls `ensureAutomaticSessionForDeviceStart()` so scene row exists after stop→start. |
+| **Manual** | `MotorManualControls.tsx` — duty slider, `motor-run` / `motor-stop`. |
+| **Live overrides** | When Options → General allows automatic overrides while running, debounced **`automatic-update`** (relay and motor). |
+| **Pattern graph** | Video column **Feeds \| Graph** (`VideoAsidePanel`); tab persisted in `localStorage` (`videoAsideTabStorage.ts`) after devices load. Preview from settings (`motorSpeedSchedule.ts`); **live** curve from hub segments (`motorAutomaticSegmentStore.ts`, `AutomaticSessionHubListener`). **Now** marker via `motorPatternRunAnchor.ts` + chart zoom (`motorChartViewRange.ts`). **API/UI only** — not standalone ESP `/operate` (see [03 § Motor pattern graph](./03-Frontend-Architecture.md#motor-pattern-graph-scope)). |
+| **Running sync** | `OptionsProvider.setDeviceAutomaticRunning`; hub complete clears per device; tab-sync includes `subTarget` + `deviceId` + kind. |
+
+### 13.4 Out of scope on hub path (still MA-R5 later steps)
+
+| Item | Phase |
+|------|--------|
+| Standalone `/api/local/*` motor parity | **M2** |
+| Gateway / TheSystem presets + scheduler | **M3** |
+| Motor automatic **bursts**, reverse channel, Hall end modes | **M4** (optional) |
+| Relay automatic **pattern graph** | Deferred |
 
 ---
 
@@ -487,3 +536,4 @@ Implementation tracking: [32 — Motor plan & checklists](./32-Motor-Actuator-Im
 | 2026-10-26 | [33](./33-Multi-Device-Per-Sub-Spike.md) — target model, dual-motor UC-4, implementation slices; gates M1b/M2 |
 | 2026-10-26 | **MA-D22** — relay-only session accessory; motor outputs in program; per-device FSMs + future super-session |
 | 2026-10-26 | **MA-D24** — gateway-led multi-device concurrency; UI per-device non-lockout; session without relay accessory |
+| 2026-10-27 | §12 — X-6 implemented; §13 as-built hub path (modes, segment telemetry, pattern graph, UI/API/firmware) |

@@ -59,6 +59,6 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Device local gateway — implementation plan](./29-Device-Local-Gateway-Implementation-Plan.md) | Developers | **LocalClient** + **LocalGateway** (:5290) — hosted in **TheSystem**; phases, checklists, Docker deferred |
 | [Main app device gateway integration](./30-Main-App-Device-Gateway-Integration.md) | Developers | TheSystem / scheduler → `IDeviceGatewayClient`, config, persisted run fields; §5 device registry (DB) |
 | [Motor (H-bridge) actuator — design](./31-Motor-Actuator-Device-Design.md) | Developers | Platform board, payloads, MA-D* decisions |
-| [Motor actuator — implementation plan & checklists](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) | Developers | **M0–M4** tasks, sign-off gates, MA-R5 order |
+| [Motor actuator — implementation plan & checklists](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) | Developers | **M1/M1b/M1c signed off** (hub path); **M2+** standalone/gateway; see [31 §13](./31-Motor-Actuator-Device-Design.md#13-as-built--hub-path-motor-programs-ui-telemetry) |
 | [Operator session & accessory — V2 rules](./34-Operator-Session-And-Accessory-V2-Rules.md) | Developers / operators | **Canonical** Scene + Accessory + multi-device gating; supersedes P16 (V1) for new work |
 | [SomNet integration runbook](./SomNetIntegrationRunbook.md) | Developers / operators | Admin test bed, gateway payloads, TheSystem recipes |

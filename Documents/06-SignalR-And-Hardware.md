@@ -67,7 +67,12 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 | `AckCommand` | `HardwareCommandAckDto` | Paired device | Confirm command execution |
 | `ReportButtonEvent` | `DeviceButtonEventDto` | Paired device | Report GPIO button click (single/double) |
 
-**DTO note:** `HardwareCommandAckDto` includes `correlationId`, `success`, `message`, and optional **`resultJson`** (string containing JSON). REST `POST /api/devices/commands` forwards `resultJson` to the UI; `CommandAcknowledged` hub events include it for operator UI sync (`correlationId=automatic-session-complete` for auto-end, abort, and cooperative manual stop).
+**DTO note:** `HardwareCommandAckDto` includes **`deviceId`** (X-6), `correlationId`, `success`, `message`, and optional **`resultJson`** (string containing JSON). REST `POST /api/devices/commands` forwards `resultJson` to the UI; `CommandAcknowledged` hub events include it for operator UI sync:
+
+| `correlationId` | Use |
+|-----------------|-----|
+| `automatic-session-complete` | Auto-end, abort, cooperative stop — finalize session/history |
+| `motor-automatic-segment` | Motor automatic ramp telemetry — live pattern graph ([31 §13](./31-Motor-Actuator-Device-Design.md#13-as-built--hub-path-motor-programs-ui-telemetry)); not a session terminator |
 
 ---
 

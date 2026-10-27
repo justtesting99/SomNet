@@ -88,8 +88,8 @@ V2 is the **target norm** for SomNet hub + web UI + unified ESP firmware on the 
 | **Hub `automatic-session-complete`** | Must include **`deviceId`** on operator `CommandAcknowledged`; listener finalizes **that device’s** session and clears **that device’s** running only |
 | **Mode switch / sign-out** | Stop cooperative automatic using **selected device** actuator plane (relay vs motor), not `settings.automatic` only |
 | **Anti-pattern** | Reading `settings.automatic.running` when the selected device is **motor**, or clearing motor running via relay-only hub paths |
-| **Control panel** | **One** dashboard column lists **every** paired device on the Sub; each block has its own Scene/Accessory + motion controls. Header **Focus** only affects video/status — not which devices appear in the panel |
-| **Operation mode** | **Per `deviceId`** (manual vs automatic). **No** global “choose mode” gate. Relay picks manual/automatic per device; motor is automatic-only until manual exists. One device may run automatic while another is in manual |
+| **Control panel** | Dashboard operations column shows the **header Focus** `deviceId` only (`DeviceOperationsPanel`). Each block has Scene/Accessory + per-device manual/automatic mode + motion controls. Video/status follow the same Focus device |
+| **Operation mode** | **Per `deviceId`** (manual vs automatic). **No** global “choose mode” gate. Relay and motor each support **manual** and **automatic** (`MotorManualControls` / `MotorAutomaticControls`). One device may run automatic while another is in manual |
 
 ---
 
@@ -121,6 +121,7 @@ Update this table when milestones land; it is a **guide**, not a second checklis
 | Per-device automatic `running` + hub complete | **Yes** | Map + per-device hint; API stamps `deviceId` on forwarded acks |
 | Per-device pairing settings (X-6.3) | **Yes** | `DomSubDeviceSettings` |
 | Doc [06](./06-SignalR-And-Hardware.md) / User Guide | **Partial** | Sweep when operator docs next edited; note `HardwareCommandAckDto.deviceId` |
+| Motor pattern graph (hub UI) | **Yes** | [31 §13](./31-Motor-Actuator-Device-Design.md), [03 § Motor pattern graph](./03-Frontend-Architecture.md#motor-pattern-graph-scope); segment ack `motor-automatic-segment` |
 
 ---
 
@@ -133,3 +134,4 @@ Update this table when milestones land; it is a **guide**, not a second checklis
 | 2026-10-27 | Per-device **scene session** — API/UI implementation started |
 | 2026-10-27 | Per-device **ready ack** (double-click) |
 | 2026-10-27 | §3.5 device-isolated automatic running + hub `deviceId` on session complete |
+| 2026-10-27 | §3.5 control panel ↔ Focus device; motor manual + pattern graph alignment row in §5 |

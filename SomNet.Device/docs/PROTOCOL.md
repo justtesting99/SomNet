@@ -301,14 +301,18 @@ Device runs the full sequence locally; one completing ack with `resultJson` when
 
 Relay caps keep `actuatorKind: relay` with stroke limits.
 
-**Motor `automatic-start` (periodic v1):**
+**Motor `automatic-start` / `automatic-update`:**
+
+Same JSON shape for **`automatic-start`** and **`automatic-update`** while a motor automatic session is active (update queues replan after the current ramp).
 
 ```json
 {
   "actuatorKind": "hbridge",
-  "automaticMode": "periodic",
+  "automaticMode": "randomSpeedAndTiming",
   "minimumDutyPercent": 20,
   "maximumDutyPercent": 80,
+  "minimumSpeedPercent": 10,
+  "maximumSpeedPercent": 90,
   "segmentMinSeconds": 5,
   "segmentMaxSeconds": 20,
   "delayBeforeStartSeconds": 0,
@@ -318,7 +322,31 @@ Relay caps keep `actuatorKind: relay` with stroke limits.
 }
 ```
 
+| Field | Notes |
+|-------|--------|
+| `automaticMode` | **`periodic`**, **`randomSpeed`**, **`randomSpeedAndTiming`**, **`powerWave`**, **`buildUp`**. Aliases accepted on device: `randomPowerOnly` → `randomSpeed`, `randomPowerAndTiming` → `randomSpeedAndTiming`. |
+| `minimumDutyPercent` / `maximumDutyPercent` | PWM duty ceiling for the H-bridge path (0–100). |
+| `minimumSpeedPercent` / `maximumSpeedPercent` | Program speed envelope (0–100); ramps target speed, mapped to duty in firmware. |
+| `segmentMinSeconds` / `segmentMaxSeconds` | Seconds until next segment target (mode-specific use — see [31 §13](../../Documents/31-Motor-Actuator-Device-Design.md)). |
+| `rampMs` | Linear ramp duration between segment speed targets (MA-D14). |
+
 `endSessionMode`: **`minutes`** or **`noAutoEnd`** only (no stroke/count end modes — MA-D20).
+
+**Motor segment telemetry (unsolicited hub ack):** While a motor automatic session runs, firmware may emit **`AckCommand`** with `correlationId` **`motor-automatic-segment`** (Shared: `HardwareCommandKeys.MotorAutomaticSegmentCorrelationId`). Payload excerpt:
+
+```json
+{
+  "commandKey": "motor-automatic-segment",
+  "actuatorKind": "hbridge",
+  "segmentIndex": 3,
+  "fromSpeedPercent": 40,
+  "toSpeedPercent": 72,
+  "durationMs": 500,
+  "programElapsedMs": 18500
+}
+```
+
+SomNet.API forwards to operators as `CommandAcknowledged`; SomNet.UI builds the live pattern graph from these events (not from relay stroke timing).
 
 **Motor session complete `resultJson` (excerpt):**
 

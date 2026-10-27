@@ -23,6 +23,7 @@ Normative rules: [34 — Operator V2](./34-Operator-Session-And-Accessory-V2-Rul
 | Hub automatic complete | `ack.deviceId` | `AutomaticSessionHubListener` |
 | Status poll | `SystemStatusProvider.getDeviceStatus(deviceId)` | Panel + header focus |
 | Video restore hint | `videoFeedRestoreHint` per `deviceId` | `useSessionVideoSources` (focus device) |
+| Motor pattern graph segments | `motorAutomaticSegmentStore` per `deviceId` | `MotorPatternGraphPanel` (Focus motor only) |
 
 Tab-sync (per device): `device-session`, `running`, `device-mode`, `scene-session`, `device-accessory`, scoped `command-lock`.
 
