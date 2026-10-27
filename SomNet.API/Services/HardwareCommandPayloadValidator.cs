@@ -100,7 +100,8 @@ internal static class HardwareCommandPayloadValidator
         }
 
         if (string.Equals(commandKey, HardwareCommandKeys.AutomaticStart, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(commandKey, HardwareCommandKeys.AutomaticStop, StringComparison.OrdinalIgnoreCase))
+            string.Equals(commandKey, HardwareCommandKeys.AutomaticStop, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(commandKey, HardwareCommandKeys.AutomaticUpdate, StringComparison.OrdinalIgnoreCase))
         {
             if (string.Equals(commandKey, HardwareCommandKeys.AutomaticStop, StringComparison.OrdinalIgnoreCase))
             {
@@ -108,12 +109,6 @@ internal static class HardwareCommandPayloadValidator
             }
 
             return TryValidateMotorAutomaticStartPayload(payloadJson, out errorMessage);
-        }
-
-        if (string.Equals(commandKey, HardwareCommandKeys.AutomaticUpdate, StringComparison.OrdinalIgnoreCase))
-        {
-            errorMessage = "automatic-update is not supported for motor devices in v1.";
-            return false;
         }
 
         if (string.Equals(commandKey, "stroke", StringComparison.OrdinalIgnoreCase) ||
@@ -182,10 +177,16 @@ internal static class HardwareCommandPayloadValidator
             var root = document.RootElement;
 
             if (!root.TryGetProperty("automaticMode", out var modeElement) ||
-                modeElement.ValueKind != JsonValueKind.String ||
-                !string.Equals(modeElement.GetString(), "periodic", StringComparison.OrdinalIgnoreCase))
+                modeElement.ValueKind != JsonValueKind.String)
             {
-                errorMessage = "Motor automatic-start requires automaticMode periodic.";
+                errorMessage = "Motor automatic-start payload requires automaticMode.";
+                return false;
+            }
+
+            var automaticMode = modeElement.GetString();
+            if (string.IsNullOrWhiteSpace(automaticMode) || !AutomaticRunModes.Contains(automaticMode))
+            {
+                errorMessage = "automaticMode is not a supported automatic program.";
                 return false;
             }
 

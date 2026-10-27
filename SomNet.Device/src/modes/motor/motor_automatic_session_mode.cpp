@@ -32,6 +32,8 @@ bool MotorAutomaticSessionMode::beginSession(const char* payloadJson) {
 
     strncpy(configJson_, payloadJson != nullptr ? payloadJson : "{}", sizeof(configJson_) - 1);
     configJson_[sizeof(configJson_) - 1] = '\0';
+    pendingConfigJson_[0] = '\0';
+    pendingUpdate_ = false;
 
     dutyPercent_ = config.maximumDutyPercent;
     rampMs_ = static_cast<unsigned long>(config.rampMs);
@@ -65,6 +67,58 @@ bool MotorAutomaticSessionMode::beginSession(const char* payloadJson) {
         }
     }
 
+    return true;
+}
+
+bool MotorAutomaticSessionMode::queueSessionUpdate(const char* payloadJson) {
+    if (!active_) {
+        return false;
+    }
+
+    MotorAutomaticConfig config{};
+    if (!parseMotorAutomaticConfig(payloadJson, &config)) {
+        Serial.println(F("[MOTOR-AUTO] update rejected — invalid payload"));
+        return false;
+    }
+
+    strncpy(pendingConfigJson_, payloadJson != nullptr ? payloadJson : "{}", sizeof(pendingConfigJson_) - 1);
+    pendingConfigJson_[sizeof(pendingConfigJson_) - 1] = '\0';
+    pendingUpdate_ = true;
+
+    Serial.print(F("[MOTOR-AUTO] update queued segments="));
+    Serial.println(segmentsCompleted_);
+    return true;
+}
+
+bool MotorAutomaticSessionMode::applyPendingUpdate() {
+    if (!pendingUpdate_ || pendingConfigJson_[0] == '\0') {
+        return false;
+    }
+
+    MotorAutomaticConfig config{};
+    if (!parseMotorAutomaticConfig(pendingConfigJson_, &config)) {
+        pendingUpdate_ = false;
+        pendingConfigJson_[0] = '\0';
+        Serial.println(F("[MOTOR-AUTO] update rejected — invalid payload"));
+        return false;
+    }
+
+    strncpy(configJson_, pendingConfigJson_, sizeof(configJson_) - 1);
+    configJson_[sizeof(configJson_) - 1] = '\0';
+    dutyPercent_ = config.maximumDutyPercent;
+    rampMs_ = static_cast<unsigned long>(config.rampMs);
+    endSessionValue_ = config.endSessionValue;
+    endSessionModeWire_ = motorEndSessionModeToWire(config.endSessionMode);
+    pendingUpdate_ = false;
+    pendingConfigJson_[0] = '\0';
+
+    if (state_ == State::StartDelay) {
+        phaseDeadlineMs_ =
+            delayStartMs_ + static_cast<unsigned long>(config.delayBeforeStartSeconds) * 1000UL;
+    }
+
+    Serial.print(F("[MOTOR-AUTO] update applied segments="));
+    Serial.println(segmentsCompleted_);
     return true;
 }
 
@@ -210,6 +264,8 @@ void MotorAutomaticSessionMode::finishSession(
     stopCorrelationId_[0] = '\0';
     segmentsCompleted_ = 0;
     sessionStartMs_ = 0;
+    pendingConfigJson_[0] = '\0';
+    pendingUpdate_ = false;
 }
 
 void MotorAutomaticSessionMode::abort() {
@@ -245,6 +301,9 @@ void MotorAutomaticSessionMode::poll() {
             return;
         }
         sessionStartMs_ = now;
+        if (pendingUpdate_) {
+            applyPendingUpdate();
+        }
         if (!beginRunSegment()) {
             finishSession(false, "automatic session failed", "error", true);
         }
@@ -305,6 +364,9 @@ void MotorAutomaticSessionMode::poll() {
     if (state_ == State::Gap) {
         if (now < phaseDeadlineMs_) {
             return;
+        }
+        if (pendingUpdate_) {
+            applyPendingUpdate();
         }
         if (!beginRunSegment()) {
             finishSession(false, "automatic session failed", "error", true);

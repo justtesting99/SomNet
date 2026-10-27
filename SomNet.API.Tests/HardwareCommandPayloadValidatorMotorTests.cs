@@ -34,6 +34,33 @@ public sealed class HardwareCommandPayloadValidatorMotorTests
     }
 
     [Fact]
+    public void Motor_automatic_update_accepts_same_payload_as_start()
+    {
+        const string payload =
+            """
+            {
+              "automaticMode": "periodic",
+              "minimumDutyPercent": 20,
+              "maximumDutyPercent": 80,
+              "segmentMinSeconds": 5,
+              "segmentMaxSeconds": 20,
+              "endSessionMode": "minutes",
+              "endSessionValue": 30
+            }
+            """;
+
+        var ok = HardwareCommandPayloadValidator.TryValidate(
+            HardwareCommandKeys.AutomaticUpdate,
+            payload,
+            maxStrokeMs: 400,
+            ActuatorKind.Hbridge,
+            out var error);
+
+        Assert.True(ok);
+        Assert.Empty(error);
+    }
+
+    [Fact]
     public void Motor_device_rejects_relay_stroke()
     {
         var ok = HardwareCommandPayloadValidator.TryValidate(

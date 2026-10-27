@@ -10,6 +10,8 @@ public:
 
     bool beginSession(const char* payloadJson);
 
+    bool queueSessionUpdate(const char* payloadJson);
+
     bool requestStop(
         const char* correlationId,
         void* callbackContext,
@@ -29,6 +31,7 @@ private:
     bool shouldEndSession() const;
     bool beginRunSegment();
     int pickSegmentSeconds() const;
+    bool applyPendingUpdate();
 
     MotorController* motor_ = nullptr;
     State state_ = State::Idle;
@@ -45,6 +48,8 @@ private:
     unsigned long phaseDeadlineMs_ = 0;
     unsigned long delayStartMs_ = 0;
     char configJson_[768] = {};
+    char pendingConfigJson_[768] = {};
+    bool pendingUpdate_ = false;
     char resultJson_[512] = {};
     char stopCorrelationId_[64] = {};
     void* callbackContext_ = nullptr;

@@ -191,7 +191,7 @@ public static class PairingSettingsSerializer
         }
 
         var endMode = source.EndSessionMode;
-        if (endMode is not EndSessionMode.Minutes and not EndSessionMode.NoAutoEnd)
+        if (!Enum.IsDefined(endMode))
         {
             endMode = EndSessionMode.NoAutoEnd;
         }
@@ -202,18 +202,65 @@ public static class PairingSettingsSerializer
             endValue = Math.Max(1, source.EndSessionValue);
         }
 
+        var minSpeed = Math.Clamp(source.MinimumSpeedPercent, 0, 100);
+        var maxSpeed = Math.Clamp(source.MaximumSpeedPercent, 0, 100);
+        if (minSpeed > maxSpeed)
+        {
+            (minSpeed, maxSpeed) = (maxSpeed, minSpeed);
+        }
+
+        var burstStrokeMin = Math.Clamp(source.BurstStrokePowerMin, 1, 100);
+        var burstStrokeMax = Math.Clamp(source.BurstStrokePowerMax, 0, 100);
+        if (burstStrokeMin > burstStrokeMax)
+        {
+            burstStrokeMax = burstStrokeMin;
+        }
+
+        var burstDelayMin = Math.Clamp(source.BurstDelayMin, 1, 300);
+        var burstDelayMax = Math.Clamp(source.BurstDelayMax, 0, 300);
+        if (burstDelayMin > burstDelayMax)
+        {
+            burstDelayMax = burstDelayMin;
+        }
+
+        var burstStrokesMin = Math.Clamp(source.BurstStrokesMin, 1, 100);
+        var burstStrokesMax = Math.Clamp(source.BurstStrokesMax, 1, 100);
+        if (burstStrokesMin > burstStrokesMax)
+        {
+            burstStrokesMin = burstStrokesMax;
+        }
+
+        var automaticMode = source.AutomaticMode;
+        if (!Enum.IsDefined(automaticMode))
+        {
+            automaticMode = AutomaticRunMode.Periodic;
+        }
+
         return new MotorAutomaticControlStateDto
         {
             Running = false,
-            AutomaticMode = string.IsNullOrWhiteSpace(source.AutomaticMode) ? "periodic" : source.AutomaticMode.Trim(),
+            AutomaticMode = automaticMode,
             MinimumDutyPercent = minDuty,
             MaximumDutyPercent = maxDuty,
+            MinimumSpeedPercent = minSpeed,
+            MaximumSpeedPercent = maxSpeed,
             SegmentMinSeconds = segmentMin,
             SegmentMaxSeconds = segmentMax,
             DelayBeforeStartSeconds = Math.Clamp(source.DelayBeforeStartSeconds, 0, 3600),
             RampMs = Math.Clamp(source.RampMs, 0, 30_000),
             EndSessionMode = endMode,
             EndSessionValue = endValue,
+            BurstsOn = source.BurstsOn,
+            BurstPercent = Math.Clamp(source.BurstPercent, 0, 100),
+            BurstStyle = Enum.IsDefined(source.BurstStyle)
+                ? source.BurstStyle
+                : BurstStyle.FixedPowerDelay,
+            BurstStrokePowerMin = burstStrokeMin,
+            BurstStrokePowerMax = burstStrokeMax,
+            BurstDelayMin = burstDelayMin,
+            BurstDelayMax = burstDelayMax,
+            BurstStrokesMin = burstStrokesMin,
+            BurstStrokesMax = burstStrokesMax,
             ActuatorKind = ActuatorKind.Hbridge,
         };
     }

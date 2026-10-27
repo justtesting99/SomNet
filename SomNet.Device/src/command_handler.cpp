@@ -564,7 +564,17 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
 
     if (isAutomaticUpdateKey(command.commandKey)) {
         if (actuatorKind == DeviceActuatorKind_HBridge) {
-            sendAck(command.correlationId, false, "automatic-update not supported for motor v1", nullptr);
+            if (motorAutomatic_ == nullptr || !motorAutomatic_->isActive()) {
+                sendAck(command.correlationId, false, "no automatic session running", nullptr);
+                return;
+            }
+
+            if (!motorAutomatic_->queueSessionUpdate(command.payloadJson)) {
+                sendAck(command.correlationId, false, "invalid automatic-update payload", nullptr);
+                return;
+            }
+
+            sendAck(command.correlationId, true, "automatic update queued", nullptr);
             return;
         }
 

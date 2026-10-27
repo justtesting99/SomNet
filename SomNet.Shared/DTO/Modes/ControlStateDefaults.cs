@@ -45,14 +45,25 @@ public static class ControlStateDefaults
     public static MotorAutomaticControlStateDto MotorAutomatic { get; } = new()
     {
         Running = false,
-        AutomaticMode = "periodic",
+        AutomaticMode = Enums.AutomaticRunMode.Periodic,
         MinimumDutyPercent = 20,
         MaximumDutyPercent = 80,
+        MinimumSpeedPercent = 0,
+        MaximumSpeedPercent = 100,
         SegmentMinSeconds = 5,
         SegmentMaxSeconds = 20,
         DelayBeforeStartSeconds = 0,
         RampMs = 500,
         EndSessionMode = Enums.EndSessionMode.Minutes,
         EndSessionValue = 30,
+        BurstsOn = false,
+        BurstPercent = 10,
+        BurstStyle = Enums.BurstStyle.FixedPowerDelay,
+        BurstStrokePowerMin = 0,
+        BurstStrokePowerMax = 100,
+        BurstDelayMin = 1,
+        BurstDelayMax = 5,
+        BurstStrokesMin = 5,
+        BurstStrokesMax = 10,
     };
 }

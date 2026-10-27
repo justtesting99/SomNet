@@ -1,50 +1,112 @@
-import type { EndSessionMode } from '@/types/modes';
+import type { AutomaticRunMode, EndSessionMode } from '@/types/modes';
 import {
   defaultMotorAutomaticState,
   type MotorAutomaticControlState,
 } from '@/types/motorModes';
+import {
+  getAutomaticFieldRules,
+  coerceEndSessionMode,
+  MIN_STROKE_GAP_SECONDS,
+} from '@/utils/automaticFieldRules';
+import {
+  MAX_BURST_DELAY_SEC,
+  MAX_BURST_STROKES,
+  MIN_BURST_DELAY_SEC,
+  MIN_BURST_STROKE_POWER,
+} from '@/utils/burstFieldRules';
 
 function clampInt(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
 function normalizeEndSessionMode(mode: EndSessionMode): EndSessionMode {
-  if (mode === 'minutes' || mode === 'noAutoEnd') {
+  if (mode === 'minutes' || mode === 'strokes' || mode === 'noAutoEnd') {
     return mode;
   }
   return 'noAutoEnd';
 }
 
-/** Clamp motor automatic form state (per-sub pairing settings). */
+function normalizeMotorBurstFields(
+  state: MotorAutomaticControlState,
+): MotorAutomaticControlState {
+  let burstStrokePowerMin = clampInt(state.burstStrokePowerMin, MIN_BURST_STROKE_POWER, 100);
+  let burstStrokePowerMax = clampInt(state.burstStrokePowerMax, 0, 100);
+  if (burstStrokePowerMin > burstStrokePowerMax) {
+    burstStrokePowerMax = burstStrokePowerMin;
+  }
+
+  let burstDelayMin = clampInt(state.burstDelayMin, MIN_BURST_DELAY_SEC, MAX_BURST_DELAY_SEC);
+  let burstDelayMax = clampInt(state.burstDelayMax, 0, MAX_BURST_DELAY_SEC);
+  if (burstDelayMin > burstDelayMax) {
+    burstDelayMax = burstDelayMin;
+  }
+
+  let burstStrokesMin = clampInt(state.burstStrokesMin, 1, MAX_BURST_STROKES);
+  let burstStrokesMax = clampInt(state.burstStrokesMax, 1, MAX_BURST_STROKES);
+  if (burstStrokesMin > burstStrokesMax) {
+    burstStrokesMin = burstStrokesMax;
+  }
+
+  return {
+    ...state,
+    burstPercent: clampInt(state.burstPercent, 0, 100),
+    burstStrokePowerMin,
+    burstStrokePowerMax,
+    burstDelayMin,
+    burstDelayMax,
+    burstStrokesMin,
+    burstStrokesMax,
+  };
+}
+
+export function applyMotorAutomaticModeChange(
+  state: MotorAutomaticControlState,
+  nextMode: AutomaticRunMode,
+): MotorAutomaticControlState {
+  const rules = getAutomaticFieldRules(nextMode);
+
+  return {
+    ...state,
+    automaticMode: nextMode,
+    endSessionMode: coerceEndSessionMode(state.endSessionMode, rules.disableNoAutoEnd),
+  };
+}
+
+/** Clamp motor automatic form state (per-device pairing settings). */
 export function normalizeMotorAutomaticControlState(
   state: MotorAutomaticControlState,
 ): MotorAutomaticControlState {
-  let minimumDutyPercent = clampInt(state.minimumDutyPercent, 0, 100);
-  let maximumDutyPercent = clampInt(state.maximumDutyPercent, 0, 100);
+  const withMode = applyMotorAutomaticModeChange(state, state.automaticMode);
+
+  let minimumDutyPercent = clampInt(withMode.minimumDutyPercent, 0, 100);
+  let maximumDutyPercent = clampInt(withMode.maximumDutyPercent, 0, 100);
   if (minimumDutyPercent > maximumDutyPercent) {
     [minimumDutyPercent, maximumDutyPercent] = [maximumDutyPercent, minimumDutyPercent];
   }
 
-  let segmentMinSeconds = clampInt(state.segmentMinSeconds, 1, 3600);
-  let segmentMaxSeconds = clampInt(state.segmentMaxSeconds, 1, 3600);
+  let segmentMinSeconds = clampInt(withMode.segmentMinSeconds, MIN_STROKE_GAP_SECONDS, 3600);
+  let segmentMaxSeconds = clampInt(withMode.segmentMaxSeconds, MIN_STROKE_GAP_SECONDS, 3600);
   if (segmentMinSeconds > segmentMaxSeconds) {
     [segmentMinSeconds, segmentMaxSeconds] = [segmentMaxSeconds, segmentMinSeconds];
   }
 
-  const endSessionMode = normalizeEndSessionMode(state.endSessionMode);
+  const endSessionMode = normalizeEndSessionMode(withMode.endSessionMode);
 
-  return {
+  const normalized: MotorAutomaticControlState = {
     ...defaultMotorAutomaticState,
-    ...state,
+    ...withMode,
     running: false,
-    automaticMode: 'periodic',
     minimumDutyPercent,
     maximumDutyPercent,
+    minimumSpeedPercent: clampInt(withMode.minimumSpeedPercent, 0, 100),
+    maximumSpeedPercent: clampInt(withMode.maximumSpeedPercent, 0, 100),
     segmentMinSeconds,
     segmentMaxSeconds,
-    delayBeforeStartSeconds: clampInt(state.delayBeforeStartSeconds, 0, 3600),
-    rampMs: clampInt(state.rampMs, 0, 30_000),
+    delayBeforeStartSeconds: clampInt(withMode.delayBeforeStartSeconds, 0, 3600),
+    rampMs: clampInt(withMode.rampMs, 0, 30_000),
     endSessionMode,
-    endSessionValue: clampInt(state.endSessionValue, 1, 1440),
+    endSessionValue: clampInt(withMode.endSessionValue, 1, 1440),
   };
+
+  return normalizeMotorBurstFields(normalized);
 }
