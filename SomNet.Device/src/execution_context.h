@@ -29,6 +29,8 @@ public:
 
     void setAutomaticSessionNotifier(void* callbackContext, AutomaticCompleteCallback onNotify);
 
+    void setAutomaticSegmentNotifier(void* callbackContext, RelayAutomaticSegmentCallback onNotify);
+
     bool stopAutomatic(
         const char* correlationId,
         void* callbackContext,

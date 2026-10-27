@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { MotorPatternGraphPanel } from '@/components/video/MotorPatternGraphPanel';
+import { RelayPatternGraphPanel } from '@/components/video/RelayPatternGraphPanel';
 import { useDevicePairingSettings } from '@/context/DevicePairingSettingsProvider';
 import { useLiveSession } from '@/context/SessionProvider';
 import { useSubDevice } from '@/context/SubDeviceProvider';
@@ -26,10 +27,12 @@ export function VideoAsidePanel({ mode, feedsContent, feedsAvailable }: VideoAsi
   const { selectedSub } = useSubTarget();
   const { sessionsByKey } = useLiveSession();
 
-  const isMotorFocus = selectedRegistration?.actuatorKind === 'hbridge';
-  const graphAvailable = isMotorFocus && Boolean(selectedDeviceId);
+  const actuatorKind = selectedRegistration?.actuatorKind;
+  const graphAvailable =
+    Boolean(selectedDeviceId) && (actuatorKind === 'hbridge' || actuatorKind === 'relay');
 
-  const panel = useDevicePairingSettings(selectedDeviceId ?? '', 'hbridge');
+  const motorPanel = useDevicePairingSettings(selectedDeviceId ?? '', 'hbridge');
+  const relayPanel = useDevicePairingSettings(selectedDeviceId ?? '', 'relay');
 
   const activeSession = useMemo(() => {
     if (!selectedDeviceId) {
@@ -83,11 +86,18 @@ export function VideoAsidePanel({ mode, feedsContent, feedsAvailable }: VideoAsi
   const effectiveTab: AsideTab =
     tab === 'feeds' && !feedsAvailable ? 'graph' : tab === 'graph' && !graphAvailable ? 'feeds' : tab;
 
-  const motorAutomaticRunning =
-    graphAvailable && mode === 'automatic' && panel.settings.motorAutomatic.running;
+  const automaticRunning =
+    graphAvailable &&
+    mode === 'automatic' &&
+    (actuatorKind === 'hbridge'
+      ? motorPanel.settings.motorAutomatic.running
+      : relayPanel.settings.automatic.running);
   const manualSessionActive =
     graphAvailable && mode === 'manual' && activeSession?.mode === 'manual';
-  const showNowMarker = Boolean(motorAutomaticRunning || manualSessionActive);
+  const showNowMarker = Boolean(automaticRunning || manualSessionActive);
+
+  const asideLabel =
+    graphAvailable && !feedsAvailable ? 'Automatic pattern graph' : 'Video and pattern graph';
 
   if (!feedsAvailable && !graphAvailable) {
     return null;
@@ -96,7 +106,7 @@ export function VideoAsidePanel({ mode, feedsContent, feedsAvailable }: VideoAsi
   return (
     <aside
       className="flex w-full min-w-0 flex-col gap-4 lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto lg:self-start"
-      aria-label={graphAvailable && !feedsAvailable ? 'Motor pattern graph' : 'Video and pattern graph'}
+      aria-label={asideLabel}
     >
       {showTabs ? (
         <div
@@ -131,11 +141,21 @@ export function VideoAsidePanel({ mode, feedsContent, feedsAvailable }: VideoAsi
 
       {effectiveTab === 'feeds' && feedsAvailable ? feedsContent : null}
 
-      {effectiveTab === 'graph' && graphAvailable ? (
+      {effectiveTab === 'graph' && graphAvailable && actuatorKind === 'hbridge' ? (
         <MotorPatternGraphPanel
           mode={mode}
-          motorAutomatic={panel.settings.motorAutomatic}
-          motorManual={panel.settings.motorManual}
+          motorAutomatic={motorPanel.settings.motorAutomatic}
+          motorManual={motorPanel.settings.motorManual}
+          sessionStartedAtIso={activeSession?.startedAt ?? null}
+          showNowMarker={showNowMarker}
+        />
+      ) : null}
+
+      {effectiveTab === 'graph' && graphAvailable && actuatorKind === 'relay' ? (
+        <RelayPatternGraphPanel
+          mode={mode}
+          automatic={relayPanel.settings.automatic}
+          manual={relayPanel.settings.manual}
           sessionStartedAtIso={activeSession?.startedAt ?? null}
           showNowMarker={showNowMarker}
         />

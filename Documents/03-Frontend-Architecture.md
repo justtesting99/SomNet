@@ -190,6 +190,10 @@ For the **Focus** device on the current Sub:
 
 **Graph:** Clearing segment store on Start/complete (`clearMotorAutomaticSegments`); live segments from hub listener — see § Motor pattern graph.
 
+### Relay automatic — pattern graph
+
+Same video column **Feeds \| Graph** when Focus device is **relay**. Plots **commanded power %** (stroke on / gap off). Preview: `relayPowerSchedule.ts`; live: hub `relay-automatic-segment` → `relayAutomaticSegmentStore.ts` → `RelayPatternGraphPanel`. Clear segments on Start in `AutomaticControls`.
+
 Design reference: [31 §13](./31-Motor-Actuator-Device-Design.md#13-as-built--hub-path-motor-programs-ui-telemetry).
 
 ## UI Component Library
@@ -325,7 +329,7 @@ Page load (authenticated; last mode may restore from localStorage)
 | **Idle / before Start** | Planned **commanded speed %** from current motor automatic settings (for random modes, a stable **example** path — device choices are unknown until run). |
 | **Running (API path)** | Live curve built from hub acks `correlationId: motor-automatic-segment` (device reports each ramp: from/to speed %, duration, `programElapsedMs`). Requires paired device → API → `AutomaticSessionHubListener` → in-memory segment store. **Now** marker uses UI Start anchor + interpolated position on that live curve. |
 | **Standalone / Mode A** ([26](./26-ESP32-Local-Offline-Mode-Design.md)) | **Not a product goal** for the ESP `/operate` panel unless standalone later exposes the same telemetry to a browser (e.g. local WebSocket or polled status). Firmware may still emit segment JSON for API use when SignalR is connected. |
-| **Relay** | Graph tab is motor-only; relay automatic timeline graphs deferred. |
+| **Relay** | Same **Feeds \| Graph** tab when Focus device is `relay` — **commanded power %** (stroke/gap steps); live from `relay-automatic-segment` hub acks. |
 
 **Why API-centric:** Random (and timing-random) programs are decided on the device at segment boundaries. A truthful running graph **must** consume device-reported targets, not UI guesses. Preview remains useful for reasoning about settings; live graph is an **operator session tool** alongside video/history, not firmware-local UI.
 

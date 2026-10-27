@@ -50,6 +50,8 @@ public:
 
     static void onMotorAutomaticSegment(void* context, const char* resultJson);
 
+    static void onRelayAutomaticSegment(void* context, const char* resultJson);
+
 private:
     void handleExecuteCommand(const ExecuteCommandPayload& command);
     void pollMotorManualRun();

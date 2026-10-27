@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { MOTOR_CHART_MIN_WINDOW_SEC } from '@/utils/motorChartViewRange';
 import { Button } from '@/components/ui/Button';
 import type { MotorSpeedSchedule } from '@/utils/motorSpeedSchedule';
@@ -7,12 +7,32 @@ import {
   zoomInWindowSec,
   zoomOutWindowSec,
 } from '@/utils/motorChartViewRange';
+import {
+  readPatternChartWindowSec,
+  writePatternChartWindowSec,
+} from '@/utils/patternChartZoomStorage';
 
 interface MotorSpeedPatternChartProps {
   schedule: MotorSpeedSchedule;
   nowSec?: number | null;
   nowSpeedPercent?: number | null;
   runningLabel?: string;
+  yAxisLabel?: string;
+  /** When set, zoom level is persisted in localStorage across refresh (per device). */
+  deviceId?: string;
+}
+
+function normalizeStoredWindowSec(
+  stored: number | null,
+  horizonSec: number,
+): number | null {
+  if (stored == null) {
+    return null;
+  }
+  if (stored >= horizonSec - 0.5) {
+    return null;
+  }
+  return Math.min(Math.max(MOTOR_CHART_MIN_WINDOW_SEC, stored), horizonSec);
 }
 
 const CHART_WIDTH = 400;
@@ -35,13 +55,39 @@ export function MotorSpeedPatternChart({
   nowSec = null,
   nowSpeedPercent = null,
   runningLabel,
+  yAxisLabel = 'Speed %',
+  deviceId,
 }: MotorSpeedPatternChartProps) {
   const clipId = useId().replace(/:/g, '');
   const horizonSec = schedule.horizonSec;
-  const [windowSec, setWindowSec] = useState<number | null>(null);
+  const [windowSec, setWindowSec] = useState<number | null>(() =>
+    deviceId
+      ? normalizeStoredWindowSec(readPatternChartWindowSec(deviceId), schedule.horizonSec)
+      : null,
+  );
+
+  const applyWindowSec = useCallback(
+    (next: number | null) => {
+      const normalized = normalizeStoredWindowSec(next, horizonSec);
+      setWindowSec(normalized);
+      if (deviceId) {
+        writePatternChartWindowSec(deviceId, normalized);
+      }
+    },
+    [deviceId, horizonSec],
+  );
 
   useEffect(() => {
-    setWindowSec(null);
+    if (!deviceId) {
+      return;
+    }
+    setWindowSec(
+      normalizeStoredWindowSec(readPatternChartWindowSec(deviceId), horizonSec),
+    );
+  }, [deviceId]);
+
+  useEffect(() => {
+    setWindowSec((prev) => normalizeStoredWindowSec(prev, horizonSec));
   }, [horizonSec]);
 
   const effectiveWindowSec = windowSec ?? horizonSec;
@@ -113,16 +159,16 @@ export function MotorSpeedPatternChart({
   const canZoomOut = isZoomed;
 
   function handleZoomIn() {
-    setWindowSec(zoomInWindowSec(effectiveWindowSec, horizonSec));
+    applyWindowSec(zoomInWindowSec(effectiveWindowSec, horizonSec));
   }
 
   function handleZoomOut() {
     const next = zoomOutWindowSec(effectiveWindowSec, horizonSec);
-    setWindowSec(next >= horizonSec - 0.5 ? null : next);
+    applyWindowSec(next >= horizonSec - 0.5 ? null : next);
   }
 
   function handleResetZoom() {
-    setWindowSec(null);
+    applyWindowSec(null);
   }
 
   return (
@@ -174,7 +220,7 @@ export function MotorSpeedPatternChart({
         viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
         className="h-auto w-full text-slate-400"
         role="img"
-        aria-label="Commanded motor speed over time"
+        aria-label={`Commanded value over time (${yAxisLabel})`}
       >
         <defs>
           <clipPath id={plotClipId}>

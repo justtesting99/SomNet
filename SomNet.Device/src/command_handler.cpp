@@ -5,6 +5,7 @@
 #include "execution_context.h"
 #include "modes/automatic/automatic_config.h"
 #include "motor_controller.h"
+#include "modes/automatic/automatic_config.h"
 #include "modes/motor/motor_automatic_config.h"
 #include "modes/motor/motor_automatic_session_mode.h"
 #include "nvs_store.h"
@@ -89,6 +90,7 @@ void CommandHandler::begin(
     initialized_ = true;
     if (executionContext_ != nullptr) {
         executionContext_->setAutomaticSessionNotifier(this, &CommandHandler::onAutomaticComplete);
+        executionContext_->setAutomaticSegmentNotifier(this, &CommandHandler::onRelayAutomaticSegment);
     }
     Serial.println(F("[CMD] command_handler ready (Phase 6)"));
 }
@@ -232,7 +234,8 @@ void CommandHandler::sendAck(
     if (correlationId != nullptr &&
         (strncmp(correlationId, "local-", 6) == 0 ||
             strcmp(correlationId, "automatic-session-complete") == 0 ||
-            strcmp(correlationId, kMotorAutomaticSegmentCorrelationId) == 0)) {
+            strcmp(correlationId, kMotorAutomaticSegmentCorrelationId) == 0 ||
+            strcmp(correlationId, kRelayAutomaticSegmentCorrelationId) == 0)) {
         Serial.print(F("[CMD] local ack correlationId="));
         Serial.print(correlationId != nullptr ? correlationId : "");
         Serial.print(F(" success="));
@@ -349,6 +352,18 @@ void CommandHandler::onMotorAutomaticSegment(void* context, const char* resultJs
         kMotorAutomaticSegmentCorrelationId,
         true,
         "motor automatic segment",
+        resultJson);
+}
+
+void CommandHandler::onRelayAutomaticSegment(void* context, const char* resultJson) {
+    if (context == nullptr || resultJson == nullptr || resultJson[0] == '\0') {
+        return;
+    }
+
+    static_cast<CommandHandler*>(context)->sendAck(
+        kRelayAutomaticSegmentCorrelationId,
+        true,
+        "relay automatic segment",
         resultJson);
 }
 

@@ -44,7 +44,9 @@ export function DashboardLayout({
   const showFrontMonitor = !feedsHidden && isFrontLiveFeedEnabled(liveFeedPreference);
   const showRearMonitor = !feedsHidden && isRearLiveFeedEnabled(liveFeedPreference);
   const feedsAvailable = showFrontMonitor || showRearMonitor || Boolean(videoPreview);
-  const graphAvailable = selectedRegistration?.actuatorKind === 'hbridge';
+  const graphAvailable =
+    selectedRegistration?.actuatorKind === 'hbridge' ||
+    selectedRegistration?.actuatorKind === 'relay';
   const showAside = feedsAvailable || graphAvailable;
   const sources: [string?, string?] = [videoSources[0], videoSources[1]];
   const rearLoadDelayMs =

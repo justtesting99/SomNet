@@ -107,6 +107,7 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
     sessionStartMs_ = 0;
     delayStartMs_ = millis();
     nextGapDeadlineMs_ = 0;
+    segmentIndex_ = 0;
     active_ = true;
 
     Serial.print(F("[AUTO] start mode="));
@@ -141,6 +142,10 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
 
     if (config.delayBeforeStartSeconds > 0) {
         state_ = State::StartDelay;
+        emitRelaySegment(
+            "gap",
+            0,
+            static_cast<unsigned long>(config.delayBeforeStartSeconds) * 1000UL);
     } else {
         sessionStartMs_ = millis();
         if (!startNextPulse()) {
@@ -160,6 +165,59 @@ void AutomaticSessionMode::setSessionNotifier(
     AutomaticCompleteCallback onNotify) {
     sessionNotifyContext_ = callbackContext;
     sessionNotify_ = onNotify;
+}
+
+void AutomaticSessionMode::setSegmentNotifier(
+    void* callbackContext,
+    RelayAutomaticSegmentCallback onNotify) {
+    segmentNotifyContext_ = callbackContext;
+    segmentNotify_ = onNotify;
+}
+
+unsigned long AutomaticSessionMode::programElapsedMs() const {
+    if (sessionStartMs_ > 0UL) {
+        return millis() - sessionStartMs_;
+    }
+    if (delayStartMs_ > 0UL && active_) {
+        return millis() - delayStartMs_;
+    }
+    return 0UL;
+}
+
+void AutomaticSessionMode::emitRelaySegment(
+    const char* phase,
+    int powerPercent,
+    unsigned long durationMs) {
+    if (segmentNotify_ == nullptr || segmentNotifyContext_ == nullptr || !active_) {
+        return;
+    }
+    if (phase == nullptr || phase[0] == '\0' || durationMs == 0UL) {
+        return;
+    }
+
+    if (powerPercent < 0) {
+        powerPercent = 0;
+    }
+    if (powerPercent > 100) {
+        powerPercent = 100;
+    }
+
+    const unsigned long elapsedMs = programElapsedMs();
+
+    char segmentJson[320];
+    snprintf(
+        segmentJson,
+        sizeof(segmentJson),
+        "{\"commandKey\":\"relay-automatic-segment\",\"actuatorKind\":\"relay\","
+        "\"segmentIndex\":%d,\"phase\":\"%s\",\"powerPercent\":%d,"
+        "\"durationMs\":%lu,\"programElapsedMs\":%lu}",
+        segmentIndex_,
+        phase,
+        powerPercent,
+        durationMs,
+        elapsedMs);
+    segmentNotify_(segmentNotifyContext_, segmentJson);
+    segmentIndex_++;
 }
 
 bool AutomaticSessionMode::requestStop(
@@ -447,6 +505,8 @@ bool AutomaticSessionMode::startNextPulse() {
     Serial.print(F(" gapSec="));
     Serial.println(gapSec_);
 
+    emitRelaySegment("stroke", powerPercent_, static_cast<unsigned long>(strokeMs_));
+
     if (!relay_->requestPulse(
             static_cast<unsigned long>(strokeMs_),
             this,
@@ -517,6 +577,8 @@ bool AutomaticSessionMode::startNextBurstPulse() {
     Serial.print(F("% strokeMs="));
     Serial.println(strokeMs_);
 
+    emitRelaySegment("stroke", powerPercent_, static_cast<unsigned long>(strokeMs_));
+
     if (!relay_->requestPulse(
             static_cast<unsigned long>(strokeMs_),
             this,
@@ -548,6 +610,10 @@ void AutomaticSessionMode::finishBurstEvent() {
 
     state_ = State::WaitingGap;
     nextGapDeadlineMs_ = millis() + static_cast<unsigned long>(postBurstGapSec_) * 1000UL;
+    emitRelaySegment(
+        "gap",
+        0,
+        static_cast<unsigned long>(postBurstGapSec_) * 1000UL);
 }
 
 void AutomaticSessionMode::onRelayPulseComplete(void* context, unsigned long /*actualMs*/) {
@@ -588,6 +654,10 @@ void AutomaticSessionMode::onRelayPulseComplete(void* context, unsigned long /*a
 
     mode->state_ = State::WaitingGap;
     mode->nextGapDeadlineMs_ = millis() + static_cast<unsigned long>(mode->gapSec_) * 1000UL;
+    mode->emitRelaySegment(
+        "gap",
+        0,
+        static_cast<unsigned long>(mode->gapSec_) * 1000UL);
 }
 
 void AutomaticSessionMode::onBurstPulseComplete(void* context, unsigned long /*actualMs*/) {
@@ -638,6 +708,7 @@ void AutomaticSessionMode::onBurstPulseComplete(void* context, unsigned long /*a
 
     mode->state_ = State::BurstGap;
     mode->burstGapStartMs_ = millis();
+    mode->emitRelaySegment("gap", 0, mode->burstDelayMs_);
 }
 
 bool AutomaticSessionMode::shouldEndSession() const {

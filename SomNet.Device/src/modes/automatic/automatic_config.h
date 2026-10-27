@@ -71,3 +71,6 @@ bool isAutomaticUpdateKey(const char* commandKey);
 
 /** Hub correlationId when automatic session ends without automatic-stop (P9-D4 end-rule / abort). */
 constexpr const char* kAutomaticSessionCompleteCorrelationId = "automatic-session-complete";
+
+/** Unsolicited hub ack while relay automatic session runs (stroke / gap telemetry for operator graph). */
+constexpr const char* kRelayAutomaticSegmentCorrelationId = "relay-automatic-segment";

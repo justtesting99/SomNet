@@ -87,6 +87,12 @@ void ExecutionContext::setAutomaticSessionNotifier(
     automaticSessionNotify_ = onNotify;
 }
 
+void ExecutionContext::setAutomaticSegmentNotifier(
+    void* callbackContext,
+    RelayAutomaticSegmentCallback onNotify) {
+    automaticSessionMode_.setSegmentNotifier(callbackContext, onNotify);
+}
+
 bool ExecutionContext::stopAutomatic(
     const char* correlationId,
     void* callbackContext,

@@ -45,6 +45,7 @@ import { useHardwareCommand } from '@/context/HardwareCommandProvider';
 import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCommand';
 import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
 import { buildAutomaticStartPayload } from '@/utils/automaticStartPayload';
+import { clearRelayAutomaticSegments } from '@/utils/relayAutomaticSegmentStore';
 import { parseAutomaticResultJson } from '@/utils/automaticResultJson';
 import { waitForAutomaticHubFinalize, computeAutomaticStopGraceMs } from '@/utils/automaticSessionFinalize';
 import { isDeviceAutomaticIdleMessage } from '@/utils/automaticSessionReconcile';
@@ -298,6 +299,7 @@ export function AutomaticControls() {
   async function handleStart() {
     setCommandError('');
     expandOnAction(commandDeviceId);
+    clearRelayAutomaticSegments(commandDeviceId);
 
     const payloadJson = buildAutomaticStartPayload(state);
 

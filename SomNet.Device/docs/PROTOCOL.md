@@ -346,7 +346,23 @@ Same JSON shape for **`automatic-start`** and **`automatic-update`** while a mot
 }
 ```
 
-SomNet.API forwards to operators as `CommandAcknowledged`; SomNet.UI builds the live pattern graph from these events (not from relay stroke timing).
+SomNet.API forwards to operators as `CommandAcknowledged`; SomNet.UI builds the live motor pattern graph from these events.
+
+**Relay segment telemetry (unsolicited hub ack):** While a **relay** automatic session runs, firmware may emit **`AckCommand`** with `correlationId` **`relay-automatic-segment`** (Shared: `HardwareCommandKeys.RelayAutomaticSegmentCorrelationId`). Each event is one **stroke** (relay on at `powerPercent` for `durationMs`) or **gap** (off for `durationMs`):
+
+```json
+{
+  "commandKey": "relay-automatic-segment",
+  "actuatorKind": "relay",
+  "segmentIndex": 4,
+  "phase": "stroke",
+  "powerPercent": 65,
+  "durationMs": 120,
+  "programElapsedMs": 8200
+}
+```
+
+`phase`: **`stroke`** or **`gap`**. SomNet.UI plots **commanded power %** over time (step waveform, not motor ramps).
 
 **Motor session complete `resultJson` (excerpt):**
 

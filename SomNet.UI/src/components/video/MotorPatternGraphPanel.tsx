@@ -137,6 +137,7 @@ export function MotorPatternGraphPanel({
         ) : null}
       </div>
       <MotorSpeedPatternChart
+        deviceId={selectedDeviceId ?? undefined}
         schedule={schedule}
         nowSec={showNowMarker ? nowSec : null}
         nowSpeedPercent={nowSpeedPercent}

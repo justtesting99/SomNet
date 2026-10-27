@@ -5,6 +5,7 @@ import { useLiveSession } from '@/context/SessionProvider';
 import {
   AUTOMATIC_SESSION_COMPLETE_CORRELATION_ID,
   MOTOR_AUTOMATIC_SEGMENT_CORRELATION_ID,
+  RELAY_AUTOMATIC_SEGMENT_CORRELATION_ID,
   type HardwareCommandAck,
 } from '@/types/hardwareHub';
 import { parseMotorAutomaticSegmentJson } from '@/utils/motorAutomaticSegmentJson';
@@ -12,6 +13,11 @@ import {
   clearMotorAutomaticSegments,
   recordMotorAutomaticSegment,
 } from '@/utils/motorAutomaticSegmentStore';
+import { parseRelayAutomaticSegmentJson } from '@/utils/relayAutomaticSegmentJson';
+import {
+  clearRelayAutomaticSegments,
+  recordRelayAutomaticSegment,
+} from '@/utils/relayAutomaticSegmentStore';
 import { useSiteUserReady } from '@/context/SiteUserReadyProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useSubDevice } from '@/context/SubDeviceProvider';
@@ -123,6 +129,24 @@ export function AutomaticSessionHubListener() {
           return;
         }
 
+        if (ack.correlationId === RELAY_AUTOMATIC_SEGMENT_CORRELATION_ID) {
+          if (!deviceId) {
+            return;
+          }
+
+          const segment = parseRelayAutomaticSegmentJson(ack.resultJson);
+          if (!segment) {
+            return;
+          }
+
+          if (segment.segmentIndex === 0) {
+            clearRelayAutomaticSegments(deviceId);
+          }
+
+          recordRelayAutomaticSegment(deviceId, segment);
+          return;
+        }
+
         if (!shouldHandleAutomaticSessionComplete(ack)) {
           return;
         }
@@ -139,6 +163,8 @@ export function AutomaticSessionHubListener() {
         const parsedComplete = parseAutomaticResultJson(ack.resultJson);
         if (parsedComplete?.actuatorKind === 'hbridge') {
           clearMotorAutomaticSegments(deviceId);
+        } else if (parsedComplete?.actuatorKind === 'relay') {
+          clearRelayAutomaticSegments(deviceId);
         }
 
         const registration = registrationsRef.current.find((row) => row.deviceId === deviceId);

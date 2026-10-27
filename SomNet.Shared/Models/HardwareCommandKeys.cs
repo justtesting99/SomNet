@@ -9,6 +9,9 @@ public static class HardwareCommandKeys
 
     /// <summary>Device hub ack when a motor automatic speed ramp segment begins.</summary>
     public const string MotorAutomaticSegmentCorrelationId = "motor-automatic-segment";
+
+    /// <summary>Device hub ack when a relay automatic stroke or gap interval begins.</summary>
+    public const string RelayAutomaticSegmentCorrelationId = "relay-automatic-segment";
     /// <summary>UI / tab-sync pending key.</summary>
     public const string ManualStroke = "manual:stroke";
 

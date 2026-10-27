@@ -73,6 +73,7 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 |-----------------|-----|
 | `automatic-session-complete` | Auto-end, abort, cooperative stop — finalize session/history |
 | `motor-automatic-segment` | Motor automatic ramp telemetry — live pattern graph ([31 §13](./31-Motor-Actuator-Device-Design.md#13-as-built--hub-path-motor-programs-ui-telemetry)); not a session terminator |
+| `relay-automatic-segment` | Relay automatic stroke/gap telemetry — live power graph ([03 § Motor pattern graph](./03-Frontend-Architecture.md#motor-pattern-graph-scope)); not a session terminator |
 
 ---
 

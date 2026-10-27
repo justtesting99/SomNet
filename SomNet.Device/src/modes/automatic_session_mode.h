@@ -13,6 +13,8 @@ typedef void (*AutomaticCompleteCallback)(
     const char* message,
     const char* resultJson);
 
+typedef void (*RelayAutomaticSegmentCallback)(void* context, const char* segmentJson);
+
 class AutomaticSessionMode : public IExecutionMode {
 public:
     void setRelay(RelayController* relay);
@@ -28,6 +30,8 @@ public:
     bool queueSessionUpdate(const char* payloadJson);
 
     void setSessionNotifier(void* callbackContext, AutomaticCompleteCallback onNotify);
+
+    void setSegmentNotifier(void* callbackContext, RelayAutomaticSegmentCallback onNotify);
 
     void start(const char* payloadJson) override;
     void poll() override;
@@ -51,6 +55,8 @@ private:
     void assignAutomaticModeLabel(AutomaticRunMode mode);
     float computeSchedulePhaseOffset() const;
     bool configUsesScheduleTable(AutomaticRunMode mode) const;
+    void emitRelaySegment(const char* phase, int powerPercent, unsigned long durationMs);
+    unsigned long programElapsedMs() const;
 
     RelayController* relay_ = nullptr;
     AutomaticProgramBase* program_ = nullptr;
@@ -89,4 +95,7 @@ private:
     AutomaticCompleteCallback onComplete_ = nullptr;
     void* sessionNotifyContext_ = nullptr;
     AutomaticCompleteCallback sessionNotify_ = nullptr;
+    void* segmentNotifyContext_ = nullptr;
+    RelayAutomaticSegmentCallback segmentNotify_ = nullptr;
+    int segmentIndex_ = 0;
 };

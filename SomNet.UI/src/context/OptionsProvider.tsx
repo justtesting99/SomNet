@@ -422,7 +422,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
         clearAutomaticDeviceRunningHint(selectedSubRef.current, deviceId);
       }
 
-      if (kind === 'motor') {
+      if (kind === 'motor' || kind === 'relay') {
         if (running) {
           writeMotorPatternRunAnchor(selectedSubRef.current, deviceId);
         } else {

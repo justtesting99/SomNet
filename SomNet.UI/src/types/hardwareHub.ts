@@ -14,4 +14,7 @@ export const AUTOMATIC_SESSION_COMPLETE_CORRELATION_ID = 'automatic-session-comp
 /** Device-reported motor automatic segment ramp (commanded speeds). */
 export const MOTOR_AUTOMATIC_SEGMENT_CORRELATION_ID = 'motor-automatic-segment';
 
+/** Device-reported relay automatic stroke/gap interval (commanded power). */
+export const RELAY_AUTOMATIC_SEGMENT_CORRELATION_ID = 'relay-automatic-segment';
+
 export const HARDWARE_HUB_COMMAND_ACKNOWLEDGED = 'CommandAcknowledged';
