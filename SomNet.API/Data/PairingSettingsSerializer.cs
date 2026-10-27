@@ -196,6 +196,11 @@ public static class PairingSettingsSerializer
             endMode = EndSessionMode.NoAutoEnd;
         }
 
+        if (endMode == EndSessionMode.Strokes)
+        {
+            endMode = EndSessionMode.NoAutoEnd;
+        }
+
         var endValue = Math.Clamp(source.EndSessionValue, 1, 1440);
         if (endMode == EndSessionMode.NoAutoEnd)
         {

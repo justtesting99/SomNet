@@ -9,7 +9,7 @@ export const MOTOR_AUTOMATIC_MODE_INFO: Record<MotorAutomaticRunMode, MotorAutom
   {
     periodic: {
       summary:
-        'Runs continuously: each segment interval is the time to ramp from the current target speed to the next (Set Speed uses the same max target each segment). Minimum speed and minimum segment interval are ignored.',
+        'Runs continuously at maximum speed until Stop or end session. Minimum speed and graph-point timing are not used.',
     },
     randomSpeed: {
       summary:
@@ -21,7 +21,7 @@ export const MOTOR_AUTOMATIC_MODE_INFO: Record<MotorAutomaticRunMode, MotorAutom
     },
     powerWave: {
       summary:
-        'Target speed follows a repeating wave between minimum and maximum; ramps between graph points while segment timing stays at the maximum interval.',
+        'Target speed follows a repeating triangle wave between minimum and maximum (20 steps per cycle). Each segment interval ramps linearly to the next target; timing uses the maximum interval only.',
       endSessionNote:
         'Wave schedule is pre-calculated from your end session duration. No AutoEnd is not available.',
     },

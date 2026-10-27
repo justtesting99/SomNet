@@ -25,6 +25,10 @@ import {
   writeDeviceAutomaticRunningLocal,
 } from '@/utils/deviceAutomaticRunningLocal';
 import { cacheDeviceSettings } from '@/utils/deviceSettingsCache';
+import {
+  DEVICE_AUTOMATIC_RUNNING_SYNC_EVENT,
+  type DeviceAutomaticRunningSyncDetail,
+} from '@/utils/deviceAutomaticRunningSync';
 import { automaticRunningKindForActuator } from '@/utils/tabSync';
 import type { ActuatorKind } from '@/types/device';
 
@@ -235,8 +239,48 @@ export function DevicePairingSettingsProvider({ children }: { children: ReactNod
         return { ...prev, [deviceId]: nextRow };
       });
     },
-    [queuePersist],
+    [queuePersist, selectedSub],
   );
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<DeviceAutomaticRunningSyncDetail>).detail;
+      if (!detail || detail.subTarget !== selectedSub) {
+        return;
+      }
+
+      const { deviceId, kind, running } = detail;
+      applyPatch(
+        deviceId,
+        (settings) => {
+          if (kind === 'motor') {
+            if (settings.motorAutomatic.running === running) {
+              return settings;
+            }
+            return {
+              ...settings,
+              motorAutomatic: { ...settings.motorAutomatic, running },
+            };
+          }
+
+          if (settings.automatic.running === running) {
+            return settings;
+          }
+
+          return {
+            ...settings,
+            automatic: { ...settings.automatic, running },
+          };
+        },
+        false,
+      );
+    };
+
+    window.addEventListener(DEVICE_AUTOMATIC_RUNNING_SYNC_EVENT, handler);
+    return () => {
+      window.removeEventListener(DEVICE_AUTOMATIC_RUNNING_SYNC_EVENT, handler);
+    };
+  }, [applyPatch, selectedSub]);
 
   const getSlice = useCallback(
     (deviceId: string, actuatorKind: ActuatorKind): DevicePairingSettingsSlice => {

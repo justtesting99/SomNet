@@ -29,6 +29,8 @@ private:
         StartDelay,
         /** Linear ramp from segment start speed to segment end speed over the segment interval. */
         SegmentRamp,
+        /** Set Speed (periodic) — ramp to target then hold until stop/end. */
+        SetSpeedHold,
         /** Cooperative stop / end session — ramp to zero using configured stop rampMs. */
         RampToStop,
     };
@@ -37,6 +39,7 @@ private:
     void finishSession(bool success, const char* message, const char* endReason, bool interrupted);
     bool shouldEndSession() const;
     bool beginSegmentTransition();
+    bool beginSetSpeedHold();
     int pickSegmentSeconds() const;
     bool applyPendingUpdate();
     void requestRampToStop();

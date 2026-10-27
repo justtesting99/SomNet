@@ -18,6 +18,7 @@ import {
 export interface MotorAutomaticFieldRules {
   disableMinimumSpeed: boolean;
   disableSegmentMinSeconds: boolean;
+  disableSegmentMaxSeconds: boolean;
   disableNoAutoEnd: boolean;
 }
 
@@ -31,12 +32,15 @@ const MODES_DISABLE_SEGMENT_MIN_SECONDS: MotorAutomaticRunMode[] = [
   'powerWave',
 ];
 
+const MODES_DISABLE_SEGMENT_MAX_SECONDS: MotorAutomaticRunMode[] = ['periodic'];
+
 export function getMotorAutomaticFieldRules(
   mode: MotorAutomaticRunMode,
 ): MotorAutomaticFieldRules {
   return {
     disableMinimumSpeed: MODES_DISABLE_MIN_SPEED.includes(mode),
     disableSegmentMinSeconds: MODES_DISABLE_SEGMENT_MIN_SECONDS.includes(mode),
+    disableSegmentMaxSeconds: MODES_DISABLE_SEGMENT_MAX_SECONDS.includes(mode),
     disableNoAutoEnd: MODES_REQUIRING_END_SESSION.includes(mode),
   };
 }
@@ -45,8 +49,12 @@ function clampInt(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
+/** Motor v1 — stroke/rotation count end requires Hall feedback (doc 31). */
 function normalizeEndSessionMode(mode: EndSessionMode): EndSessionMode {
-  if (mode === 'minutes' || mode === 'strokes' || mode === 'noAutoEnd') {
+  if (mode === 'strokes') {
+    return 'noAutoEnd';
+  }
+  if (mode === 'minutes' || mode === 'noAutoEnd') {
     return mode;
   }
   return 'noAutoEnd';

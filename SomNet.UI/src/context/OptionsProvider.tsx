@@ -20,6 +20,7 @@ import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
 import { normalizeStrokeMsPair } from '@/utils/strokeMsLimits';
 import { normalizeAutomaticControlState } from '@/utils/automaticFieldRules';
 import { normalizeMotorAutomaticControlState } from '@/utils/motorAutomaticFieldRules';
+import { dispatchDeviceAutomaticRunningSync } from '@/utils/deviceAutomaticRunningSync';
 import type { MotorAutomaticControlState, MotorManualControlState } from '@/types/motorModes';
 import { normalizeMotorManualControlState } from '@/utils/motorManualFieldRules';
 import { clearAutomaticDeviceRunningHint } from '@/utils/automaticDeviceRunningHint';
@@ -418,6 +419,13 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       }
 
       writeDeviceAutomaticRunningLocal(selectedSubRef.current, deviceId, kind, running);
+
+      dispatchDeviceAutomaticRunningSync({
+        subTarget: selectedSubRef.current,
+        deviceId,
+        kind,
+        running,
+      });
 
       if (shouldBroadcastLocalChange()) {
         postTabSync({

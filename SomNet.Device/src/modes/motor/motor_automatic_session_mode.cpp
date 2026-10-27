@@ -164,6 +164,40 @@ int MotorAutomaticSessionMode::pickSegmentSeconds() const {
     return config.segmentMinSeconds + static_cast<int>(esp_random() % static_cast<uint32_t>(span));
 }
 
+bool MotorAutomaticSessionMode::beginSetSpeedHold() {
+    if (motor_ == nullptr || !active_) {
+        return false;
+    }
+
+    MotorAutomaticConfig config{};
+    if (!parseMotorAutomaticConfig(configJson_, &config)) {
+        return false;
+    }
+
+    if (config.mode != MotorAutomaticRunMode::Periodic) {
+        return false;
+    }
+
+    const int toSpeedPercent =
+        motorResolveSpeedPercentForSegment(config, 0, sessionStartMs_, millis());
+    dutyPercent_ = motorSpeedPercentToDuty(toSpeedPercent, config);
+    const unsigned long rampMs = stopRampMs_ > 0UL ? stopRampMs_ : 1UL;
+
+    if (!motor_->beginRampToDuty(dutyPercent_, rampMs)) {
+        Serial.println(F("[MOTOR-AUTO] reject: motor busy"));
+        return false;
+    }
+
+    state_ = State::SetSpeedHold;
+    segmentsCompleted_ = 1;
+
+    Serial.print(F("[MOTOR-AUTO] set-speed hold duty="));
+    Serial.print(dutyPercent_);
+    Serial.print(F("% rampMs="));
+    Serial.println(rampMs);
+    return true;
+}
+
 bool MotorAutomaticSessionMode::beginSegmentTransition() {
     if (motor_ == nullptr || !active_) {
         return false;
@@ -172,6 +206,10 @@ bool MotorAutomaticSessionMode::beginSegmentTransition() {
     MotorAutomaticConfig config{};
     if (!parseMotorAutomaticConfig(configJson_, &config)) {
         return false;
+    }
+
+    if (config.mode == MotorAutomaticRunMode::Periodic) {
+        return beginSetSpeedHold();
     }
 
     const unsigned long nowMs = millis();
@@ -314,7 +352,8 @@ void MotorAutomaticSessionMode::poll() {
         return;
     }
 
-    if (stopRequested_ && state_ != State::SegmentRamp && state_ != State::RampToStop) {
+    if (stopRequested_ && state_ != State::SegmentRamp && state_ != State::SetSpeedHold &&
+        state_ != State::RampToStop) {
         finishSession(true, "automatic session stopped", "manualStop", false);
         return;
     }
@@ -333,6 +372,32 @@ void MotorAutomaticSessionMode::poll() {
         }
         if (!beginSegmentTransition()) {
             finishSession(false, "automatic session failed", "error", true);
+        }
+        return;
+    }
+
+    if (state_ == State::SetSpeedHold) {
+        if (motor_ != nullptr && motor_->isRamping()) {
+            if (stopRequested_) {
+                requestRampToStop();
+            } else if (shouldEndSession()) {
+                requestRampToStop();
+            }
+            return;
+        }
+
+        if (stopRequested_) {
+            requestRampToStop();
+            return;
+        }
+        if (shouldEndSession()) {
+            requestRampToStop();
+            return;
+        }
+
+        if (pendingUpdate_) {
+            applyPendingUpdate();
+            beginSetSpeedHold();
         }
         return;
     }

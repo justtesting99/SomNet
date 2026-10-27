@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { MOTOR_AUTOMATIC_RUN_MODE_OPTIONS } from '@/types/motorAutomaticModes';
 import { coerceMotorAutomaticRunMode } from '@/types/motorAutomaticModes';
-import { getMotorAutomaticFieldRules } from '@/utils/motorAutomaticFieldRules';
+import {
+  getMotorAutomaticFieldRules,
+  normalizeMotorAutomaticControlState,
+} from '@/utils/motorAutomaticFieldRules';
+import { defaultMotorAutomaticState } from '@/types/motorModes';
 
 describe('motor automatic modes', () => {
   it('exposes only motor waveform programs', () => {
@@ -23,8 +27,11 @@ describe('motor automatic modes', () => {
 });
 
 describe('getMotorAutomaticFieldRules', () => {
-  it('locks minimum speed for set-speed mode', () => {
-    expect(getMotorAutomaticFieldRules('periodic').disableMinimumSpeed).toBe(true);
+  it('locks minimum speed and segment timing for set-speed mode', () => {
+    const rules = getMotorAutomaticFieldRules('periodic');
+    expect(rules.disableMinimumSpeed).toBe(true);
+    expect(rules.disableSegmentMinSeconds).toBe(true);
+    expect(rules.disableSegmentMaxSeconds).toBe(true);
   });
 
   it('allows minimum segment interval for random speed and timing', () => {
@@ -32,6 +39,14 @@ describe('getMotorAutomaticFieldRules', () => {
       false,
     );
     expect(getMotorAutomaticFieldRules('randomSpeed').disableSegmentMinSeconds).toBe(true);
+  });
+
+  it('maps strokes end session to noAutoEnd for motor', () => {
+    const normalized = normalizeMotorAutomaticControlState({
+      ...defaultMotorAutomaticState,
+      endSessionMode: 'strokes',
+    });
+    expect(normalized.endSessionMode).toBe('noAutoEnd');
   });
 
   it('requires end session for wave and build-up', () => {

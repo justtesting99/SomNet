@@ -152,7 +152,12 @@ export function MotorAutomaticControls() {
     () =>
       END_SESSION_OPTIONS.map((option) => ({
         ...option,
-        disabled: option.value === 'noAutoEnd' ? fieldRules.disableNoAutoEnd : false,
+        disabled:
+          option.value === 'strokes'
+            ? true
+            : option.value === 'noAutoEnd'
+              ? fieldRules.disableNoAutoEnd
+              : false,
       })),
     [fieldRules.disableNoAutoEnd],
   );
@@ -178,6 +183,35 @@ export function MotorAutomaticControls() {
       lastPushedUpdateRef.current = null;
     }
   }, [liveOverridesActive]);
+
+  useEffect(() => {
+    if (isLoading || !settingsLoaded || startPending) {
+      return;
+    }
+
+    if (!state.running) {
+      return;
+    }
+
+    if (automaticSessionActive) {
+      return;
+    }
+
+    if (sceneSessionActive && activeSession?.deviceId === commandDeviceId) {
+      return;
+    }
+
+    setRunningLocal(false);
+  }, [
+    activeSession?.deviceId,
+    automaticSessionActive,
+    commandDeviceId,
+    isLoading,
+    sceneSessionActive,
+    settingsLoaded,
+    startPending,
+    state.running,
+  ]);
 
   useEffect(() => {
     if (isLoading || !settingsLoaded || !liveOverridesActive) {
@@ -499,7 +533,7 @@ export function MotorAutomaticControls() {
         <Panel title="Timing Settings">
           <div className="space-y-5">
             <div>
-              <p className="mb-3 text-sm font-medium text-slate-300">Time Between Segments</p>
+              <p className="mb-3 text-sm font-medium text-slate-300">Time Between Graph Points</p>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1">
                   <NumberField
@@ -510,7 +544,7 @@ export function MotorAutomaticControls() {
                     disabled={configLocked || fieldRules.disableSegmentMinSeconds}
                     title={
                       fieldRules.disableSegmentMinSeconds
-                        ? 'Not used in this automatic mode — device uses maximum interval'
+                        ? 'Not used in this automatic mode'
                         : undefined
                     }
                     onChange={(event) => {
@@ -521,22 +555,32 @@ export function MotorAutomaticControls() {
                     }}
                   />
                   {fieldRules.disableSegmentMinSeconds ? (
-                    <p className="text-xs text-slate-500">Not used — device uses maximum gap.</p>
+                    <p className="text-xs text-slate-500">Not used in this mode.</p>
                   ) : null}
                 </div>
-                <NumberField
-                  label="Maximum (sec)"
-                  alignLabelHeight
-                  value={state.segmentMaxSeconds}
-                  min={MIN_STROKE_GAP_SECONDS}
-                  disabled={configLocked}
-                  onChange={(event) => {
-                    const parsed = Math.trunc(Number(event.target.value));
-                    if (Number.isFinite(parsed)) {
-                      update('segmentMaxSeconds', parsed);
+                <div className="space-y-1">
+                  <NumberField
+                    label="Maximum (sec)"
+                    alignLabelHeight
+                    value={state.segmentMaxSeconds}
+                    min={MIN_STROKE_GAP_SECONDS}
+                    disabled={configLocked || fieldRules.disableSegmentMaxSeconds}
+                    title={
+                      fieldRules.disableSegmentMaxSeconds
+                        ? 'Not used in this automatic mode — continuous set speed'
+                        : undefined
                     }
-                  }}
-                />
+                    onChange={(event) => {
+                      const parsed = Math.trunc(Number(event.target.value));
+                      if (Number.isFinite(parsed)) {
+                        update('segmentMaxSeconds', parsed);
+                      }
+                    }}
+                  />
+                  {fieldRules.disableSegmentMaxSeconds ? (
+                    <p className="text-xs text-slate-500">Not used — continuous set speed.</p>
+                  ) : null}
+                </div>
                 <NumberField
                   label="Delay Before Start (sec)"
                   alignLabelHeight
@@ -587,6 +631,9 @@ export function MotorAutomaticControls() {
                   onChange={(value) => update('endSessionMode', value as EndSessionMode)}
                 />
               </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Strokes is disabled until rotation feedback hardware is available on the motor.
+              </p>
               {modeInfo.endSessionNote ? (
                 <p className="mt-2 text-xs text-slate-500">{modeInfo.endSessionNote}</p>
               ) : null}
