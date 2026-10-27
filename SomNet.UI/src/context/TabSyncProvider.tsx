@@ -48,7 +48,7 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
     setAutomaticRunningLocal,
     setMotorAutomaticRunningLocal,
   } = useOptions();
-  const actuatorKind = useDeviceActuatorKind(selectedSub);
+  const { actuatorKind } = useDeviceActuatorKind();
   const { activeSession, syncSessionFromRemote, endActiveSessionIfNeeded } = useLiveSession();
 
   const [remotePendingKeys, setRemotePendingKeys] = useState<ReadonlySet<HardwareCommandKey>>(

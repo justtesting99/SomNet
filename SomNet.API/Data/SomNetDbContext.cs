@@ -100,7 +100,12 @@ public sealed class SomNetDbContext : DbContext
         modelBuilder.Entity<SubDeviceRegistration>(entity =>
         {
             entity.ToTable("SubDeviceRegistrations");
-            entity.HasKey(registration => new { registration.DomTarget, registration.SubName });
+            entity.HasKey(registration => new
+            {
+                registration.DomTarget,
+                registration.SubName,
+                registration.DeviceId,
+            });
             entity.Property(registration => registration.DomTarget).HasMaxLength(128);
             entity.Property(registration => registration.SubName).HasMaxLength(32);
             entity.Property(registration => registration.DeviceId).HasMaxLength(64);

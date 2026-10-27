@@ -10,6 +10,7 @@ import { useLiveSession } from '@/context/SessionProvider';
 import { useOptions } from '@/context/OptionsProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useCommandDeviceId } from '@/context/SubDeviceProvider';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
 import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 import { Panel } from '@/components/ui/Panel';
@@ -48,6 +49,7 @@ import { waitForAutomaticHubFinalize, computeAutomaticStopGraceMs } from '@/util
 import { isDeviceAutomaticIdleMessage } from '@/utils/automaticSessionReconcile';
 import { writeAutomaticDeviceRunningHint } from '@/utils/automaticDeviceRunningHint';
 import { ApiError } from '@/api/client';
+import { isHardwareCommandReady } from '@/utils/commandReadiness';
 
 const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
   { value: 'minutes', label: 'Minutes' },
@@ -68,6 +70,7 @@ export function AutomaticControls() {
   const state = settings.automatic;
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { selectedSub } = useSubTarget();
+  const commandDeviceId = useCommandDeviceId();
   const { expandOnAction } = useVideoDisplay();
   const { endAutomaticSession, activeSession, markAutomaticDeviceStarted } = useLiveSession();
   const { isCommandPending } = useHardwareCommand();
@@ -104,7 +107,7 @@ export function AutomaticControls() {
   /** Master gate for burst sub-controls — Bursts On must be checked (Phase 10). */
   const burstSettingsDisabled = configLocked || !state.burstsOn;
   const delayStartLocked = sessionRunning;
-  const hardwareReady = systemStatus.isReady && sessionInProgress;
+  const hardwareReady = isHardwareCommandReady(systemStatus) && sessionInProgress;
   const lastPushedUpdateRef = useRef<string | null>(null);
   const updateDebounceRef = useRef<number | null>(null);
   const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);
@@ -164,6 +167,7 @@ export function AutomaticControls() {
         try {
           await sendHardwareCommand(
             selectedSub,
+            commandDeviceId,
             HARDWARE_COMMAND_KEYS.automaticUpdate,
             payload,
           );
@@ -180,7 +184,7 @@ export function AutomaticControls() {
         window.clearTimeout(updateDebounceRef.current);
       }
     };
-  }, [isLoading, settingsLoaded, liveOverridesActive, selectedSub, state]);
+  }, [commandDeviceId, isLoading, settingsLoaded, liveOverridesActive, selectedSub, state]);
 
   useEffect(() => {
     if (isLoading || !settingsLoaded || automaticSessionActive || startPending) {
@@ -275,6 +279,7 @@ export function AutomaticControls() {
     try {
       await sendHardwareCommand(
         selectedSub,
+        commandDeviceId,
         HARDWARE_COMMAND_KEYS.automaticStart,
         payloadJson,
       );
@@ -297,6 +302,7 @@ export function AutomaticControls() {
     try {
       const response = await sendHardwareCommandRaw(
         selectedSub,
+        commandDeviceId,
         HARDWARE_COMMAND_KEYS.automaticStop,
         '{}',
       );
@@ -357,7 +363,7 @@ export function AutomaticControls() {
     const wasRunning = automaticSessionActive || state.running;
 
     try {
-      const response = await sendHardwareCommandRaw(selectedSub, 'abort', '{}');
+      const response = await sendHardwareCommandRaw(selectedSub, commandDeviceId, 'abort', '{}');
 
       if (!response.delivered) {
         setCommandError(response.message ?? 'Abort could not be delivered.');

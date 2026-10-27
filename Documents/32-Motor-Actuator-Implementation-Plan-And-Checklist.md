@@ -44,7 +44,7 @@ Track once; reference from phase checklists.
 | **X-3** | Motor `resultJson` + summary builder (separate from relay) | Firmware + Shared + API | **Done** (v1 periodic) |
 | **X-4** | Relay regression: relay NVS profile unchanged on same binary | Firmware CI / manual | In progress — §2.1 runbook |
 | **X-5** | `boardDefs.h`: `MOTOR_PWM_FREQUENCY_HZ`, `MOTOR_ENABLE_ACTIVE_HIGH` tuned on module (MA-D18) | Firmware / bench | 5 kHz PWM validated; duty **>50%** very fast on production motor — operator using **~10%** until max-duty cap/tuning (MA-D18 follow-up) |
-| **X-6** | **Multi-device per Sub** — [33](./33-Multi-Device-Per-Sub-Spike.md) **signed off** 2026-10-26; implement **X-6.1–X-6.6**. Today: one `deviceId` per Sub. **Interim bench:** two Subs (X-6i) | API + UI + docs | **Impl** — §2.3 S4 |
+| **X-6** | **Multi-device per Sub** — [33](./33-Multi-Device-Per-Sub-Spike.md) **signed off** 2026-10-26; **X-6.1–X-6.2** in tree; **X-6.3–X-6.6** open. **Interim bench:** two Subs (X-6i) until same-Sub multi-pair verified | API + UI + docs | **In progress** — §2.3 S4 |
 | **X-6i** | **Dual-Sub bench UI** — switching `selectedSub` must not leak session row, `running`, or Start/Stop state to the other Sub (until true multi-device-per-Sub). See §2.2 | SomNet.UI | **Done** (2026-10-26, operator verified) |
 
 **Bench note (until X-6):** use **two Subs** (e.g. relay on `Slv66`, motor on `Slv67`) — not two boards on one Sub. You may **switch Sub in the UI** while the other device keeps its session; each Sub’s controls reflect **that** pairing only (X-6i).
@@ -72,7 +72,7 @@ Required for parallel motor + relay regression on one Dom account. **Does not** 
 | **S1** | Read & review [33 — Multi-device per Sub spike](./33-Multi-Device-Per-Sub-Spike.md) (use cases UC-1–UC-5, §4 model, §5 slices) | ☑ |
 | **S2** | Resolve **Q1–Q7** in [33 §7](./33-Multi-Device-Per-Sub-Spike.md) | ☑ 2026-10-26 |
 | **S3** | **Spike sign-off** ([33 §8](./33-Multi-Device-Per-Sub-Spike.md)) | ☑ 2026-10-26 |
-| **S4** | Implement **X-6.1** → **X-6.6** per agreed order | ☐ |
+| **S4** | Implement **X-6.1** → **X-6.6** per agreed order | **In progress** — X-6.1 + X-6.2 (API/UI `deviceId`) landed 2026-10-26; X-6.3–X-6.6 remain |
 
 **Phase gates (until S3 complete):**
 
@@ -348,3 +348,4 @@ Update this table when a phase is signed off.
 | 2026-10-26 | Spike decisions: relay-only session accessory (MA-D22); independent motors; no v1 relay+motor lockout; gateway super-session future |
 | 2026-10-26 | Spike **§8 sign-off** — Q2 always `deviceId`; Q5 max 8 (MA-D13); Q6 one relay/Sub; Q7 migration; begin X-6.1 |
 | 2026-10-26 | [33 §1.1](./33-Multi-Device-Per-Sub-Spike.md) vision — gateway orchestration; per-device UI; Q8 no session block without accessory (MA-D24) |
+| 2026-10-26 | **X-6.1–X-6.2** — composite PK `(Dom, Sub, DeviceId)`; list/pair/revoke per device; hub unicast; UI `deviceId` + device picker |

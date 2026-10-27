@@ -1,14 +1,20 @@
 import { AutomaticControls } from '@/components/modes/AutomaticControls';
 import { MotorAutomaticControls } from '@/components/modes/MotorAutomaticControls';
 import { useDeviceActuatorKind } from '@/hooks/useDeviceActuatorKind';
-import { useSubTarget } from '@/context/SubTargetProvider';
 
 export function AutomaticModeControls() {
-  const { selectedSub } = useSubTarget();
-  const actuatorKind = useDeviceActuatorKind(selectedSub);
+  const { actuatorKind, isLoading, hasDevice } = useDeviceActuatorKind();
 
-  if (actuatorKind === null) {
+  if (isLoading) {
     return <p className="text-sm text-slate-500">Loading device profile…</p>;
+  }
+
+  if (!hasDevice || actuatorKind === null) {
+    return (
+      <p className="text-sm text-slate-500">
+        No paired device for this Sub. Pair hardware in Options → Hardware.
+      </p>
+    );
   }
 
   if (actuatorKind === 'hbridge') {

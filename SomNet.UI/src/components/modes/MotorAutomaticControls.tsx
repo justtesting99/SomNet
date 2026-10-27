@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveSession } from '@/context/SessionProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useCommandDeviceId } from '@/context/SubDeviceProvider';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
 import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
@@ -21,6 +22,7 @@ import { isDeviceAutomaticIdleMessage } from '@/utils/automaticSessionReconcile'
 import { writeAutomaticDeviceRunningHint } from '@/utils/automaticDeviceRunningHint';
 import { ApiError } from '@/api/client';
 import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCommand';
+import { isHardwareCommandReady } from '@/utils/commandReadiness';
 const MOTOR_STOP_GRACE_MS = 60_000;
 
 const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
@@ -33,11 +35,12 @@ export function MotorAutomaticControls() {
     useOptions();
   const state = settings.motorAutomatic;
   const { selectedSub } = useSubTarget();
+  const commandDeviceId = useCommandDeviceId();
   const { expandOnAction } = useVideoDisplay();
   const { endAutomaticSession, activeSession, markAutomaticDeviceStarted } = useLiveSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
-  const { sessionInProgress, sessionAccessoryError } = useSessionAccessory();
+  const { sessionAccessoryError } = useSessionAccessory();
   const [commandError, setCommandError] = useState('');
   const [cooperativeStopInProgress, setCooperativeStopInProgress] = useState(false);
   const runningRef = useRef(state.running);
@@ -48,15 +51,13 @@ export function MotorAutomaticControls() {
   const automaticSessionActive = activeSession?.mode === 'automatic';
   const sessionRunning = settingsLoaded && state.running;
   const configLocked = sessionRunning;
-  const hardwareReady = systemStatus.isReady && sessionInProgress;
+  const hardwareReady = isHardwareCommandReady(systemStatus);
   const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);
   const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop);
   const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
-  const hardwareDisabledReason = !sessionInProgress
-    ? 'Turn Session in Progress on before Start.'
-    : hardwareReady
-      ? undefined
-      : systemStatus.detail || systemStatus.summary;
+  const hardwareDisabledReason = hardwareReady
+    ? undefined
+    : systemStatus.detail || systemStatus.summary;
 
   useEffect(() => {
     if (!automaticSessionActive && !state.running) {
@@ -111,7 +112,12 @@ export function MotorAutomaticControls() {
     expandOnAction();
     const payloadJson = buildMotorAutomaticStartPayload(state);
     try {
-      await sendHardwareCommand(selectedSub, HARDWARE_COMMAND_KEYS.automaticStart, payloadJson);
+      await sendHardwareCommand(
+        selectedSub,
+        commandDeviceId,
+        HARDWARE_COMMAND_KEYS.automaticStart,
+        payloadJson,
+      );
       markAutomaticDeviceStarted();
       const sessionId = activeSessionRef.current?.id;
       if (sessionId) {
@@ -133,6 +139,7 @@ export function MotorAutomaticControls() {
     try {
       const response = await sendHardwareCommandRaw(
         selectedSub,
+        commandDeviceId,
         HARDWARE_COMMAND_KEYS.automaticStop,
         '{}',
       );
@@ -178,7 +185,7 @@ export function MotorAutomaticControls() {
     setCommandError('');
     const wasRunning = automaticSessionActive || state.running;
     try {
-      const response = await sendHardwareCommandRaw(selectedSub, 'abort', '{}');
+      const response = await sendHardwareCommandRaw(selectedSub, commandDeviceId, 'abort', '{}');
       if (!response.delivered || !response.acknowledged) {
         setCommandError(response.message ?? 'Abort could not be delivered.');
         return;
@@ -214,6 +221,11 @@ export function MotorAutomaticControls() {
       </p>
       {sessionAccessoryError ? (
         <p className="mb-2 text-sm text-red-400" role="alert">{sessionAccessoryError}</p>
+      ) : null}
+      {!hardwareReady && !commandError && !startPending && !stopPending && !abortPending ? (
+        <p className="mb-2 text-sm text-amber-400/90" role="status">
+          {hardwareDisabledReason}
+        </p>
       ) : null}
       {commandError ? <p className="mb-2 text-sm text-red-400">{commandError}</p> : null}
       {cooperativeStopInProgress ? (

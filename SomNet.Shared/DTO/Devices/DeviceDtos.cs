@@ -28,17 +28,36 @@ public sealed class PairDeviceResponseDto
     public string? Message { get; init; }
 }
 
+public sealed class DeviceRegistrationDto
+{
+    public required string DeviceId { get; init; }
+
+    public required string DomTarget { get; init; }
+
+    public required string SubTarget { get; init; }
+
+    public bool IsConnected { get; init; }
+
+    public DateTimeOffset PairedAt { get; init; }
+
+    public DateTimeOffset? LastConnectedAt { get; init; }
+
+    public DateTimeOffset TokenExpiresAt { get; init; }
+
+    public ActuatorKind ActuatorKind { get; init; } = ActuatorKind.Relay;
+}
+
 public sealed class DeviceStatusResponseDto
 {
     public required string DomTarget { get; init; }
 
     public required string SubTarget { get; init; }
 
+    public required string DeviceId { get; init; }
+
     public bool IsPaired { get; init; }
 
     public bool IsConnected { get; init; }
-
-    public string? DeviceId { get; init; }
 
     public DateTimeOffset? PairedAt { get; init; }
 
@@ -95,6 +114,8 @@ public sealed class HardwareCommandAckDto
 public sealed class SendHardwareCommandRequestDto
 {
     public required string SubTarget { get; init; }
+
+    public required string DeviceId { get; init; }
 
     public required string CommandKey { get; init; }
 

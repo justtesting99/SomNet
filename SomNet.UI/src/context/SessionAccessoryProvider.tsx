@@ -13,6 +13,7 @@ import { useMode } from '@/context/ModeProvider';
 import { useOptions } from '@/context/OptionsProvider';
 import { useLiveSession } from '@/context/SessionProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
 import { useSiteUserReady } from '@/context/SiteUserReadyProvider';
 import { useHardwareCommand } from '@/context/HardwareCommandProvider';
@@ -35,6 +36,10 @@ import { readSubPresentAck } from '@/utils/subPresentAckStorage';
 import { subTargetsMatch, writeReadyBannerDismissed } from '@/utils/readyBannerStorage';
 import { useDeviceActuatorKind } from '@/hooks/useDeviceActuatorKind';
 import { deviceAutomaticRunningForActuator } from '@/utils/deviceAutomaticRunning';
+import {
+  isDeviceConnectionOnline,
+  isHubLinkReady,
+} from '@/utils/commandReadiness';
 
 interface SessionAccessoryContextValue {
   sessionInProgress: boolean;
@@ -53,7 +58,8 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
   const { user } = useAuth();
   const { mode } = useMode();
   const { selectedSub } = useSubTarget();
-  const { status: systemStatus } = useSystemStatus();
+  const { relayRegistration, registrations, selectedDeviceId } = useSubDevice();
+  const { status: systemStatus, relayStatus } = useSystemStatus();
   const { subPresentAckSub, dismissReadyBannerForSub } = useSiteUserReady();
   const {
     settings,
@@ -69,7 +75,7 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
     syncActiveSessionMode,
   } = useLiveSession();
   const { isCommandPending, executeCommand } = useHardwareCommand();
-  const actuatorKind = useDeviceActuatorKind(selectedSub);
+  const { actuatorKind } = useDeviceActuatorKind();
 
   const domTarget = user?.displayName ?? user?.username ?? '';
 
@@ -106,8 +112,19 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
     automaticDeviceRunning ||
     (sessionInProgress ? motionCommandPending : false);
 
+  const relayConnectionSnapshot =
+    relayRegistration && relayRegistration.deviceId !== selectedDeviceId
+      ? relayStatus
+      : systemStatus;
+
+  const hubLinkReady = isHubLinkReady(systemStatus);
+
+  const relayDeviceOnline = relayRegistration
+    ? relayConnectionSnapshot !== null && isDeviceConnectionOnline(relayConnectionSnapshot)
+    : isDeviceConnectionOnline(systemStatus);
+
   const canEnableSwitch =
-    systemStatus.isReady && subPresentAcknowledged && !workInProgress;
+    hubLinkReady && relayDeviceOnline && subPresentAcknowledged && !workInProgress;
 
   const switchDisabled =
     togglePending ||
@@ -124,8 +141,18 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
     }
 
     if (!sessionInProgress) {
-      if (!systemStatus.isReady) {
+      if (!hubLinkReady) {
         return systemStatus.detail || systemStatus.summary;
+      }
+
+      if (!relayDeviceOnline) {
+        return (
+          relayConnectionSnapshot?.detail ||
+          relayConnectionSnapshot?.summary ||
+          (relayRegistration
+            ? 'Relay device is not connected.'
+            : systemStatus.detail || systemStatus.summary)
+        );
       }
 
       if (!subPresentAcknowledged) {
@@ -159,8 +186,12 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
     subPresentAcknowledged,
     subPresentAckSub,
     selectedSub,
+    hubLinkReady,
+    relayConnectionSnapshot?.detail,
+    relayConnectionSnapshot?.summary,
+    relayDeviceOnline,
+    relayRegistration,
     systemStatus.detail,
-    systemStatus.isReady,
     systemStatus.summary,
     toggleError,
     togglePending,
@@ -235,6 +266,10 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
   }, [domTarget, selectedSub]);
 
   useEffect(() => {
+    setToggleError('');
+  }, [selectedSub, selectedDeviceId]);
+
+  useEffect(() => {
     if (!sessionInProgress || !mode || !activeSession) {
       return;
     }
@@ -261,7 +296,15 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
         const payloadJson = JSON.stringify({ enabled });
 
         try {
-          await sendHardwareCommand(selectedSub, HARDWARE_COMMAND_KEYS.sessionAccessory, payloadJson);
+          const relayDeviceId = relayRegistration?.deviceId;
+          if (relayDeviceId) {
+            await sendHardwareCommand(
+              selectedSub,
+              relayDeviceId,
+              HARDWARE_COMMAND_KEYS.sessionAccessory,
+              payloadJson,
+            );
+          }
 
           if (enabled) {
             persistInProgress(true);
@@ -284,13 +327,34 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
           const relayAutoRunning = settingsRef.current.automatic.running;
           const motorAutoRunning = settingsRef.current.motorAutomatic.running;
 
+          const stopTargets: { deviceId: string; automatic: typeof settingsRef.current.automatic; motor: boolean }[] =
+            [];
+          if (relayAutoRunning && relayRegistration?.deviceId) {
+            stopTargets.push({
+              deviceId: relayRegistration.deviceId,
+              automatic: settingsRef.current.automatic,
+              motor: false,
+            });
+          }
+          if (motorAutoRunning) {
+            for (const reg of registrations.filter((row) => row.actuatorKind === 'hbridge')) {
+              stopTargets.push({
+                deviceId: reg.deviceId,
+                automatic: settingsRef.current.automatic,
+                motor: true,
+              });
+            }
+          }
+
           if (
             activeSessionRef.current?.mode === 'automatic' ||
             relayAutoRunning ||
             motorAutoRunning
           ) {
+            for (const target of stopTargets) {
             await stopAutomaticForModeSwitch(
               selectedSub,
+              target.deviceId,
               settingsRef.current.automatic,
               {
                 endAutomaticSession: async (_endReason, deviceResult) => {
@@ -308,10 +372,11 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
                   settingsRef.current.motorAutomatic.running,
               },
               {
-                deviceSessionRunning: relayAutoRunning || motorAutoRunning,
-                stopGraceMs: motorAutoRunning ? 60_000 : undefined,
+                deviceSessionRunning: target.motor ? motorAutoRunning : relayAutoRunning,
+                stopGraceMs: target.motor ? 60_000 : undefined,
               },
             );
+            }
           }
 
           const automaticDeviceStarted =

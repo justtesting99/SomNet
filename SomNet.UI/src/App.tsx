@@ -5,6 +5,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { SystemStatusProvider } from '@/context/SystemStatusProvider';
 import { SubTargetProvider } from '@/context/SubTargetProvider';
+import { SubDeviceProvider } from '@/context/SubDeviceProvider';
 import { HistoryProvider } from '@/context/HistoryProvider';
 import { DomSessionsProvider } from '@/context/DomSessionsProvider';
 import { OptionsProvider } from '@/context/OptionsProvider';
@@ -69,6 +70,7 @@ export function App() {
 
   return (
     <SubTargetProvider>
+      <SubDeviceProvider>
       <SessionProvider>
         <DomSessionsProvider>
           <HardwareProvider>
@@ -101,6 +103,7 @@ export function App() {
           </HardwareProvider>
         </DomSessionsProvider>
       </SessionProvider>
+      </SubDeviceProvider>
     </SubTargetProvider>
   );
 }

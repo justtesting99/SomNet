@@ -15,11 +15,13 @@ export function isDeviceAutomaticIdleMessage(message?: string | null): boolean {
  */
 export async function probeDeviceAutomaticSessionActive(
   subTarget: SubTargetName,
+  deviceId: string,
   automatic: AutomaticControlState,
 ): Promise<boolean | null> {
   try {
     const response = await sendHardwareCommand(
       subTarget,
+      deviceId,
       HARDWARE_COMMAND_KEYS.automaticUpdate,
       buildAutomaticStartPayload(automatic),
     );

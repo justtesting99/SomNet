@@ -11,7 +11,6 @@ import {
 import { fetchPairingSettings, fetchStrokeLimits, savePairingSettings } from '@/api/settings';
 import { useAuth } from '@/context/AuthProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
-import type { SubTargetName } from '@/config/sessionUsers';
 import { DEFAULT_STROKE_MS_LIMITS } from '@/config/strokeLimits';
 import type { AppOptions } from '@/types/options';
 import type { AutomaticControlState, ManualControlState } from '@/types/modes';

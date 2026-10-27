@@ -27,6 +27,7 @@ public class SystemStatusController : ControllerBase
     [HttpGet("status")]
     public async Task<ActionResult<SystemStatusResponseDto>> GetStatus(
         [FromQuery] string? subTarget,
+        [FromQuery] string? deviceId,
         CancellationToken cancellationToken)
     {
         var domTarget = GetDomTarget();
@@ -45,7 +46,18 @@ public class SystemStatusController : ControllerBase
             });
         }
 
-        var status = await _deviceTokenService.GetStatusAsync(domTarget, subTarget, cancellationToken);
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            return Ok(new SystemStatusResponseDto
+            {
+                Api = ConnectionState.Online,
+                Device = ConnectionState.Offline,
+                SignalR = signalRState,
+                Message = "deviceId is required for device connection status.",
+            });
+        }
+
+        var status = await _deviceTokenService.GetStatusAsync(domTarget, subTarget, deviceId, cancellationToken);
         var deviceState = status.IsConnected
             ? ConnectionState.Online
             : status.IsPaired

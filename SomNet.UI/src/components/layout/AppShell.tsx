@@ -16,6 +16,7 @@ import { useHardwareDialog } from '@/context/HardwareProvider';
 import { useNotify } from '@/context/NotifyProvider';
 import { useLiveSession } from '@/context/SessionProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 import { stopAutomaticForModeSwitch } from '@/utils/stopAutomaticForModeSwitch';
 import { SessionInProgressSwitch } from '@/components/hardware/SessionInProgressSwitch';
 import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
@@ -34,6 +35,7 @@ export function AppShell({ children, wide = false }: AppShellProps) {
   const { openDialog: openNotify } = useNotify();
   const { activeSession, endActiveSessionIfNeeded, endAutomaticSession } = useLiveSession();
   const { selectedSub } = useSubTarget();
+  const { selectedDeviceId } = useSubDevice();
   const { settings, setAutomaticRunningLocal } = useOptions();
   const { sessionInProgress } = useSessionAccessory();
   const activeSessionRef = useRef(activeSession);
@@ -43,8 +45,11 @@ export function AppShell({ children, wide = false }: AppShellProps) {
   sessionInProgressRef.current = sessionInProgress;
 
   async function stopAutomaticDeviceOnly() {
-    if (activeSessionRef.current?.mode === 'automatic' || settings.automatic.running) {
-      await stopAutomaticForModeSwitch(selectedSub, settings.automatic, {
+    if (
+      selectedDeviceId &&
+      (activeSessionRef.current?.mode === 'automatic' || settings.automatic.running)
+    ) {
+      await stopAutomaticForModeSwitch(selectedSub, selectedDeviceId, settings.automatic, {
         endAutomaticSession: async () => {
           // Keep server session row while Session in Progress stays on (P16-D7).
         },
@@ -62,8 +67,11 @@ export function AppShell({ children, wide = false }: AppShellProps) {
       return;
     }
 
-    if (activeSessionRef.current?.mode === 'automatic' || settings.automatic.running) {
-      await stopAutomaticForModeSwitch(selectedSub, settings.automatic, {
+    if (
+      selectedDeviceId &&
+      (activeSessionRef.current?.mode === 'automatic' || settings.automatic.running)
+    ) {
+      await stopAutomaticForModeSwitch(selectedSub, selectedDeviceId, settings.automatic, {
         endAutomaticSession: (endReason, deviceResult) =>
           endAutomaticSession(endReason || reason, deviceResult),
         setAutomaticRunningLocal,

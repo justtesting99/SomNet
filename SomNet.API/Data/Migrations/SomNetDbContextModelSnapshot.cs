@@ -206,6 +206,10 @@ namespace SomNet.API.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
+                    b.Property<string>("DeviceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("AccessToken")
                         .IsRequired()
                         .HasMaxLength(2048)
@@ -215,11 +219,6 @@ namespace SomNet.API.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
-
-                    b.Property<string>("DeviceId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
 
                     b.Property<bool>("IsRevoked")
                         .HasColumnType("bit");
@@ -238,7 +237,7 @@ namespace SomNet.API.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
-                    b.HasKey("DomTarget", "SubName");
+                    b.HasKey("DomTarget", "SubName", "DeviceId");
 
                     b.HasIndex("DeviceId");
 

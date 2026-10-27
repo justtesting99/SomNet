@@ -260,18 +260,32 @@ public sealed class HardwareHub : Hub
 
 public static class HardwareHubExtensions
 {
-    public static Task SendPairDeviceAsync(
+    public static async Task SendPairDeviceAsync(
         this IHubContext<HardwareHub> hubContext,
+        IDeviceConnectionRegistry connectionRegistry,
         string deviceId,
         PairDeviceMessageDto message,
         CancellationToken cancellationToken = default)
     {
-        return Task.WhenAll(
+        var deliveries = new List<Task>();
+
+        deliveries.Add(
             hubContext.Clients
                 .Group(HardwareHubGroups.Unpaired(deviceId))
-                .SendAsync(HardwareHubMethods.PairDevice, message, cancellationToken),
-            hubContext.Clients
-                .Group(HardwareHubGroups.Paired(message.DomTarget, message.SubTarget))
                 .SendAsync(HardwareHubMethods.PairDevice, message, cancellationToken));
+
+        if (connectionRegistry.TryGetPairedConnectionId(
+                message.DomTarget,
+                message.SubTarget,
+                deviceId,
+                out var pairedConnectionId))
+        {
+            deliveries.Add(
+                hubContext.Clients
+                    .Client(pairedConnectionId)
+                    .SendAsync(HardwareHubMethods.PairDevice, message, cancellationToken));
+        }
+
+        await Task.WhenAll(deliveries);
     }
 }

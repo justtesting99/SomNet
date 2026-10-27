@@ -373,7 +373,35 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
         return;
     }
 
-    if (sessionAccessory_ == nullptr || !sessionAccessory_->isEnabled()) {
+    if (isAutomaticStopKey(command.commandKey)) {
+        if (actuatorKind == DeviceActuatorKind_HBridge) {
+            if (motorAutomatic_ == nullptr ||
+                !motorAutomatic_->requestStop(
+                    command.correlationId,
+                    this,
+                    &CommandHandler::onAutomaticComplete)) {
+                sendAck(command.correlationId, false, "no automatic session running", nullptr);
+                return;
+            }
+            sendAck(command.correlationId, true, "automatic stop requested", nullptr);
+            return;
+        }
+
+        if (!executionContext_->stopAutomatic(
+                command.correlationId,
+                this,
+                &CommandHandler::onAutomaticComplete)) {
+            sendAck(command.correlationId, false, "no automatic session running", nullptr);
+            return;
+        }
+
+        sendAck(command.correlationId, true, "automatic stop requested", nullptr);
+        return;
+    }
+
+    // Session accessory (GPIO) is relay-only in multi-device Subs; H-bridge motion is independent.
+    if (actuatorKind == DeviceActuatorKind_Relay &&
+        (sessionAccessory_ == nullptr || !sessionAccessory_->isEnabled())) {
         Serial.println(F("[CMD] reject: session accessory off"));
         sendAck(command.correlationId, false, "session accessory off", nullptr);
         return;
@@ -456,32 +484,6 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
         }
 
         sendAck(command.correlationId, true, "automatic session started", nullptr);
-        return;
-    }
-
-    if (isAutomaticStopKey(command.commandKey)) {
-        if (actuatorKind == DeviceActuatorKind_HBridge) {
-            if (motorAutomatic_ == nullptr ||
-                !motorAutomatic_->requestStop(
-                    command.correlationId,
-                    this,
-                    &CommandHandler::onAutomaticComplete)) {
-                sendAck(command.correlationId, false, "no automatic session running", nullptr);
-                return;
-            }
-            sendAck(command.correlationId, true, "automatic stop requested", nullptr);
-            return;
-        }
-
-        if (!executionContext_->stopAutomatic(
-                command.correlationId,
-                this,
-                &CommandHandler::onAutomaticComplete)) {
-            sendAck(command.correlationId, false, "no automatic session running", nullptr);
-            return;
-        }
-
-        sendAck(command.correlationId, true, "automatic stop requested", nullptr);
         return;
     }
 

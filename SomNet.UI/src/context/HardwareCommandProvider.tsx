@@ -10,6 +10,7 @@ import {
 } from 'react';
 import type { HardwareCommandKey, HardwareCommandStatus } from '@/types/hardwareCommand';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
 
 interface HardwareCommandContextValue {
@@ -25,6 +26,7 @@ const HardwareCommandContext = createContext<HardwareCommandContextValue | null>
 
 export function HardwareCommandProvider({ children }: { children: ReactNode }) {
   const { selectedSub } = useSubTarget();
+  const { selectedDeviceId } = useSubDevice();
   const pendingRef = useRef(new Set<HardwareCommandKey>());
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<HardwareCommandKey>>(
     () => new Set(),
@@ -57,7 +59,7 @@ export function HardwareCommandProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     pendingRef.current.clear();
     syncPendingState();
-  }, [selectedSub, syncPendingState]);
+  }, [selectedDeviceId, selectedSub, syncPendingState]);
 
   const getCommandStatus = useCallback(
     (commandKey: HardwareCommandKey): HardwareCommandStatus =>

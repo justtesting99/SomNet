@@ -28,6 +28,7 @@ export interface StopAutomaticForModeSwitchOptions {
 /** Stop device automatic session before Switch mode / sign-out (P15 follow-up). */
 export async function stopAutomaticForModeSwitch(
   subTarget: SubTargetName,
+  deviceId: string,
   automatic: AutomaticControlState,
   handlers: StopAutomaticForModeSwitchHandlers,
   options?: StopAutomaticForModeSwitchOptions,
@@ -42,6 +43,7 @@ export async function stopAutomaticForModeSwitch(
   try {
     const response = await sendHardwareCommandRaw(
       subTarget,
+      deviceId,
       HARDWARE_COMMAND_KEYS.automaticStop,
       '{}',
     );

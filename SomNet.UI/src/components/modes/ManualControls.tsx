@@ -3,8 +3,10 @@ import { type ManualControlState } from '@/types/modes';
 import { useOptions } from '@/context/OptionsProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useCommandDeviceId } from '@/context/SubDeviceProvider';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
 import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
+import { isHardwareCommandReady } from '@/utils/commandReadiness';
 import { Panel } from '@/components/ui/Panel';
 import { CommandButton } from '@/components/ui/CommandButton';
 import { NumberField } from '@/components/ui/NumberField';
@@ -38,6 +40,7 @@ export function ManualControls() {
   const state = settings.manual;
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { selectedSub } = useSubTarget();
+  const commandDeviceId = useCommandDeviceId();
   const { expandOnAction } = useVideoDisplay();
   const { prepareManualSession, recordManualStroke, recordManualBurst, recordManualAbort } =
     useLiveSession();
@@ -64,7 +67,7 @@ export function ManualControls() {
   const strokePending = isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke);
   const burstPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualBurst);
   const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
-  const hardwareReady = systemStatus.isReady && sessionInProgress;
+  const hardwareReady = isHardwareCommandReady(systemStatus) && sessionInProgress;
   const strokeDisabledReason = !sessionInProgress
     ? 'Turn Session in Progress on before stroke or burst.'
     : hardwareReady
@@ -120,6 +123,7 @@ export function ManualControls() {
       const snapshotActionIndex = await prepareManualSession();
       const response = await sendHardwareCommand(
         selectedSub,
+        commandDeviceId,
         'stroke',
         payloadJson,
         snapshotActionIndex,
@@ -152,6 +156,7 @@ export function ManualControls() {
       const snapshotActionIndex = await prepareManualSession();
       const response = await sendHardwareCommand(
         selectedSub,
+        commandDeviceId,
         'burst',
         payloadJson,
         snapshotActionIndex,
@@ -186,7 +191,7 @@ export function ManualControls() {
     setCommandError('');
 
     try {
-      const response = await sendHardwareCommandRaw(selectedSub, 'abort', '{}');
+      const response = await sendHardwareCommandRaw(selectedSub, commandDeviceId, 'abort', '{}');
 
       if (!response.delivered) {
         setCommandError(response.message ?? 'Abort could not be delivered.');

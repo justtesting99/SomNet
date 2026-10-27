@@ -29,13 +29,17 @@ public interface IDeviceConnectionRegistry
 
     bool TryGetUnpairedConnectionId(string deviceId, out string connectionId);
 
-    bool IsPairedDeviceConnected(string domTarget, string subTarget);
+    bool TryGetPairedConnectionId(string domTarget, string subTarget, string deviceId, out string connectionId);
+
+    bool IsPairedDeviceConnected(string domTarget, string subTarget, string deviceId);
+
+    bool IsAnyPairedDeviceConnectedOnSub(string domTarget, string subTarget);
 
     bool IsAnyDeviceConnected();
 
     bool IsSignalRActive();
 
-    string? GetConnectedDeviceId(string domTarget, string subTarget);
+    IReadOnlyList<string> ListConnectedDeviceIds(string domTarget, string subTarget);
 
     Task<HardwareCommandAckDto?> WaitForAcknowledgementAsync(
         string correlationId,
@@ -53,7 +57,8 @@ public sealed class DeviceConnectionRegistry : IDeviceConnectionRegistry
 {
     private readonly ConcurrentDictionary<string, UnpairedConnection> _unpairedConnections =
         new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, PairedConnection> _pairedConnections = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, PairedConnection> _pairedConnections =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte> _operatorConnections = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, TaskCompletionSource<HardwareCommandAckDto>> _pendingAcks =
         new(StringComparer.OrdinalIgnoreCase);
@@ -70,7 +75,7 @@ public sealed class DeviceConnectionRegistry : IDeviceConnectionRegistry
     public void RegisterPaired(string deviceId, string domTarget, string subTarget, string connectionId, string? remoteIp = null)
     {
         var normalizedDeviceId = NormalizeDeviceId(deviceId);
-        var pairingKey = CreatePairingKey(domTarget, subTarget);
+        var pairingKey = CreatePairedKey(domTarget, subTarget, normalizedDeviceId);
         _pairedConnections[pairingKey] = new PairedConnection(
             normalizedDeviceId,
             domTarget.Trim(),
@@ -134,20 +139,42 @@ public sealed class DeviceConnectionRegistry : IDeviceConnectionRegistry
         return false;
     }
 
-    public bool IsPairedDeviceConnected(string domTarget, string subTarget)
+    public bool TryGetPairedConnectionId(string domTarget, string subTarget, string deviceId, out string connectionId)
     {
-        return _pairedConnections.ContainsKey(CreatePairingKey(domTarget, subTarget));
+        if (_pairedConnections.TryGetValue(
+                CreatePairedKey(domTarget, subTarget, deviceId),
+                out var connection))
+        {
+            connectionId = connection.ConnectionId;
+            return true;
+        }
+
+        connectionId = string.Empty;
+        return false;
+    }
+
+    public bool IsPairedDeviceConnected(string domTarget, string subTarget, string deviceId) =>
+        TryGetPairedConnectionId(domTarget, subTarget, deviceId, out _);
+
+    public bool IsAnyPairedDeviceConnectedOnSub(string domTarget, string subTarget)
+    {
+        var prefix = CreateSubPrefix(domTarget, subTarget);
+        return _pairedConnections.Keys.Any(key => key.StartsWith(prefix, StringComparison.Ordinal));
     }
 
     public bool IsAnyDeviceConnected() => !_pairedConnections.IsEmpty;
 
-    public bool IsSignalRActive() => !_pairedConnections.IsEmpty || !_unpairedConnections.IsEmpty || !_operatorConnections.IsEmpty;
+    public bool IsSignalRActive() =>
+        !_pairedConnections.IsEmpty || !_unpairedConnections.IsEmpty || !_operatorConnections.IsEmpty;
 
-    public string? GetConnectedDeviceId(string domTarget, string subTarget)
+    public IReadOnlyList<string> ListConnectedDeviceIds(string domTarget, string subTarget)
     {
-        return _pairedConnections.TryGetValue(CreatePairingKey(domTarget, subTarget), out var connection)
-            ? connection.DeviceId
-            : null;
+        var prefix = CreateSubPrefix(domTarget, subTarget);
+        return _pairedConnections
+            .Where(entry => entry.Key.StartsWith(prefix, StringComparison.Ordinal))
+            .Select(entry => entry.Value.DeviceId)
+            .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     public async Task<HardwareCommandAckDto?> WaitForAcknowledgementAsync(
@@ -239,8 +266,11 @@ public sealed class DeviceConnectionRegistry : IDeviceConnectionRegistry
             : null;
     }
 
-    private static string CreatePairingKey(string domTarget, string subTarget) =>
-        $"{domTarget.Trim()}::{subTarget.Trim()}";
+    private static string CreatePairedKey(string domTarget, string subTarget, string deviceId) =>
+        $"{domTarget.Trim()}::{subTarget.Trim()}::{NormalizeDeviceId(deviceId)}";
+
+    private static string CreateSubPrefix(string domTarget, string subTarget) =>
+        $"{domTarget.Trim()}::{subTarget.Trim()}::";
 
     private static string NormalizeDeviceId(string deviceId) => deviceId.Trim();
 
