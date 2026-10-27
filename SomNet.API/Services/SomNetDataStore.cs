@@ -550,6 +550,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
             Manual = device.Manual,
             Automatic = device.Automatic,
             MotorAutomatic = device.MotorAutomatic,
+            MotorManual = device.MotorManual,
         };
     }
 

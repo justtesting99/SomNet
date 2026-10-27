@@ -165,19 +165,10 @@ public static class PairingSettingsSerializer
             (minDuty, maxDuty) = (maxDuty, minDuty);
         }
 
-        var minRun = Math.Clamp(source.MinimumRunSeconds, 1, 3600);
-        var maxRun = Math.Clamp(source.MaximumRunSeconds, 1, 3600);
-        if (minRun > maxRun)
-        {
-            (minRun, maxRun) = (maxRun, minRun);
-        }
-
         return new MotorManualControlStateDto
         {
             MinimumDutyPercent = minDuty,
             MaximumDutyPercent = maxDuty,
-            MinimumRunSeconds = minRun,
-            MaximumRunSeconds = maxRun,
             SpeedPercent = Math.Clamp(source.SpeedPercent, 0, 100),
         };
     }

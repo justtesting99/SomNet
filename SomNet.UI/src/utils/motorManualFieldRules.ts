@@ -10,13 +10,6 @@ function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, Math.trunc(value)));
 }
 
-function clampRunSeconds(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 1;
-  }
-  return Math.min(3600, Math.max(1, Math.trunc(value)));
-}
-
 export function normalizeMotorManualControlState(
   state: MotorManualControlState,
 ): MotorManualControlState {
@@ -26,19 +19,22 @@ export function normalizeMotorManualControlState(
     [minimumDutyPercent, maximumDutyPercent] = [maximumDutyPercent, minimumDutyPercent];
   }
 
-  let minimumRunSeconds = clampRunSeconds(state.minimumRunSeconds);
-  let maximumRunSeconds = clampRunSeconds(state.maximumRunSeconds);
-  if (minimumRunSeconds > maximumRunSeconds) {
-    [minimumRunSeconds, maximumRunSeconds] = [maximumRunSeconds, minimumRunSeconds];
-  }
-
   return {
     ...defaultMotorManualState,
     ...state,
     minimumDutyPercent,
     maximumDutyPercent,
-    minimumRunSeconds,
-    maximumRunSeconds,
     speedPercent: clampPercent(state.speedPercent),
   };
+}
+
+/** Strip legacy persisted run-second fields from API payloads. */
+export function normalizeMotorManualFromApi(
+  value: MotorManualControlState & {
+    minimumRunSeconds?: number;
+    maximumRunSeconds?: number;
+  },
+): MotorManualControlState {
+  const { minimumRunSeconds: _minRun, maximumRunSeconds: _maxRun, ...rest } = value;
+  return normalizeMotorManualControlState(rest);
 }

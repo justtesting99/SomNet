@@ -452,6 +452,16 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     tokensLoadedSessionRef.current = null;
   }, [videoFeedBandwidth]);
 
+  const prevFocusDeviceIdRef = useRef(focusDeviceId);
+  useEffect(() => {
+    if (prevFocusDeviceIdRef.current === focusDeviceId) {
+      return;
+    }
+
+    prevFocusDeviceIdRef.current = focusDeviceId;
+    hideFeeds('focus-device-change');
+  }, [focusDeviceId, hideFeeds]);
+
   useEffect(
     () => () => {
       stopHideWatch();

@@ -1,4 +1,5 @@
 import { useSystemStatus } from '@/context/SystemStatusProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 import { getOverallTone } from '@/utils/systemStatus';
 
 const toneStyles = {
@@ -26,8 +27,10 @@ const toneStyles = {
 
 export function SystemStatusDisplay() {
   const { status } = useSystemStatus();
+  const { selectedDeviceId, registrations } = useSubDevice();
   const tone = getOverallTone(status);
   const styles = toneStyles[tone];
+  const showDeviceLabel = registrations.length > 1 && selectedDeviceId;
 
   return (
     <div
@@ -43,6 +46,9 @@ export function SystemStatusDisplay() {
           aria-hidden="true"
         />
         <p className="min-w-0 truncate text-sm">
+          {showDeviceLabel ? (
+            <span className="text-slate-500">{selectedDeviceId} · </span>
+          ) : null}
           <span className="text-slate-400">Status: </span>
           <span className={`font-medium ${styles.text}`}>{status.summary}</span>
         </p>

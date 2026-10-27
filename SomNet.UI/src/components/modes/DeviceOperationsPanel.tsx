@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { DeviceRegistration } from '@/types/device';
 import { useSubDevice } from '@/context/SubDeviceProvider';
 import { DeviceOperationScope } from '@/context/DeviceOperationScope';
@@ -76,9 +77,19 @@ function DeviceOperationSection({ registration }: { registration: DeviceRegistra
   );
 }
 
-/** One dashboard panel — each paired device is an independent operator instance. */
+/** Operations for the header Focus device (one independent instance at a time). */
 export function DeviceOperationsPanel() {
-  const { registrations, isLoading } = useSubDevice();
+  const { registrations, isLoading, selectedDeviceId } = useSubDevice();
+
+  const visibleRegistrations = useMemo(() => {
+    const ordered = sortRegistrations(registrations);
+    if (!selectedDeviceId) {
+      return ordered;
+    }
+
+    const focused = ordered.filter((row) => row.deviceId === selectedDeviceId);
+    return focused.length > 0 ? focused : ordered;
+  }, [registrations, selectedDeviceId]);
 
   if (isLoading) {
     return <p className="text-sm text-slate-500">Loading devices…</p>;
@@ -92,11 +103,17 @@ export function DeviceOperationsPanel() {
     );
   }
 
-  const ordered = sortRegistrations(registrations);
+  if (!selectedDeviceId) {
+    return (
+      <p className="text-sm text-slate-500">
+        Select a device in the header Focus control to operate this Sub.
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-4" data-ui="device-operations-panel">
-      {ordered.map((registration) => (
+      {visibleRegistrations.map((registration) => (
         <DeviceOperationSection key={registration.deviceId} registration={registration} />
       ))}
     </div>

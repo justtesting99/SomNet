@@ -6,9 +6,5 @@ public sealed class MotorManualControlStateDto
 
     public int MaximumDutyPercent { get; init; } = 80;
 
-    public int MinimumRunSeconds { get; init; } = 2;
-
-    public int MaximumRunSeconds { get; init; } = 15;
-
     public int SpeedPercent { get; init; }
 }

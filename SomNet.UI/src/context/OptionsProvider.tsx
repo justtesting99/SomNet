@@ -27,7 +27,7 @@ import {
   readDeviceAutomaticRunningLocal,
   writeDeviceAutomaticRunningLocal,
 } from '@/utils/deviceAutomaticRunningLocal';
-import { cacheDeviceSettings } from '@/utils/deviceSettingsCache';
+import { cacheDeviceSettings, readCachedDeviceSettings } from '@/utils/deviceSettingsCache';
 import {
   automaticRunningKindForActuator,
   getTabId,
@@ -237,8 +237,15 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       saveTimerRef.current = null;
     }
 
+    const cachedSettings = readCachedDeviceSettings(selectedSub, deviceIdForLoad);
+    if (cachedSettings) {
+      setSettings(cachedSettings);
+      setSettingsLoaded(true);
+    } else {
+      setSettingsLoaded(false);
+    }
+
     setIsLoading(true);
-    setSettingsLoaded(false);
 
     const kindForLoad = actuatorKindForDevice(deviceIdForLoad);
     const restoredRunning = readDeviceAutomaticRunningLocal(

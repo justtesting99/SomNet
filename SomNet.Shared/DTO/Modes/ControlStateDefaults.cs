@@ -39,8 +39,6 @@ public static class ControlStateDefaults
     {
         MinimumDutyPercent = 20,
         MaximumDutyPercent = 80,
-        MinimumRunSeconds = 2,
-        MaximumRunSeconds = 15,
         SpeedPercent = 0,
     };
 

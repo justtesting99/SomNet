@@ -8,28 +8,21 @@ interface MotorSpeedSliderProps
   minimumDuty: number;
   maximumDuty: number;
   dutyPercent: number;
-  minimumRunSeconds: number;
-  maximumRunSeconds: number;
-  runSeconds: number;
 }
 
+/** Vertical speed slider — layout matches {@link StrokePowerSlider} (relay Power). */
 export function MotorSpeedSlider({
   label,
   percent,
   minimumDuty,
   maximumDuty,
   dutyPercent,
-  minimumRunSeconds,
-  maximumRunSeconds,
-  runSeconds,
   id,
   disabled,
   ...props
 }: MotorSpeedSliderProps) {
   const maxDuty = Math.max(minimumDuty, maximumDuty);
   const minDuty = Math.min(minimumDuty, maximumDuty);
-  const maxRun = Math.max(minimumRunSeconds, maximumRunSeconds);
-  const minRun = Math.min(minimumRunSeconds, maximumRunSeconds);
   const inputId = id ?? `${label.toLowerCase().replace(/\s+/g, '-')}-speed`;
   const isDisabled = Boolean(disabled);
 
@@ -70,7 +63,7 @@ export function MotorSpeedSlider({
         <div className="space-y-3 text-center sm:text-left">
           <div>
             <p className={isDisabled ? 'text-xs text-slate-600' : 'text-xs text-slate-400'}>
-              Speed
+              Percent
             </p>
             <p
               className={
@@ -96,25 +89,8 @@ export function MotorSpeedSlider({
               {dutyPercent}%
             </p>
           </div>
-          <div>
-            <p className={isDisabled ? 'text-xs text-slate-600' : 'text-xs text-slate-400'}>
-              Run (sec)
-            </p>
-            <p
-              className={
-                isDisabled
-                  ? 'text-base font-semibold text-slate-600'
-                  : 'text-base font-semibold text-white'
-              }
-            >
-              {runSeconds}
-            </p>
-          </div>
         </div>
       </div>
-      <p className="text-center text-xs text-slate-500">
-        Run bounds {minRun}–{maxRun}s · duty bounds {minDuty}–{maxDuty}%
-      </p>
     </div>
   );
 }

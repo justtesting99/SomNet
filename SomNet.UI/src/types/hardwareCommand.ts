@@ -2,6 +2,7 @@ export const HARDWARE_COMMAND_KEYS = {
   manualStroke: 'manual:stroke',
   manualBurst: 'manual:burst',
   manualAbort: 'manual:abort',
+  manualMotorStop: 'manual:motor-stop',
   automaticStart: 'automatic-start',
   automaticStop: 'automatic-stop',
   automaticUpdate: 'automatic-update',

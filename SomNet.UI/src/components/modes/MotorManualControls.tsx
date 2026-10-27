@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MotorManualControlState } from '@/types/motorModes';
 import { useControlPanelSettings } from '@/hooks/useControlPanelSettings';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
@@ -9,7 +9,7 @@ import { useSystemStatus } from '@/context/SystemStatusProvider';
 import { isHardwareCommandReady } from '@/utils/commandReadiness';
 import { Panel } from '@/components/ui/Panel';
 import { CommandButton } from '@/components/ui/CommandButton';
-import { MinMaxRow } from '@/components/ui/NumberField';
+import { StrokeMsInput } from '@/components/modes/StrokeMsInput';
 import { MotorSpeedSlider } from '@/components/modes/MotorSpeedSlider';
 import { useOperationSession } from '@/hooks/useOperationSession';
 import { useHardwareCommand } from '@/context/HardwareCommandProvider';
@@ -17,11 +17,22 @@ import { computeStrokeMs } from '@/utils/stroke';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCommand';
 import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
-import { parseMotorRunResultJson } from '@/utils/motorRunResultJson';
 import { ApiError } from '@/api/client';
 
+const DUTY_MIN = 0;
+const DUTY_MAX = 100;
+
+interface ActiveManualRun {
+  dutyPercent: number;
+  startedAtMs: number;
+}
+
+function clampDuty(value: number): number {
+  return Math.max(DUTY_MIN, Math.min(DUTY_MAX, Math.trunc(value)));
+}
+
 export function MotorManualControls() {
-  const { settings, updateMotorManual, isLoading, settingsLoaded } = useControlPanelSettings();
+  const { settings, updateMotorManual, isLoading } = useControlPanelSettings();
   const state = settings.motorManual;
   const { selectedSub } = useSubTarget();
   const commandDeviceId = useOperationDeviceId();
@@ -31,11 +42,26 @@ export function MotorManualControls() {
   const { isCommandPending } = useHardwareCommand();
   const { getDeviceStatus } = useSystemStatus();
   const systemStatus = getDeviceStatus(commandDeviceId);
+  const sceneSessionError = '';
+  const accessoryError = '';
   const [commandError, setCommandError] = useState('');
+  const [motorRunning, setMotorRunning] = useState(false);
+  const activeRunRef = useRef<ActiveManualRun | null>(null);
 
   useEffect(() => {
     setCommandError('');
   }, [selectedSub]);
+
+  useEffect(() => {
+    setMotorRunning(false);
+    activeRunRef.current = null;
+  }, [selectedSub, commandDeviceId]);
+
+  useEffect(() => {
+    if (systemStatus.isReady) {
+      setCommandError('');
+    }
+  }, [systemStatus.isReady]);
 
   const dutyPercent = useMemo(
     () =>
@@ -43,28 +69,21 @@ export function MotorManualControls() {
     [state.speedPercent, state.minimumDutyPercent, state.maximumDutyPercent],
   );
 
-  const runSeconds = useMemo(
-    () =>
-      computeStrokeMs(state.speedPercent, state.minimumRunSeconds, state.maximumRunSeconds),
-    [state.speedPercent, state.minimumRunSeconds, state.maximumRunSeconds],
-  );
-
-  const runPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke, commandDeviceId);
+  const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke, commandDeviceId);
+  const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualMotorStop, commandDeviceId);
   const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort, commandDeviceId);
   const hardwareReady = isHardwareCommandReady(systemStatus) && sceneSessionActive;
-  const runDisabledReason = !sceneSessionActive
-    ? 'Turn Scene session on before Run.'
-    : hardwareReady
-      ? undefined
-      : systemStatus.detail || systemStatus.summary;
+  const motionPending = startPending || stopPending;
+  const startDisabledReason = !sceneSessionActive
+    ? 'Turn Scene session on before start or stop.'
+    : motorRunning
+      ? 'Stop the motor before starting again.'
+      : hardwareReady
+        ? undefined
+        : systemStatus.detail || systemStatus.summary;
 
   function update<K extends keyof MotorManualControlState>(key: K, value: MotorManualControlState[K]) {
-    if (
-      key === 'minimumDutyPercent' ||
-      key === 'maximumDutyPercent' ||
-      key === 'minimumRunSeconds' ||
-      key === 'maximumRunSeconds'
-    ) {
+    if (key === 'minimumDutyPercent' || key === 'maximumDutyPercent') {
       return;
     }
 
@@ -83,47 +102,59 @@ export function MotorManualControls() {
     return 'Hardware command failed. Check that the API and device are connected.';
   }
 
-  async function handleRun() {
+  async function handleStart() {
     setCommandError('');
     expandOnAction(commandDeviceId);
 
-    const durationMs = runSeconds * 1000;
-    const payloadJson = JSON.stringify({
-      dutyPercent,
-      durationMs,
-    });
+    const payloadJson = JSON.stringify({ dutyPercent });
 
     try {
+      await sendHardwareCommand(selectedSub, commandDeviceId, 'motor-run', payloadJson);
+      activeRunRef.current = { dutyPercent, startedAtMs: Date.now() };
+      setMotorRunning(true);
+    } catch (error) {
+      setCommandError(formatCommandError(error));
+    }
+  }
+
+  async function handleStop() {
+    setCommandError('');
+    const activeRun = activeRunRef.current;
+    if (!activeRun) {
+      return;
+    }
+
+    try {
+      const elapsedMs = Math.max(0, Date.now() - activeRun.startedAtMs);
       const snapshotActionIndex = await prepareManualSession();
-      const response = await sendHardwareCommand(
+      await sendHardwareCommand(
         selectedSub,
         commandDeviceId,
-        'motor-run',
-        payloadJson,
+        'motor-stop',
+        '{}',
         snapshotActionIndex,
       );
-      const parsed = parseMotorRunResultJson(response.resultJson);
-      await recordManualStroke(
-        dutyPercent,
-        parsed?.actualDurationMs ?? durationMs,
-      );
+      await recordManualStroke(activeRun.dutyPercent, elapsedMs);
+      activeRunRef.current = null;
+      setMotorRunning(false);
     } catch (error) {
-      if (error instanceof HardwareCommandError) {
-        const parsed = parseMotorRunResultJson(error.response.resultJson);
-        if (parsed?.interrupted) {
-          return;
-        }
-      }
       setCommandError(formatCommandError(error));
     }
   }
 
   async function handleAbort() {
     setCommandError('');
+
     try {
       const response = await sendHardwareCommandRaw(selectedSub, commandDeviceId, 'abort', '{}');
-      if (!response.delivered || !response.acknowledged) {
+
+      if (!response.delivered) {
         setCommandError(response.message ?? 'Abort could not be delivered.');
+        return;
+      }
+
+      if (!response.acknowledged) {
+        setCommandError(response.message ?? 'Device did not acknowledge abort in time.');
         return;
       }
 
@@ -132,85 +163,82 @@ export function MotorManualControls() {
         return;
       }
 
-      await recordManualAbort();
+      if (activeRunRef.current) {
+        await recordManualAbort();
+      }
+      activeRunRef.current = null;
+      setMotorRunning(false);
     } catch (error) {
       setCommandError(formatCommandError(error));
     }
   }
 
+  const settingsLocked = motorRunning || motionPending;
+
   return (
     <div className="space-y-4">
-      {isLoading || !settingsLoaded ? (
-        <p className="text-sm text-slate-500">Loading saved motor manual settings…</p>
+      {isLoading ? (
+        <p className="text-sm text-slate-500">Loading saved manual settings…</p>
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Panel title="Speed settings" className="min-w-0 overflow-hidden">
-          <MinMaxRow
-            label="Duty %"
-            min={state.minimumDutyPercent}
-            max={state.maximumDutyPercent}
-            minLimit={0}
-            maxLimit={100}
-            onMinChange={(value) =>
-              updateMotorManual({
-                ...state,
-                minimumDutyPercent: value,
-                maximumDutyPercent: Math.max(value, state.maximumDutyPercent),
-              })
-            }
-            onMaxChange={(value) =>
-              updateMotorManual({
-                ...state,
-                maximumDutyPercent: value,
-                minimumDutyPercent: Math.min(value, state.minimumDutyPercent),
-              })
-            }
-          />
+        <Panel title="Speed Settings" className="min-w-0 overflow-hidden">
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
+            <StrokeMsInput
+              label="Minimum Duty (%)"
+              value={state.minimumDutyPercent}
+              min={DUTY_MIN}
+              max={DUTY_MAX}
+              disabled={settingsLocked}
+              onCommit={(nextMin) => {
+                const minimumDutyPercent = clampDuty(nextMin);
+                updateMotorManual({
+                  ...state,
+                  minimumDutyPercent,
+                  maximumDutyPercent: Math.max(minimumDutyPercent, state.maximumDutyPercent),
+                });
+              }}
+            />
+            <StrokeMsInput
+              label="Maximum Duty (%)"
+              value={state.maximumDutyPercent}
+              min={state.minimumDutyPercent}
+              max={DUTY_MAX}
+              disabled={settingsLocked}
+              onCommit={(nextMax) => {
+                const maximumDutyPercent = clampDuty(nextMax);
+                updateMotorManual({
+                  ...state,
+                  maximumDutyPercent,
+                  minimumDutyPercent: Math.min(maximumDutyPercent, state.minimumDutyPercent),
+                });
+              }}
+            />
+          </div>
 
-          <MinMaxRow
-            label="Run (sec)"
-            min={state.minimumRunSeconds}
-            max={state.maximumRunSeconds}
-            minLimit={1}
-            maxLimit={3600}
-            minValueMin={1}
-            onMinChange={(value) =>
-              updateMotorManual({
-                ...state,
-                minimumRunSeconds: value,
-                maximumRunSeconds: Math.max(value, state.maximumRunSeconds),
-              })
-            }
-            onMaxChange={(value) =>
-              updateMotorManual({
-                ...state,
-                maximumRunSeconds: value,
-                minimumRunSeconds: Math.min(value, state.minimumRunSeconds),
-              })
-            }
-          />
-
-          <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-2">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-2">
             <MotorSpeedSlider
               label="Speed"
               percent={state.speedPercent}
               minimumDuty={state.minimumDutyPercent}
               maximumDuty={state.maximumDutyPercent}
               dutyPercent={dutyPercent}
-              minimumRunSeconds={state.minimumRunSeconds}
-              maximumRunSeconds={state.maximumRunSeconds}
-              runSeconds={runSeconds}
               id="motor-manual-speed"
+              disabled={settingsLocked}
               onChange={(event) => update('speedPercent', Number(event.target.value))}
             />
           </div>
         </Panel>
 
         <Panel title="Actions">
-          {!hardwareReady && !commandError && !runPending ? (
+          {accessoryError || sceneSessionError ? (
+            <p className="mb-3 text-sm text-red-400" role="alert">
+              {accessoryError || sceneSessionError}
+            </p>
+          ) : null}
+          {!hardwareReady && !commandError && !startPending && !stopPending ? (
             <p className="mb-3 text-sm text-amber-400/90" role="status">
-              {runDisabledReason}
+              {startDisabledReason}
             </p>
           ) : null}
 
@@ -225,24 +253,41 @@ export function MotorManualControls() {
             size="lg"
             fullWidth
             className="py-4 text-base"
-            disabled={!hardwareReady}
-            title={runDisabledReason}
-            onCommand={handleRun}
+            disabled={!hardwareReady || motorRunning || stopPending}
+            title={startDisabledReason}
+            onCommand={handleStart}
           >
-            Run
+            Start
           </CommandButton>
 
-          <CommandButton
-            commandKey={HARDWARE_COMMAND_KEYS.manualAbort}
-            size="lg"
-            fullWidth
-            variant="secondary"
-            className="mt-4 py-4 text-base"
-            disabled={!runPending || abortPending}
-            onCommand={handleAbort}
+          <div
+            className="space-y-3 border-t border-slate-600"
+            style={{ marginTop: 30, paddingTop: 30 }}
           >
-            Abort
-          </CommandButton>
+            <CommandButton
+              commandKey={HARDWARE_COMMAND_KEYS.manualMotorStop}
+              size="lg"
+              fullWidth
+              className="py-4 text-base"
+              disabled={!hardwareReady || !motorRunning || startPending}
+              title={motorRunning ? undefined : 'Start the motor before stopping.'}
+              onCommand={handleStop}
+            >
+              Stop
+            </CommandButton>
+
+            <CommandButton
+              commandKey={HARDWARE_COMMAND_KEYS.manualAbort}
+              size="lg"
+              fullWidth
+              variant="secondary"
+              className="py-4 text-base"
+              disabled={(!startPending && !motorRunning) || abortPending}
+              onCommand={handleAbort}
+            >
+              Abort
+            </CommandButton>
+          </div>
         </Panel>
       </div>
     </div>

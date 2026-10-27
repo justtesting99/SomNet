@@ -41,6 +41,7 @@ interface DevicePairingSettingsSlice {
 }
 
 interface DevicePairingSettingsContextValue {
+  rows: Record<string, DeviceRow>;
   getSlice: (deviceId: string, actuatorKind: ActuatorKind) => DevicePairingSettingsSlice;
 }
 
@@ -331,7 +332,7 @@ export function DevicePairingSettingsProvider({ children }: { children: ReactNod
     [applyPatch, rows, selectedSub, setDeviceAutomaticRunning, strokeLimits],
   );
 
-  const value = useMemo(() => ({ getSlice }), [getSlice]);
+  const value = useMemo(() => ({ rows, getSlice }), [getSlice, rows]);
 
   return (
     <DevicePairingSettingsContext.Provider value={value}>
@@ -348,6 +349,10 @@ export function useDevicePairingSettings(
   if (!context) {
     throw new Error('useDevicePairingSettings must be used within DevicePairingSettingsProvider');
   }
+
+  const row = context.rows[deviceId];
+  void row?.generation;
+  void row?.loaded;
 
   return context.getSlice(deviceId, actuatorKind);
 }
