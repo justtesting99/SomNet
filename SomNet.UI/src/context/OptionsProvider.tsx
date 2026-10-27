@@ -20,7 +20,8 @@ import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
 import { normalizeStrokeMsPair } from '@/utils/strokeMsLimits';
 import { normalizeAutomaticControlState } from '@/utils/automaticFieldRules';
 import { normalizeMotorAutomaticControlState } from '@/utils/motorAutomaticFieldRules';
-import type { MotorAutomaticControlState } from '@/types/motorModes';
+import type { MotorAutomaticControlState, MotorManualControlState } from '@/types/motorModes';
+import { normalizeMotorManualControlState } from '@/utils/motorManualFieldRules';
 import { clearAutomaticDeviceRunningHint } from '@/utils/automaticDeviceRunningHint';
 import {
   readDeviceAutomaticRunningLocal,
@@ -46,6 +47,7 @@ interface OptionsContextValue {
   updateManual: (manual: ManualControlState) => void;
   updateAutomatic: (automatic: AutomaticControlState) => void;
   updateMotorAutomatic: (motorAutomatic: MotorAutomaticControlState) => void;
+  updateMotorManual: (motorManual: MotorManualControlState) => void;
   /** Set running flag locally without persisting (session rehydration). */
   setAutomaticRunningLocal: (running: boolean) => void;
   setMotorAutomaticRunningLocal: (running: boolean) => void;
@@ -274,6 +276,9 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
               ...loadedSettings.motorAutomatic,
               running: kindForLoad === 'motor' ? restoredRunning : false,
             }),
+            motorManual: normalizeMotorManualControlState(
+              loadedSettings.motorManual ?? DEFAULT_PAIRING_SETTINGS.motorManual,
+            ),
           });
           setSettingsLoaded(true);
         }
@@ -488,6 +493,17 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     [applySettings],
   );
 
+  const updateMotorManual = useCallback(
+    (motorManual: MotorManualControlState) => {
+      userEditedRef.current = true;
+      applySettings({
+        ...settingsRef.current,
+        motorManual: normalizeMotorManualControlState(motorManual),
+      });
+    },
+    [applySettings],
+  );
+
   const setMotorAutomaticRunningLocal = useCallback(
     (running: boolean) => {
       const deviceId = persistDeviceIdRef.current;
@@ -519,6 +535,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       updateManual,
       updateAutomatic,
       updateMotorAutomatic,
+      updateMotorManual,
       setAutomaticRunningLocal,
       setMotorAutomaticRunningLocal,
       setDeviceAutomaticRunning,
@@ -535,6 +552,7 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       updateManual,
       updateAutomatic,
       updateMotorAutomatic,
+      updateMotorManual,
       setAutomaticRunningLocal,
       setMotorAutomaticRunningLocal,
       setDeviceAutomaticRunning,

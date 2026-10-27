@@ -4,6 +4,7 @@ import { DeviceOperationScope } from '@/context/DeviceOperationScope';
 import { useDeviceOperationMode } from '@/context/DeviceOperationModeProvider';
 import { Panel } from '@/components/ui/Panel';
 import { ManualControls } from '@/components/modes/ManualControls';
+import { MotorManualControls } from '@/components/modes/MotorManualControls';
 import { AutomaticControls } from '@/components/modes/AutomaticControls';
 import { MotorAutomaticControls } from '@/components/modes/MotorAutomaticControls';
 import { DeviceAccessoryResync } from '@/components/hardware/DeviceAccessoryResync';
@@ -59,7 +60,11 @@ function DeviceOperationSection({ registration }: { registration: DeviceRegistra
             actuatorKind={registration.actuatorKind}
           />
           {needsModeChoice ? null : mode === 'manual' ? (
-            <ManualControls />
+            registration.actuatorKind === 'hbridge' ? (
+              <MotorManualControls />
+            ) : (
+              <ManualControls />
+            )
           ) : registration.actuatorKind === 'hbridge' ? (
             <MotorAutomaticControls />
           ) : (

@@ -148,6 +148,21 @@ internal static class HardwareCommandPayloadValidator
                 return false;
             }
 
+            if (root.TryGetProperty("durationMs", out var durationElement))
+            {
+                if (durationElement.ValueKind != JsonValueKind.Number || !durationElement.TryGetInt32(out var durationMs))
+                {
+                    errorMessage = "durationMs must be a positive integer.";
+                    return false;
+                }
+
+                if (durationMs < 1 || durationMs > 3_600_000)
+                {
+                    errorMessage = "durationMs must be between 1 and 3600000.";
+                    return false;
+                }
+            }
+
             return true;
         }
         catch (JsonException)

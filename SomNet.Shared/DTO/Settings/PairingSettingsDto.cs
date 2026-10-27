@@ -13,5 +13,7 @@ public sealed class PairingSettingsDto
 
     public MotorAutomaticControlStateDto MotorAutomatic { get; init; } = ControlStateDefaults.MotorAutomatic;
 
+    public MotorManualControlStateDto MotorManual { get; init; } = ControlStateDefaults.MotorManual;
+
     public VideoSettingsDto Video { get; init; } = VideoSettingsDefaults.Value;
 }

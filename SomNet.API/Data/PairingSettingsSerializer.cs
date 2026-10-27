@@ -51,6 +51,7 @@ public static class PairingSettingsSerializer
             AppOptions = NormalizeAppOptions(settings.AppOptions),
             Video = NormalizeVideo(settings.Video),
             Manual = manual,
+            MotorManual = NormalizeMotorManual(settings.MotorManual),
             MotorAutomatic = NormalizeMotorAutomatic(settings.MotorAutomatic),
             Automatic = new()
             {
@@ -151,6 +152,33 @@ public static class PairingSettingsSerializer
             VideoFeedBandwidth = Enum.IsDefined(source.VideoFeedBandwidth)
                 ? source.VideoFeedBandwidth
                 : VideoFeedBandwidth.High,
+        };
+    }
+
+    private static MotorManualControlStateDto NormalizeMotorManual(MotorManualControlStateDto? motor)
+    {
+        var source = motor ?? ControlStateDefaults.MotorManual;
+        var minDuty = Math.Clamp(source.MinimumDutyPercent, 0, 100);
+        var maxDuty = Math.Clamp(source.MaximumDutyPercent, 0, 100);
+        if (minDuty > maxDuty)
+        {
+            (minDuty, maxDuty) = (maxDuty, minDuty);
+        }
+
+        var minRun = Math.Clamp(source.MinimumRunSeconds, 1, 3600);
+        var maxRun = Math.Clamp(source.MaximumRunSeconds, 1, 3600);
+        if (minRun > maxRun)
+        {
+            (minRun, maxRun) = (maxRun, minRun);
+        }
+
+        return new MotorManualControlStateDto
+        {
+            MinimumDutyPercent = minDuty,
+            MaximumDutyPercent = maxDuty,
+            MinimumRunSeconds = minRun,
+            MaximumRunSeconds = maxRun,
+            SpeedPercent = Math.Clamp(source.SpeedPercent, 0, 100),
         };
     }
 

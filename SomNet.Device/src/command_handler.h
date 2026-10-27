@@ -50,6 +50,8 @@ public:
 
 private:
     void handleExecuteCommand(const ExecuteCommandPayload& command);
+    void pollMotorManualRun();
+    void completeMotorManualRun(bool success, const char* message, bool interrupted);
     void sendAck(const char* correlationId, bool success, const char* message, const char* resultJson);
     bool validateHubCommand(const ExecuteCommandPayload& command, char* rejectMessage, size_t rejectMessageLen);
     bool validateLocalCommand(const ExecuteCommandPayload& command, char* rejectMessage, size_t rejectMessageLen);
@@ -64,6 +66,12 @@ private:
     bool initialized_ = false;
     bool pendingCommandReady_ = false;
     ExecuteCommandPayload pendingCommand_{};
+    bool motorManualRunActive_ = false;
+    char motorManualCorrelationId_[64] = {};
+    unsigned long motorManualRunStartMs_ = 0;
+    unsigned long motorManualRunUntilMs_ = 0;
+    int motorManualDuty_ = 0;
+    unsigned long motorManualDurationMs_ = 0;
 };
 
 void commandHandlerOnExecuteCommand(const ExecuteCommandPayload& command);

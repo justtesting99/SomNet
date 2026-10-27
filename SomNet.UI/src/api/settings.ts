@@ -15,12 +15,14 @@ import {
 import { normalizeVideoFeedBandwidth } from '@/utils/videoFeedBandwidth';
 import { apiFetch } from '@/api/client';
 import { normalizeMotorAutomaticControlState } from '@/utils/motorAutomaticFieldRules';
+import { normalizeMotorManualControlState } from '@/utils/motorManualFieldRules';
 
 interface PairingSettingsResponse {
   appOptions: PairingSettings['appOptions'];
   manual: PairingSettings['manual'];
   automatic: PairingSettings['automatic'];
   motorAutomatic?: PairingSettings['motorAutomatic'];
+  motorManual?: PairingSettings['motorManual'];
   video?: PairingSettings['video'];
 }
 
@@ -54,6 +56,9 @@ function normalizeSettings(response: PairingSettingsResponse): PairingSettings {
     motorAutomatic: normalizeMotorAutomaticControlState(
       response.motorAutomatic ?? DEFAULT_PAIRING_SETTINGS.motorAutomatic,
     ),
+    motorManual: normalizeMotorManualControlState(
+      response.motorManual ?? DEFAULT_PAIRING_SETTINGS.motorManual,
+    ),
     video: response.video ?? DEFAULT_VIDEO_SETTINGS,
   };
 }
@@ -84,6 +89,7 @@ export async function savePairingSettings(
       manual: settings.manual,
       automatic: { ...settings.automatic, running: false },
       motorAutomatic: { ...settings.motorAutomatic, running: false },
+      motorManual: settings.motorManual,
       video: settings.video,
     }),
   });

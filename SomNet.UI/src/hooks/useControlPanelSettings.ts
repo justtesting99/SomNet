@@ -23,6 +23,7 @@ export function useControlPanelSettings() {
       updateManual: panel.updateManual,
       updateAutomatic: panel.updateAutomatic,
       updateMotorAutomatic: panel.updateMotorAutomatic,
+      updateMotorManual: panel.updateMotorManual,
       setAutomaticRunningLocal: panel.setAutomaticRunningLocal,
       setMotorAutomaticRunningLocal: panel.setMotorAutomaticRunningLocal,
     };
@@ -36,6 +37,7 @@ export function useControlPanelSettings() {
     updateManual: options.updateManual,
     updateAutomatic: options.updateAutomatic,
     updateMotorAutomatic: options.updateMotorAutomatic,
+    updateMotorManual: options.updateMotorManual,
     setAutomaticRunningLocal: options.setAutomaticRunningLocal,
     setMotorAutomaticRunningLocal: options.setMotorAutomaticRunningLocal,
   };

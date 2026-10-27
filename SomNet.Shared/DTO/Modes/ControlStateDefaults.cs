@@ -35,6 +35,15 @@ public static class ControlStateDefaults
         BurstStrokesMax = 10,
     };
 
+    public static MotorManualControlStateDto MotorManual { get; } = new()
+    {
+        MinimumDutyPercent = 20,
+        MaximumDutyPercent = 80,
+        MinimumRunSeconds = 2,
+        MaximumRunSeconds = 15,
+        SpeedPercent = 0,
+    };
+
     public static MotorAutomaticControlStateDto MotorAutomatic { get; } = new()
     {
         Running = false,

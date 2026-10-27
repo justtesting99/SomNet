@@ -108,6 +108,12 @@ void CommandHandler::enqueueExecuteCommand(const ExecuteCommandPayload& command)
 }
 
 void CommandHandler::poll() {
+    if (motor_ != nullptr) {
+        motor_->poll();
+    }
+
+    pollMotorManualRun();
+
     if (motorAutomatic_ != nullptr) {
         motorAutomatic_->poll();
     }
@@ -254,6 +260,58 @@ void CommandHandler::sendAck(
     }
 }
 
+void CommandHandler::pollMotorManualRun() {
+    if (!motorManualRunActive_ || motor_ == nullptr) {
+        return;
+    }
+
+    if (millis() < motorManualRunUntilMs_) {
+        return;
+    }
+
+    completeMotorManualRun(true, "motor run complete", false);
+}
+
+void CommandHandler::completeMotorManualRun(bool success, const char* message, bool interrupted) {
+    if (!motorManualRunActive_) {
+        return;
+    }
+
+    const unsigned long actualMs = millis() - motorManualRunStartMs_;
+    if (motor_ != nullptr) {
+        motor_->stop();
+    }
+
+    char resultJson[192];
+    if (interrupted) {
+        snprintf(
+            resultJson,
+            sizeof(resultJson),
+            "{\"commandKey\":\"motor-run\",\"dutyPercent\":%d,\"durationMs\":%lu,"
+            "\"actualDurationMs\":%lu,\"interrupted\":true}",
+            motorManualDuty_,
+            motorManualDurationMs_,
+            actualMs);
+    } else {
+        snprintf(
+            resultJson,
+            sizeof(resultJson),
+            "{\"commandKey\":\"motor-run\",\"dutyPercent\":%d,\"durationMs\":%lu,"
+            "\"actualDurationMs\":%lu}",
+            motorManualDuty_,
+            motorManualDurationMs_,
+            actualMs);
+    }
+
+    sendAck(motorManualCorrelationId_, success, message, resultJson);
+    motorManualRunActive_ = false;
+    motorManualCorrelationId_[0] = '\0';
+    motorManualDuty_ = 0;
+    motorManualDurationMs_ = 0;
+    motorManualRunStartMs_ = 0;
+    motorManualRunUntilMs_ = 0;
+}
+
 void CommandHandler::onStrokeComplete(
     void* context,
     const char* correlationId,
@@ -347,6 +405,11 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
             sendAck(command.correlationId, true, "command aborted", nullptr);
             return;
         }
+        if (motorManualRunActive_) {
+            completeMotorManualRun(true, "command aborted", true);
+            sendAck(command.correlationId, true, "command aborted", nullptr);
+            return;
+        }
         if (motor_ != nullptr && motor_->isActive()) {
             motor_->stop();
             sendAck(command.correlationId, true, "command aborted", nullptr);
@@ -404,7 +467,7 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
             sendAck(command.correlationId, false, "motor unavailable", nullptr);
             return;
         }
-        if (executionContext_->isActive() || motor_->isActive() ||
+        if (executionContext_->isActive() || motorManualRunActive_ || motor_->isActive() ||
             (motorAutomatic_ != nullptr && motorAutomatic_->isActive())) {
             sendAck(command.correlationId, false, "device busy", nullptr);
             return;
@@ -420,6 +483,26 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
         }
 
         const int duty = doc["dutyPercent"].as<int>();
+        const unsigned long durationMs = doc["durationMs"] | 0UL;
+        if (durationMs > 0UL) {
+            if (!motor_->setDutyPercent(duty)) {
+                sendAck(command.correlationId, false, "motor run failed", nullptr);
+                return;
+            }
+
+            strncpy(
+                motorManualCorrelationId_,
+                command.correlationId,
+                sizeof(motorManualCorrelationId_) - 1);
+            motorManualCorrelationId_[sizeof(motorManualCorrelationId_) - 1] = '\0';
+            motorManualDuty_ = duty;
+            motorManualDurationMs_ = durationMs;
+            motorManualRunStartMs_ = millis();
+            motorManualRunUntilMs_ = motorManualRunStartMs_ + durationMs;
+            motorManualRunActive_ = true;
+            return;
+        }
+
         if (!motor_->setDutyPercent(duty)) {
             sendAck(command.correlationId, false, "motor run failed", nullptr);
             return;

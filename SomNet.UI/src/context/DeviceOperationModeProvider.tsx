@@ -9,7 +9,6 @@ import {
 } from 'react';
 import { useAuth } from '@/context/AuthProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
-import { useSubDevice } from '@/context/SubDeviceProvider';
 import type { ActuatorKind } from '@/types/device';
 import type { OperationMode } from '@/types/modes';
 import {
@@ -28,14 +27,13 @@ interface DeviceOperationModeContextValue {
 
 const DeviceOperationModeContext = createContext<DeviceOperationModeContextValue | null>(null);
 
-function defaultModeForActuator(actuatorKind: ActuatorKind): OperationMode {
-  return actuatorKind === 'hbridge' ? 'automatic' : 'manual';
+function defaultModeForActuator(_actuatorKind: ActuatorKind): OperationMode {
+  return 'manual';
 }
 
 export function DeviceOperationModeProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { selectedSub } = useSubTarget();
-  const { registrations } = useSubDevice();
   const domTarget = user?.displayName ?? user?.username ?? '';
   const [revision, setRevision] = useState(0);
 
@@ -101,22 +99,6 @@ export function DeviceOperationModeProvider({ children }: { children: ReactNode 
     [bump, domTarget, selectedSub],
   );
 
-  useEffect(() => {
-    if (!domTarget) {
-      return;
-    }
-
-    for (const registration of registrations) {
-      if (registration.actuatorKind === 'hbridge') {
-        const stored = readDeviceOperationMode(domTarget, selectedSub, registration.deviceId);
-        if (!stored) {
-          writeDeviceOperationMode(domTarget, selectedSub, registration.deviceId, 'automatic');
-        }
-      }
-    }
-    bump();
-  }, [bump, domTarget, registrations, selectedSub]);
-
   const value = useMemo(
     () => ({
       getDeviceOperationMode,
@@ -146,7 +128,7 @@ export function useDeviceOperationMode(deviceId: string, actuatorKind: ActuatorK
   const api = useDeviceOperationModeApi();
   const mode = api.getDeviceOperationMode(deviceId, actuatorKind);
   const stored = api.getStoredDeviceOperationMode(deviceId);
-  const needsModeChoice = actuatorKind === 'relay' && stored === null;
+  const needsModeChoice = stored === null;
 
   return {
     mode,

@@ -17,7 +17,8 @@ import type { AutomaticControlState, ManualControlState } from '@/types/modes';
 import { DEFAULT_PAIRING_SETTINGS, type PairingSettings } from '@/types/pairingSettings';
 import { normalizeAutomaticControlState } from '@/utils/automaticFieldRules';
 import { normalizeMotorAutomaticControlState } from '@/utils/motorAutomaticFieldRules';
-import type { MotorAutomaticControlState } from '@/types/motorModes';
+import { normalizeMotorManualControlState } from '@/utils/motorManualFieldRules';
+import type { MotorAutomaticControlState, MotorManualControlState } from '@/types/motorModes';
 import { normalizeStrokeMsPair } from '@/utils/strokeMsLimits';
 import {
   readDeviceAutomaticRunningLocal,
@@ -34,6 +35,7 @@ interface DevicePairingSettingsSlice {
   updateManual: (manual: ManualControlState) => void;
   updateAutomatic: (automatic: AutomaticControlState) => void;
   updateMotorAutomatic: (motorAutomatic: MotorAutomaticControlState) => void;
+  updateMotorManual: (motorManual: MotorManualControlState) => void;
   setAutomaticRunningLocal: (running: boolean) => void;
   setMotorAutomaticRunningLocal: (running: boolean) => void;
 }
@@ -170,6 +172,9 @@ export function DevicePairingSettingsProvider({ children }: { children: ReactNod
                 ...loadedSettings.motorAutomatic,
                 running: kind === 'motor' ? restoredRunning : false,
               }),
+              motorManual: normalizeMotorManualControlState(
+                loadedSettings.motorManual ?? DEFAULT_PAIRING_SETTINGS.motorManual,
+              ),
             };
         cacheDeviceSettings(selectedSub, registration.deviceId, mergedSettings);
         setRows((prev) => ({
@@ -307,6 +312,16 @@ export function DevicePairingSettingsProvider({ children }: { children: ReactNod
           applyPatch(deviceId, (settings) => ({
             ...settings,
             motorAutomatic: normalizeMotorAutomaticControlState(motorAutomatic),
+          }));
+        },
+        updateMotorManual: (motorManual) => {
+          if (kind === 'relay') {
+            return;
+          }
+
+          applyPatch(deviceId, (settings) => ({
+            ...settings,
+            motorManual: normalizeMotorManualControlState(motorManual),
           }));
         },
         setAutomaticRunningLocal: (running) => setRunning(running),

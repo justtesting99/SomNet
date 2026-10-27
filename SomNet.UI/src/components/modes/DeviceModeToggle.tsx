@@ -1,7 +1,7 @@
 import type { OperationMode } from '@/types/modes';
 import type { ActuatorKind } from '@/types/device';
 import { useDeviceOperationMode } from '@/context/DeviceOperationModeProvider';
-import { useRelayModeChange } from '@/hooks/useRelayModeChange';
+import { useDeviceModeChange } from '@/hooks/useDeviceModeChange';
 import { Button } from '@/components/ui/Button';
 
 interface DeviceModeToggleProps {
@@ -11,25 +11,18 @@ interface DeviceModeToggleProps {
 
 export function DeviceModeToggle({ deviceId, actuatorKind }: DeviceModeToggleProps) {
   const { mode, needsModeChoice, setMode } = useDeviceOperationMode(deviceId, actuatorKind);
-  const changeRelayMode = useRelayModeChange(deviceId);
+  const changeMode = useDeviceModeChange(deviceId, actuatorKind);
 
   function selectMode(next: OperationMode) {
-    void changeRelayMode(mode, next, () => setMode(next));
+    void changeMode(mode, next, () => setMode(next));
   }
 
-  if (actuatorKind === 'hbridge') {
-    return (
-      <p className="text-xs text-slate-500">
-        Motor devices run <span className="font-medium text-slate-400">automatic</span> programs
-        only (manual stroke is not on this build).
-      </p>
-    );
-  }
+  const deviceLabel = actuatorKind === 'hbridge' ? 'motor' : 'relay';
 
   if (needsModeChoice) {
     return (
       <div className="space-y-2 rounded-lg border border-slate-700/80 bg-slate-950/40 p-3">
-        <p className="text-sm text-slate-300">Choose how to operate this relay device.</p>
+        <p className="text-sm text-slate-300">Choose how to operate this {deviceLabel} device.</p>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="secondary" onClick={() => selectMode('manual')}>
             Manual
