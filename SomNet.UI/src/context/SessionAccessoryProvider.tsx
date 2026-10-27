@@ -31,7 +31,8 @@ import {
   readSessionAccessoryInProgress,
   writeSessionAccessoryInProgress,
 } from '@/utils/sessionAccessoryStorage';
-import { writeReadyBannerDismissed } from '@/utils/readyBannerStorage';
+import { readSubPresentAck } from '@/utils/subPresentAckStorage';
+import { subTargetsMatch, writeReadyBannerDismissed } from '@/utils/readyBannerStorage';
 
 interface SessionAccessoryContextValue {
   sessionInProgress: boolean;
@@ -39,6 +40,8 @@ interface SessionAccessoryContextValue {
   canEnableSwitch: boolean;
   switchDisabled: boolean;
   switchDisabledReason: string | undefined;
+  /** Last failed session-accessory toggle (header switch or banner). */
+  sessionAccessoryError: string;
   setSessionInProgress: (enabled: boolean) => Promise<void>;
 }
 
@@ -50,7 +53,13 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
   const { selectedSub } = useSubTarget();
   const { status: systemStatus } = useSystemStatus();
   const { subPresentAckSub, dismissReadyBannerForSub } = useSiteUserReady();
-  const { settings, setAutomaticRunningLocal } = useOptions();
+  const {
+    settings,
+    settingsLoaded,
+    isLoading: settingsLoading,
+    setAutomaticRunningLocal,
+    setMotorAutomaticRunningLocal,
+  } = useOptions();
   const {
     activeSession,
     startSessionForAccessory,
@@ -73,16 +82,27 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
 
   const togglePending = isCommandPending(HARDWARE_COMMAND_KEYS.sessionAccessory);
 
-  const workInProgress =
-    togglePending ||
+  const subPresentAcknowledged =
+    readSubPresentAck(selectedSub) ||
+    (subPresentAckSub !== null && subTargetsMatch(subPresentAckSub, selectedSub));
+
+  const automaticDeviceRunning =
+    settingsLoaded &&
+    !settingsLoading &&
+    (settings.automatic.running || settings.motorAutomatic.running);
+
+  const motionCommandPending =
     isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke) ||
     isCommandPending(HARDWARE_COMMAND_KEYS.manualBurst) ||
-    isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart) ||
-    settings.automatic.running ||
-    settings.motorAutomatic.running;
+    isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);
+
+  const workInProgress =
+    togglePending ||
+    automaticDeviceRunning ||
+    (sessionInProgress ? motionCommandPending : false);
 
   const canEnableSwitch =
-    systemStatus.isReady && subPresentAckSub === selectedSub && !workInProgress;
+    systemStatus.isReady && subPresentAcknowledged && !workInProgress;
 
   const switchDisabled =
     togglePending ||
@@ -103,20 +123,42 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
         return systemStatus.detail || systemStatus.summary;
       }
 
-      if (subPresentAckSub !== selectedSub) {
+      if (!subPresentAcknowledged) {
         return 'Sub must double-click the device button (ReportButtonEvent) before starting.';
+      }
+
+      if (automaticDeviceRunning) {
+        return 'Stop the automatic run on this Sub before starting Session in Progress.';
+      }
+
+      if (settingsLoading || !settingsLoaded) {
+        return 'Loading settings for this Sub…';
+      }
+
+      if (togglePending) {
+        return 'Session command in progress…';
+      }
+
+      if (motionCommandPending) {
+        return 'Wait for the current hardware command to finish.';
       }
     }
 
     return undefined;
   }, [
+    automaticDeviceRunning,
+    motionCommandPending,
     sessionInProgress,
+    settingsLoaded,
+    settingsLoading,
+    subPresentAcknowledged,
     subPresentAckSub,
     selectedSub,
     systemStatus.detail,
     systemStatus.isReady,
     systemStatus.summary,
     toggleError,
+    togglePending,
     workInProgress,
   ]);
 
@@ -210,33 +252,61 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
         dismissReadyBannerForSub(selectedSub);
       }
 
-      await executeCommand(HARDWARE_COMMAND_KEYS.sessionAccessory, async () => {
+      const ran = await executeCommand(HARDWARE_COMMAND_KEYS.sessionAccessory, async () => {
         const payloadJson = JSON.stringify({ enabled });
 
         try {
           await sendHardwareCommand(selectedSub, HARDWARE_COMMAND_KEYS.sessionAccessory, payloadJson);
 
           if (enabled) {
-            await startSessionForAccessory(mode!);
             persistInProgress(true);
+            try {
+              await startSessionForAccessory(mode!);
+            } catch (sessionError) {
+              const message =
+                sessionError instanceof Error
+                  ? sessionError.message
+                  : 'Could not create server session record.';
+              setToggleError(
+                `Session is on at the device, but the server session failed: ${message}`,
+              );
+            }
             return;
           }
 
           let automaticDeviceResult: AutomaticResultJson | null = null;
 
+          const relayAutoRunning = settingsRef.current.automatic.running;
+          const motorAutoRunning = settingsRef.current.motorAutomatic.running;
+
           if (
             activeSessionRef.current?.mode === 'automatic' ||
-            settingsRef.current.automatic.running
+            relayAutoRunning ||
+            motorAutoRunning
           ) {
-            await stopAutomaticForModeSwitch(selectedSub, settingsRef.current.automatic, {
-              endAutomaticSession: async (_endReason, deviceResult) => {
-                automaticDeviceResult = deviceResult ?? null;
+            await stopAutomaticForModeSwitch(
+              selectedSub,
+              settingsRef.current.automatic,
+              {
+                endAutomaticSession: async (_endReason, deviceResult) => {
+                  automaticDeviceResult = deviceResult ?? null;
+                },
+                setAutomaticRunningLocal: (running) => {
+                  setAutomaticRunningLocal(running);
+                  if (!running) {
+                    setMotorAutomaticRunningLocal(false);
+                  }
+                },
+                isAutomaticSessionActive: () =>
+                  activeSessionRef.current?.mode === 'automatic' ||
+                  settingsRef.current.automatic.running ||
+                  settingsRef.current.motorAutomatic.running,
               },
-              setAutomaticRunningLocal,
-              isAutomaticSessionActive: () =>
-                activeSessionRef.current?.mode === 'automatic' ||
-                settingsRef.current.automatic.running,
-            });
+              {
+                deviceSessionRunning: relayAutoRunning || motorAutoRunning,
+                stopGraceMs: motorAutoRunning ? 60_000 : undefined,
+              },
+            );
           }
 
           const automaticDeviceStarted =
@@ -254,6 +324,10 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
           throw error;
         }
       });
+
+      if (!ran) {
+        setToggleError('Session command already in progress. Wait a moment and try again.');
+      }
     },
     [
       dismissReadyBannerForSub,
@@ -263,6 +337,7 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
       persistInProgress,
       selectedSub,
       setAutomaticRunningLocal,
+      setMotorAutomaticRunningLocal,
       startSessionForAccessory,
     ],
   );
@@ -274,6 +349,7 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
       canEnableSwitch,
       switchDisabled,
       switchDisabledReason,
+      sessionAccessoryError: toggleError,
       setSessionInProgress,
     }),
     [
@@ -282,6 +358,7 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
       setSessionInProgress,
       switchDisabled,
       switchDisabledReason,
+      toggleError,
       togglePending,
     ],
   );

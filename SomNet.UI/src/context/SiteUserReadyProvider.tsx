@@ -81,7 +81,7 @@ export function SiteUserReadyProvider({ children }: { children: ReactNode }) {
 
   const markSubPresentAck = useCallback((subTarget: SubTargetName) => {
     writeSubPresentAck(subTarget, true);
-    setSubPresentAckSub(subTarget);
+    setSubPresentAckSub(subTarget.trim());
   }, []);
 
   const clearSubPresentAck = useCallback((subTarget?: SubTargetName) => {

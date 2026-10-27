@@ -7,6 +7,9 @@ import {
   type HardwareCommandAck,
 } from '@/types/hardwareHub';
 import { useSiteUserReady } from '@/context/SiteUserReadyProvider';
+import { useSubTarget } from '@/context/SubTargetProvider';
+import type { SubTargetName } from '@/config/sessionUsers';
+import { subTargetsMatch } from '@/utils/readyBannerStorage';
 import {
   createOperatorHardwareHub,
   startOperatorHardwareHub,
@@ -35,8 +38,13 @@ function handleDeviceButtonEvent(
   event: DeviceButtonEvent,
   notifySiteUserReady: (subTarget: string, requestStartFeed: boolean) => void,
   markSubPresentAck: (subTarget: string) => void,
+  alignSelectedSub: (subTarget: SubTargetName) => void,
+  selectedSub: string,
 ) {
   if (event.clickType === 'double') {
+    if (!subTargetsMatch(event.subTarget, selectedSub)) {
+      alignSelectedSub(event.subTarget);
+    }
     notifySiteUserReady(event.subTarget, true);
     markSubPresentAck(event.subTarget);
     return;
@@ -52,12 +60,15 @@ export function AutomaticSessionHubListener() {
   const { settings, setAutomaticRunningLocal } = useOptions();
   const { activeSession, endAutomaticSession } = useLiveSession();
   const { notifySiteUserReady, markSubPresentAck } = useSiteUserReady();
+  const { selectedSub, applySubFromSync } = useSubTarget();
   const automaticRef = useRef(settings.automatic);
   const activeSessionRef = useRef(activeSession);
   const endAutomaticSessionRef = useRef(endAutomaticSession);
   const clearAutomaticRunningRef = useRef<() => void>(() => setAutomaticRunningLocal(false));
   const notifySiteUserReadyRef = useRef(notifySiteUserReady);
   const markSubPresentAckRef = useRef(markSubPresentAck);
+  const applySubFromSyncRef = useRef(applySubFromSync);
+  const selectedSubRef = useRef(selectedSub);
 
   automaticRef.current = settings.automatic;
   activeSessionRef.current = activeSession;
@@ -65,6 +76,8 @@ export function AutomaticSessionHubListener() {
   clearAutomaticRunningRef.current = () => setAutomaticRunningLocal(false);
   notifySiteUserReadyRef.current = notifySiteUserReady;
   markSubPresentAckRef.current = markSubPresentAck;
+  applySubFromSyncRef.current = applySubFromSync;
+  selectedSubRef.current = selectedSub;
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -101,6 +114,8 @@ export function AutomaticSessionHubListener() {
           event,
           notifySiteUserReadyRef.current,
           markSubPresentAckRef.current,
+          applySubFromSyncRef.current,
+          selectedSubRef.current,
         );
       },
     });

@@ -13,7 +13,12 @@ export function SiteUserReadyBanner() {
   const { notification, dismissReadyBannerForSub, isReadyBannerDismissedForSub } =
     useSiteUserReady();
   const { selectedSub } = useSubTarget();
-  const { sessionInProgress, togglePending } = useSessionAccessory();
+  const {
+    sessionInProgress,
+    togglePending,
+    setSessionInProgress,
+    sessionAccessoryError,
+  } = useSessionAccessory();
 
   const accessoryActive =
     sessionInProgress ||
@@ -51,14 +56,34 @@ export function SiteUserReadyBanner() {
       className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-100"
       role="status"
     >
-      <span>{notification.message}</span>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => dismissReadyBannerForSub(selectedSub)}
-      >
-        Dismiss
-      </Button>
+      <div className="min-w-0 flex-1 space-y-1">
+        <span>{notification.message}</span>
+        {sessionAccessoryError ? (
+          <p className="text-xs text-amber-200" role="alert">{sessionAccessoryError}</p>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-2">
+        {notification.requestStartFeed && !sessionInProgress ? (
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={togglePending}
+            onClick={() => {
+              dismissReadyBannerForSub(selectedSub);
+              void setSessionInProgress(true);
+            }}
+          >
+            Turn session on
+          </Button>
+        ) : null}
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => dismissReadyBannerForSub(selectedSub)}
+        >
+          Dismiss
+        </Button>
+      </div>
     </div>
   );
 }

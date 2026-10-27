@@ -141,8 +141,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const startSessionForAccessory = useCallback(
     async (mode: OperationMode) => {
-      if (startingRef.current || !domTarget) {
-        return;
+      if (!domTarget) {
+        throw new Error('Not signed in.');
+      }
+
+      if (startingRef.current) {
+        throw new Error('Session start already in progress.');
       }
 
       startingRef.current = true;

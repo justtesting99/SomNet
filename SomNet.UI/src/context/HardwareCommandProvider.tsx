@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { HardwareCommandKey, HardwareCommandStatus } from '@/types/hardwareCommand';
+import { useSubTarget } from '@/context/SubTargetProvider';
 import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
 
 interface HardwareCommandContextValue {
@@ -17,12 +18,13 @@ interface HardwareCommandContextValue {
   executeCommand: (
     commandKey: HardwareCommandKey,
     action: () => void | Promise<void>,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
 }
 
 const HardwareCommandContext = createContext<HardwareCommandContextValue | null>(null);
 
 export function HardwareCommandProvider({ children }: { children: ReactNode }) {
+  const { selectedSub } = useSubTarget();
   const pendingRef = useRef(new Set<HardwareCommandKey>());
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<HardwareCommandKey>>(
     () => new Set(),
@@ -35,7 +37,7 @@ export function HardwareCommandProvider({ children }: { children: ReactNode }) {
   const executeCommand = useCallback(
     async (commandKey: HardwareCommandKey, action: () => void | Promise<void>) => {
       if (pendingRef.current.has(commandKey)) {
-        return;
+        return false;
       }
 
       pendingRef.current.add(commandKey);
@@ -43,6 +45,7 @@ export function HardwareCommandProvider({ children }: { children: ReactNode }) {
 
       try {
         await action();
+        return true;
       } finally {
         pendingRef.current.delete(commandKey);
         syncPendingState();
@@ -50,6 +53,11 @@ export function HardwareCommandProvider({ children }: { children: ReactNode }) {
     },
     [syncPendingState],
   );
+
+  useEffect(() => {
+    pendingRef.current.clear();
+    syncPendingState();
+  }, [selectedSub, syncPendingState]);
 
   const getCommandStatus = useCallback(
     (commandKey: HardwareCommandKey): HardwareCommandStatus =>

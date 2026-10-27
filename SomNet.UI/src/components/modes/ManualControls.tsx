@@ -43,7 +43,7 @@ export function ManualControls() {
     useLiveSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
-  const { sessionInProgress } = useSessionAccessory();
+  const { sessionInProgress, sessionAccessoryError } = useSessionAccessory();
   const [commandError, setCommandError] = useState('');
 
   useEffect(() => {
@@ -267,6 +267,11 @@ export function ManualControls() {
         </Panel>
 
         <Panel title="Actions">
+          {sessionAccessoryError ? (
+            <p className="mb-3 text-sm text-red-400" role="alert">
+              {sessionAccessoryError}
+            </p>
+          ) : null}
           {!hardwareReady && !commandError && !strokePending && !burstPending ? (
             <p className="mb-3 text-sm text-amber-400/90" role="status">
               {strokeDisabledReason}

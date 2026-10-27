@@ -41,11 +41,29 @@ Track once; reference from phase checklists.
 | **X-1** | `ActuatorKind` enum in `SomNet.Shared` (`relay`, `hbridge`) | Shared | **Done** |
 | **X-2** | Motor program DTO sketch (`minimumDutyPercent`, `maximumDutyPercent`, `rampMs`, `endSessionMode` minutes/noAutoEnd — MA-D19, MA-D20) | Shared + PROTOCOL | **Done** (DTO + PROTOCOL) |
 | **X-3** | Motor `resultJson` + summary builder (separate from relay) | Firmware + Shared + API | **Done** (v1 periodic) |
-| **X-4** | Relay regression: relay NVS profile unchanged on same binary | Firmware CI / manual | |
+| **X-4** | Relay regression: relay NVS profile unchanged on same binary | Firmware CI / manual | In progress — §2.1 runbook |
 | **X-5** | `boardDefs.h`: `MOTOR_PWM_FREQUENCY_HZ`, `MOTOR_ENABLE_ACTIVE_HIGH` tuned on module (MA-D18) | Firmware / bench | 5 kHz PWM validated; duty **>50%** very fast on production motor — operator using **~10%** until max-duty cap/tuning (MA-D18 follow-up) |
 | **X-6** | **Multi-device per Sub** — project remit; **review & correct** API/DB/hub/UI (today: one `deviceId` per Sub). See [31 §12](./31-Motor-Actuator-Device-Design.md). **Interim testing:** two Subs, one ESP each | API + UI + docs | **Not started** |
 
 **Bench note (until X-6):** use **two Subs** (e.g. relay on `Slv66`, motor on `Slv67`) — not two boards on one Sub.
+
+### 2.1 Relay regression runbook (X-4 / M0-V2)
+
+Same **`pio run -e dev`** binary as the motor ESP; NVS **`actuatorKind` = `relay`** (default for unbound units; confirm in Hardware pairing or serial banner).
+
+| Step | Action | Pass criteria |
+|------|--------|----------------|
+| R0 | **`accessToken mismatch`** or **`actuatorKind rejected (NVS=hbridge pair=relay)`** | **Revoke** on target Sub (clears `act_kind` on device), then **Pair** correct profile while hub connected; expect `[HUB] paired dom=… sub=…` |
+| R1 | Flash relay ESP (`pio run -e dev -t upload`) | Boot banner: `Actuator: relay`; hub connects |
+| R2 | Pair/register as **Relay** on **relay Sub** (not motor Sub) | UI Hardware shows `relay`; hub status `actuatorKind: relay` |
+| R3 | Session accessory ON (button or UI) | `[ACCESSORY] ON`; motion not rejected for accessory |
+| R4 | **Manual** — stroke (and burst if used) | Relay clicks / load behaves; `[CMD] ack` success |
+| R5 | **Automatic** — short relay program (e.g. random, 1–2 min end) | Segments run; Stop or natural end; history summary |
+| R6 | **Abort** during automatic | Relay off; `resultJson` / session complete path |
+| R7 | **Negative** — hub must not drive motor on this unit | `motor-run` / motor-shaped automatic → device **`actuator kind mismatch`** (or API blocks before dispatch) |
+| R8 | Idle / sign-off | No motor motion on D25–D27; relay idle when disarmed; optional: `[MOTOR] backend ready` in serial only |
+
+Record deviceId, Sub, and date in **X-4** row when R1–R7 pass.
 
 ---
 
@@ -96,7 +114,7 @@ Track once; reference from phase checklists.
 - [x] **M1-R2** `POST /api/devices/pair`: accept `actuatorKind`; persist on server device record.
 - [x] **M1-R3** SomNet.UI Hardware pairing: **“Register as relay or motor?”** control.
 - [x] **M1-R4** Firmware `PairDevice` handler: write NVS if unbound; **reject mismatch** if already bound.
-- [ ] **M1-R5** Rebind documented: revoke + device reset + re-pair (operator doc or Hardware UI copy).
+- [x] **M1-R5** Rebind: **Revoke** clears NVS pairing + `act_kind`; re-pair may bind new `actuatorKind`. Factory reset still clears all NVS.
 - [x] **M1-R6** PROTOCOL §4.2 updated with `actuatorKind` in `PairDevice` arguments.
 
 ### 4.2 Firmware — motor automatic FSM
@@ -117,7 +135,7 @@ Track once; reference from phase checklists.
 
 ### 4.4 SomNet.UI
 
-- [x] **M1-U1** Motor automatic form: duty min/max, segment timing, end session (no stroke-ms; no count end mode).
+- [x] **M1-U1** Motor automatic form: duty min/max, segment timing, end session (no stroke-ms; no count end mode). *Per-Sub `motorAutomatic` pairing settings + operation mode on refresh (2026-10-26).*
 - [x] **M1-U2** Hide relay-only controls when device/caps `actuatorKind` = `hbridge`. *(`AutomaticModeControls` switches UI; manual tab still relay — M2/M1 follow-up.)*
 - [x] **M1-U3** Start / Stop / Abort E2E on paired motor device. *(Hub: `esp32-84CCA85C36B4` → Slv67; production bench `esp32-7C9EBD398F08` → Slv66, BTS7960, button accessory + periodic ramp + abort.)*
 
@@ -283,3 +301,4 @@ Update this table when a phase is signed off.
 | 2026-10-26 | Bench motor ESP: 5 kHz PWM; M1-F7 segment ramp + UI `rampMs` field |
 | 2026-10-26 | X-6 / MA-D21 — document multi-device-per-Sub remit gap; interim dual-Sub bench |
 | 2026-10-26 | Production motor E2E on Slv66: ramp segments, cooperative stop, 30 min end-session clock, abort |
+| 2026-10-26 | Motor UI: `motorAutomatic` in pairing settings; TabSync mode guard — persistence verified on bench |

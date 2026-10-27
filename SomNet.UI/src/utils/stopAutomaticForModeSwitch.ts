@@ -19,15 +19,25 @@ interface StopAutomaticForModeSwitchHandlers {
   isAutomaticSessionActive: () => boolean;
 }
 
+export interface StopAutomaticForModeSwitchOptions {
+  /** Relay or motor automatic running on device (defaults to `automatic.running`). */
+  deviceSessionRunning?: boolean;
+  stopGraceMs?: number;
+}
+
 /** Stop device automatic session before Switch mode / sign-out (P15 follow-up). */
 export async function stopAutomaticForModeSwitch(
   subTarget: SubTargetName,
   automatic: AutomaticControlState,
   handlers: StopAutomaticForModeSwitchHandlers,
+  options?: StopAutomaticForModeSwitchOptions,
 ): Promise<void> {
-  if (!handlers.isAutomaticSessionActive() && !automatic.running) {
+  const deviceRunning = options?.deviceSessionRunning ?? automatic.running;
+  if (!handlers.isAutomaticSessionActive() && !deviceRunning) {
     return;
   }
+
+  const stopGraceMs = options?.stopGraceMs ?? computeAutomaticStopGraceMs(automatic);
 
   try {
     const response = await sendHardwareCommandRaw(
@@ -69,7 +79,7 @@ export async function stopAutomaticForModeSwitch(
       return;
     }
 
-    if (!handlers.isAutomaticSessionActive() && !automatic.running) {
+    if (!handlers.isAutomaticSessionActive() && !deviceRunning) {
       return;
     }
 
@@ -81,7 +91,7 @@ export async function stopAutomaticForModeSwitch(
           await handlers.endAutomaticSession('mode-switch');
         }
       },
-      computeAutomaticStopGraceMs(automatic),
+      stopGraceMs,
     );
   } catch {
     handlers.setAutomaticRunningLocal(false);

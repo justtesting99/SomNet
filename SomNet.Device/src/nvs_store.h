@@ -90,7 +90,9 @@ public:
     DeviceActuatorKind getActuatorKind() const;
     bool setActuatorKind(DeviceActuatorKind kind);
     bool setActuatorKindFromJson(const char* value);
-    /** PairDevice: bind NVS kind when unset; reject mismatch when already bound. */
+    /** Clears actuator profile binding (e.g. after RevokePairing for kind rebind). */
+    bool clearActuatorKindBinding();
+    /** PairDevice: bind when unset; when paired reject mismatch; when unpaired allow rebind. */
     bool tryBindActuatorKindFromPairJson(const char* jsonKind);
 
 private:

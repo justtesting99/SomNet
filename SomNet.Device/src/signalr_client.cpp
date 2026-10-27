@@ -881,8 +881,11 @@ void handleHubFrame(const char* frame) {
     const char* target = doc["target"] | "";
     if (strcmp(target, "RevokePairing") == 0) {
         Serial.println(F("[HUB] pairing revoked — clearing"));
-        if (gNvs != nullptr && gNvs->isPaired()) {
-            gNvs->clearPairing();
+        if (gNvs != nullptr) {
+            if (gNvs->isPaired()) {
+                gNvs->clearPairing();
+            }
+            gNvs->clearActuatorKindBinding();
             gUsePairedConnect = false;
         }
         gImmediateReconnect = true;

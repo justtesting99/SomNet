@@ -36,7 +36,7 @@ export function MotorAutomaticControls() {
   const { endAutomaticSession, activeSession, markAutomaticDeviceStarted } = useLiveSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
-  const { sessionInProgress } = useSessionAccessory();
+  const { sessionInProgress, sessionAccessoryError } = useSessionAccessory();
   const [commandError, setCommandError] = useState('');
   const [cooperativeStopInProgress, setCooperativeStopInProgress] = useState(false);
   const runningRef = useRef(state.running);
@@ -211,6 +211,9 @@ export function MotorAutomaticControls() {
       <p className="mb-3 text-sm text-slate-400">
         H-bridge profile: duty segments with min/max timing. End session: minutes or no auto end only.
       </p>
+      {sessionAccessoryError ? (
+        <p className="mb-2 text-sm text-red-400" role="alert">{sessionAccessoryError}</p>
+      ) : null}
       {commandError ? <p className="mb-2 text-sm text-red-400">{commandError}</p> : null}
       {cooperativeStopInProgress ? (
         <p className="mb-2 text-sm text-amber-300">Stopping after current motor segment…</p>

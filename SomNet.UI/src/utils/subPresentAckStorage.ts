@@ -3,7 +3,7 @@ import type { SubTargetName } from '@/config/sessionUsers';
 const STORAGE_PREFIX = 'somnet-sub-present-ack';
 
 function storageKey(subTarget: SubTargetName): string {
-  return `${STORAGE_PREFIX}:${subTarget}`;
+  return `${STORAGE_PREFIX}:${subTarget.trim().toLowerCase()}`;
 }
 
 export function readSubPresentAck(subTarget: SubTargetName): boolean {

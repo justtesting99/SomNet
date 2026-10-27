@@ -127,6 +127,11 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
     setIsLoading(true);
     setSettingsLoaded(false);
+    setSettings((current) => ({
+      ...current,
+      automatic: { ...current.automatic, running: false },
+      motorAutomatic: { ...current.motorAutomatic, running: false },
+    }));
 
     Promise.all([fetchPairingSettings(selectedSub), fetchStrokeLimits()])
       .then(([loadedSettings, loadedStrokeLimits]) => {

@@ -15,6 +15,7 @@ export function SessionInProgressSwitch() {
     switchDisabledReason,
     setSessionInProgress,
     togglePending,
+    canEnableSwitch,
   } = useSessionAccessory();
 
   const disabled = switchDisabled || togglePending;
@@ -81,6 +82,17 @@ export function SessionInProgressSwitch() {
         </button>
       </div>
       </div>
+      {switchDisabledReason ? (
+        <p className="text-xs text-amber-200/90" title={switchDisabledReason}>
+          {switchDisabledReason}
+        </p>
+      ) : switchDisabled && !sessionInProgress ? (
+        <p className="text-xs text-slate-400">
+          {canEnableSwitch
+            ? 'Switch is locked while another command is pending.'
+            : 'Need system Ready, double-click device button for this Sub, then try again.'}
+        </p>
+      ) : null}
       {options.showActiveSessionIdInHeader && sessionInProgress && activeSession ? (
         <p className="min-w-0 truncate font-mono text-xs text-indigo-100" title="Active session id">
           <span className="font-sans text-slate-400">ID </span>

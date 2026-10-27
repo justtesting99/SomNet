@@ -435,6 +435,13 @@ bool NvsStore::setActuatorKindFromJson(const char* value) {
     return setActuatorKind(kind);
 }
 
+bool NvsStore::clearActuatorKindBinding() {
+    if (!open_ || !preferences.isKey(kKeyActuatorKind)) {
+        return true;
+    }
+    return preferences.remove(kKeyActuatorKind);
+}
+
 bool NvsStore::tryBindActuatorKindFromPairJson(const char* jsonKind) {
     DeviceActuatorKind incoming = DeviceActuatorKind_Relay;
     if (!actuatorKindFromJson(jsonKind, &incoming)) {
@@ -442,6 +449,9 @@ bool NvsStore::tryBindActuatorKindFromPairJson(const char* jsonKind) {
     }
 
     if (hasActuatorKindBound()) {
+        if (!isPaired()) {
+            return setActuatorKind(incoming);
+        }
         return getActuatorKind() == incoming;
     }
 

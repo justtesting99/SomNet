@@ -72,7 +72,7 @@ export function AutomaticControls() {
   const { endAutomaticSession, activeSession, markAutomaticDeviceStarted } = useLiveSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
-  const { sessionInProgress } = useSessionAccessory();
+  const { sessionInProgress, sessionAccessoryError } = useSessionAccessory();
   const [commandError, setCommandError] = useState('');
   const [cooperativeStopInProgress, setCooperativeStopInProgress] = useState(false);
   const runningRef = useRef(state.running);
@@ -681,6 +681,11 @@ export function AutomaticControls() {
 
         <Panel title="Controls">
           <div className="flex h-full flex-col justify-center gap-3">
+            {sessionAccessoryError ? (
+              <p className="text-sm text-red-400" role="alert">
+                {sessionAccessoryError}
+              </p>
+            ) : null}
             {!hardwareReady && !commandError && !startPending && !stopPending && !abortPending ? (
               <p className="text-sm text-amber-400/90" role="status">
                 {hardwareDisabledReason}
