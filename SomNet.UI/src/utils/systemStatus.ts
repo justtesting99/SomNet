@@ -65,6 +65,63 @@ export function buildSystemStatus(
   };
 }
 
+/** Merge API poll with per-device present ack (device button double-click). */
+export function applyOperatorDeviceStatus(
+  polled: SystemStatusSnapshot,
+  options: { hasSelectedDevice: boolean; presentAcknowledged: boolean },
+): SystemStatusSnapshot {
+  if (!options.hasSelectedDevice) {
+    if (polled.api === 'offline') {
+      return polled;
+    }
+
+    return {
+      ...polled,
+      summary: 'No device selected',
+      detail: 'Choose a device in Focus to see connection status.',
+      isReady: false,
+    };
+  }
+
+  if (polled.api === 'offline') {
+    return polled;
+  }
+
+  if (polled.device !== 'online') {
+    return {
+      ...polled,
+      summary: 'Device offline',
+      detail: polled.detail || 'Device is not connected to the hub.',
+      isReady: false,
+    };
+  }
+
+  if (!options.presentAcknowledged) {
+    return {
+      ...polled,
+      summary: 'Awaiting device button',
+      detail: 'Double-click the device button to confirm connection for this Sub.',
+      isReady: false,
+    };
+  }
+
+  if (polled.signalR !== 'online') {
+    return {
+      ...polled,
+      summary: 'Link connecting',
+      detail: polled.detail || 'Waiting for the real-time link to the device.',
+      isReady: false,
+    };
+  }
+
+  return {
+    ...polled,
+    summary: 'Ready',
+    detail: polled.detail || 'Device connected and acknowledged.',
+    isReady: true,
+  };
+}
+
 export function getOverallTone(
   status: SystemStatusSnapshot,
 ): 'ready' | 'warning' | 'error' | 'checking' {

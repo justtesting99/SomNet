@@ -8,7 +8,8 @@ import { useSystemStatus } from '@/context/SystemStatusProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { Panel } from '@/components/ui/Panel';
 import { CommandButton } from '@/components/ui/CommandButton';
-import { NumberField, MinMaxRow } from '@/components/ui/NumberField';
+import { ClampedNumberField } from '@/components/ui/ClampedNumberField';
+import { MinMaxRow } from '@/components/ui/NumberField';
 import { SelectField } from '@/components/ui/RadioGroup';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 import { useHardwareCommand } from '@/context/HardwareCommandProvider';
@@ -273,22 +274,22 @@ export function MotorAutomaticControls() {
         onMaxChange={(value) => update('segmentMaxSeconds', value)}
       />
 
-      <NumberField
+      <ClampedNumberField
         label="Duty ramp (ms)"
         value={state.rampMs}
         min={0}
         max={30_000}
         disabled={configLocked}
-        onChange={(event) => update('rampMs', Number(event.target.value))}
+        onCommit={(value) => update('rampMs', value)}
       />
 
-      <NumberField
+      <ClampedNumberField
         label="Delay before start (sec)"
         value={state.delayBeforeStartSeconds}
         min={0}
         max={3600}
         disabled={sessionRunning}
-        onChange={(event) => update('delayBeforeStartSeconds', Number(event.target.value))}
+        onCommit={(value) => update('delayBeforeStartSeconds', value)}
       />
 
       <SelectField
@@ -300,13 +301,13 @@ export function MotorAutomaticControls() {
       />
 
       {endSessionMode === 'minutes' ? (
-        <NumberField
+        <ClampedNumberField
           label="End after (minutes)"
           value={state.endSessionValue}
           min={1}
           max={1440}
           disabled={configLocked}
-          onChange={(event) => update('endSessionValue', Number(event.target.value))}
+          onCommit={(value) => update('endSessionValue', value)}
         />
       ) : null}
 

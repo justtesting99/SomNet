@@ -11,10 +11,8 @@ import { useSubDevice } from '@/context/SubDeviceProvider';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 import { sendHardwareCommand } from '@/services/hardwareCommand';
-import {
-  readDeviceAccessoryEngaged,
-  readDeviceSceneSessionActive,
-} from '@/utils/sessionAccessoryStorage';
+import { readDeviceAccessoryEngaged } from '@/utils/sessionAccessoryStorage';
+import { useDeviceSceneSessionActive } from '@/hooks/useDeviceSceneSessionActive';
 import { deviceAutomaticRunningForDevice } from '@/utils/selectedDeviceAutomatic';
 import { automaticRunningKindForActuator, subscribeTabSync } from '@/utils/tabSync';
 import type { AutomaticResultJson } from '@/utils/automaticResultJson';
@@ -45,43 +43,35 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
     syncActiveSessionModeForDevice,
   } = useLiveSession();
 
+  const sceneSessionActive = useDeviceSceneSessionActive(deviceId);
+
   const [scenePending, setScenePending] = useState(false);
   const [sceneError, setSceneError] = useState('');
   const [accessoryError, setAccessoryError] = useState('');
-  const [sceneSessionActive, setSceneSessionActiveState] = useState(false);
   const [accessoryEngaged, setAccessoryEngagedState] = useState(false);
 
-  const syncFromStorage = useCallback(() => {
+  const syncAccessoryFromStorage = useCallback(() => {
     if (!domTarget) {
-      setSceneSessionActiveState(false);
       setAccessoryEngagedState(false);
       return;
     }
 
-    setSceneSessionActiveState(readDeviceSceneSessionActive(domTarget, selectedSub, deviceId));
     setAccessoryEngagedState(readDeviceAccessoryEngaged(domTarget, selectedSub, deviceId));
   }, [deviceId, domTarget, selectedSub]);
 
   useEffect(() => {
-    syncFromStorage();
-  }, [syncFromStorage]);
+    syncAccessoryFromStorage();
+  }, [syncAccessoryFromStorage]);
 
   useEffect(() => {
     return subscribeTabSync((message) => {
-      if (message.type === 'scene-session') {
-        if (message.subTarget === selectedSub && message.deviceId === deviceId) {
-          syncFromStorage();
-        }
-        return;
-      }
-
       if (message.type === 'device-accessory') {
         if (message.subTarget === selectedSub && message.deviceId === deviceId) {
-          syncFromStorage();
+          syncAccessoryFromStorage();
         }
       }
     });
-  }, [deviceId, selectedSub, syncFromStorage]);
+  }, [deviceId, selectedSub, syncAccessoryFromStorage]);
 
   const deviceSession = sessionsByKey[sessionDeviceKey(selectedSub, deviceId)] ?? null;
 
@@ -194,7 +184,6 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
           persistDeviceSceneSession(domTarget, selectedSub, deviceId, true, {
             dismissReadyBanner: () => dismissReadyBannerForSub(selectedSub),
           });
-          syncFromStorage();
           await startSessionForDevice(deviceId, mode!);
           return;
         }
@@ -253,7 +242,7 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
         }
 
         persistDeviceSceneSession(domTarget, selectedSub, deviceId, false);
-        syncFromStorage();
+        syncAccessoryFromStorage();
       } catch (error) {
         setSceneError(error instanceof Error ? error.message : 'Could not update scene session.');
       } finally {
@@ -275,7 +264,6 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
       runningKind,
       selectedSub,
       startSessionForDevice,
-      syncFromStorage,
     ],
   );
 
@@ -302,7 +290,7 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
             JSON.stringify({ enabled: active }),
           );
           persistDeviceAccessoryEngaged(domTarget, selectedSub, deviceId, active);
-          syncFromStorage();
+          syncAccessoryFromStorage();
         },
         deviceId,
       );
@@ -311,7 +299,7 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
         setAccessoryError('Accessory command already in progress.');
       }
     },
-    [deviceId, domTarget, executeCommand, sceneSessionActive, selectedSub, syncFromStorage],
+    [deviceId, domTarget, executeCommand, sceneSessionActive, selectedSub, syncAccessoryFromStorage],
   );
 
   return {

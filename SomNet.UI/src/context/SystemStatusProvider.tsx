@@ -26,10 +26,11 @@ interface SystemStatusContextValue {
 
 const SystemStatusContext = createContext<SystemStatusContextValue | null>(null);
 
+/** Null when the status request failed — caller should keep the previous snapshot if any. */
 async function fetchSystemStatus(
   subTarget: string,
   deviceId: string | null,
-): Promise<SystemStatusSnapshot> {
+): Promise<SystemStatusSnapshot | null> {
   try {
     const params = new URLSearchParams();
     if (subTarget) {
@@ -44,7 +45,7 @@ async function fetchSystemStatus(
     );
     return buildSystemStatus(payload, true);
   } catch {
-    return buildSystemStatus(null, false);
+    return null;
   }
 }
 
@@ -79,11 +80,20 @@ export function SystemStatusProvider({
       }),
     );
 
-    const next: Record<string, SystemStatusSnapshot> = {};
-    for (const [deviceId, snapshot] of results) {
-      next[deviceId] = snapshot;
-    }
-    setStatusByDeviceId(next);
+    setStatusByDeviceId((prev) => {
+      const next: Record<string, SystemStatusSnapshot> = { ...prev };
+      for (const [deviceId, snapshot] of results) {
+        if (snapshot) {
+          next[deviceId] = snapshot;
+          continue;
+        }
+
+        if (!(deviceId in next)) {
+          next[deviceId] = buildSystemStatus(null, false);
+        }
+      }
+      return next;
+    });
   }, [enabled, registrations, selectedSub]);
 
   useEffect(() => {

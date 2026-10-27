@@ -1,18 +1,22 @@
 import { useEffect, useRef } from 'react';
 import { useSiteUserReady } from '@/context/SiteUserReadyProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { subTargetsMatch } from '@/utils/readyBannerStorage';
 import type { VideoPreviewControls } from '@/hooks/useSessionVideoSources';
 
 /** When the site user double-clicks the device button, auto-run Start feed when allowed. */
 export function useSiteUserReadyStartFeed(videoPreview: VideoPreviewControls | undefined) {
-  const { notification } = useSiteUserReady();
+  const { deviceButtonReadySignal } = useSiteUserReady();
   const { selectedSub } = useSubTarget();
   const previewRef = useRef(videoPreview);
 
   previewRef.current = videoPreview;
 
   useEffect(() => {
-    if (!notification?.requestStartFeed || notification.subTarget !== selectedSub) {
+    if (
+      !deviceButtonReadySignal?.requestStartFeed ||
+      !subTargetsMatch(deviceButtonReadySignal.subTarget, selectedSub)
+    ) {
       return;
     }
 
@@ -27,7 +31,7 @@ export function useSiteUserReadyStartFeed(videoPreview: VideoPreviewControls | u
 
     void preview.start();
   }, [
-    notification,
+    deviceButtonReadySignal,
     selectedSub,
     videoPreview?.available,
     videoPreview?.canStart,

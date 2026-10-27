@@ -16,14 +16,16 @@ export function NumberField({
   className = '',
   disabled,
   alignLabelHeight = false,
+  step,
   ...props
 }: NumberFieldProps) {
   const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
+  const resolvedStep = type === 'number' ? (step ?? 1) : step;
   const isDisabled = Boolean(disabled);
   const labelClass = isDisabled ? 'text-slate-600' : 'text-slate-400';
   const inputClass = [
     inline
-      ? 'w-16 rounded-lg border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-center text-sm'
+      ? 'w-[4.5rem] rounded-lg border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-center text-sm'
       : 'w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm',
     isDisabled
       ? 'cursor-not-allowed text-slate-600 opacity-60'
@@ -40,7 +42,14 @@ export function NumberField({
         <label htmlFor={inputId} className={['shrink-0 text-sm', labelClass].join(' ')}>
           {label}
         </label>
-        <input id={inputId} type={type} className={inputClass} disabled={disabled} {...props} />
+        <input
+          id={inputId}
+          type={type}
+          step={resolvedStep}
+          className={inputClass}
+          disabled={disabled}
+          {...props}
+        />
       </div>
     );
   }
@@ -61,7 +70,14 @@ export function NumberField({
           {label}
         </label>
       ) : null}
-      <input id={inputId} type={type} className={inputClass} disabled={disabled} {...props} />
+      <input
+        id={inputId}
+        type={type}
+        step={resolvedStep}
+        className={inputClass}
+        disabled={disabled}
+        {...props}
+      />
     </div>
   );
 }
@@ -116,7 +132,12 @@ export function MinMaxRow({
           min={minInputMin}
           max={maxLimit}
           disabled={minFieldDisabled}
-          onChange={(event) => onMinChange(Number(event.target.value))}
+          onChange={(event) => {
+            const parsed = Math.trunc(Number(event.target.value));
+            if (Number.isFinite(parsed)) {
+              onMinChange(parsed);
+            }
+          }}
         />
         <NumberField
           label="Max"
@@ -125,7 +146,12 @@ export function MinMaxRow({
           min={maxInputMin}
           max={maxLimit}
           disabled={maxFieldDisabled}
-          onChange={(event) => onMaxChange(Number(event.target.value))}
+          onChange={(event) => {
+            const parsed = Math.trunc(Number(event.target.value));
+            if (Number.isFinite(parsed)) {
+              onMaxChange(parsed);
+            }
+          }}
         />
       </div>
       {hint ? <p className="min-h-4 text-xs text-slate-500">{hint}</p> : null}

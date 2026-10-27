@@ -17,7 +17,6 @@ import { DeviceOperationsPanel } from '@/components/modes/DeviceOperationsPanel'
 import { DevicePairingSettingsProvider } from '@/context/DevicePairingSettingsProvider';
 import { DeviceOperationModeProvider } from '@/context/DeviceOperationModeProvider';
 import { AutomaticSessionHubListener } from '@/components/hardware/AutomaticSessionHubListener';
-import { SiteUserReadyBanner } from '@/components/hardware/SiteUserReadyBanner';
 import { SessionRehydrator } from '@/components/hardware/SessionRehydrator';
 import { SiteUserReadyProvider } from '@/context/SiteUserReadyProvider';
 import { useSiteUserReadyStartFeed } from '@/hooks/useSiteUserReadyStartFeed';
@@ -33,7 +32,6 @@ function DashboardLayoutWithSessionVideo() {
 
   return (
     <>
-      <SiteUserReadyBanner />
       <DashboardLayout
         controls={<DeviceOperationsPanel />}
         videoSources={sources}

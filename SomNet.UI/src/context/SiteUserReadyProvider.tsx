@@ -15,27 +15,22 @@ import {
   writeSubPresentAck,
 } from '@/utils/subPresentAckStorage';
 import { readDeviceSceneSessionActive } from '@/utils/sessionAccessoryStorage';
-import {
-  readReadyBannerDismissed,
-  subTargetsMatch,
-  writeReadyBannerDismissed,
-} from '@/utils/readyBannerStorage';
+import { readReadyBannerDismissed, writeReadyBannerDismissed } from '@/utils/readyBannerStorage';
 
-interface SiteUserReadyState {
+export interface DeviceButtonReadySignal {
   subTarget: string;
-  deviceId?: string;
-  message: string;
+  deviceId: string;
   requestStartFeed: boolean;
+  atMs: number;
 }
 
 interface SiteUserReadyContextValue {
-  notification: SiteUserReadyState | null;
+  deviceButtonReadySignal: DeviceButtonReadySignal | null;
   notifySiteUserReady: (
     subTarget: string,
     requestStartFeed: boolean,
     deviceId?: string,
   ) => void;
-  clearNotification: () => void;
   dismissReadyBannerForSub: (subTarget: SubTargetName) => void;
   isReadyBannerDismissedForSub: (subTarget: SubTargetName) => boolean;
   isDevicePresentAcknowledged: (subTarget: SubTargetName, deviceId: string | null) => boolean;
@@ -55,7 +50,8 @@ export function SiteUserReadyProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { selectedSub } = useSubTarget();
   const domTarget = user?.displayName ?? user?.username ?? '';
-  const [notification, setNotification] = useState<SiteUserReadyState | null>(null);
+  const [deviceButtonReadySignal, setDeviceButtonReadySignal] =
+    useState<DeviceButtonReadySignal | null>(null);
   const [presentAckRevision, setPresentAckRevision] = useState(0);
   const [dismissedSubs, setDismissedSubs] = useState<Set<string>>(() => new Set());
 
@@ -77,19 +73,15 @@ export function SiteUserReadyProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      writeReadyBannerDismissed(subTarget, false);
-      setDismissedSubs((current) => {
-        const next = new Set(current);
-        next.delete(subTarget.trim().toLowerCase());
-        return next;
-      });
-      setNotification({
+      if (!deviceId) {
+        return;
+      }
+
+      setDeviceButtonReadySignal({
         subTarget,
         deviceId,
         requestStartFeed,
-        message: requestStartFeed
-          ? `${subTarget} is Ready For Session.`
-          : `Device button pressed on ${subTarget}.`,
+        atMs: Date.now(),
       });
     },
     [domTarget],
@@ -127,21 +119,10 @@ export function SiteUserReadyProvider({ children }: { children: ReactNode }) {
     return null;
   }, [presentAckRevision]);
 
-  const clearNotification = useCallback(() => {
-    setNotification(null);
-  }, []);
-
   const dismissReadyBannerForSub = useCallback((subTarget: SubTargetName) => {
     const key = subTarget.trim().toLowerCase();
     writeReadyBannerDismissed(subTarget, true);
     setDismissedSubs((current) => new Set(current).add(key));
-    setNotification((current) => {
-      if (!current || !subTargetsMatch(current.subTarget, subTarget)) {
-        return current;
-      }
-
-      return null;
-    });
   }, []);
 
   const isReadyBannerDismissedForSub = useCallback(
@@ -154,9 +135,8 @@ export function SiteUserReadyProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     (): SiteUserReadyContextValue => ({
-      notification,
+      deviceButtonReadySignal,
       notifySiteUserReady,
-      clearNotification,
       dismissReadyBannerForSub,
       isReadyBannerDismissedForSub,
       isDevicePresentAcknowledged,
@@ -168,14 +148,13 @@ export function SiteUserReadyProvider({ children }: { children: ReactNode }) {
     }),
     [
       clearDevicePresentAck,
-      clearNotification,
       clearSubPresentAck,
+      deviceButtonReadySignal,
       dismissReadyBannerForSub,
       isDevicePresentAcknowledged,
       isReadyBannerDismissedForSub,
       markDevicePresentAck,
       markSubPresentAck,
-      notification,
       notifySiteUserReady,
       subPresentAckSub,
     ],

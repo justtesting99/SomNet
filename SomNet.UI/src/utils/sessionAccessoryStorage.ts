@@ -29,6 +29,22 @@ function deviceAccessoryKey(domTarget: string, subTarget: string, deviceId: stri
   return `${ACCESSORY_PREFIX}:${domTarget}:${subTarget}:${deviceId}`;
 }
 
+const deviceSceneSessionListeners = new Set<() => void>();
+
+/** Same-tab listeners (BroadcastChannel does not echo to the posting tab). */
+export function subscribeDeviceSceneSessionStorage(listener: () => void): () => void {
+  deviceSceneSessionListeners.add(listener);
+  return () => {
+    deviceSceneSessionListeners.delete(listener);
+  };
+}
+
+function notifyDeviceSceneSessionStorage(): void {
+  for (const listener of deviceSceneSessionListeners) {
+    listener();
+  }
+}
+
 function migrateLegacyIfNeeded(domTarget: string, subTarget: string): void {
   try {
     const legacy = sessionStorage.getItem(legacyKey(domTarget, subTarget));
@@ -76,6 +92,7 @@ export function migrateSubSceneToDeviceIds(
 
     for (const deviceId of deviceIds) {
       sessionStorage.setItem(deviceSceneKey(domTarget, subTarget, deviceId), '1');
+      notifyDeviceSceneSessionStorage();
     }
     sessionStorage.removeItem(sceneKey(domTarget, subTarget));
   } catch {
@@ -121,6 +138,8 @@ export function writeDeviceSceneSessionActive(
     } else {
       sessionStorage.removeItem(key);
     }
+
+    notifyDeviceSceneSessionStorage();
   } catch {
     // ignore
   }
@@ -157,6 +176,8 @@ export function writeSceneSessionActive(
     } else {
       sessionStorage.removeItem(key);
     }
+
+    notifyDeviceSceneSessionStorage();
   } catch {
     // ignore
   }

@@ -9,7 +9,7 @@ import { useSystemStatus } from '@/context/SystemStatusProvider';
 import { isHardwareCommandReady } from '@/utils/commandReadiness';
 import { Panel } from '@/components/ui/Panel';
 import { CommandButton } from '@/components/ui/CommandButton';
-import { StrokeMsInput } from '@/components/modes/StrokeMsInput';
+import { ClampedNumberField } from '@/components/ui/ClampedNumberField';
 import { MotorSpeedSlider } from '@/components/modes/MotorSpeedSlider';
 import { useOperationSession } from '@/hooks/useOperationSession';
 import { useHardwareCommand } from '@/context/HardwareCommandProvider';
@@ -124,8 +124,10 @@ export function MotorManualControls() {
       return;
     }
 
+    const dutyForHistory = activeRun.dutyPercent;
+    const elapsedMs = Math.max(0, Date.now() - activeRun.startedAtMs);
+
     try {
-      const elapsedMs = Math.max(0, Date.now() - activeRun.startedAtMs);
       const snapshotActionIndex = await prepareManualSession();
       await sendHardwareCommand(
         selectedSub,
@@ -134,9 +136,11 @@ export function MotorManualControls() {
         '{}',
         snapshotActionIndex,
       );
-      await recordManualStroke(activeRun.dutyPercent, elapsedMs);
       activeRunRef.current = null;
       setMotorRunning(false);
+      void recordManualStroke(dutyForHistory, elapsedMs).catch((error) => {
+        setCommandError(formatCommandError(error));
+      });
     } catch (error) {
       setCommandError(formatCommandError(error));
     }
@@ -184,7 +188,7 @@ export function MotorManualControls() {
       <div className="grid gap-4 md:grid-cols-2">
         <Panel title="Speed Settings" className="min-w-0 overflow-hidden">
           <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-8">
-            <StrokeMsInput
+            <ClampedNumberField
               label="Minimum Duty (%)"
               value={state.minimumDutyPercent}
               min={DUTY_MIN}
@@ -199,7 +203,7 @@ export function MotorManualControls() {
                 });
               }}
             />
-            <StrokeMsInput
+            <ClampedNumberField
               label="Maximum Duty (%)"
               value={state.maximumDutyPercent}
               min={state.minimumDutyPercent}

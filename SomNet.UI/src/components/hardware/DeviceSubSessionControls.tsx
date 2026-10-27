@@ -24,12 +24,10 @@ export function DeviceSubSessionControls({
     setAccessoryEngaged,
   } = useDeviceSceneSessionControls(deviceId, actuatorKind);
 
-  const deviceShort = `${deviceId.slice(0, 8)}…`;
-
   return (
     <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-start">
       <HeaderToggle
-        label={`Scene (${deviceShort})`}
+        label="Scene"
         shortLabel="Scene"
         active={sceneSessionActive}
         disabled={sceneSwitchDisabled}
@@ -41,7 +39,7 @@ export function DeviceSubSessionControls({
         onToggle={() => void setSceneSessionActive(!sceneSessionActive)}
       />
       <HeaderToggle
-        label={`Accessory (${deviceShort})`}
+        label="Accessory"
         shortLabel="Accessory"
         active={accessoryEngaged}
         disabled={accessorySwitchDisabled}
