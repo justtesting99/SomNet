@@ -75,7 +75,18 @@ void MotorController::writeForwardPwmDuty(int dutyPercent) {
     writeRunEnable(true);
 }
 
+void MotorController::beginIfNeeded() {
+    if (initialized_) {
+        return;
+    }
+    begin();
+}
+
 void MotorController::begin() {
+    if (initialized_) {
+        return;
+    }
+
     pinMode(PIN_MOTOR_ENABLE, OUTPUT);
     if (!MOTOR_ENABLES_GANGED_ON_D27) {
         pinMode(PIN_MOTOR_ENABLE_SECONDARY, OUTPUT);

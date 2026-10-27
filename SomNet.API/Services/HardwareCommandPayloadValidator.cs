@@ -20,6 +20,15 @@ internal static class HardwareCommandPayloadValidator
         "buildUp",
     };
 
+    private static readonly HashSet<string> MotorAutomaticRunModes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "periodic",
+        "randomSpeed",
+        "randomSpeedAndTiming",
+        "powerWave",
+        "buildUp",
+    };
+
     private static readonly HashSet<string> WaveAutomaticModes = new(StringComparer.OrdinalIgnoreCase)
     {
         "powerWave",
@@ -184,15 +193,16 @@ internal static class HardwareCommandPayloadValidator
             }
 
             var automaticMode = modeElement.GetString();
-            if (string.IsNullOrWhiteSpace(automaticMode) || !AutomaticRunModes.Contains(automaticMode))
+            if (string.IsNullOrWhiteSpace(automaticMode) || !MotorAutomaticRunModes.Contains(automaticMode))
             {
-                errorMessage = "automaticMode is not a supported automatic program.";
+                errorMessage = "automaticMode is not a supported motor automatic program.";
                 return false;
             }
 
             foreach (var propertyName in new[]
                      {
-                         "minimumDutyPercent", "maximumDutyPercent", "segmentMinSeconds", "segmentMaxSeconds",
+                         "minimumDutyPercent", "maximumDutyPercent", "minimumSpeedPercent", "maximumSpeedPercent",
+                         "segmentMinSeconds", "segmentMaxSeconds",
                          "delayBeforeStartSeconds", "endSessionValue", "rampMs",
                      })
             {
@@ -207,6 +217,17 @@ internal static class HardwareCommandPayloadValidator
                     root,
                     "minimumDutyPercent",
                     "maximumDutyPercent",
+                    0,
+                    100,
+                    out errorMessage))
+            {
+                return false;
+            }
+
+            if (!TryValidateIntMinMax(
+                    root,
+                    "minimumSpeedPercent",
+                    "maximumSpeedPercent",
                     0,
                     100,
                     out errorMessage))

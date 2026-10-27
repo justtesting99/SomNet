@@ -35,11 +35,13 @@ bool MotorAutomaticSessionMode::beginSession(const char* payloadJson) {
     pendingConfigJson_[0] = '\0';
     pendingUpdate_ = false;
 
-    dutyPercent_ = config.maximumDutyPercent;
     rampMs_ = static_cast<unsigned long>(config.rampMs);
     endSessionValue_ = config.endSessionValue;
     endSessionModeWire_ = motorEndSessionModeToWire(config.endSessionMode);
     segmentsCompleted_ = 0;
+    dutyPercent_ = motorSpeedPercentToDuty(
+        motorResolveSpeedPercentForSegment(config, segmentsCompleted_, sessionStartMs_, millis()),
+        config);
     stopRequested_ = false;
     stopCorrelationId_[0] = '\0';
     callbackContext_ = nullptr;
@@ -105,10 +107,12 @@ bool MotorAutomaticSessionMode::applyPendingUpdate() {
 
     strncpy(configJson_, pendingConfigJson_, sizeof(configJson_) - 1);
     configJson_[sizeof(configJson_) - 1] = '\0';
-    dutyPercent_ = config.maximumDutyPercent;
     rampMs_ = static_cast<unsigned long>(config.rampMs);
     endSessionValue_ = config.endSessionValue;
     endSessionModeWire_ = motorEndSessionModeToWire(config.endSessionMode);
+    dutyPercent_ = motorSpeedPercentToDuty(
+        motorResolveSpeedPercentForSegment(config, segmentsCompleted_, sessionStartMs_, millis()),
+        config);
     pendingUpdate_ = false;
     pendingConfigJson_[0] = '\0';
 
@@ -154,6 +158,12 @@ int MotorAutomaticSessionMode::pickSegmentSeconds() const {
     if (!parseMotorAutomaticConfig(configJson_, &config)) {
         return 5;
     }
+    if (config.mode == MotorAutomaticRunMode::Periodic ||
+        config.mode == MotorAutomaticRunMode::RandomSpeed ||
+        config.mode == MotorAutomaticRunMode::PowerWave ||
+        config.mode == MotorAutomaticRunMode::BuildUp) {
+        return config.segmentMaxSeconds;
+    }
     if (config.segmentMinSeconds >= config.segmentMaxSeconds) {
         return config.segmentMinSeconds;
     }
@@ -166,8 +176,16 @@ bool MotorAutomaticSessionMode::beginRunSegment() {
         return false;
     }
 
+    MotorAutomaticConfig config{};
+    if (!parseMotorAutomaticConfig(configJson_, &config)) {
+        return false;
+    }
+
     runSeconds_ = pickSegmentSeconds();
     gapSeconds_ = pickSegmentSeconds();
+    dutyPercent_ = motorSpeedPercentToDuty(
+        motorResolveSpeedPercentForSegment(config, segmentsCompleted_, sessionStartMs_, millis()),
+        config);
 
     if (!motor_->beginRampToDuty(dutyPercent_, rampMs_)) {
         Serial.println(F("[MOTOR-AUTO] reject: motor busy"));

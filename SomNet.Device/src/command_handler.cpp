@@ -108,7 +108,9 @@ void CommandHandler::enqueueExecuteCommand(const ExecuteCommandPayload& command)
 }
 
 void CommandHandler::poll() {
-    if (motor_ != nullptr) {
+    if (motor_ != nullptr && nvs_ != nullptr &&
+        nvs_->getActuatorKind() == DeviceActuatorKind_HBridge) {
+        motor_->beginIfNeeded();
         motor_->poll();
     }
 
@@ -372,6 +374,10 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
     if (actuatorKind == DeviceActuatorKind_HBridge && isRelayMotionCommandKey(command.commandKey)) {
         sendAck(command.correlationId, false, "actuator kind mismatch", nullptr);
         return;
+    }
+
+    if (actuatorKind == DeviceActuatorKind_HBridge && motor_ != nullptr) {
+        motor_->beginIfNeeded();
     }
 
     if (strcmp(command.commandKey, "session-accessory") == 0) {

@@ -8,10 +8,22 @@ enum class MotorEndSessionMode : uint8_t {
     Minutes = 1,
 };
 
+enum class MotorAutomaticRunMode : uint8_t {
+    Unknown = 0,
+    Periodic,
+    RandomSpeed,
+    RandomSpeedAndTiming,
+    PowerWave,
+    BuildUp,
+};
+
 struct MotorAutomaticConfig {
     bool valid = false;
+    MotorAutomaticRunMode mode = MotorAutomaticRunMode::Periodic;
     int minimumDutyPercent = 0;
     int maximumDutyPercent = 80;
+    int minimumSpeedPercent = 0;
+    int maximumSpeedPercent = 100;
     int segmentMinSeconds = 5;
     int segmentMaxSeconds = 20;
     int delayBeforeStartSeconds = 0;
@@ -23,3 +35,15 @@ struct MotorAutomaticConfig {
 bool parseMotorAutomaticConfig(const char* payloadJson, MotorAutomaticConfig* outConfig);
 
 int motorEndSessionModeToWire(MotorEndSessionMode mode);
+
+MotorAutomaticRunMode parseMotorAutomaticRunMode(const char* value);
+
+/** Map 0–100 speed to duty using configured duty limits. */
+int motorSpeedPercentToDuty(int speedPercent, const MotorAutomaticConfig& config);
+
+/** Target speed (0–100) for a segment boundary — mode graph sample point. */
+int motorResolveSpeedPercentForSegment(
+    const MotorAutomaticConfig& config,
+    int segmentIndex,
+    unsigned long sessionStartMs,
+    unsigned long nowMs);

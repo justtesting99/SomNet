@@ -2,22 +2,117 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <esp_random.h>
 #include <string.h>
 
 namespace {
 
-bool readIntField(JsonObjectConst root, const char* key, int* out) {
-    if (!root[key].is<int>()) {
-        return false;
+constexpr unsigned long kMsPerMinute = 60UL * 1000UL;
+constexpr int kWaveSteps = 20;
+
+int clampInt(int value, int minValue, int maxValue) {
+    if (value < minValue) {
+        return minValue;
     }
-    *out = root[key].as<int>();
-    return true;
+    if (value > maxValue) {
+        return maxValue;
+    }
+    return value;
 }
 
 } // namespace
 
 int motorEndSessionModeToWire(MotorEndSessionMode mode) {
     return mode == MotorEndSessionMode::Minutes ? 1 : 0;
+}
+
+MotorAutomaticRunMode parseMotorAutomaticRunMode(const char* value) {
+    if (value == nullptr || value[0] == '\0') {
+        return MotorAutomaticRunMode::Unknown;
+    }
+
+    if (strcmp(value, "periodic") == 0) {
+        return MotorAutomaticRunMode::Periodic;
+    }
+    if (strcmp(value, "randomSpeed") == 0 || strcmp(value, "randomPowerOnly") == 0) {
+        return MotorAutomaticRunMode::RandomSpeed;
+    }
+    if (strcmp(value, "randomSpeedAndTiming") == 0 || strcmp(value, "randomPowerAndTiming") == 0) {
+        return MotorAutomaticRunMode::RandomSpeedAndTiming;
+    }
+    if (strcmp(value, "powerWave") == 0) {
+        return MotorAutomaticRunMode::PowerWave;
+    }
+    if (strcmp(value, "buildUp") == 0) {
+        return MotorAutomaticRunMode::BuildUp;
+    }
+
+    return MotorAutomaticRunMode::Unknown;
+}
+
+int motorSpeedPercentToDuty(int speedPercent, const MotorAutomaticConfig& config) {
+    const int speed = clampInt(speedPercent, 0, 100);
+    const int minDuty = config.minimumDutyPercent;
+    const int maxDuty = config.maximumDutyPercent;
+    if (maxDuty <= minDuty) {
+        return maxDuty;
+    }
+
+    return minDuty + (maxDuty - minDuty) * speed / 100;
+}
+
+int motorResolveSpeedPercentForSegment(
+    const MotorAutomaticConfig& config,
+    int segmentIndex,
+    unsigned long sessionStartMs,
+    unsigned long nowMs) {
+    const int minSpeed = config.minimumSpeedPercent;
+    const int maxSpeed = config.maximumSpeedPercent;
+    const int lo = minSpeed < maxSpeed ? minSpeed : maxSpeed;
+    const int hi = minSpeed < maxSpeed ? maxSpeed : minSpeed;
+
+    switch (config.mode) {
+        case MotorAutomaticRunMode::Periodic:
+            return hi;
+        case MotorAutomaticRunMode::RandomSpeed:
+        case MotorAutomaticRunMode::RandomSpeedAndTiming: {
+            if (lo >= hi) {
+                return hi;
+            }
+            const int span = hi - lo + 1;
+            return lo + static_cast<int>(esp_random() % static_cast<uint32_t>(span));
+        }
+        case MotorAutomaticRunMode::PowerWave: {
+            const int step = segmentIndex % kWaveSteps;
+            const int half = kWaveSteps / 2;
+            const int tri = step < half ? step : (kWaveSteps - step);
+            const int span = hi - lo;
+            return lo + (tri * span) / half;
+        }
+        case MotorAutomaticRunMode::BuildUp: {
+            float progress = 0.0f;
+            if (config.endSessionMode == MotorEndSessionMode::Minutes && config.endSessionValue > 0 &&
+                sessionStartMs > 0) {
+                const unsigned long elapsedMs = nowMs - sessionStartMs;
+                const unsigned long targetMs =
+                    static_cast<unsigned long>(config.endSessionValue) * kMsPerMinute;
+                if (targetMs > 0) {
+                    progress = static_cast<float>(elapsedMs) / static_cast<float>(targetMs);
+                }
+            } else if (segmentIndex > 0) {
+                progress = static_cast<float>(segmentIndex) / static_cast<float>(segmentIndex + 10);
+            }
+            if (progress < 0.0f) {
+                progress = 0.0f;
+            }
+            if (progress > 1.0f) {
+                progress = 1.0f;
+            }
+            return lo + static_cast<int>(progress * static_cast<float>(hi - lo));
+        }
+        default:
+            return hi;
+    }
 }
 
 bool parseMotorAutomaticConfig(const char* payloadJson, MotorAutomaticConfig* outConfig) {
@@ -30,7 +125,7 @@ bool parseMotorAutomaticConfig(const char* payloadJson, MotorAutomaticConfig* ou
         return false;
     }
 
-    JsonDocument doc;
+    StaticJsonDocument<1024> doc;
     const DeserializationError err = deserializeJson(doc, payloadJson);
     if (err) {
         return false;
@@ -38,14 +133,18 @@ bool parseMotorAutomaticConfig(const char* payloadJson, MotorAutomaticConfig* ou
 
     JsonObjectConst root = doc.as<JsonObjectConst>();
     const char* mode = root["automaticMode"] | "";
-    if (strcmp(mode, "periodic") != 0) {
-        Serial.println(F("[MOTOR-AUTO] reject: only periodic mode in v1"));
+    const MotorAutomaticRunMode parsedMode = parseMotorAutomaticRunMode(mode);
+    if (parsedMode == MotorAutomaticRunMode::Unknown) {
+        Serial.println(F("[MOTOR-AUTO] reject: unsupported automaticMode"));
         return false;
     }
 
     MotorAutomaticConfig config{};
+    config.mode = parsedMode;
     config.minimumDutyPercent = root["minimumDutyPercent"] | 0;
     config.maximumDutyPercent = root["maximumDutyPercent"] | 80;
+    config.minimumSpeedPercent = root["minimumSpeedPercent"] | 0;
+    config.maximumSpeedPercent = root["maximumSpeedPercent"] | 100;
     config.segmentMinSeconds = root["segmentMinSeconds"] | 5;
     config.segmentMaxSeconds = root["segmentMaxSeconds"] | 20;
     config.delayBeforeStartSeconds = root["delayBeforeStartSeconds"] | 0;
@@ -70,6 +169,16 @@ bool parseMotorAutomaticConfig(const char* payloadJson, MotorAutomaticConfig* ou
         const int tmp = config.minimumDutyPercent;
         config.minimumDutyPercent = config.maximumDutyPercent;
         config.maximumDutyPercent = tmp;
+    }
+
+    if (config.minimumSpeedPercent < 0 || config.minimumSpeedPercent > 100 ||
+        config.maximumSpeedPercent < 0 || config.maximumSpeedPercent > 100) {
+        return false;
+    }
+    if (config.minimumSpeedPercent > config.maximumSpeedPercent) {
+        const int tmp = config.minimumSpeedPercent;
+        config.minimumSpeedPercent = config.maximumSpeedPercent;
+        config.maximumSpeedPercent = tmp;
     }
 
     if (config.segmentMinSeconds < 1 || config.segmentMaxSeconds < 1) {

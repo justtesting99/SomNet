@@ -1,6 +1,6 @@
 #pragma once
 
-#include "modes/automatic_session_mode.h"
+#include "modes/motor/motor_session_callbacks.h"
 
 class MotorController;
 

@@ -230,11 +230,7 @@ public static class PairingSettingsSerializer
             burstStrokesMin = burstStrokesMax;
         }
 
-        var automaticMode = source.AutomaticMode;
-        if (!Enum.IsDefined(automaticMode))
-        {
-            automaticMode = AutomaticRunMode.Periodic;
-        }
+        var automaticMode = NormalizeMotorAutomaticMode(source.AutomaticMode);
 
         return new MotorAutomaticControlStateDto
         {
@@ -271,6 +267,26 @@ public static class PairingSettingsSerializer
         return new VideoSettingsDto
         {
             TunnelBaseUrl = tunnelBaseUrl,
+        };
+    }
+
+    private static AutomaticRunMode NormalizeMotorAutomaticMode(AutomaticRunMode mode)
+    {
+        if (!Enum.IsDefined(mode))
+        {
+            return AutomaticRunMode.Periodic;
+        }
+
+        return mode switch
+        {
+            AutomaticRunMode.Periodic => AutomaticRunMode.Periodic,
+            AutomaticRunMode.RandomSpeed => AutomaticRunMode.RandomSpeed,
+            AutomaticRunMode.RandomSpeedAndTiming => AutomaticRunMode.RandomSpeedAndTiming,
+            AutomaticRunMode.RandomPowerOnly => AutomaticRunMode.RandomSpeed,
+            AutomaticRunMode.RandomPowerAndTiming => AutomaticRunMode.RandomSpeedAndTiming,
+            AutomaticRunMode.PowerWave => AutomaticRunMode.PowerWave,
+            AutomaticRunMode.BuildUp => AutomaticRunMode.BuildUp,
+            _ => AutomaticRunMode.Periodic,
         };
     }
 

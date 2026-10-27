@@ -1,19 +1,45 @@
-import type { AutomaticRunMode, EndSessionMode } from '@/types/modes';
+import type { EndSessionMode } from '@/types/modes';
+import {
+  coerceMotorAutomaticRunMode,
+  type MotorAutomaticRunMode,
+} from '@/types/motorAutomaticModes';
 import {
   defaultMotorAutomaticState,
   type MotorAutomaticControlState,
 } from '@/types/motorModes';
-import {
-  getAutomaticFieldRules,
-  coerceEndSessionMode,
-  MIN_STROKE_GAP_SECONDS,
-} from '@/utils/automaticFieldRules';
+import { coerceEndSessionMode, MIN_STROKE_GAP_SECONDS } from '@/utils/automaticFieldRules';
 import {
   MAX_BURST_DELAY_SEC,
   MAX_BURST_STROKES,
   MIN_BURST_DELAY_SEC,
   MIN_BURST_STROKE_POWER,
 } from '@/utils/burstFieldRules';
+
+export interface MotorAutomaticFieldRules {
+  disableMinimumSpeed: boolean;
+  disableSegmentMinSeconds: boolean;
+  disableNoAutoEnd: boolean;
+}
+
+const MODES_REQUIRING_END_SESSION: MotorAutomaticRunMode[] = ['powerWave', 'buildUp'];
+
+const MODES_DISABLE_MIN_SPEED: MotorAutomaticRunMode[] = ['periodic'];
+
+const MODES_DISABLE_SEGMENT_MIN_SECONDS: MotorAutomaticRunMode[] = [
+  'periodic',
+  'randomSpeed',
+  'powerWave',
+];
+
+export function getMotorAutomaticFieldRules(
+  mode: MotorAutomaticRunMode,
+): MotorAutomaticFieldRules {
+  return {
+    disableMinimumSpeed: MODES_DISABLE_MIN_SPEED.includes(mode),
+    disableSegmentMinSeconds: MODES_DISABLE_SEGMENT_MIN_SECONDS.includes(mode),
+    disableNoAutoEnd: MODES_REQUIRING_END_SESSION.includes(mode),
+  };
+}
 
 function clampInt(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));
@@ -61,9 +87,9 @@ function normalizeMotorBurstFields(
 
 export function applyMotorAutomaticModeChange(
   state: MotorAutomaticControlState,
-  nextMode: AutomaticRunMode,
+  nextMode: MotorAutomaticRunMode,
 ): MotorAutomaticControlState {
-  const rules = getAutomaticFieldRules(nextMode);
+  const rules = getMotorAutomaticFieldRules(nextMode);
 
   return {
     ...state,
@@ -76,7 +102,11 @@ export function applyMotorAutomaticModeChange(
 export function normalizeMotorAutomaticControlState(
   state: MotorAutomaticControlState,
 ): MotorAutomaticControlState {
-  const withMode = applyMotorAutomaticModeChange(state, state.automaticMode);
+  const automaticMode = coerceMotorAutomaticRunMode(state.automaticMode);
+  const withMode = applyMotorAutomaticModeChange(
+    { ...state, automaticMode },
+    automaticMode,
+  );
 
   let minimumDutyPercent = clampInt(withMode.minimumDutyPercent, 0, 100);
   let maximumDutyPercent = clampInt(withMode.maximumDutyPercent, 0, 100);

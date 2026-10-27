@@ -6,6 +6,9 @@
 class MotorController {
 public:
     void begin();
+    /** Safe to call multiple times; no-op after first successful begin. */
+    void beginIfNeeded();
+    bool isInitialized() const { return initialized_; }
     void poll();
 
     /** 0–100 duty; 0 stops motor (PWM off, enable inactive). */

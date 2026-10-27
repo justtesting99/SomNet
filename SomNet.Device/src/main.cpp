@@ -43,6 +43,24 @@ LocalOperate localOperate;
 DeviceBootMode bootMode = DeviceBootMode::Running;
 bool bannerPrinted = false;
 bool wifiRecoveryAttempted = false;
+bool motorHardwareDeferredBeginDone = false;
+
+void maybeBeginMotorHardwareAfterWifi() {
+    if (motorHardwareDeferredBeginDone) {
+        return;
+    }
+    if (!wifiManager.isConnected() || wifiManager.isSoftAp()) {
+        return;
+    }
+    if (nvsStore.getActuatorKind() != DeviceActuatorKind_HBridge) {
+        motorHardwareDeferredBeginDone = true;
+        return;
+    }
+
+    motorController.beginIfNeeded();
+    motorHardwareDeferredBeginDone = true;
+    Serial.println(F("[MOTOR] hardware init deferred until Wi-Fi up"));
+}
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
 bool wasWifiConnectedForLocal = false;
 #endif
@@ -235,7 +253,6 @@ void setup() {
     }
 
     relayController.begin();
-    motorController.begin();
     sessionAccessoryController.begin();
     executionContext.begin(&relayController);
     buttonInput.begin();
@@ -272,6 +289,7 @@ void setup() {
 
 void loop() {
     wifiManager.poll();
+    maybeBeginMotorHardwareAfterWifi();
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
     const bool wifiStaUp = wifiManager.isConnected() && !wifiManager.isSoftAp();
     if (wasWifiConnectedForLocal && !wifiStaUp) {

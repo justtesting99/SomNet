@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { BURST_STYLE_OPTIONS, type EndSessionMode } from '@/types/modes';
 import {
-  AUTOMATIC_RUN_MODE_OPTIONS,
-  BURST_STYLE_OPTIONS,
-  type AutomaticRunMode,
-  type EndSessionMode,
-} from '@/types/modes';
+  MOTOR_AUTOMATIC_RUN_MODE_OPTIONS,
+  type MotorAutomaticRunMode,
+} from '@/types/motorAutomaticModes';
 import type { MotorAutomaticControlState } from '@/types/motorModes';
 import { useOptions } from '@/context/OptionsProvider';
 import { useControlPanelSettings } from '@/hooks/useControlPanelSettings';
@@ -33,7 +32,10 @@ import { ApiError } from '@/api/client';
 import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCommand';
 import { isHardwareCommandReady } from '@/utils/commandReadiness';
 import { computeStrokeMs } from '@/utils/stroke';
-import { getAutomaticFieldRules, MIN_STROKE_GAP_SECONDS } from '@/utils/automaticFieldRules';
+import { MIN_STROKE_GAP_SECONDS } from '@/utils/automaticFieldRules';
+import {
+  getMotorAutomaticFieldRules,
+} from '@/utils/motorAutomaticFieldRules';
 import {
   getBurstFieldRules,
   MAX_BURST_DELAY_SEC,
@@ -89,7 +91,7 @@ export function MotorAutomaticControls() {
   activeSessionRef.current = activeSession;
 
   const fieldRules = useMemo(
-    () => getAutomaticFieldRules(state.automaticMode),
+    () => getMotorAutomaticFieldRules(state.automaticMode),
     [state.automaticMode],
   );
 
@@ -249,7 +251,7 @@ export function MotorAutomaticControls() {
     updateMotorAutomatic({ ...state, [key]: value });
   }
 
-  function handleAutomaticModeChange(nextMode: AutomaticRunMode) {
+  function handleAutomaticModeChange(nextMode: MotorAutomaticRunMode) {
     updateMotorAutomatic(applyMotorAutomaticModeChange(state, nextMode));
   }
 
@@ -468,15 +470,15 @@ export function MotorAutomaticControls() {
                 minimumDuty={state.minimumDutyPercent}
                 maximumDuty={state.maximumDutyPercent}
                 dutyPercent={minimumDutyPercent}
-                disabled={configLocked || fieldRules.disableMinimumPower}
+                disabled={configLocked || fieldRules.disableMinimumSpeed}
                 title={
-                  fieldRules.disableMinimumPower
+                  fieldRules.disableMinimumSpeed
                     ? 'Not used in this automatic mode — device uses maximum speed'
                     : undefined
                 }
                 onChange={(event) => update('minimumSpeedPercent', Number(event.target.value))}
               />
-              {fieldRules.disableMinimumPower ? (
+              {fieldRules.disableMinimumSpeed ? (
                 <p className="text-center text-xs text-slate-500 sm:text-left">
                   Not used — device uses maximum speed.
                 </p>
@@ -505,9 +507,9 @@ export function MotorAutomaticControls() {
                     alignLabelHeight
                     value={state.segmentMinSeconds}
                     min={MIN_STROKE_GAP_SECONDS}
-                    disabled={configLocked || fieldRules.disableStrokeMinSeconds}
+                    disabled={configLocked || fieldRules.disableSegmentMinSeconds}
                     title={
-                      fieldRules.disableStrokeMinSeconds
+                      fieldRules.disableSegmentMinSeconds
                         ? 'Not used in this automatic mode — device uses maximum interval'
                         : undefined
                     }
@@ -518,7 +520,7 @@ export function MotorAutomaticControls() {
                       }
                     }}
                   />
-                  {fieldRules.disableStrokeMinSeconds ? (
+                  {fieldRules.disableSegmentMinSeconds ? (
                     <p className="text-xs text-slate-500">Not used — device uses maximum gap.</p>
                   ) : null}
                 </div>
@@ -697,9 +699,9 @@ export function MotorAutomaticControls() {
               label="Automatic Mode"
               value={state.automaticMode}
               disabled={configLocked}
-              options={AUTOMATIC_RUN_MODE_OPTIONS}
+              options={MOTOR_AUTOMATIC_RUN_MODE_OPTIONS}
               onChange={(event) =>
-                handleAutomaticModeChange(event.target.value as AutomaticRunMode)
+                handleAutomaticModeChange(event.target.value as MotorAutomaticRunMode)
               }
             />
             <p className="text-xs leading-relaxed text-slate-500">{modeInfo.summary}</p>

@@ -1,4 +1,5 @@
-import type { AutomaticRunMode, BurstStyle, EndSessionMode } from '@/types/modes';
+import type { BurstStyle, EndSessionMode } from '@/types/modes';
+import type { MotorAutomaticRunMode } from '@/types/motorAutomaticModes';
 
 export interface MotorManualControlState {
   minimumDutyPercent: number;
@@ -14,7 +15,7 @@ export const defaultMotorManualState: MotorManualControlState = {
 
 export interface MotorAutomaticControlState {
   running: boolean;
-  automaticMode: AutomaticRunMode;
+  automaticMode: MotorAutomaticRunMode;
   minimumDutyPercent: number;
   maximumDutyPercent: number;
   minimumSpeedPercent: number;
