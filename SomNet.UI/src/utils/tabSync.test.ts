@@ -35,11 +35,15 @@ describe('tabSync', () => {
       parseTabSyncMessage({
         type: 'running',
         tabId: 'a',
+        subTarget: 'Slv66',
+        kind: 'motor',
         running: true,
       }),
     ).toEqual({
       type: 'running',
       tabId: 'a',
+      subTarget: 'Slv66',
+      kind: 'motor',
       running: true,
     });
   });

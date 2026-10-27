@@ -11,9 +11,17 @@ export interface ActiveSessionSnapshot {
   subTarget: SubTargetName;
 }
 
+export type AutomaticRunningKind = 'relay' | 'motor';
+
 export type TabSyncMessage =
   | { type: 'session'; tabId: string; session: ActiveSessionSnapshot | null }
-  | { type: 'running'; tabId: string; running: boolean }
+  | {
+      type: 'running';
+      tabId: string;
+      subTarget: SubTargetName;
+      kind: AutomaticRunningKind;
+      running: boolean;
+    }
   | { type: 'sub'; tabId: string; subTarget: SubTargetName }
   | { type: 'command-lock'; tabId: string; keys: HardwareCommandKey[] }
   | {

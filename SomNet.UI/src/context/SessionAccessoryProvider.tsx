@@ -33,6 +33,8 @@ import {
 } from '@/utils/sessionAccessoryStorage';
 import { readSubPresentAck } from '@/utils/subPresentAckStorage';
 import { subTargetsMatch, writeReadyBannerDismissed } from '@/utils/readyBannerStorage';
+import { useDeviceActuatorKind } from '@/hooks/useDeviceActuatorKind';
+import { deviceAutomaticRunningForActuator } from '@/utils/deviceAutomaticRunning';
 
 interface SessionAccessoryContextValue {
   sessionInProgress: boolean;
@@ -67,6 +69,7 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
     syncActiveSessionMode,
   } = useLiveSession();
   const { isCommandPending, executeCommand } = useHardwareCommand();
+  const actuatorKind = useDeviceActuatorKind(selectedSub);
 
   const domTarget = user?.displayName ?? user?.username ?? '';
 
@@ -86,10 +89,12 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
     readSubPresentAck(selectedSub) ||
     (subPresentAckSub !== null && subTargetsMatch(subPresentAckSub, selectedSub));
 
-  const automaticDeviceRunning =
-    settingsLoaded &&
-    !settingsLoading &&
-    (settings.automatic.running || settings.motorAutomatic.running);
+  const automaticDeviceRunning = deviceAutomaticRunningForActuator(
+    settings,
+    actuatorKind,
+    settingsLoaded,
+    settingsLoading,
+  );
 
   const motionCommandPending =
     isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke) ||

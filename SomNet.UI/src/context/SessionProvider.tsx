@@ -19,6 +19,7 @@ import { useAuth } from '@/context/AuthProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import type { SubTargetName } from '@/config/sessionUsers';
 import type { OperationMode } from '@/types/modes';
+import { activeSessionForSub } from '@/utils/sessionForSub';
 import {
   buildAutomaticSessionSummary,
   buildManualSessionSummary,
@@ -461,9 +462,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [discardActiveSession, endActiveSessionIfNeeded, endAutomaticSession],
   );
 
+  const activeSessionForSelectedSub = useMemo(
+    () => activeSessionForSub(activeSession, selectedSub),
+    [activeSession, selectedSub],
+  );
+
   const value = useMemo(
     () => ({
-      activeSession,
+      activeSession: activeSessionForSelectedSub,
       manualVideoActivitySeq,
       manualVideoRehydrateSeq,
       beginAutomaticSession,
@@ -483,7 +489,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       markAutomaticDeviceStarted,
     }),
     [
-      activeSession,
+      activeSessionForSelectedSub,
       manualVideoActivitySeq,
       manualVideoRehydrateSeq,
       beginAutomaticSession,

@@ -29,7 +29,8 @@ const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
 ];
 
 export function MotorAutomaticControls() {
-  const { settings, updateMotorAutomatic, setMotorAutomaticRunningLocal } = useOptions();
+  const { settings, settingsLoaded, updateMotorAutomatic, setMotorAutomaticRunningLocal } =
+    useOptions();
   const state = settings.motorAutomatic;
   const { selectedSub } = useSubTarget();
   const { expandOnAction } = useVideoDisplay();
@@ -45,7 +46,7 @@ export function MotorAutomaticControls() {
   activeSessionRef.current = activeSession;
 
   const automaticSessionActive = activeSession?.mode === 'automatic';
-  const sessionRunning = state.running;
+  const sessionRunning = settingsLoaded && state.running;
   const configLocked = sessionRunning;
   const hardwareReady = systemStatus.isReady && sessionInProgress;
   const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);

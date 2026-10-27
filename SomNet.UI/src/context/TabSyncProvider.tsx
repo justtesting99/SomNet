@@ -20,6 +20,8 @@ import {
   isRehydratableManualSession,
 } from '@/utils/sessionProgress';
 import { shouldRestoreAutomaticDeviceRunning } from '@/utils/automaticDeviceRunningHint';
+import { subTargetsMatch } from '@/utils/readyBannerStorage';
+import { useDeviceActuatorKind } from '@/hooks/useDeviceActuatorKind';
 import {
   getTabId,
   postTabSync,
@@ -40,7 +42,13 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { mode: operationMode, setMode } = useMode();
   const { selectedSub, applySubFromSync } = useSubTarget();
-  const { settings, settingsLoaded, setAutomaticRunningLocal } = useOptions();
+  const {
+    settings,
+    settingsLoaded,
+    setAutomaticRunningLocal,
+    setMotorAutomaticRunningLocal,
+  } = useOptions();
+  const actuatorKind = useDeviceActuatorKind(selectedSub);
   const { activeSession, syncSessionFromRemote, endActiveSessionIfNeeded } = useLiveSession();
 
   const [remotePendingKeys, setRemotePendingKeys] = useState<ReadonlySet<HardwareCommandKey>>(
@@ -97,7 +105,17 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
     postTabSync({
       type: 'running',
       tabId: getTabId(),
+      subTarget: selectedSubRef.current,
+      kind: 'relay',
       running: settingsRef.current.automatic.running,
+    });
+
+    postTabSync({
+      type: 'running',
+      tabId: getTabId(),
+      subTarget: selectedSubRef.current,
+      kind: 'motor',
+      running: settingsRef.current.motorAutomatic.running,
     });
 
     postTabSync({
@@ -170,12 +188,18 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
           syncSessionFromRemote(entry);
           setMode(entry.mode);
 
-          if (
-            entry.mode === 'automatic' &&
-            !settingsRef.current.automatic.running &&
-            shouldRestoreAutomaticDeviceRunning(entry.id, entry.subTarget)
-          ) {
-            setAutomaticRunningLocal(true);
+          if (entry.mode === 'automatic' && shouldRestoreAutomaticDeviceRunning(entry.id, entry.subTarget)) {
+            const restoreMotor = actuatorKind === 'hbridge';
+            const alreadyRunning = restoreMotor
+              ? settingsRef.current.motorAutomatic.running
+              : settingsRef.current.automatic.running;
+            if (!alreadyRunning) {
+              if (restoreMotor) {
+                setMotorAutomaticRunningLocal(true);
+              } else {
+                setAutomaticRunningLocal(true);
+              }
+            }
           }
         });
       } catch {
@@ -189,7 +213,9 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
     [
       applySubFromSync,
       endActiveSessionIfNeeded,
+      actuatorKind,
       setAutomaticRunningLocal,
+      setMotorAutomaticRunningLocal,
       setMode,
       syncSessionFromRemote,
     ],
@@ -249,8 +275,22 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
           void applySessionSnapshot(message.session);
           break;
         case 'running':
+          if (
+            !('subTarget' in message) ||
+            !('kind' in message) ||
+            (message.kind !== 'relay' && message.kind !== 'motor')
+          ) {
+            break;
+          }
+          if (!subTargetsMatch(message.subTarget, selectedSubRef.current)) {
+            break;
+          }
           withRemoteSyncApply(() => {
-            setAutomaticRunningLocal(message.running);
+            if (message.kind === 'motor') {
+              setMotorAutomaticRunningLocal(message.running);
+            } else {
+              setAutomaticRunningLocal(message.running);
+            }
           });
           break;
         case 'sub':
@@ -281,6 +321,7 @@ export function TabSyncProvider({ children }: { children: ReactNode }) {
     endActiveSessionIfNeeded,
     mergeRemoteLocks,
     setAutomaticRunningLocal,
+    setMotorAutomaticRunningLocal,
   ]);
 
   useEffect(() => {

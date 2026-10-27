@@ -11,6 +11,7 @@ import {
 import { fetchPairingSettings, fetchStrokeLimits, savePairingSettings } from '@/api/settings';
 import { useAuth } from '@/context/AuthProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import type { SubTargetName } from '@/config/sessionUsers';
 import { DEFAULT_STROKE_MS_LIMITS } from '@/config/strokeLimits';
 import type { AppOptions } from '@/types/options';
 import type { AutomaticControlState, ManualControlState } from '@/types/modes';
@@ -49,6 +50,8 @@ const SAVE_DEBOUNCE_MS = 400;
 export function OptionsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { selectedSub } = useSubTarget();
+  const selectedSubRef = useRef(selectedSub);
+  selectedSubRef.current = selectedSub;
   const domTarget = user?.displayName ?? user?.username ?? '';
   const [settings, setSettings] = useState<PairingSettings>(DEFAULT_PAIRING_SETTINGS);
   const [strokeLimits, setStrokeLimits] = useState<StrokeMsLimits>(DEFAULT_STROKE_MS_LIMITS);
@@ -196,9 +199,25 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     postTabSync({
       type: 'running',
       tabId: getTabId(),
+      subTarget: selectedSubRef.current,
+      kind: 'relay',
       running: settings.automatic.running,
     });
   }, [settings.automatic.running]);
+
+  useEffect(() => {
+    if (!shouldBroadcastLocalChange()) {
+      return;
+    }
+
+    postTabSync({
+      type: 'running',
+      tabId: getTabId(),
+      subTarget: selectedSubRef.current,
+      kind: 'motor',
+      running: settings.motorAutomatic.running,
+    });
+  }, [settings.motorAutomatic.running]);
 
   const applySettings = useCallback(
     (nextSettings: PairingSettings, persistImmediately = false, skipPersist = false) => {
