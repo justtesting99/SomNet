@@ -11,7 +11,7 @@ import type { SubTargetName } from '@/config/sessionUsers';
 import { useAuth } from '@/context/AuthProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { readSubPresentAck, writeSubPresentAck } from '@/utils/subPresentAckStorage';
-import { readSessionAccessoryInProgress } from '@/utils/sessionAccessoryStorage';
+import { readSceneSessionActive } from '@/utils/sessionAccessoryStorage';
 import {
   readReadyBannerDismissed,
   subTargetsMatch,
@@ -57,7 +57,7 @@ export function SiteUserReadyProvider({ children }: { children: ReactNode }) {
     (subTarget: string, requestStartFeed: boolean) => {
       if (
         domTarget &&
-        readSessionAccessoryInProgress(domTarget, subTarget)
+        readSceneSessionActive(domTarget, subTarget)
       ) {
         return;
       }

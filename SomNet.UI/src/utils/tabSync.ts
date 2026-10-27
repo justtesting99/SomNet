@@ -30,6 +30,18 @@ export type TabSyncMessage =
       inProgress: boolean;
       subTarget: SubTargetName;
     }
+  | {
+      type: 'scene-session';
+      tabId: string;
+      active: boolean;
+      subTarget: SubTargetName;
+    }
+  | {
+      type: 'relay-lock';
+      tabId: string;
+      engaged: boolean;
+      subTarget: SubTargetName;
+    }
   | { type: 'request-sync'; tabId: string };
 
 let tabId: string | null = null;

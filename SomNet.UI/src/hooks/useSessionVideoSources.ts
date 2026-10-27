@@ -72,7 +72,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
   const { options, settings } = useOptions();
   const { expandForPlaybackStart } = useVideoDisplay();
   const { isCommandPending } = useHardwareCommand();
-  const { sessionInProgress } = useSessionAccessory();
+  const { sceneSessionActive } = useSessionAccessory();
   const videoFeedBandwidth = normalizeVideoFeedBandwidth(options.videoFeedBandwidth);
 
   const timeoutSeconds = clampVideoFeedTimeoutSeconds(options.videoFeedTimeoutSeconds);
@@ -169,7 +169,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     if (
       !isVideoConfigured() ||
       !mode ||
-      !sessionInProgress ||
+      !sceneSessionActive ||
       (feedVisible && feedsAlreadyLoaded) ||
       previewStarting ||
       commandPending ||
@@ -204,7 +204,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     previewTimeoutSeconds,
     scheduleHideAfter,
     expandForPlaybackStart,
-    sessionInProgress,
+    sceneSessionActive,
     sources,
   ]);
 
@@ -443,7 +443,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     (): VideoPreviewControls => ({
       available: mode !== null && isVideoConfigured(),
       canStart:
-        sessionInProgress &&
+        sceneSessionActive &&
         (!feedVisible || !hasLoadedSources) &&
         !previewStarting &&
         !commandPending &&
@@ -463,7 +463,7 @@ export function useSessionVideoSources(): SessionVideoSourcesResult {
     previewActive,
     previewStarting,
     previewTimeoutSeconds,
-    sessionInProgress,
+    sceneSessionActive,
     startPreview,
   ],
   );

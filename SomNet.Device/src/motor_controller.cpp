@@ -8,23 +8,53 @@ namespace {
 
 constexpr int kPwmResolutionBits = 10;
 constexpr int kPwmMax = (1 << kPwmResolutionBits) - 1;
-constexpr int kMotorPwmChannel = 0;
+constexpr int kMotorPwmChannelPrimary = 0;
+constexpr int kMotorPwmChannelSecondary = 1;
 
 } // namespace
 
-void MotorController::writeEnable(bool energized) {
+void MotorController::writePrimaryEnable(bool energized) {
     const int level = (energized == MOTOR_ENABLE_ACTIVE_HIGH) ? HIGH : LOW;
     digitalWrite(PIN_MOTOR_ENABLE, level);
 }
 
-void MotorController::holdSecondaryIdle() {
-    digitalWrite(PIN_MOTOR_ENABLE_SECONDARY, MOTOR_ENABLE_ACTIVE_HIGH ? LOW : HIGH);
-    digitalWrite(PIN_MOTOR_PWM_SECONDARY, LOW);
+void MotorController::writeSecondaryEnable(bool energized) {
+    if (MOTOR_ENABLES_GANGED_ON_D27) {
+        return;
+    }
+
+    const int level = (energized == MOTOR_ENABLE_ACTIVE_HIGH) ? HIGH : LOW;
+    digitalWrite(PIN_MOTOR_ENABLE_SECONDARY, level);
 }
 
-void MotorController::writePwmDuty(int dutyPercent) {
+void MotorController::writeRunEnable(bool energized) {
+    if (MOTOR_ENABLES_GANGED_ON_D27) {
+        writePrimaryEnable(energized);
+        return;
+    }
+
+    if (MOTOR_FORWARD_PWM_ON_D26) {
+        writePrimaryEnable(false);
+        writeSecondaryEnable(energized);
+    } else {
+        writeSecondaryEnable(false);
+        writePrimaryEnable(energized);
+    }
+}
+
+void MotorController::holdAllPwmIdle() {
+    ledcWrite(kMotorPwmChannelPrimary, 0);
+    ledcWrite(kMotorPwmChannelSecondary, 0);
+}
+
+void MotorController::holdIdle() {
+    holdAllPwmIdle();
+    writeRunEnable(false);
+}
+
+void MotorController::writeForwardPwmDuty(int dutyPercent) {
     if (dutyPercent <= 0) {
-        ledcWrite(kMotorPwmChannel, 0);
+        holdIdle();
         return;
     }
 
@@ -33,23 +63,36 @@ void MotorController::writePwmDuty(int dutyPercent) {
     }
 
     const int duty = (dutyPercent * kPwmMax) / 100;
-    ledcWrite(kMotorPwmChannel, duty);
+
+    if (MOTOR_FORWARD_PWM_ON_D26) {
+        ledcWrite(kMotorPwmChannelPrimary, 0);
+        ledcWrite(kMotorPwmChannelSecondary, duty);
+    } else {
+        ledcWrite(kMotorPwmChannelSecondary, 0);
+        ledcWrite(kMotorPwmChannelPrimary, duty);
+    }
+
+    writeRunEnable(true);
 }
 
 void MotorController::begin() {
     pinMode(PIN_MOTOR_ENABLE, OUTPUT);
-    pinMode(PIN_MOTOR_ENABLE_SECONDARY, OUTPUT);
-    pinMode(PIN_MOTOR_PWM_SECONDARY, OUTPUT);
+    if (!MOTOR_ENABLES_GANGED_ON_D27) {
+        pinMode(PIN_MOTOR_ENABLE_SECONDARY, OUTPUT);
+    }
 
-    ledcSetup(kMotorPwmChannel, MOTOR_PWM_FREQUENCY_HZ, kPwmResolutionBits);
-    ledcAttachPin(PIN_MOTOR_PWM, kMotorPwmChannel);
+    ledcSetup(kMotorPwmChannelPrimary, MOTOR_PWM_FREQUENCY_HZ, kPwmResolutionBits);
+    ledcAttachPin(PIN_MOTOR_PWM, kMotorPwmChannelPrimary);
+    ledcSetup(kMotorPwmChannelSecondary, MOTOR_PWM_FREQUENCY_HZ, kPwmResolutionBits);
+    ledcAttachPin(PIN_MOTOR_PWM_SECONDARY, kMotorPwmChannelSecondary);
 
-    holdSecondaryIdle();
-    writeEnable(false);
-    writePwmDuty(0);
+    holdIdle();
     dutyPercent_ = 0;
     initialized_ = true;
-    Serial.println(F("[MOTOR] backend ready (pins idle)"));
+    Serial.print(F("[MOTOR] ready forward=PWM D"));
+    Serial.print(MOTOR_FORWARD_PWM_ON_D26 ? PIN_MOTOR_PWM_SECONDARY : PIN_MOTOR_PWM);
+    Serial.print(F(" enable="));
+    Serial.println(MOTOR_ENABLES_GANGED_ON_D27 ? F("D27 ganged") : F("split R/L EN"));
 }
 
 void MotorController::poll() {
@@ -77,9 +120,7 @@ void MotorController::poll() {
 
     const float t = static_cast<float>(elapsed) / static_cast<float>(rampDurationMs_);
     const int duty = rampFromPercent_ + static_cast<int>((rampToPercent_ - rampFromPercent_) * t);
-    holdSecondaryIdle();
-    writePwmDuty(duty);
-    writeEnable(duty > 0);
+    writeForwardPwmDuty(duty);
     dutyPercent_ = duty;
 }
 
@@ -134,9 +175,7 @@ bool MotorController::setDutyPercent(int dutyPercent) {
         return true;
     }
 
-    holdSecondaryIdle();
-    writePwmDuty(dutyPercent);
-    writeEnable(true);
+    writeForwardPwmDuty(dutyPercent);
     dutyPercent_ = dutyPercent;
 
     Serial.print(F("[MOTOR] duty="));
@@ -150,9 +189,7 @@ void MotorController::stop() {
     }
 
     ramping_ = false;
-    writePwmDuty(0);
-    writeEnable(false);
-    holdSecondaryIdle();
+    holdIdle();
     if (dutyPercent_ != 0) {
         Serial.println(F("[MOTOR] stop"));
     }

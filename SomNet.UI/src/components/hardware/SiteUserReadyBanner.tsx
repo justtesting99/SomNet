@@ -4,7 +4,7 @@ import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 import { useSiteUserReady } from '@/context/SiteUserReadyProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { subTargetsMatch } from '@/utils/readyBannerStorage';
-import { readSessionAccessoryInProgress } from '@/utils/sessionAccessoryStorage';
+import { readSceneSessionActive } from '@/utils/sessionAccessoryStorage';
 import { Button } from '@/components/ui/Button';
 
 export function SiteUserReadyBanner() {
@@ -14,16 +14,16 @@ export function SiteUserReadyBanner() {
     useSiteUserReady();
   const { selectedSub } = useSubTarget();
   const {
-    sessionInProgress,
-    togglePending,
-    setSessionInProgress,
-    sessionAccessoryError,
+    sceneSessionActive,
+    sceneTogglePending,
+    setSceneSessionActive,
+    sceneSessionError,
   } = useSessionAccessory();
 
   const accessoryActive =
-    sessionInProgress ||
-    togglePending ||
-    (domTarget ? readSessionAccessoryInProgress(domTarget, selectedSub) : false);
+    sceneSessionActive ||
+    sceneTogglePending ||
+    (domTarget ? readSceneSessionActive(domTarget, selectedSub) : false);
 
   const bannerDismissed = isReadyBannerDismissedForSub(selectedSub);
 
@@ -58,22 +58,22 @@ export function SiteUserReadyBanner() {
     >
       <div className="min-w-0 flex-1 space-y-1">
         <span>{notification.message}</span>
-        {sessionAccessoryError ? (
-          <p className="text-xs text-amber-200" role="alert">{sessionAccessoryError}</p>
+        {sceneSessionError ? (
+          <p className="text-xs text-amber-200" role="alert">{sceneSessionError}</p>
         ) : null}
       </div>
       <div className="flex shrink-0 flex-wrap gap-2">
-        {notification.requestStartFeed && !sessionInProgress ? (
+        {notification.requestStartFeed && !sceneSessionActive ? (
           <Button
             variant="primary"
             size="sm"
-            disabled={togglePending}
+            disabled={sceneTogglePending}
             onClick={() => {
               dismissReadyBannerForSub(selectedSub);
-              void setSessionInProgress(true);
+              void setSceneSessionActive(true);
             }}
           >
-            Turn session on
+            Start scene session
           </Button>
         ) : null}
         <Button

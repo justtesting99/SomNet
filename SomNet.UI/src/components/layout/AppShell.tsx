@@ -18,7 +18,7 @@ import { useLiveSession } from '@/context/SessionProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useSubDevice } from '@/context/SubDeviceProvider';
 import { stopAutomaticForModeSwitch } from '@/utils/stopAutomaticForModeSwitch';
-import { SessionInProgressSwitch } from '@/components/hardware/SessionInProgressSwitch';
+import { SubSessionControls } from '@/components/hardware/SubSessionControls';
 import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 
 interface AppShellProps {
@@ -37,12 +37,12 @@ export function AppShell({ children, wide = false }: AppShellProps) {
   const { selectedSub } = useSubTarget();
   const { selectedDeviceId } = useSubDevice();
   const { settings, setAutomaticRunningLocal } = useOptions();
-  const { sessionInProgress } = useSessionAccessory();
+  const { sceneSessionActive } = useSessionAccessory();
   const activeSessionRef = useRef(activeSession);
-  const sessionInProgressRef = useRef(sessionInProgress);
+  const sceneSessionActiveRef = useRef(sceneSessionActive);
 
   activeSessionRef.current = activeSession;
-  sessionInProgressRef.current = sessionInProgress;
+  sceneSessionActiveRef.current = sceneSessionActive;
 
   async function stopAutomaticDeviceOnly() {
     if (
@@ -62,7 +62,7 @@ export function AppShell({ children, wide = false }: AppShellProps) {
   }
 
   async function leaveAutomaticSessionIfNeeded(reason: 'mode-switch' | 'sign-out') {
-    if (sessionInProgressRef.current) {
+    if (sceneSessionActiveRef.current) {
       await stopAutomaticDeviceOnly();
       return;
     }
@@ -89,7 +89,7 @@ export function AppShell({ children, wide = false }: AppShellProps) {
   }
 
   async function handleSignOut() {
-    if (sessionInProgressRef.current) {
+    if (sceneSessionActiveRef.current) {
       return;
     }
 
@@ -136,7 +136,7 @@ export function AppShell({ children, wide = false }: AppShellProps) {
               </Button>
               {mode ? (
                 <div className="shrink-0">
-                  <SessionInProgressSwitch />
+                  <SubSessionControls />
                 </div>
               ) : null}
               <div className="min-w-0 flex-1">

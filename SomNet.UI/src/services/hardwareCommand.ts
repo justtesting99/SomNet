@@ -43,9 +43,12 @@ export async function sendHardwareCommand(
 
   if (!response.success) {
     const raw = response.message ?? 'Device rejected the command.';
-    const message = raw.toLowerCase().includes('accesstoken mismatch')
+    const lower = raw.toLowerCase();
+    const message = lower.includes('accesstoken mismatch')
       ? 'Device token is out of date. In Hardware, re-pair this device while the ESP is online (hub connected), then try again.'
-      : raw;
+      : lower.includes('session accessory off')
+        ? 'Relay lock is off on the device. Turn Relay lock on in the header (relay connected), then try again.'
+        : raw;
     throw new HardwareCommandError(message, response);
   }
 

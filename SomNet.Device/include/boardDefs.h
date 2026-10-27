@@ -10,15 +10,24 @@ constexpr int PIN_STATUS_LED = 2;
 constexpr int PIN_SESSION_ACCESSORY = 32;
 
 // Motor (BTS7960) — same firmware binary as relay; active backend from NVS actuator profile. Doc 31.
-/** BTS7960 channel A (e.g. RPWM / R_EN on module) — primary direction. */
-constexpr int PIN_MOTOR_PWM = 25;              // D25
-constexpr int PIN_MOTOR_ENABLE = 27;           // D27
-/** BTS7960 channel B (e.g. LPWM / L_EN) — opposite direction; v1 may use primary only. */
-constexpr int PIN_MOTOR_PWM_SECONDARY = 26;    // D26
+/** PWM to module LPWM (bench: D25). Opposite rotation vs PIN_MOTOR_PWM_SECONDARY. */
+constexpr int PIN_MOTOR_PWM = 25; // D25
+/** Shared enable when MOTOR_ENABLES_GANGED_ON_D27; else primary-side EN (e.g. R_EN). */
+constexpr int PIN_MOTOR_ENABLE = 27; // D27
+/** PWM to module RPWM (bench: D26). */
+constexpr int PIN_MOTOR_PWM_SECONDARY = 26; // D26
+/** Secondary enable (e.g. L_EN) — unused when enables are ganged on D27. */
 constexpr int PIN_MOTOR_ENABLE_SECONDARY = 14; // D14
 
 /** BTS7960 module enable pin polarity (ESP output → module EN). Tune on bench — doc 31. */
 constexpr bool MOTOR_ENABLE_ACTIVE_HIGH = true;
+/** Both module EN inputs tied to D27; D14 not used. */
+constexpr bool MOTOR_ENABLES_GANGED_ON_D27 = true;
+/**
+ * Forward rotation PWM pin: false = D25 (LPWM), true = D26 (RPWM).
+ * If the load spins the wrong way, flip this (same as swapping D25/D26 wires).
+ */
+constexpr bool MOTOR_FORWARD_PWM_ON_D26 = true;
 /** LEDC PWM frequency for motor channels (Hz). Bench: 5 kHz matched to BTS7960 module (2026-10-26). */
 constexpr unsigned long MOTOR_PWM_FREQUENCY_HZ = 5000;
 

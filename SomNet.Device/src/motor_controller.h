@@ -18,9 +18,12 @@ public:
     bool isRamping() const;
 
 private:
-    void writeEnable(bool energized);
-    void writePwmDuty(int dutyPercent);
-    void holdSecondaryIdle();
+    void writePrimaryEnable(bool energized);
+    void writeSecondaryEnable(bool energized);
+    void writeRunEnable(bool energized);
+    void holdAllPwmIdle();
+    void holdIdle();
+    void writeForwardPwmDuty(int dutyPercent);
 
     int dutyPercent_ = 0;
     bool ramping_ = false;

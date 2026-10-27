@@ -46,7 +46,13 @@ export function ManualControls() {
     useLiveSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
-  const { sessionInProgress, sessionAccessoryError } = useSessionAccessory();
+  const {
+    relayLockEngaged,
+    sceneSessionActive,
+    relayLockError,
+    sceneSessionError,
+    ensureRelaySessionAccessoryOn,
+  } = useSessionAccessory();
   const [commandError, setCommandError] = useState('');
 
   useEffect(() => {
@@ -67,12 +73,15 @@ export function ManualControls() {
   const strokePending = isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke);
   const burstPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualBurst);
   const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
-  const hardwareReady = isHardwareCommandReady(systemStatus) && sessionInProgress;
-  const strokeDisabledReason = !sessionInProgress
-    ? 'Turn Session in Progress on before stroke or burst.'
-    : hardwareReady
-      ? undefined
-      : systemStatus.detail || systemStatus.summary;
+  const hardwareReady =
+    isHardwareCommandReady(systemStatus) && relayLockEngaged && sceneSessionActive;
+  const strokeDisabledReason = !sceneSessionActive
+    ? 'Turn Scene session on before stroke or burst.'
+    : !relayLockEngaged
+      ? 'Turn Relay lock on before stroke or burst.'
+      : hardwareReady
+        ? undefined
+        : systemStatus.detail || systemStatus.summary;
 
   function update<K extends keyof ManualControlState>(key: K, value: ManualControlState[K]) {
     if (key === 'burstStrokes') {
@@ -120,6 +129,7 @@ export function ManualControls() {
     });
 
     try {
+      await ensureRelaySessionAccessoryOn();
       const snapshotActionIndex = await prepareManualSession();
       const response = await sendHardwareCommand(
         selectedSub,
@@ -153,6 +163,7 @@ export function ManualControls() {
     });
 
     try {
+      await ensureRelaySessionAccessoryOn();
       const snapshotActionIndex = await prepareManualSession();
       const response = await sendHardwareCommand(
         selectedSub,
@@ -272,9 +283,9 @@ export function ManualControls() {
         </Panel>
 
         <Panel title="Actions">
-          {sessionAccessoryError ? (
+          {relayLockError || sceneSessionError ? (
             <p className="mb-3 text-sm text-red-400" role="alert">
-              {sessionAccessoryError}
+              {relayLockError || sceneSessionError}
             </p>
           ) : null}
           {!hardwareReady && !commandError && !strokePending && !burstPending ? (

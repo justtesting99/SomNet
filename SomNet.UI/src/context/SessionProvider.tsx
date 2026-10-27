@@ -146,6 +146,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         throw new Error('Not signed in.');
       }
 
+      const existing = activeSessionRef.current;
+      if (existing) {
+        if (existing.mode !== mode) {
+          await patchSessionModeApi(existing.id, mode);
+          const nextSession: ActiveSessionState = { ...existing, mode };
+          activeSessionRef.current = nextSession;
+          setActiveSession(nextSession);
+        }
+        return;
+      }
+
       if (startingRef.current) {
         throw new Error('Session start already in progress.');
       }

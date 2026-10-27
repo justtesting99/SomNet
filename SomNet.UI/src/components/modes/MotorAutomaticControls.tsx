@@ -3,7 +3,6 @@ import { useLiveSession } from '@/context/SessionProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useCommandDeviceId } from '@/context/SubDeviceProvider';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
-import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { Panel } from '@/components/ui/Panel';
 import { CommandButton } from '@/components/ui/CommandButton';
@@ -40,7 +39,6 @@ export function MotorAutomaticControls() {
   const { endAutomaticSession, activeSession, markAutomaticDeviceStarted } = useLiveSession();
   const { isCommandPending } = useHardwareCommand();
   const { status: systemStatus } = useSystemStatus();
-  const { sessionAccessoryError } = useSessionAccessory();
   const [commandError, setCommandError] = useState('');
   const [cooperativeStopInProgress, setCooperativeStopInProgress] = useState(false);
   const runningRef = useRef(state.running);
@@ -219,9 +217,6 @@ export function MotorAutomaticControls() {
       <p className="mb-3 text-sm text-slate-400">
         H-bridge profile: duty segments with min/max timing. End session: minutes or no auto end only.
       </p>
-      {sessionAccessoryError ? (
-        <p className="mb-2 text-sm text-red-400" role="alert">{sessionAccessoryError}</p>
-      ) : null}
       {!hardwareReady && !commandError && !startPending && !stopPending && !abortPending ? (
         <p className="mb-2 text-sm text-amber-400/90" role="status">
           {hardwareDisabledReason}

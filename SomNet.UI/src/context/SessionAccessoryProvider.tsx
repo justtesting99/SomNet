@@ -29,27 +29,40 @@ import {
   withRemoteSyncApply,
 } from '@/utils/tabSync';
 import {
-  readSessionAccessoryInProgress,
-  writeSessionAccessoryInProgress,
+  readRelayLockEngaged,
+  readSceneSessionActive,
+  writeRelayLockEngaged,
+  writeSceneSessionActive,
 } from '@/utils/sessionAccessoryStorage';
 import { readSubPresentAck } from '@/utils/subPresentAckStorage';
 import { subTargetsMatch, writeReadyBannerDismissed } from '@/utils/readyBannerStorage';
-import { useDeviceActuatorKind } from '@/hooks/useDeviceActuatorKind';
-import { deviceAutomaticRunningForActuator } from '@/utils/deviceAutomaticRunning';
 import {
   isDeviceConnectionOnline,
   isHubLinkReady,
 } from '@/utils/commandReadiness';
 
 interface SessionAccessoryContextValue {
+  /** Sub scene / server session / video (one per Sub). */
+  sceneSessionActive: boolean;
+  /** Relay ESP session-accessory GPIO (relay device only). */
+  relayLockEngaged: boolean;
+  /** @deprecated Use sceneSessionActive */
   sessionInProgress: boolean;
-  togglePending: boolean;
-  canEnableSwitch: boolean;
-  switchDisabled: boolean;
-  switchDisabledReason: string | undefined;
-  /** Last failed session-accessory toggle (header switch or banner). */
+  sceneTogglePending: boolean;
+  relayTogglePending: boolean;
+  sceneSwitchDisabled: boolean;
+  relaySwitchDisabled: boolean;
+  sceneSwitchDisabledReason: string | undefined;
+  relaySwitchDisabledReason: string | undefined;
+  sceneSessionError: string;
+  relayLockError: string;
+  /** @deprecated Use sceneSessionError / relayLockError */
   sessionAccessoryError: string;
+  setSceneSessionActive: (active: boolean) => Promise<void>;
+  setRelayLockEngaged: (engaged: boolean) => Promise<void>;
+  /** @deprecated Use setSceneSessionActive */
   setSessionInProgress: (enabled: boolean) => Promise<void>;
+  ensureRelaySessionAccessoryOn: () => Promise<void>;
 }
 
 const SessionAccessoryContext = createContext<SessionAccessoryContextValue | null>(null);
@@ -75,42 +88,44 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
     syncActiveSessionMode,
   } = useLiveSession();
   const { isCommandPending, executeCommand } = useHardwareCommand();
-  const { actuatorKind } = useDeviceActuatorKind();
 
   const domTarget = user?.displayName ?? user?.username ?? '';
+  const relayDeviceId = relayRegistration?.deviceId ?? null;
 
-  const [sessionInProgress, setSessionInProgressState] = useState(() =>
-    domTarget ? readSessionAccessoryInProgress(domTarget, selectedSub) : false,
+  const [sceneSessionActive, setSceneSessionActiveState] = useState(() =>
+    domTarget ? readSceneSessionActive(domTarget, selectedSub) : false,
   );
-  const [toggleError, setToggleError] = useState('');
+  const [relayLockEngaged, setRelayLockEngagedState] = useState(() =>
+    domTarget ? readRelayLockEngaged(domTarget, selectedSub, relayDeviceId) : false,
+  );
+  const [sceneSessionError, setSceneSessionError] = useState('');
+  const [relayLockError, setRelayLockError] = useState('');
+  const [sceneTogglePending, setSceneTogglePending] = useState(false);
 
   const activeSessionRef = useRef(activeSession);
   const settingsRef = useRef(settings);
+  const relayAccessorySyncedKeyRef = useRef<string | null>(null);
+  const wasRelayOnlineRef = useRef(false);
   activeSessionRef.current = activeSession;
   settingsRef.current = settings;
 
-  const togglePending = isCommandPending(HARDWARE_COMMAND_KEYS.sessionAccessory);
+  const relayTogglePending = isCommandPending(HARDWARE_COMMAND_KEYS.sessionAccessory);
 
   const subPresentAcknowledged =
     readSubPresentAck(selectedSub) ||
     (subPresentAckSub !== null && subTargetsMatch(subPresentAckSub, selectedSub));
 
-  const automaticDeviceRunning = deviceAutomaticRunningForActuator(
-    settings,
-    actuatorKind,
-    settingsLoaded,
-    settingsLoading,
-  );
+  const anyAutomaticRunningOnSub =
+    settingsLoaded &&
+    !settingsLoading &&
+    (settings.automatic.running || settings.motorAutomatic.running);
+
+  const relayAutoRunning = settingsLoaded && !settingsLoading && settings.automatic.running;
 
   const motionCommandPending =
     isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke) ||
     isCommandPending(HARDWARE_COMMAND_KEYS.manualBurst) ||
     isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);
-
-  const workInProgress =
-    togglePending ||
-    automaticDeviceRunning ||
-    (sessionInProgress ? motionCommandPending : false);
 
   const relayConnectionSnapshot =
     relayRegistration && relayRegistration.deviceId !== selectedDeviceId
@@ -123,91 +138,129 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
     ? relayConnectionSnapshot !== null && isDeviceConnectionOnline(relayConnectionSnapshot)
     : isDeviceConnectionOnline(systemStatus);
 
-  const canEnableSwitch =
-    hubLinkReady && relayDeviceOnline && subPresentAcknowledged && !workInProgress;
+  const canEnableScene =
+    hubLinkReady && subPresentAcknowledged && !anyAutomaticRunningOnSub && !sceneTogglePending;
 
-  const switchDisabled =
-    togglePending ||
-    workInProgress ||
-    (sessionInProgress ? false : !canEnableSwitch);
+  const canEnableRelayLock =
+    hubLinkReady &&
+    relayDeviceOnline &&
+    subPresentAcknowledged &&
+    !relayTogglePending &&
+    (!relayAutoRunning || relayLockEngaged);
 
-  const switchDisabledReason = useMemo(() => {
-    if (toggleError) {
-      return toggleError;
+  const sceneWorkInProgress =
+    sceneTogglePending ||
+    (sceneSessionActive && (anyAutomaticRunningOnSub || motionCommandPending));
+
+  const sceneSwitchDisabled =
+    sceneTogglePending ||
+    (sceneSessionActive ? sceneWorkInProgress : !canEnableScene);
+
+  const relaySwitchDisabled =
+    !relayRegistration ||
+    relayTogglePending ||
+    (relayLockEngaged ? relayAutoRunning || relayTogglePending : !canEnableRelayLock);
+
+  const sceneSwitchDisabledReason = useMemo(() => {
+    if (sceneSessionError) {
+      return sceneSessionError;
     }
 
-    if (sessionInProgress && workInProgress) {
-      return 'Wait for the current stroke or automatic run to finish, or press Abort.';
+    if (sceneSessionActive && sceneWorkInProgress) {
+      return 'Wait for the current run or command to finish before ending the scene session.';
     }
 
-    if (!sessionInProgress) {
+    if (!sceneSessionActive) {
       if (!hubLinkReady) {
         return systemStatus.detail || systemStatus.summary;
       }
-
-      if (!relayDeviceOnline) {
-        return (
-          relayConnectionSnapshot?.detail ||
-          relayConnectionSnapshot?.summary ||
-          (relayRegistration
-            ? 'Relay device is not connected.'
-            : systemStatus.detail || systemStatus.summary)
-        );
-      }
-
       if (!subPresentAcknowledged) {
-        return 'Sub must double-click the device button (ReportButtonEvent) before starting.';
+        return 'Sub must double-click the device button before starting a scene session.';
       }
-
-      if (automaticDeviceRunning) {
-        return 'Stop the automatic run on this Sub before starting Session in Progress.';
+      if (anyAutomaticRunningOnSub) {
+        return 'Stop automatic runs on this Sub before starting a scene session.';
       }
-
       if (settingsLoading || !settingsLoaded) {
         return 'Loading settings for this Sub…';
       }
-
-      if (togglePending) {
-        return 'Session command in progress…';
-      }
-
-      if (motionCommandPending) {
-        return 'Wait for the current hardware command to finish.';
+      if (sceneTogglePending) {
+        return 'Scene session command in progress…';
       }
     }
 
     return undefined;
   }, [
-    automaticDeviceRunning,
-    motionCommandPending,
-    sessionInProgress,
+    anyAutomaticRunningOnSub,
+    hubLinkReady,
+    sceneSessionActive,
+    sceneSessionError,
+    sceneTogglePending,
+    sceneWorkInProgress,
     settingsLoaded,
     settingsLoading,
     subPresentAcknowledged,
-    subPresentAckSub,
-    selectedSub,
+    systemStatus.detail,
+    systemStatus.summary,
+  ]);
+
+  const relaySwitchDisabledReason = useMemo(() => {
+    if (relayLockError) {
+      return relayLockError;
+    }
+
+    if (!relayRegistration) {
+      return undefined;
+    }
+
+    if (relayLockEngaged && relayAutoRunning) {
+      return 'Stop the relay automatic run before turning Relay lock off.';
+    }
+
+    if (!relayLockEngaged) {
+      if (!hubLinkReady) {
+        return systemStatus.detail || systemStatus.summary;
+      }
+      if (!relayDeviceOnline) {
+        return (
+          relayConnectionSnapshot?.detail ||
+          relayConnectionSnapshot?.summary ||
+          'Relay device is not connected.'
+        );
+      }
+      if (!subPresentAcknowledged) {
+        return 'Sub must double-click the device button before engaging Relay lock.';
+      }
+      if (relayTogglePending) {
+        return 'Relay lock command in progress…';
+      }
+    }
+
+    return undefined;
+  }, [
     hubLinkReady,
+    relayAutoRunning,
     relayConnectionSnapshot?.detail,
     relayConnectionSnapshot?.summary,
     relayDeviceOnline,
+    relayLockEngaged,
+    relayLockError,
     relayRegistration,
+    relayTogglePending,
+    subPresentAcknowledged,
     systemStatus.detail,
     systemStatus.summary,
-    toggleError,
-    togglePending,
-    workInProgress,
   ]);
 
-  const persistInProgress = useCallback(
-    (inProgress: boolean) => {
+  const persistScene = useCallback(
+    (active: boolean) => {
       if (!domTarget) {
         return;
       }
 
-      writeSessionAccessoryInProgress(domTarget, selectedSub, inProgress);
-      setSessionInProgressState(inProgress);
+      writeSceneSessionActive(domTarget, selectedSub, active);
+      setSceneSessionActiveState(active);
 
-      if (inProgress) {
+      if (active) {
         dismissReadyBannerForSub(selectedSub);
       } else {
         writeReadyBannerDismissed(selectedSub, false);
@@ -215,9 +268,9 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
 
       if (shouldBroadcastLocalChange()) {
         postTabSync({
-          type: 'session-accessory',
+          type: 'scene-session',
           tabId: getTabId(),
-          inProgress,
+          active,
           subTarget: selectedSub,
         });
       }
@@ -225,19 +278,42 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
     [dismissReadyBannerForSub, domTarget, selectedSub],
   );
 
-  const applyRemoteInProgress = useCallback(
-    (inProgress: boolean, subTarget: string) => {
+  const persistRelayLock = useCallback(
+    (engaged: boolean) => {
+      if (!domTarget) {
+        return;
+      }
+
+      writeRelayLockEngaged(domTarget, selectedSub, engaged, relayRegistration?.deviceId ?? null);
+      setRelayLockEngagedState(engaged);
+      if (!engaged) {
+        relayAccessorySyncedKeyRef.current = null;
+      }
+
+      if (shouldBroadcastLocalChange()) {
+        postTabSync({
+          type: 'relay-lock',
+          tabId: getTabId(),
+          engaged,
+          subTarget: selectedSub,
+        });
+      }
+    },
+    [domTarget, relayRegistration?.deviceId, selectedSub],
+  );
+
+  const applyRemoteScene = useCallback(
+    (active: boolean, subTarget: string) => {
       if (subTarget !== selectedSub) {
         return;
       }
 
       withRemoteSyncApply(() => {
         if (domTarget) {
-          writeSessionAccessoryInProgress(domTarget, selectedSub, inProgress);
+          writeSceneSessionActive(domTarget, selectedSub, active);
         }
-        setSessionInProgressState(inProgress);
-
-        if (inProgress) {
+        setSceneSessionActiveState(active);
+        if (active) {
           dismissReadyBannerForSub(selectedSub);
         } else {
           writeReadyBannerDismissed(selectedSub, false);
@@ -247,189 +323,356 @@ export function SessionAccessoryProvider({ children }: { children: ReactNode }) 
     [dismissReadyBannerForSub, domTarget, selectedSub],
   );
 
-  useEffect(() => {
-    return subscribeTabSync((message) => {
-      if (message.type !== 'session-accessory') {
+  const applyRemoteRelayLock = useCallback(
+    (engaged: boolean, subTarget: string) => {
+      if (subTarget !== selectedSub) {
         return;
       }
 
-      applyRemoteInProgress(message.inProgress, message.subTarget);
+      withRemoteSyncApply(() => {
+        if (domTarget) {
+          writeRelayLockEngaged(
+            domTarget,
+            selectedSub,
+            engaged,
+            relayRegistration?.deviceId ?? null,
+          );
+        }
+        setRelayLockEngagedState(engaged);
+        if (!engaged) {
+          relayAccessorySyncedKeyRef.current = null;
+        }
+      });
+    },
+    [domTarget, relayRegistration?.deviceId, selectedSub],
+  );
+
+  useEffect(() => {
+    return subscribeTabSync((message) => {
+      if (message.type === 'scene-session') {
+        applyRemoteScene(message.active, message.subTarget);
+        return;
+      }
+      if (message.type === 'relay-lock') {
+        applyRemoteRelayLock(message.engaged, message.subTarget);
+        return;
+      }
+      if (message.type === 'session-accessory') {
+        applyRemoteScene(message.inProgress, message.subTarget);
+        applyRemoteRelayLock(message.inProgress, message.subTarget);
+      }
     });
-  }, [applyRemoteInProgress]);
+  }, [applyRemoteRelayLock, applyRemoteScene]);
 
   useEffect(() => {
     if (!domTarget) {
       return;
     }
 
-    setSessionInProgressState(readSessionAccessoryInProgress(domTarget, selectedSub));
-  }, [domTarget, selectedSub]);
+    setSceneSessionActiveState(readSceneSessionActive(domTarget, selectedSub));
+    setRelayLockEngagedState(readRelayLockEngaged(domTarget, selectedSub, relayDeviceId));
+    relayAccessorySyncedKeyRef.current = null;
+  }, [domTarget, relayDeviceId, selectedSub]);
 
   useEffect(() => {
-    setToggleError('');
+    setSceneSessionError('');
+    setRelayLockError('');
+    relayAccessorySyncedKeyRef.current = null;
   }, [selectedSub, selectedDeviceId]);
 
+  const ensureRelaySessionAccessoryOn = useCallback(async () => {
+    const relayId = relayRegistration?.deviceId;
+    if (!relayId) {
+      return;
+    }
+
+    if (!relayLockEngaged) {
+      throw new Error('Turn Relay lock on before relay commands.');
+    }
+
+    relayAccessorySyncedKeyRef.current = null;
+    await sendHardwareCommand(
+      selectedSub,
+      relayId,
+      HARDWARE_COMMAND_KEYS.sessionAccessory,
+      JSON.stringify({ enabled: true }),
+    );
+    relayAccessorySyncedKeyRef.current = `${selectedSub}:${relayId}`;
+  }, [relayLockEngaged, relayRegistration?.deviceId, selectedSub]);
+
   useEffect(() => {
-    if (!sessionInProgress || !mode || !activeSession) {
+    if (!relayLockEngaged) {
+      relayAccessorySyncedKeyRef.current = null;
+      wasRelayOnlineRef.current = false;
+      return;
+    }
+
+    const relayId = relayRegistration?.deviceId;
+    if (!relayId || !hubLinkReady) {
+      return;
+    }
+
+    if (!relayDeviceOnline) {
+      wasRelayOnlineRef.current = false;
+      return;
+    }
+
+    const syncKey = `${selectedSub}:${relayId}`;
+    const justConnected = !wasRelayOnlineRef.current;
+    wasRelayOnlineRef.current = true;
+
+    if (!justConnected && relayAccessorySyncedKeyRef.current === syncKey) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void sendHardwareCommand(
+        selectedSub,
+        relayId,
+        HARDWARE_COMMAND_KEYS.sessionAccessory,
+        JSON.stringify({ enabled: true }),
+      )
+        .then(() => {
+          relayAccessorySyncedKeyRef.current = syncKey;
+        })
+        .catch(() => {
+          relayAccessorySyncedKeyRef.current = null;
+        });
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [hubLinkReady, relayDeviceOnline, relayLockEngaged, relayRegistration?.deviceId, selectedSub]);
+
+  useEffect(() => {
+    if (!sceneSessionActive || !mode || !activeSession) {
       return;
     }
 
     if (activeSession.mode !== mode) {
       void syncActiveSessionMode(mode);
     }
-  }, [activeSession, mode, sessionInProgress, syncActiveSessionMode]);
+  }, [activeSession, mode, sceneSessionActive, syncActiveSessionMode]);
 
-  const setSessionInProgress = useCallback(
-    async (enabled: boolean) => {
-      setToggleError('');
+  const stopAllAutomaticOnSub = useCallback(async (): Promise<AutomaticResultJson | null> => {
+    let automaticDeviceResult: AutomaticResultJson | null = null;
+    const relayAutoRunning = settingsRef.current.automatic.running;
+    const motorAutoRunning = settingsRef.current.motorAutomatic.running;
 
-      if (enabled && !mode) {
-        setToggleError('Choose Manual or Automatic mode first.');
+    const stopTargets: {
+      deviceId: string;
+      automatic: typeof settingsRef.current.automatic;
+      motor: boolean;
+    }[] = [];
+
+    if (relayAutoRunning && relayRegistration?.deviceId) {
+      stopTargets.push({
+        deviceId: relayRegistration.deviceId,
+        automatic: settingsRef.current.automatic,
+        motor: false,
+      });
+    }
+    if (motorAutoRunning) {
+      for (const reg of registrations.filter((row) => row.actuatorKind === 'hbridge')) {
+        stopTargets.push({
+          deviceId: reg.deviceId,
+          automatic: settingsRef.current.automatic,
+          motor: true,
+        });
+      }
+    }
+
+    if (
+      activeSessionRef.current?.mode === 'automatic' ||
+      relayAutoRunning ||
+      motorAutoRunning
+    ) {
+      for (const target of stopTargets) {
+        await stopAutomaticForModeSwitch(
+          selectedSub,
+          target.deviceId,
+          settingsRef.current.automatic,
+          {
+            endAutomaticSession: async (_endReason, deviceResult) => {
+              automaticDeviceResult = deviceResult ?? null;
+            },
+            setAutomaticRunningLocal: (running) => {
+              setAutomaticRunningLocal(running);
+              if (!running) {
+                setMotorAutomaticRunningLocal(false);
+              }
+            },
+            isAutomaticSessionActive: () =>
+              activeSessionRef.current?.mode === 'automatic' ||
+              settingsRef.current.automatic.running ||
+              settingsRef.current.motorAutomatic.running,
+          },
+          {
+            deviceSessionRunning: target.motor ? motorAutoRunning : relayAutoRunning,
+            stopGraceMs: target.motor ? 60_000 : undefined,
+          },
+        );
+      }
+    }
+
+    return automaticDeviceResult;
+  }, [
+    registrations,
+    relayRegistration?.deviceId,
+    selectedSub,
+    setAutomaticRunningLocal,
+    setMotorAutomaticRunningLocal,
+  ]);
+
+  const setSceneSessionActive = useCallback(
+    async (active: boolean) => {
+      setSceneSessionError('');
+
+      if (active && !mode) {
+        setSceneSessionError('Choose Manual or Automatic mode first.');
         return;
       }
 
-      if (enabled) {
+      if (active) {
         dismissReadyBannerForSub(selectedSub);
       }
 
-      const ran = await executeCommand(HARDWARE_COMMAND_KEYS.sessionAccessory, async () => {
-        const payloadJson = JSON.stringify({ enabled });
-
-        try {
-          const relayDeviceId = relayRegistration?.deviceId;
-          if (relayDeviceId) {
-            await sendHardwareCommand(
-              selectedSub,
-              relayDeviceId,
-              HARDWARE_COMMAND_KEYS.sessionAccessory,
-              payloadJson,
-            );
+      setSceneTogglePending(true);
+      try {
+        if (active) {
+          persistScene(true);
+          try {
+            await startSessionForAccessory(mode!);
+          } catch (sessionError) {
+            const message =
+              sessionError instanceof Error
+                ? sessionError.message
+                : 'Could not create server session record.';
+            setSceneSessionError(message);
           }
-
-          if (enabled) {
-            persistInProgress(true);
-            try {
-              await startSessionForAccessory(mode!);
-            } catch (sessionError) {
-              const message =
-                sessionError instanceof Error
-                  ? sessionError.message
-                  : 'Could not create server session record.';
-              setToggleError(
-                `Session is on at the device, but the server session failed: ${message}`,
-              );
-            }
-            return;
-          }
-
-          let automaticDeviceResult: AutomaticResultJson | null = null;
-
-          const relayAutoRunning = settingsRef.current.automatic.running;
-          const motorAutoRunning = settingsRef.current.motorAutomatic.running;
-
-          const stopTargets: { deviceId: string; automatic: typeof settingsRef.current.automatic; motor: boolean }[] =
-            [];
-          if (relayAutoRunning && relayRegistration?.deviceId) {
-            stopTargets.push({
-              deviceId: relayRegistration.deviceId,
-              automatic: settingsRef.current.automatic,
-              motor: false,
-            });
-          }
-          if (motorAutoRunning) {
-            for (const reg of registrations.filter((row) => row.actuatorKind === 'hbridge')) {
-              stopTargets.push({
-                deviceId: reg.deviceId,
-                automatic: settingsRef.current.automatic,
-                motor: true,
-              });
-            }
-          }
-
-          if (
-            activeSessionRef.current?.mode === 'automatic' ||
-            relayAutoRunning ||
-            motorAutoRunning
-          ) {
-            for (const target of stopTargets) {
-            await stopAutomaticForModeSwitch(
-              selectedSub,
-              target.deviceId,
-              settingsRef.current.automatic,
-              {
-                endAutomaticSession: async (_endReason, deviceResult) => {
-                  automaticDeviceResult = deviceResult ?? null;
-                },
-                setAutomaticRunningLocal: (running) => {
-                  setAutomaticRunningLocal(running);
-                  if (!running) {
-                    setMotorAutomaticRunningLocal(false);
-                  }
-                },
-                isAutomaticSessionActive: () =>
-                  activeSessionRef.current?.mode === 'automatic' ||
-                  settingsRef.current.automatic.running ||
-                  settingsRef.current.motorAutomatic.running,
-              },
-              {
-                deviceSessionRunning: target.motor ? motorAutoRunning : relayAutoRunning,
-                stopGraceMs: target.motor ? 60_000 : undefined,
-              },
-            );
-            }
-          }
-
-          const automaticDeviceStarted =
-            activeSessionRef.current?.automaticDeviceStarted ?? false;
-
-          await endSessionForAccessory({
-            automaticDeviceStarted,
-            automaticDeviceResult: automaticDeviceResult,
-          });
-          persistInProgress(false);
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : 'Could not update session accessory.';
-          setToggleError(message);
-          throw error;
+          return;
         }
-      });
 
-      if (!ran) {
-        setToggleError('Session command already in progress. Wait a moment and try again.');
+        const automaticDeviceResult = await stopAllAutomaticOnSub();
+        const automaticDeviceStarted =
+          activeSessionRef.current?.automaticDeviceStarted ?? false;
+
+        await endSessionForAccessory({
+          automaticDeviceStarted,
+          automaticDeviceResult: automaticDeviceResult,
+        });
+        persistScene(false);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Could not update scene session.';
+        setSceneSessionError(message);
+      } finally {
+        setSceneTogglePending(false);
       }
     },
     [
       dismissReadyBannerForSub,
       endSessionForAccessory,
-      executeCommand,
       mode,
-      persistInProgress,
+      persistScene,
       selectedSub,
-      setAutomaticRunningLocal,
-      setMotorAutomaticRunningLocal,
       startSessionForAccessory,
+      stopAllAutomaticOnSub,
     ],
+  );
+
+  const setRelayLockEngaged = useCallback(
+    async (engaged: boolean) => {
+      setRelayLockError('');
+
+      const relayId = relayRegistration?.deviceId;
+      if (!relayId) {
+        setRelayLockError('No relay device paired on this Sub.');
+        return;
+      }
+
+      const ran = await executeCommand(HARDWARE_COMMAND_KEYS.sessionAccessory, async () => {
+        try {
+          if (engaged) {
+            await sendHardwareCommand(
+              selectedSub,
+              relayId,
+              HARDWARE_COMMAND_KEYS.sessionAccessory,
+              JSON.stringify({ enabled: true }),
+            );
+            relayAccessorySyncedKeyRef.current = `${selectedSub}:${relayId}`;
+            persistRelayLock(true);
+            return;
+          }
+
+          await sendHardwareCommand(
+            selectedSub,
+            relayId,
+            HARDWARE_COMMAND_KEYS.sessionAccessory,
+            JSON.stringify({ enabled: false }),
+          );
+          relayAccessorySyncedKeyRef.current = null;
+          persistRelayLock(false);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Could not update relay lock.';
+          setRelayLockError(message);
+          throw error;
+        }
+      });
+
+      if (!ran) {
+        setRelayLockError('Relay lock command already in progress. Wait a moment and try again.');
+      }
+    },
+    [executeCommand, persistRelayLock, relayRegistration?.deviceId, selectedSub],
+  );
+
+  const setSessionInProgress = useCallback(
+    async (enabled: boolean) => {
+      await setSceneSessionActive(enabled);
+      if (relayRegistration?.deviceId) {
+        await setRelayLockEngaged(enabled);
+      }
+    },
+    [relayRegistration?.deviceId, setRelayLockEngaged, setSceneSessionActive],
   );
 
   const value = useMemo(
     (): SessionAccessoryContextValue => ({
-      sessionInProgress,
-      togglePending,
-      canEnableSwitch,
-      switchDisabled,
-      switchDisabledReason,
-      sessionAccessoryError: toggleError,
+      sceneSessionActive,
+      relayLockEngaged,
+      sessionInProgress: sceneSessionActive,
+      sceneTogglePending,
+      relayTogglePending,
+      sceneSwitchDisabled,
+      relaySwitchDisabled,
+      sceneSwitchDisabledReason,
+      relaySwitchDisabledReason,
+      sceneSessionError,
+      relayLockError,
+      sessionAccessoryError: relayLockError || sceneSessionError,
+      setSceneSessionActive,
+      setRelayLockEngaged,
       setSessionInProgress,
+      ensureRelaySessionAccessoryOn,
     }),
     [
-      canEnableSwitch,
-      sessionInProgress,
+      ensureRelaySessionAccessoryOn,
+      relayLockEngaged,
+      relayLockError,
+      relaySwitchDisabled,
+      relaySwitchDisabledReason,
+      relayTogglePending,
+      sceneSessionActive,
+      sceneSessionError,
+      sceneSwitchDisabled,
+      sceneSwitchDisabledReason,
+      sceneTogglePending,
+      setRelayLockEngaged,
+      setSceneSessionActive,
       setSessionInProgress,
-      switchDisabled,
-      switchDisabledReason,
-      toggleError,
-      togglePending,
     ],
   );
 
