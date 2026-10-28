@@ -1,6 +1,6 @@
 # SomEsp — standalone ESP32 trial (device-only)
 
-**Status:** **In progress** — Phase 0 scaffold done in **SomNet.Device** (`env:somesp`); Phases 1–5 relay **`/operate`** signed; **Motor profile (M2)** scoped in [32 §6](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#6-phase-m2--somesp-standalone-local-api--operate).
+**Status:** **M2 signed off** **2026-10-28** — relay Phases 1–5 + **motor LAN parity** (`env:somesp` and **`env:dev`** + **`SOMNET_LOCAL_API`**). Details: [32 §6 Phase M2](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#6-phase-m2--somesp-standalone-local-api--operate).
 
 **Parent design:** [26 — Site operating profiles](./26-ESP32-Local-Offline-Mode-Design.md) **tier 3 / Mode A** (narrowed for trial).
 
@@ -234,20 +234,25 @@ Only after Phase 4 sign-off.
 
 ---
 
-## 4.1 Motor profile (M2 — hub parity on LAN)
+## 4.1 Motor profile (M2 — hub parity on LAN) — **signed 2026-10-28**
 
-SomEsp relay MVP (Phases 1–5) is **signed off**. **Motor (H-bridge)** uses the same **`CommandHandler`** as hub when NVS = `hbridge`; **M2** closes **API + `/operate` parity** with SomNet hub payloads ([32 §6 M2-P0](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#601-hub-vs-local--parity-matrix-target)).
+SomEsp relay MVP (Phases 1–5) is **signed off**. **Motor (H-bridge)** uses the same **`CommandHandler`** as hub when NVS = `hbridge`; **M2** delivered **API + `/operate` parity** with SomNet hub payloads ([32 §6 M2-P0](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#601-hub-vs-local--parity-matrix-target)).
 
-| Area | Relay today | Motor M2 work |
-|------|-------------|----------------|
-| **Parity rule** | Relay **`automatic-start`** JSON = hub | Motor start/update JSON = hub — **☑ `/operate` + local API** |
-| NVS **`actuatorKind`** | Default `relay`; **`/config` / `/operate` / unlock** | **☑** |
-| **`/api/local/commands`** | `stroke`, relay automatic | **`motor-run`**, motor automatic — **☑** |
-| **`/api/local/settings`** | Relay `manual` + `automatic` | **`motorManual` + `motorAutomatic` + `appOptions`** — **☑** |
-| **`/operate`** | Stroke/burst + relay automatic | Caps-driven motor UI — **☑ M2-C** |
-| **Status poll** | Relay `busy` / `automaticActive` | Motor FSM — **☑ M2-F1** |
+| Area | Relay | Motor (M2) |
+|------|-------|------------|
+| **Parity rule** | Relay **`automatic-start`** JSON = hub | Motor start/update JSON = hub |
+| NVS **`actuatorKind`** | **`relay`** default; **`/config`**, **`/operate`**, optional unlock bind | **`hbridge`** — same flows |
+| **`GET /api/local/caps`** | Stroke limits | **`minDutyPercent` / `maxDutyPercent`** |
+| **`/api/local/commands`** | `stroke`, burst, relay automatic | **`motor-run`**, **`motor-stop`**, motor automatic |
+| **`/api/local/settings`** | `manual` + `automatic` | **`motorManual` + `motorAutomatic` + `appOptions`** |
+| **`/operate`** | Relay manual + automatic panels | Caps-driven motor UI (**M2-C**) |
+| **`GET /api/local/status`** | `busy`, `automaticActive`, relay **`resultJson`** | Same fields + motor **`resultJson`** |
+| **Session history** | LittleFS on **`env:somesp`** only | Motor summaries in history index (**`buildSummary`**) |
+| **Hub hybrid** | N/A on pure SomEsp | **`env:dev`**: status toggle **Connect SomNet hub** + LAN **`/operate`** |
 
-**Sign-off:** [32 Run D (M2-R1–R6)](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#69-run-d--m2-operator--bench-sign-off). Pattern graph stays **SomNet.UI only** (no `/operate` chart in M2).
+**Operator sign-off:** [32 Phase M2](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#phase-m2-sign-off) · Run D **M2-R1–R6**. User guide: [SOMESP-STANDALONE.md](../SomNet.Device/docs/SOMESP-STANDALONE.md). Pattern graph stays **SomNet.UI only** (no `/operate` chart in M2).
+
+**Firmware tags:** hub **`0.16.4-motor-burst-duty`**; SomEsp **`somesp-0.16.4-motor-burst-duty`** (`platformio.ini`).
 
 ---
 
@@ -319,3 +324,4 @@ If trial succeeds, options for **main** repo:
 | Date | Change |
 |------|--------|
 | 2026-10-05 | Initial SomEsp standalone trial plan (fork, device-only, no API/Pi) |
+| 2026-10-28 | **§4.1 Motor profile (M2)** — signed off; status header updated ([32 Phase M2](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#phase-m2-sign-off)) |

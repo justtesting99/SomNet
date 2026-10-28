@@ -80,6 +80,7 @@ Copy `secrets.ini.example` → `secrets.ini` with your Wi‑Fi and PC **LAN IP**
 | SignalR hub + device pairing (API) | Complete |
 | ESP32 firmware (pairing, stroke/burst/automatic, session accessory, burst placement, motor automatic) | **Phases 0–12 + P16 + motor M1d signed off** — firmware **`0.16.4-motor-burst-duty`** ([32](Documents/32-Motor-Actuator-Implementation-Plan-And-Checklist.md)) |
 | Motor hub path (automatic modes, bursts, pattern graph) | **M1 + M1b + M1c + M1d signed off** **2026-10-28** — [31 §13](Documents/31-Motor-Actuator-Device-Design.md#13-as-built--hub-path-motor-programs-ui-telemetry) |
+| SomEsp / LAN **`/operate`** + local API (motor + relay) | **M2 signed off** **2026-10-28** — [32 Phase M2](Documents/32-Motor-Actuator-Implementation-Plan-And-Checklist.md#phase-m2-sign-off) · [27 SomEsp](Documents/27-SomEsp-Standalone-Device-Plan.md) |
 | Session in Progress (UI + GPIO32 lock) | **Signed off** — [P16 checklist](Documents/25-Session-Accessory-In-Progress-Checklist.md) |
 | UI device pairing | **Hardware** toolbar dialog (Phase 8) |
 | UI → hardware command dispatch | **Complete** — REST + operator hub listener (Phases 8–11) |

@@ -8,7 +8,7 @@ PlatformIO firmware for the SomNet hardware device (ESP32 DevKit V1 clone). Live
 **Plan:** [Documents/09-ESP32-Device-Plan.md](../Documents/09-ESP32-Device-Plan.md)  
 **Phase checklists:** [0](../Documents/09-ESP32-Phase-0-Checklist.md) · … · [12](../Documents/09-ESP32-Phase-12-Network-Hardening-Checklist.md) · [button clicks](../Documents/23-Device-Button-Clicks-Checklist.md) · [P16 session accessory](../Documents/25-Session-Accessory-In-Progress-Checklist.md)
 
-**Current firmware:** **`0.16.4-motor-burst-duty`** (`platformio.ini`) — unified **`env:dev`** image: relay automatic (Phases 5–12 lineage) + **burst placement** + **motor automatic** (H-bridge PWM, modes, bursts, segment telemetry). P16 **`session-accessory`** (GPIO32) — [V2 rules](../Documents/34-Operator-Session-And-Accessory-V2-Rules.md) for motion gating on new work. Hub path sign-off: [32 M1d](../Documents/32-Motor-Actuator-Implementation-Plan-And-Checklist.md#phase-m1d-sign-off) **2026-10-28**.
+**Current firmware:** **`0.16.4-motor-burst-duty`** (`platformio.ini`) — unified **`env:dev`** image: relay automatic (Phases 5–12 lineage) + **burst placement** + **motor automatic** (H-bridge PWM, modes, bursts, segment telemetry) + optional **LAN `/operate`** (`SOMNET_LOCAL_API=1`). P16 **`session-accessory`** (GPIO32) — [V2 rules](../Documents/34-Operator-Session-And-Accessory-V2-Rules.md). Sign-off: hub [32 M1d](../Documents/32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e) · LAN/SomEsp [32 M2](../Documents/32-Motor-Actuator-Implementation-Plan-And-Checklist.md#phase-m2-sign-off) **2026-10-28**.
 
 ### Capability summary
 
@@ -69,9 +69,9 @@ Or use the PlatformIO sidebar: **Build**, **Upload**, **Monitor** (115200 baud).
 
 | Environment | Use | Hub transport |
 |-------------|-----|---------------|
-| **`dev`** (default) | Local LAN development | `http://` negotiate + `ws://` |
+| **`dev`** (default) | Local LAN development + optional **LAN `/operate`** (`SOMNET_LOCAL_API`) | `http://` negotiate + `ws://` when hub enabled |
 | **`prod_cloud`** | Cloud / Azure deployment | `https://` negotiate + `wss://` |
-| **`somesp`** | **SomEsp** standalone trial (no API/hub) | **Disabled** — see [docs/SOMESP-STANDALONE.md](docs/SOMESP-STANDALONE.md) |
+| **`somesp`** | **SomEsp** standalone (**M2 signed 2026-10-28**) — motor + relay on LAN | Hub optional / off — [docs/SOMESP-STANDALONE.md](docs/SOMESP-STANDALONE.md) |
 
 ```bash
 pio run -e somesp

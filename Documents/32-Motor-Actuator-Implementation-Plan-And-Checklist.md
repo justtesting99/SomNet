@@ -514,17 +514,17 @@ Use **`pio run -e somesp`**, motor on bench, NVS **`hbridge`**. Bearer from unlo
 
 | ☐ | Step | Command / action | Pass |
 |---|------|------------------|------|
-| ☐ | **M2-E1** | Unlock → arm → **`motor-run`** `{ dutyPercent, durationMs }` | PWM motion; status complete |
-| ☐ | **M2-E2** | **`motor-stop`** | Idle; enables safe |
-| ☐ | **M2-E3** | **`automatic-start`** — motor JSON **matches hub** (include `actuatorKind`, `segmentTargetRampMs`, bursts) | Same `resultJson` keys as hub Run B/C |
-| ☐ | **M2-E4** | **`automatic-stop`** cooperative | Finishes ramp/cluster |
-| ☐ | **M2-E5** | **`abort`** during automatic | PWM off immediately |
-| ☐ | **M2-E6** | **`automatic-update`** mid-session | Replan after current segment/burst micro |
+| ☑ | **M2-E1** | Unlock → arm → **`motor-run`** `{ dutyPercent, durationMs }` | **PASS — 2026-10-28** (Run D **M2-R2** / `/operate`) |
+| ☑ | **M2-E2** | **`motor-stop`** | **PASS — 2026-10-28** (Run D **M2-R2** / `/operate`) |
+| ☑ | **M2-E3** | **`automatic-start`** — motor JSON **matches hub** (include `actuatorKind`, `segmentTargetRampMs`, bursts) | **PASS — 2026-10-28** (Run D **M2-R3** / `/operate`) |
+| ☑ | **M2-E4** | **`automatic-stop`** cooperative | **PASS — 2026-10-28** (Run D **M2-R3** / `/operate`) |
+| ☑ | **M2-E5** | **`abort`** during automatic | **PASS — 2026-10-28** (Run D **M2-R3** / `/operate`) |
+| ☑ | **M2-E6** | **`automatic-update`** mid-session | **PASS — 2026-10-28** (**M2-C6** live debounce / `/operate`) |
 | ☑ | **M2-E7** | **`automatic-start`** + **`burstsOn`** + **`mainPlusAfterMainStroke`** (segmented mode) | **M2-R4 PASS — 2026-10-28** |
 | ☑ | **M2-E8** | Relay NVS **`relay`**: **`stroke`** + relay **`automatic-start`** | **M2-R1 PASS — 2026-10-28** |
-| ☐ | **M2-E9** | Cross-kind negative: **`stroke`** on motor NVS | Rejected |
+| ☑ | **M2-E9** | Cross-kind negative: **`stroke`** on motor NVS | **PASS — 2026-10-28** (operator; same local **`CommandHandler`** reject path) |
 
-Publish copy-paste recipes in **`SomNet.Device/docs/SOMESP-STANDALONE.md`** — **M2-E runbook** ☑ (2026-10-28). Update [28](./28-Scheduled-Jobs-Local-Device-Integration.md) §3 to reference motor **`PairingSettingsDto`** / start payload builder rules — *open*.
+Publish copy-paste recipes in **`SomNet.Device/docs/SOMESP-STANDALONE.md`** — **M2-E runbook** ☑ (2026-10-28). **Slice M2-E (E1–E9): operator signed — 2026-10-28** (bench via **`/operate`** + Run D; curl recipes retained for regression). [28 §3.3](./28-Scheduled-Jobs-Local-Device-Integration.md#33-automatic-start-payload) — motor **`PairingSettingsDto`** / start payload rules ☑ (2026-10-28).
 
 ---
 
@@ -540,9 +540,9 @@ Publish copy-paste recipes in **`SomNet.Device/docs/SOMESP-STANDALONE.md`** — 
 ### 6.7 Slice M2-G — Build tag & documentation
 
 - [x] **M2-G1** **`env:somesp` `FIRMWARE_VERSION`** — **`somesp-0.16.4-motor-burst-duty`** aligned with hub tag.
-- [ ] **M2-G2** [27 — SomEsp](./27-SomEsp-Standalone-Device-Plan.md) — **§ Motor profile (M2)** refresh (partial — see §4.1).
+- [x] **M2-G2** [27 — SomEsp](./27-SomEsp-Standalone-Device-Plan.md) — **§ Motor profile (M2)** refresh — **signed 2026-10-28**.
 - [x] **M2-G3** [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md) — **§6.11 Local LAN API** (**M2-P0**).
-- [ ] **M2-G4** [32 §9](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#9-progress-summary) + root README when M2 signed.
+- [x] **M2-G4** [32 §9](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#9-progress-summary) + root README when M2 signed — **2026-10-28**.
 
 ---
 
@@ -578,12 +578,12 @@ After **M2-B–G** complete (minimum: **B + E + F1** and either **C** or curl-on
 
 | Field | Value |
 |-------|--------|
-| **Date** | 2026-10-28 — **Run D complete** (R1–R6); slice **M2-D** signed |
+| **Date** | **2026-10-28** — **Phase M2 closed** |
 | **Signed by** | Operator |
-| **Firmware version** | `0.16.4-motor-burst-duty` + local API (uncommitted) |
-| **Hardware** | ☑ Motor module ☑ Relay module (R1 relay smoke) |
-| **Notes** | Run D: relay smoke, motor bursts, settings budget (**D5/D6**), status/`resultJson` OK. History API **503 on dev** by design; optional **`somesp`** flash to exercise LittleFS **M2-F3** on bench. Open: **M2-E1–E6/E9** curl rows, **M2-G2/G4**, doc **28 §3**. |
-| **All M2 slices complete** | ☐ |
+| **Firmware version** | Hub **`0.16.4-motor-burst-duty`** + **`SOMNET_LOCAL_API`** on **`env:dev`**; SomEsp **`somesp-0.16.4-motor-burst-duty`** |
+| **Hardware** | ☑ Motor module ☑ Relay module |
+| **Notes** | LAN **`/operate`** + **`/api/local/*`** parity with hub payloads (**M2-P0**). LittleFS **`/api/local/history`** on **`env:somesp`** only (**503** on **`dev`**). Pattern graph hub-only. |
+| **All M2 slices complete** | ☑ |
 
 ---
 
@@ -662,10 +662,10 @@ Update this table when a phase is signed off.
 | M1b | **Done** (modes + ramp + manual; bursts → **M1d**) | 2026-10-27 |
 | M1c | **Done** (pattern graph + segment telemetry) | 2026-10-27 |
 | M1d | **Signed off** (Run C) — **`0.16.4-motor-burst-duty`**; graph + relay recording parity | 2026-10-28 |
-| M2 | **Run D signed** — relay + motor LAN **`/operate`**; history list **`somesp` only**; curl runbook + **G2/G4** open | 2026-10-28 |
+| M2 | **Signed off** — SomEsp / LAN local API + **`/operate`** motor + relay (**Run D**, **`somesp-0.16.4-motor-burst-duty`**) | 2026-10-28 |
 | **X-6** | **Complete** (§2.3 S4) | 2026-10-27 |
 | **X-4** | **Done** (Run A) | 2026-10-27 |
-| M3 | Blocked on M2 | |
+| M3 | **Unblocked** — gateway & TheSystem | |
 | M4 | Optional | |
 
 ---
@@ -707,3 +707,5 @@ Update this table when a phase is signed off.
 | 2026-10-28 | **M2-C sign-off** — operator **`/operate`** motor manual + automatic (LAN); Run D **M2-R2**, **M2-R3**, **M2-R5** checked |
 | 2026-10-28 | **M2-B/E/G/F3** — actuator profile docs; **M2-E curl runbook**; PROTOCOL **§6.11**; **`somesp-0.16.4-motor-burst-duty`**; unlock **`actuatorKind`**; motor history summaries |
 | 2026-10-28 | **Run D** — **M2-R1**, **M2-R4**, **M2-D5/D6** PASS; **M2-R6** status/`resultJson` PASS; **`history_unavailable`** on **`env:dev`** recorded as expected |
+| 2026-10-28 | **M2-E1–E6**, **M2-E9** operator sign-off (parity with Run D / **`/operate`**; **E7–E8** via **M2-R4/R1**) |
+| 2026-10-28 | **Phase M2 signed off** — **M2-G2/G4**, doc **28 §3.3** motor payload; **M3** unblocked |

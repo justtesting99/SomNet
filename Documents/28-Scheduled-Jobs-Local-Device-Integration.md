@@ -91,7 +91,7 @@
 
 ### 3.3 Automatic-start payload
 
-Same snapshot as SomNet UI / hub (`PROTOCOL.md` §6.5):
+**Relay profile** (`actuatorKind: relay`): same snapshot as SomNet UI / hub (`PROTOCOL.md` §6.5):
 
 - camelCase JSON
 - **Required:** `automaticMode` — one of: `periodic`, `randomPowerOnly`, `randomTimingOnly`, `randomPowerAndTiming`, `powerWave`, `powerAndTimingWave`, `buildUp`
@@ -99,6 +99,13 @@ Same snapshot as SomNet UI / hub (`PROTOCOL.md` §6.5):
 - **End conditions:** `endSessionMode`, `endSessionValue` — prefer setting these in the payload so the **device ends the program** and the job only waits (§4)
 
 Build in C# with **`AutomaticControlStateDto`** (`SomNet.Shared`) serialized with **camelCase** and **without** `Running`.
+
+**Motor profile** (`actuatorKind: hbridge`, **M2 signed 2026-10-28**):
+
+- Use **`MotorAutomaticControlStateDto`** (+ optional **`AppOptionsDto`** slice for segment ramp) from **`PairingSettingsDto`** — same field names as hub pairing settings ([Shared DTOs](../SomNet.Shared/DTO/Settings/PairingSettingsDto.cs)).
+- **`automatic-start` `payloadJson`** must include **`actuatorKind`: `"hbridge"`**, **`segmentTargetRampMs`** (from `appOptions` / UI Options), and burst fields when enabled — mirror [SomNet.UI `buildMotorAutomaticStartPayload`](../SomNet.UI/src/utils/motorAutomaticStartPayload.ts) (also used by **`/operate`** on the device).
+- Optional: **`GET /api/local/settings`** on the device to read the persisted snapshot before building the job payload; **`PUT`** updates NVS without SignalR ([PROTOCOL §6.11](../SomNet.Device/docs/PROTOCOL.md), [SOMESP-STANDALONE §M2-E](../SomNet.Device/docs/SOMESP-STANDALONE.md)).
+- **`automatic-update`** mid-run: full motor snapshot JSON (same as hub).
 
 `payloadJson` in the POST body may be a **JSON object** or a string; the device accepts both.
 

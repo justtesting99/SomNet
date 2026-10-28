@@ -471,8 +471,8 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 | **M0** | NVS `actuatorKind`, motor backend, caps, manual PWM/stop |
 | **M1** | Pair/register + periodic automatic + UI/API + `resultJson` |
 | **M1b** | *(Optional)* random mode + duty ramp |
-| **M2** | Standalone `/api/local/*` parity (after **M1** sign-off) |
-| **M3** | Gateway + TheSystem (after **M2** sign-off) |
+| **M2** | Standalone `/api/local/*` parity — **signed off 2026-10-28** |
+| **M3** | Gateway + TheSystem (after **M2** sign-off) — **next** |
 | **M4** | Reverse, Hall count, straps — optional |
 
 ---
@@ -553,7 +553,7 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 
 | Item | Phase |
 |------|--------|
-| Standalone `/api/local/*` motor parity | **M2** |
+| Standalone `/api/local/*` motor + relay parity | **M2 signed** **2026-10-28** ([32 Phase M2](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#phase-m2-sign-off)) |
 | Gateway / TheSystem presets + scheduler | **M3** |
 | Motor automatic **bursts** + placement | **M1d signed** **2026-10-28** ([32 §5.2](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e)) |
 | Reverse channel, Hall end modes | **M4** (optional) |
