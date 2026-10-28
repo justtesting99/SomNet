@@ -16,7 +16,11 @@ import { useSubDevice } from '@/context/SubDeviceProvider';
 import type { AutomaticControlState, ManualControlState } from '@/types/modes';
 import { DEFAULT_PAIRING_SETTINGS, type PairingSettings } from '@/types/pairingSettings';
 import { normalizeAutomaticControlState } from '@/utils/automaticFieldRules';
+import { relayAutomaticGraphSettingsFingerprint } from '@/utils/relayAutomaticGraphFingerprint';
+import { clearRelayAutomaticGraphRecording } from '@/utils/relayAutomaticSegmentStore';
 import { normalizeMotorAutomaticControlState } from '@/utils/motorAutomaticFieldRules';
+import { motorAutomaticGraphSettingsFingerprint } from '@/utils/motorAutomaticGraphFingerprint';
+import { clearMotorAutomaticGraphRecording } from '@/utils/motorAutomaticSegmentStore';
 import { normalizeMotorManualControlState } from '@/utils/motorManualFieldRules';
 import type { MotorAutomaticControlState, MotorManualControlState } from '@/types/motorModes';
 import { normalizeStrokeMsPair } from '@/utils/strokeMsLimits';
@@ -341,23 +345,45 @@ export function DevicePairingSettingsProvider({ children }: { children: ReactNod
             automatic.maximumStrokeMs,
             strokeLimits,
           );
-          applyPatch(deviceId, (settings) => ({
-            ...settings,
-            automatic: normalizeAutomaticControlState({
+          applyPatch(deviceId, (settings) => {
+            const nextAutomatic = normalizeAutomaticControlState({
               ...automatic,
               ...normalizedStroke,
-            }),
-          }));
+            });
+            const prevFp = relayAutomaticGraphSettingsFingerprint(settings.automatic);
+            const nextFp = relayAutomaticGraphSettingsFingerprint(nextAutomatic);
+            if (prevFp !== nextFp) {
+              clearRelayAutomaticGraphRecording(deviceId);
+            }
+            return {
+              ...settings,
+              automatic: nextAutomatic,
+            };
+          });
         },
         updateMotorAutomatic: (motorAutomatic) => {
           if (kind === 'relay') {
             return;
           }
 
-          applyPatch(deviceId, (settings) => ({
-            ...settings,
-            motorAutomatic: normalizeMotorAutomaticControlState(motorAutomatic),
-          }));
+          applyPatch(deviceId, (settings) => {
+            const nextMotor = normalizeMotorAutomaticControlState(motorAutomatic);
+            const prevFp = motorAutomaticGraphSettingsFingerprint(
+              settings.motorAutomatic,
+              settings.appOptions,
+            );
+            const nextFp = motorAutomaticGraphSettingsFingerprint(
+              nextMotor,
+              settings.appOptions,
+            );
+            if (prevFp !== nextFp) {
+              clearMotorAutomaticGraphRecording(deviceId);
+            }
+            return {
+              ...settings,
+              motorAutomatic: nextMotor,
+            };
+          });
         },
         updateMotorManual: (motorManual) => {
           if (kind === 'relay') {

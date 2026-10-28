@@ -13,5 +13,5 @@ void motorBurstScheduleInput(const MotorAutomaticConfig& motorConfig, AutomaticC
 /** MA-D27: periodic allows session-spread placements with minutes end only. */
 bool motorBurstSettingsAllowed(const MotorAutomaticConfig& config);
 
-/** Burst target speed 0–100 from burst-relative power and session speed envelope. */
+/** Burst target: duty from duty band; speed percent for telemetry via motorDutyPercentToSpeedPercent. */
 int motorResolveBurstSpeedPercent(int burstRelativePower, const MotorAutomaticConfig& config);

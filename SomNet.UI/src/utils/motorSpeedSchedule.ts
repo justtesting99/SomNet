@@ -1,8 +1,20 @@
+import type { AutomaticControlState } from '@/types/modes';
+import { defaultAutomaticState } from '@/types/modes';
 import type { MotorAutomaticControlState, MotorManualControlState } from '@/types/motorModes';
 import type { AppOptions } from '@/types/options';
 import type { MotorAutomaticRunMode } from '@/types/motorAutomaticModes';
 import type { MotorAutomaticSegmentEvent } from '@/utils/motorAutomaticSegmentJson';
+import { resolveMotorBurstGraphSpeedPercent } from '@/utils/motorBurstEffectiveSpeed';
 import { resolveMotorSegmentTargetRampMs } from '@/utils/motorSegmentTargetRamp';
+import {
+  advanceBurstPlan,
+  buildRelayBurstPlan,
+  previewBurstDelaySec,
+  previewBurstRelativePower,
+  previewBurstStrokeCount,
+  shouldPreviewBurstAfterMainStroke,
+  shouldPreviewBurstBeforeMainStroke,
+} from '@/utils/relayBurstPlan';
 
 export const MOTOR_PATTERN_PREVIEW_NO_AUTO_END_SEC = 180;
 
@@ -20,6 +32,8 @@ export interface MotorSpeedSchedule {
 
 const WAVE_STEPS = 20;
 const MAX_SEGMENTS = 5000;
+/** Matches firmware `kMotorBurstMicroHoldMs` (doc 31 MA-D26). */
+const MOTOR_BURST_MICRO_HOLD_SEC = 0.3;
 
 function clampInt(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));
@@ -53,6 +67,10 @@ export function hashMotorAutomaticScheduleSeed(state: MotorAutomaticControlState
     state.rampMs,
     state.endSessionMode,
     state.endSessionValue,
+    state.burstsOn,
+    state.burstPlacement,
+    state.burstPercent,
+    state.burstStrokePowerMax,
   ].join('|');
 
   let hash = 2166136261;
@@ -171,6 +189,133 @@ function pushPoint(points: MotorSpeedSchedulePoint[], tSec: number, speedPercent
   points.push({ tSec, speedPercent: v });
 }
 
+function motorAutomaticBurstPlanInput(state: MotorAutomaticControlState): AutomaticControlState {
+  return {
+    ...defaultAutomaticState,
+    minimumPower: Math.min(state.minimumSpeedPercent, state.maximumSpeedPercent),
+    maximumPower: Math.max(state.minimumSpeedPercent, state.maximumSpeedPercent),
+    endSessionMode: state.endSessionMode === 'minutes' ? 'minutes' : 'noAutoEnd',
+    endSessionValue: state.endSessionValue,
+    delayBeforeStartSeconds: state.delayBeforeStartSeconds,
+    burstsOn: state.burstsOn,
+    burstPlacement: state.burstPlacement,
+    burstPercent: state.burstPercent,
+    burstStyle: state.burstStyle,
+    burstStrokePowerMin: state.burstStrokePowerMin,
+    burstStrokePowerMax: state.burstStrokePowerMax,
+    burstDelayMin: state.burstDelayMin,
+    burstDelayMax: state.burstDelayMax,
+    burstStrokesMin: state.burstStrokesMin,
+    burstStrokesMax: state.burstStrokesMax,
+  };
+}
+
+function transitionRampSec(
+  segmentTargetRampMs: number,
+  state: MotorAutomaticControlState,
+  durationSec: number,
+): number {
+  if (segmentTargetRampMs === 0) {
+    return 0.001;
+  }
+  if (segmentTargetRampMs > 0) {
+    return Math.min(durationSec, Math.max(segmentTargetRampMs / 1000, 0.001));
+  }
+  return Math.min(durationSec, Math.max(state.rampMs / 1000, 0.001));
+}
+
+function appendMotorBurstCluster(
+  relayState: AutomaticControlState,
+  motorState: MotorAutomaticControlState,
+  scheduleSeed: number,
+  burstEventIndex: number,
+  points: MotorSpeedSchedulePoint[],
+  tSec: number,
+  level: number,
+  horizonSec: number,
+  rampSec: number,
+): { tSec: number; level: number; burstEventIndex: number } {
+  const strokeCount = previewBurstStrokeCount(relayState, burstEventIndex, scheduleSeed);
+  let cursor = tSec;
+  let currentLevel = level;
+
+  for (let strokeInBurst = 0; strokeInBurst < strokeCount; strokeInBurst += 1) {
+    if (cursor >= horizonSec) {
+      break;
+    }
+
+    const relativePower = previewBurstRelativePower(
+      relayState,
+      burstEventIndex,
+      strokeInBurst,
+      scheduleSeed,
+    );
+    const target = resolveMotorBurstGraphSpeedPercent(relativePower, motorState);
+
+    pushPoint(points, cursor, currentLevel);
+    const rampEnd = Math.min(cursor + rampSec, horizonSec);
+    pushPoint(points, rampEnd, target);
+    currentLevel = target;
+    cursor = rampEnd;
+
+    const holdEnd = Math.min(cursor + MOTOR_BURST_MICRO_HOLD_SEC, horizonSec);
+    pushPoint(points, holdEnd, target);
+    cursor = holdEnd;
+
+    if (strokeInBurst < strokeCount - 1 && cursor < horizonSec) {
+      const delaySec = previewBurstDelaySec(
+        relayState,
+        burstEventIndex,
+        strokeInBurst,
+        scheduleSeed,
+      );
+      cursor = Math.min(cursor + Math.max(0, delaySec), horizonSec);
+      pushPoint(points, cursor, currentLevel);
+    }
+  }
+
+  return { tSec: cursor, level: currentLevel, burstEventIndex: burstEventIndex + 1 };
+}
+
+function appendMotorProgramSegment(
+  points: MotorSpeedSchedulePoint[],
+  tSec: number,
+  fromSpeed: number,
+  toSpeed: number,
+  durationSec: number,
+  segmentTargetRampMs: number,
+  state: MotorAutomaticControlState,
+  horizonSec: number,
+): { tSec: number; level: number } {
+  const segmentEnd = Math.min(tSec + durationSec, horizonSec);
+
+  if (segmentTargetRampMs < 0) {
+    const fraction = durationSec > 0 ? (segmentEnd - tSec) / durationSec : 1;
+    const endSpeed = fromSpeed + (toSpeed - fromSpeed) * fraction;
+    pushPoint(points, tSec, fromSpeed);
+    pushPoint(points, segmentEnd, endSpeed);
+    return { tSec: segmentEnd, level: endSpeed };
+  }
+
+  if (segmentTargetRampMs === 0) {
+    pushPoint(points, tSec, fromSpeed);
+    if (fromSpeed !== toSpeed) {
+      pushPoint(points, tSec, toSpeed);
+    }
+    pushPoint(points, segmentEnd, toSpeed);
+    return { tSec: segmentEnd, level: toSpeed };
+  }
+
+  const transitionSec = transitionRampSec(segmentTargetRampMs, state, durationSec);
+  const rampEnd = Math.min(tSec + transitionSec, segmentEnd);
+  pushPoint(points, tSec, fromSpeed);
+  pushPoint(points, rampEnd, toSpeed);
+  if (rampEnd < segmentEnd) {
+    pushPoint(points, segmentEnd, toSpeed);
+  }
+  return { tSec: segmentEnd, level: toSpeed };
+}
+
 export function buildMotorAutomaticSpeedSchedule(
   state: MotorAutomaticControlState,
   appOptions?: Pick<AppOptions, 'motorSegmentTargetRampMode' | 'motorSegmentTargetRampMs'>,
@@ -222,7 +367,42 @@ export function buildMotorAutomaticSpeedSchedule(
 
   let segmentIndex = 0;
   let commandedSpeed = 0;
+  const burstRelayState = motorAutomaticBurstPlanInput(state);
+  const burstPlan = state.burstsOn ? buildRelayBurstPlan(burstRelayState) : null;
+  const burstRampSec = transitionRampSec(segmentTargetRampMs, state, state.segmentMaxSeconds);
+  let mainStrokesCompleted = 0;
+  let burstEventIndex = 0;
+
   while (tSec < horizonSec && segmentIndex < MAX_SEGMENTS) {
+    if (
+      burstPlan?.active &&
+      shouldPreviewBurstBeforeMainStroke(
+        burstRelayState,
+        burstPlan,
+        mainStrokesCompleted,
+        scheduleSeed,
+      )
+    ) {
+      const burst = appendMotorBurstCluster(
+        burstRelayState,
+        state,
+        scheduleSeed,
+        burstEventIndex,
+        points,
+        tSec,
+        commandedSpeed,
+        horizonSec,
+        burstRampSec,
+      );
+      tSec = burst.tSec;
+      commandedSpeed = burst.level;
+      burstEventIndex = burst.burstEventIndex;
+      advanceBurstPlan(burstPlan);
+      mainStrokesCompleted += 1;
+      segmentIndex += 1;
+      continue;
+    }
+
     const durationSec = Math.max(
       previewSegmentDurationSec(state, segmentIndex, scheduleSeed),
       0.001,
@@ -237,34 +417,46 @@ export function buildMotorAutomaticSpeedSchedule(
       scheduleSeed,
     );
 
-    const segmentEnd = Math.min(tSec + durationSec, horizonSec);
-
-    if (segmentTargetRampMs < 0) {
-      const fraction = (segmentEnd - tSec) / durationSec;
-      const endSpeed = fromSpeed + (toSpeed - fromSpeed) * fraction;
-      pushPoint(points, tSec, fromSpeed);
-      pushPoint(points, segmentEnd, endSpeed);
-      commandedSpeed = endSpeed;
-    } else if (segmentTargetRampMs === 0) {
-      pushPoint(points, tSec, fromSpeed);
-      if (fromSpeed !== toSpeed) {
-        pushPoint(points, tSec, toSpeed);
-      }
-      pushPoint(points, segmentEnd, toSpeed);
-      commandedSpeed = toSpeed;
-    } else {
-      const transitionSec = Math.min(durationSec, segmentTargetRampMs / 1000);
-      const rampEnd = Math.min(tSec + transitionSec, segmentEnd);
-      pushPoint(points, tSec, fromSpeed);
-      pushPoint(points, rampEnd, toSpeed);
-      if (rampEnd < segmentEnd) {
-        pushPoint(points, segmentEnd, toSpeed);
-      }
-      commandedSpeed = toSpeed;
-    }
-
-    tSec = segmentEnd;
+    const segment = appendMotorProgramSegment(
+      points,
+      tSec,
+      fromSpeed,
+      toSpeed,
+      durationSec,
+      segmentTargetRampMs,
+      state,
+      horizonSec,
+    );
+    tSec = segment.tSec;
+    commandedSpeed = segment.level;
+    mainStrokesCompleted += 1;
     segmentIndex += 1;
+
+    if (
+      burstPlan?.active &&
+      shouldPreviewBurstAfterMainStroke(
+        burstRelayState,
+        burstPlan,
+        mainStrokesCompleted,
+        scheduleSeed,
+      )
+    ) {
+      const burst = appendMotorBurstCluster(
+        burstRelayState,
+        state,
+        scheduleSeed,
+        burstEventIndex,
+        points,
+        tSec,
+        commandedSpeed,
+        horizonSec,
+        burstRampSec,
+      );
+      tSec = burst.tSec;
+      commandedSpeed = burst.level;
+      burstEventIndex = burst.burstEventIndex;
+      advanceBurstPlan(burstPlan);
+    }
   }
 
   return { points, horizonSec, illustrativeRandom };
@@ -311,11 +503,16 @@ export function buildMotorSpeedScheduleFromLiveSegments(
   }
 
   const last = points[points.length - 1];
-  if (last.tSec < horizonSec) {
-    pushPoint(points, horizonSec, last.speedPercent);
+  let effectiveHorizonSec = Math.max(1, horizonSec);
+  for (const segment of sorted) {
+    const endSec = segment.programElapsedMs / 1000 + Math.max(segment.durationMs / 1000, 0);
+    effectiveHorizonSec = Math.max(effectiveHorizonSec, endSec);
+  }
+  if (last.tSec < effectiveHorizonSec) {
+    pushPoint(points, effectiveHorizonSec, last.speedPercent);
   }
 
-  return { points, horizonSec, illustrativeRandom: false };
+  return { points, horizonSec: effectiveHorizonSec, illustrativeRandom: false };
 }
 
 export function buildMotorManualSpeedSchedule(

@@ -97,8 +97,8 @@ private:
     unsigned long burstPhaseDeadlineMs_ = 0;
     int resumeSpeedPercent_ = 0;
     State resumeState_ = State::Idle;
-    char configJson_[1024] = {};
-    char pendingConfigJson_[1024] = {};
+    char configJson_[1536] = {};
+    char pendingConfigJson_[1536] = {};
     bool pendingUpdate_ = false;
     char resultJson_[640] = {};
     char stopCorrelationId_[64] = {};

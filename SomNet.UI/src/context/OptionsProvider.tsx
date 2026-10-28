@@ -20,6 +20,10 @@ import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
 import { normalizeStrokeMsPair } from '@/utils/strokeMsLimits';
 import { normalizeAutomaticControlState } from '@/utils/automaticFieldRules';
 import { normalizeMotorAutomaticControlState } from '@/utils/motorAutomaticFieldRules';
+import { motorAutomaticGraphSettingsFingerprint } from '@/utils/motorAutomaticGraphFingerprint';
+import { relayAutomaticGraphSettingsFingerprint } from '@/utils/relayAutomaticGraphFingerprint';
+import { clearMotorAutomaticGraphRecording } from '@/utils/motorAutomaticSegmentStore';
+import { clearRelayAutomaticGraphRecording } from '@/utils/relayAutomaticSegmentStore';
 import { dispatchDeviceAutomaticRunningSync } from '@/utils/deviceAutomaticRunningSync';
 import type { MotorAutomaticControlState, MotorManualControlState } from '@/types/motorModes';
 import { normalizeMotorManualControlState } from '@/utils/motorManualFieldRules';
@@ -396,17 +400,25 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
   const updateAutomatic = useCallback(
     (automatic: AutomaticControlState) => {
       userEditedRef.current = true;
+      const deviceId = persistDeviceIdRef.current;
+      const current = settingsRef.current;
       const normalizedStroke = normalizeStrokeMsPair(
         automatic.minimumStrokeMs,
         automatic.maximumStrokeMs,
         strokeLimits,
       );
+      const nextAutomatic = normalizeAutomaticControlState({
+        ...automatic,
+        ...normalizedStroke,
+      });
+      const prevFp = relayAutomaticGraphSettingsFingerprint(current.automatic);
+      const nextFp = relayAutomaticGraphSettingsFingerprint(nextAutomatic);
+      if (deviceId && prevFp !== nextFp) {
+        clearRelayAutomaticGraphRecording(deviceId);
+      }
       applySettings({
-        ...settingsRef.current,
-        automatic: normalizeAutomaticControlState({
-          ...automatic,
-          ...normalizedStroke,
-        }),
+        ...current,
+        automatic: nextAutomatic,
       });
     },
     [applySettings, strokeLimits],
@@ -512,9 +524,20 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
   const updateMotorAutomatic = useCallback(
     (motorAutomatic: MotorAutomaticControlState) => {
       userEditedRef.current = true;
+      const deviceId = persistDeviceIdRef.current;
+      const current = settingsRef.current;
+      const nextMotor = normalizeMotorAutomaticControlState(motorAutomatic);
+      const prevFp = motorAutomaticGraphSettingsFingerprint(
+        current.motorAutomatic,
+        current.appOptions,
+      );
+      const nextFp = motorAutomaticGraphSettingsFingerprint(nextMotor, current.appOptions);
+      if (deviceId && prevFp !== nextFp) {
+        clearMotorAutomaticGraphRecording(deviceId);
+      }
       applySettings({
-        ...settingsRef.current,
-        motorAutomatic: normalizeMotorAutomaticControlState(motorAutomatic),
+        ...current,
+        motorAutomatic: nextMotor,
       });
     },
     [applySettings],

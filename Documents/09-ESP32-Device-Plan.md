@@ -14,7 +14,7 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 **End-user / installer documentation:** [Hardware User Guide](./Hardware-User-Guide.md) — provisioning, Wi‑Fi recovery (10 s button hold), Device ID, relay operation.
 
-**Implementation progress (2026-09-20):** Phases **0–12 + device button clicks + Session in Progress (P16) signed off** at firmware **`0.15.0-session-accessory`**. **Follow-on (2026-10-27):** [Burst placement](./36-Burst-Placement-Modes-Design.md) — **`burstPlacement`** main+ / instead-of; relay **`0.15.2-burst-main-timing`**. **Motor automatic bursts (M1d):** **`0.16.0-motor-burst`** ([31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27)).
+**Implementation progress (2026-09-20):** Phases **0–12 + device button clicks + Session in Progress (P16) signed off** at firmware **`0.15.0-session-accessory`**. **Follow-on (2026-10-27):** [Burst placement](./36-Burst-Placement-Modes-Design.md) — **`burstPlacement`** main+ / instead-of; relay **`0.15.2-burst-main-timing`**. **Motor automatic bursts (M1d):** **`0.16.4-motor-burst-duty`** — signed **2026-10-28** ([31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27)).
 
 **Capabilities (current build):** manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On** and placement modes; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; network hardening (Phase 12); GPIO **single/double click** + 10 s hold reset ([23](./23-Device-Button-Clicks-Checklist.md)); **`session-accessory`** on GPIO32 ([25](./25-Session-Accessory-In-Progress-Checklist.md)); **`resultJson`** end-to-end. SomNet UI: P16 slide switch + session rehydration [10](./10-UI-Session-Rehydration-Checklist.md) / [11](./11-UI-Manual-Session-Rehydration-Checklist.md) + multi-tab sync [12](./12-UI-Multi-Tab-Sync-Checklist.md). See §10.
 
@@ -1866,7 +1866,7 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 
 **Implementation through Phase 12 + button clicks (2026-09-13):**
 
-- [x] Phases 0–12 + button clicks + P16 signed off — P16 tag **`0.15.0-session-accessory`**; current firmware **`0.16.0-motor-burst`** (relay burst placement **`0.15.2-burst-main-timing`**; motor bursts M1d)
+- [x] Phases 0–12 + button clicks + P16 signed off — P16 tag **`0.15.0-session-accessory`**; current firmware **`0.16.4-motor-burst-duty`** (relay burst placement **`0.15.2-burst-main-timing`**; motor bursts **M1d signed 2026-10-28**)
 - [x] PlatformIO project `SomNet.Device/` with module tree per §12
 - [x] Pairing + manual **stroke**, **burst**, **abort** E2E from SomNet UI on hardware (`esp32-84CCA85C36B4` / Sub `Slv66`)
 - [x] Automatic **Start/Stop/Abort** E2E from SomNet UI; **Bursts On** during automatic; live **`automatic-update`**; auto-end / abort / cooperative stop via hub; session from device `resultJson`

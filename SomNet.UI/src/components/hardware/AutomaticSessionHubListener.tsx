@@ -10,13 +10,13 @@ import {
 } from '@/types/hardwareHub';
 import { parseMotorAutomaticSegmentJson } from '@/utils/motorAutomaticSegmentJson';
 import {
-  clearMotorAutomaticSegments,
   recordMotorAutomaticSegment,
+  resetMotorAutomaticSegmentEvents,
 } from '@/utils/motorAutomaticSegmentStore';
 import { parseRelayAutomaticSegmentJson } from '@/utils/relayAutomaticSegmentJson';
 import {
-  clearRelayAutomaticSegments,
   recordRelayAutomaticSegment,
+  resetRelayAutomaticSegmentEvents,
 } from '@/utils/relayAutomaticSegmentStore';
 import { useSiteUserReady } from '@/context/SiteUserReadyProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
@@ -122,7 +122,7 @@ export function AutomaticSessionHubListener() {
           }
 
           if (segment.segmentIndex === 0) {
-            clearMotorAutomaticSegments(deviceId);
+            resetMotorAutomaticSegmentEvents(deviceId);
           }
 
           recordMotorAutomaticSegment(deviceId, segment);
@@ -140,7 +140,7 @@ export function AutomaticSessionHubListener() {
           }
 
           if (segment.segmentIndex === 0) {
-            clearRelayAutomaticSegments(deviceId);
+            resetRelayAutomaticSegmentEvents(deviceId);
           }
 
           recordRelayAutomaticSegment(deviceId, segment);
@@ -161,10 +161,10 @@ export function AutomaticSessionHubListener() {
         }
 
         const parsedComplete = parseAutomaticResultJson(ack.resultJson);
-        if (parsedComplete?.actuatorKind === 'hbridge') {
-          clearMotorAutomaticSegments(deviceId);
-        } else if (parsedComplete?.actuatorKind === 'relay') {
-          clearRelayAutomaticSegments(deviceId);
+        // Keep motor/relay segment history for the pattern graph until the next automatic
+        // start (segment index 0 ack clears the store). Do not clear on session complete.
+        if (!parsedComplete) {
+          return;
         }
 
         const registration = registrationsRef.current.find((row) => row.deviceId === deviceId);

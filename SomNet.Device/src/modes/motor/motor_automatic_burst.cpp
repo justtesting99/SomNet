@@ -57,7 +57,6 @@ bool motorBurstSettingsAllowed(const MotorAutomaticConfig& config) {
 }
 
 int motorResolveBurstSpeedPercent(int burstRelativePower, const MotorAutomaticConfig& config) {
-    AutomaticConfig envelope{};
-    motorBurstScheduleInput(config, &envelope);
-    return resolveBurstEffectivePower(burstRelativePower, envelope);
+    const int duty = motorResolveBurstDutyPercent(burstRelativePower, config);
+    return motorDutyPercentToSpeedPercent(duty, config);
 }

@@ -1,6 +1,6 @@
 # Motor (H-bridge) actuator — early design
 
-**Status:** **Hub path implemented** (M1 + M1b + M1c — see [§13](#13-as-built--hub-path-motor-programs-ui-telemetry)). Standalone/gateway remain MA-R5 steps 2–3. Pin map provisional in `boardDefs.h` until unified PCB exists. Checklists: [32](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md).
+**Status:** **Hub path implemented** (M1 + M1b + M1c + **M1d** — see [§13](#13-as-built--hub-path-motor-programs-ui-telemetry)). Standalone/gateway remain MA-R5 steps 2–3. Pin map provisional in `boardDefs.h` until unified PCB exists. Checklists: [32](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md).
 
 **Audience:** Firmware (`SomNet.Device`), `SomNet.Shared`, `SomNet.Device.LocalClient` / **LocalGateway**, main app (TheSystem), and eventually SomNet.API / UI if the motor device joins the hub path.
 
@@ -238,7 +238,7 @@ Only include **shared** envelope pieces in both schemas when product signs off t
 
 ### 5.2.1 Bursts in motor automatic (design locked 2026-10-27)
 
-**Status:** **Implemented (core)** — firmware **`0.16.0-motor-burst`** ([32 — Phase M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e), doc 36 **BP-E**). **UI + API + DTO** round-trip burst fields; **`MotorAutomaticSessionMode`** runs burst clusters via shared `automatic_burst_runtime`. **Open:** burst segment telemetry during clusters (M1d-F10), preview graph (U1), operator bench sign-off.
+**Status:** **Signed (M1d)** — firmware **`0.16.4-motor-burst-duty`** ([32 Run C](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#run-c--m1d-motor-bursts--pattern-graph-after-run-b), **2026-10-28**). Burst clusters via shared `automatic_burst_runtime`; **MA-D28** maps burst relative power to **duty min/max**; live + preview graph via `emitSegmentRamp` + `motorSpeedSchedule.ts` (Options **`segmentTargetRampMs`** for burst micro ramps).
 
 **Goal:** Operators use the **same six placement options** and percent semantics as relay ([36 §3](./36-Burst-Placement-Modes-Design.md)), without learning a second product. Motor execution differs: **PWM ramps** and **segment timing**, not relay pulses.
 
@@ -272,11 +272,11 @@ Wall-clock **session spread + minutes** runs in **`poll`** while idle between se
 
 Relay burst = `burstStrokes` relay pulses + `burstDelayMs` open gaps. Motor burst = **`burstStrokesMin`–`burstStrokesMax` micro-cycles**, each cycle:
 
-1. **Ramp** commanded speed from current program target toward **burst target speed** over `rampMs` (or a burst-specific ramp cap TBD — default: session `rampMs`).
+1. **Ramp** commanded speed from current program target toward **burst target speed** over **`segmentTargetRampMs`** from Options (General): **0** = instant step + flat hold telemetry; **>0** = quick ramp then hold plateau; **-1** (default) = session panel **`rampMs`**. Implemented **`0.16.3-motor-burst-ramp`** (same wire field as segment targets, **`0.16.2-motor-instant-segment`**).
 2. **Hold** at burst target for a **fixed micro-duration** derived from session stroke-ms limits **or** a motor-specific default (e.g. 200–400 ms equivalent “pulse width” at burst duty) — **MA-D26** bench tune.
 3. **Intra-burst gap:** ramp/hold at **reduced speed** (or duty floor) for `burstDelayMin`–`burstDelayMax` **seconds** (drawn per gap like relay).
 
-**Burst target speed:** Map `burstStrokePowerMin` / `burstStrokePowerMax` (0–100 **relative**) into the session **`minimumSpeedPercent`–`maximumSpeedPercent`** envelope (same idea as relay `resolveBurstEffectivePower` on `minimumPower`/`maximumPower`), then `motorSpeedPercentToDuty`.
+**Burst target speed:** Map `burstStrokePowerMin` / `burstStrokePowerMax` (0–100 **relative**) into the session **`minimumDutyPercent`–`maximumDutyPercent`** PWM band (motor **MA-D28** — not the speed band; allows bursts above main segment speeds when duty max exceeds program speed→duty mapping). Telemetry/graph convert duty back to a 0–100 **speed axis** via `motorDutyPercentToSpeedPercent`. Relay remains min/max **power** envelope.
 
 **`burstStyle`:** Same four styles as relay — random draws per micro-cycle for power and/or delay (`drawBurstRelativePower` / `drawBurstDelaySec` logic shared or ported).
 
@@ -319,6 +319,7 @@ During burst micro-cycles, emit **`motor-automatic-segment`** acks (same correla
 | **MA-D25** | Motor burst uses **doc 36** placements and percent meanings; execution is **ramped speed clusters**, not relay pulses |
 | **MA-D26** | Micro-hold duration per burst stroke: **`kMotorBurstMicroHoldMs` = 300** (`motor_automatic_burst.h`); noted in `boardDefs.h` |
 | **MA-D27** | **`periodic`** + bursts: **session spread + minutes only**; even/chance disabled in UI for periodic |
+| **MA-D28** | Motor burst relative maps to **duty min/max** (PWM), not speed band — bursts can exceed main segment speeds | 2026-10-28 |
 
 ---
 
@@ -513,7 +514,7 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 
 ## 13. As-built — hub path (motor programs, UI, telemetry)
 
-**Status:** **Signed M1** (periodic + ramp, **2026-10-27**). **M1b modes**, **live `automatic-update`**, **segment graph telemetry**, **manual `motor-run`**, and **motor automatic bursts** (**`0.16.0-motor-burst`**, [M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e)) on the hub path.
+**Status:** **Signed M1** (periodic + ramp, **2026-10-27**). **M1b modes**, **live `automatic-update`**, **segment graph telemetry**, **manual `motor-run`**, and **motor automatic bursts** (**M1d**, **`0.16.4-motor-burst-duty`**, [32 §5.2](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e)) on the hub path.
 
 ### 13.1 Firmware (`MotorAutomaticSessionMode`)
 
@@ -526,7 +527,7 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 | **`automatic-update`** | Queued replan via `queueSessionUpdate` when session active (same JSON shape as start). |
 | **PWM init** | Motor hardware init **deferred until Wi‑Fi up** (`main.cpp`) to avoid LEDC/Wi‑Fi contention on boot. |
 | **Segment telemetry** | At each ramp, unsolicited hub ack `correlationId: motor-automatic-segment` with `fromSpeedPercent`, `toSpeedPercent`, `durationMs`, `programElapsedMs` (`emitSegmentRamp`). |
-| **Bursts** | **Implemented** — [§5.2.1](#521-bursts-in-motor-automatic-design-locked-2026-10-27), firmware **`0.16.0-motor-burst`**. Live graph during burst clusters (**M1d-F10**) still open. |
+| **Bursts** | **Signed M1d** — [§5.2.1](#521-bursts-in-motor-automatic-design-locked-2026-10-27), firmware **`0.16.4-motor-burst-duty`**. Live graph includes burst clusters (`emitSegmentRamp` during micro transitions). |
 
 ### 13.2 SomNet.API / Shared
 
@@ -544,7 +545,8 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 | **Automatic** | `MotorAutomaticControls.tsx` — mode selector (Set Speed / Random / Wave / Build-Up), field rules (`motorAutomaticFieldRules.ts`), start payload (`motorAutomaticStartPayload.ts`). **Abort** always visible (disabled when idle). **Start** calls `ensureAutomaticSessionForDeviceStart()` so scene row exists after stop→start. |
 | **Manual** | `MotorManualControls.tsx` — duty slider, `motor-run` / `motor-stop`. |
 | **Live overrides** | When Options → General allows automatic overrides while running, debounced **`automatic-update`** (relay and motor). |
-| **Pattern graph** | Video column **Feeds \| Graph** (`VideoAsidePanel`); tab persisted in `localStorage` (`videoAsideTabStorage.ts`) after devices load. Preview from settings (`motorSpeedSchedule.ts`); **live** curve from hub segments (`motorAutomaticSegmentStore.ts`, `AutomaticSessionHubListener`). **Now** marker via `motorPatternRunAnchor.ts` + chart zoom (`motorChartViewRange.ts`). **API/UI only** — not standalone ESP `/operate` (see [03 § Motor pattern graph](./03-Frontend-Architecture.md#motor-pattern-graph-scope)). |
+| **Pattern graph** | Video column **Feeds \| Graph** (`VideoAsidePanel`); tab persisted in `localStorage` (`videoAsideTabStorage.ts`) after devices load. Preview from settings (`motorSpeedSchedule.ts`, incl. burst preview); **live/recorded** curve from hub segments (`motorAutomaticSegmentStore.ts`, `motorAutomaticGraphFingerprint.ts`, `AutomaticSessionHubListener`). **Recording:** last run **kept** after Stop/end until settings fingerprint changes or **Start** (`beginMotorAutomaticGraphRecording`); hub complete does **not** wipe segments. **Now** marker via `motorPatternRunAnchor.ts` + chart zoom (`motorChartViewRange.ts`). **API/UI only** — not standalone ESP `/operate` (see [03 § Motor pattern graph](./03-Frontend-Architecture.md#motor-pattern-graph-scope)). |
+| **Relay pattern graph** | Same tab when Focus device is **relay** — `relayPowerSchedule.ts`, `relayAutomaticSegmentStore.ts`, **`relayAutomaticGraphFingerprint.ts`** (same keep/clear lifecycle as motor). |
 | **Running sync** | `OptionsProvider.setDeviceAutomaticRunning`; hub complete clears per device; tab-sync includes `subTarget` + `deviceId` + kind. |
 
 ### 13.4 Out of scope on hub path (still MA-R5 later steps)
@@ -553,9 +555,9 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 |------|--------|
 | Standalone `/api/local/*` motor parity | **M2** |
 | Gateway / TheSystem presets + scheduler | **M3** |
-| Motor automatic **bursts** + placement | **M1d** ([32 §5.2](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e)) — was listed under M4 |
+| Motor automatic **bursts** + placement | **M1d signed** **2026-10-28** ([32 §5.2](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e)) |
 | Reverse channel, Hall end modes | **M4** (optional) |
-| Relay automatic **pattern graph** | Deferred |
+| Relay automatic **pattern graph** | **Shipped** — hub segment acks + recording lifecycle (2026-10-28) |
 
 ---
 
@@ -578,6 +580,7 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 | **MA-D25** | Motor automatic bursts | Same **burstPlacement** as relay ([36](./36-Burst-Placement-Modes-Design.md)); **ramped speed clusters** — [§5.2.1](#521-bursts-in-motor-automatic-design-locked-2026-10-27) | 2026-10-27 |
 | **MA-D26** | Burst micro-hold duration | v1 **bench-tuned** per micro-cycle (not motor `strokeMs` DTO) | 2026-10-27 |
 | **MA-D27** | Periodic + burst placement | **Session spread + minutes** only; disable even/chance for periodic in UI | 2026-10-27 |
+| **MA-D28** | Motor burst power envelope | **Duty min/max** (PWM), not speed min/max | 2026-10-28 |
 | **MA-D6** | Hardware driver | **Unified MCU board**; motor header → **BTS7960** (**D25/D27**, **D26/D14**); relay header → **D4**; shared **D33/D2/D32** | 2026-10-25 |
 | **MA-D11** | Product hardware | **One platform PCB** + **either** relay **or** H-bridge module; future alternate modules possible, none planned | 2026-10-25 |
 | **MA-D12** | Actuator binding | **`actuatorKind` chosen at device registration** (pair / add device: relay or motor?) → **NVS on ESP** + **server registration row**; `PairDevice` carries kind to firmware; commands validated vs NVS | 2026-10-25 |
@@ -628,3 +631,4 @@ Implementation tracking: [32 — Motor plan & checklists](./32-Motor-Actuator-Im
 | 2026-10-26 | **MA-D22** — relay-only session accessory; motor outputs in program; per-device FSMs + future super-session |
 | 2026-10-26 | **MA-D24** — gateway-led multi-device concurrency; UI per-device non-lockout; session without relay accessory |
 | 2026-10-27 | §12 — X-6 implemented; §13 as-built hub path (modes, segment telemetry, pattern graph, UI/API/firmware) |
+| 2026-10-28 | **M1d sign-off** — **`0.16.4-motor-burst-duty`**, MA-D28 duty burst envelope, graph recording lifecycle (motor + relay); [32 Run C](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#run-c--m1d-motor-bursts--pattern-graph-after-run-b) |

@@ -35,6 +35,10 @@ import {
   MAX_BURST_STROKES,
   MIN_BURST_DELAY_SEC,
   MIN_BURST_STROKE_POWER,
+  burstStrokePowerMinForDisplay,
+  burstStrokePowerNeedsMinSync,
+  burstDelayMinForDisplay,
+  burstDelayNeedsMinSync,
 } from '@/utils/burstFieldRules';
 import {
   clampMaximumStrokeMs,
@@ -56,7 +60,8 @@ import {
   burstPreviewLikelyMatchesMainPower,
   describeRelayBurstScheduleHint,
 } from '@/utils/relayBurstPlan';
-import { clearRelayAutomaticSegments } from '@/utils/relayAutomaticSegmentStore';
+import { relayAutomaticGraphSettingsFingerprint } from '@/utils/relayAutomaticGraphFingerprint';
+import { beginRelayAutomaticGraphRecording } from '@/utils/relayAutomaticSegmentStore';
 import { parseAutomaticResultJson } from '@/utils/automaticResultJson';
 import { waitForAutomaticHubFinalize, computeAutomaticStopGraceMs } from '@/utils/automaticSessionFinalize';
 import { isDeviceAutomaticIdleMessage } from '@/utils/automaticSessionReconcile';
@@ -146,6 +151,25 @@ export function AutomaticControls() {
     : hardwareReady
       ? undefined
       : systemStatus.detail || systemStatus.summary;
+
+  useEffect(() => {
+    if (!settingsLoaded) {
+      return;
+    }
+    if (!burstStrokePowerNeedsMinSync(state) && !burstDelayNeedsMinSync(state)) {
+      return;
+    }
+    updateAutomatic(state);
+  }, [
+    settingsLoaded,
+    state.burstStyle,
+    state.burstStrokePowerMin,
+    state.burstStrokePowerMax,
+    state.burstDelayMin,
+    state.burstDelayMax,
+    updateAutomatic,
+    state,
+  ]);
 
   useEffect(() => {
     if (!automaticSessionActive && !state.running) {
@@ -315,7 +339,10 @@ export function AutomaticControls() {
   async function handleStart() {
     setCommandError('');
     expandOnAction(commandDeviceId);
-    clearRelayAutomaticSegments(commandDeviceId);
+    beginRelayAutomaticGraphRecording(
+      commandDeviceId,
+      relayAutomaticGraphSettingsFingerprint(state),
+    );
 
     const payloadJson = buildAutomaticStartPayload(state);
 
@@ -722,16 +749,21 @@ export function AutomaticControls() {
 
             <MinMaxRow
               label="Burst Stroke Power in Percent (0 to 100)"
-              min={state.burstStrokePowerMin}
+              min={burstStrokePowerMinForDisplay(state)}
               max={state.burstStrokePowerMax}
               minLimit={0}
               minValueMin={MIN_BURST_STROKE_POWER}
+              maxValueMin={
+                burstFieldRules.disableBurstStrokePowerMin
+                  ? 0
+                  : state.burstStrokePowerMin
+              }
               maxLimit={100}
               disabled={burstSettingsDisabled}
               minDisabled={burstFieldRules.disableBurstStrokePowerMin}
               hint={
                 burstFieldRules.disableBurstStrokePowerMin
-                  ? 'Min not used — device uses maximum power.'
+                  ? 'Min mirrors Max for this style — only Max is sent to the device.'
                   : undefined
               }
               onMinChange={(value) => update('burstStrokePowerMin', value)}
@@ -740,7 +772,7 @@ export function AutomaticControls() {
 
             <MinMaxRow
               label="Delay Between Burst Strokes in Seconds"
-              min={state.burstDelayMin}
+              min={burstDelayMinForDisplay(state)}
               max={state.burstDelayMax}
               minLimit={0}
               minValueMin={MIN_BURST_DELAY_SEC}
@@ -749,7 +781,7 @@ export function AutomaticControls() {
               minDisabled={burstFieldRules.disableBurstDelayMin}
               hint={
                 burstFieldRules.disableBurstDelayMin
-                  ? 'Min not used — device uses maximum delay.'
+                  ? 'Min mirrors Max for this style — only Max is sent to the device.'
                   : undefined
               }
               onMinChange={(value) => update('burstDelayMin', value)}

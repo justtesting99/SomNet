@@ -69,6 +69,8 @@ export function OptionsGeneralPanel({ pendingOptions, onUpdate }: OptionsGeneral
           burst micro-cycles inside automatic sessions. Speed Wave and Build-Up always ramp
           over the full segment interval. When set to the default (full segment interval),
           Stop and burst steps use the Ramp (ms) field on the motor automatic panel.
+          Instant or quick ramp holds each target for the segment interval (or burst micro-hold)
+          so graph points read as flat steps.
         </p>
         <SelectField
           label="Live video feeds"

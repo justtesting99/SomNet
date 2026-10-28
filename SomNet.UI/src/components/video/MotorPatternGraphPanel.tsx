@@ -13,8 +13,11 @@ import {
   speedAtScheduleTime,
 } from '@/utils/motorSpeedSchedule';
 import { readMotorPatternRunAnchor } from '@/utils/motorPatternRunAnchor';
+import { motorAutomaticGraphSettingsFingerprint } from '@/utils/motorAutomaticGraphFingerprint';
 import {
+  clearMotorAutomaticGraphRecording,
   getMotorAutomaticSegments,
+  motorAutomaticGraphRecordingActive,
   subscribeMotorAutomaticSegments,
 } from '@/utils/motorAutomaticSegmentStore';
 import { MotorSpeedPatternChart } from '@/components/video/MotorSpeedPatternChart';
@@ -51,25 +54,45 @@ export function MotorPatternGraphPanel({
   const { selectedDeviceId } = useSubDevice();
   const { options } = useOptions();
 
+  const graphSettingsFingerprint = useMemo(
+    () => motorAutomaticGraphSettingsFingerprint(motorAutomatic, options),
+    [motorAutomatic, options],
+  );
+
   const liveSegments = useSyncExternalStore(
     subscribeMotorAutomaticSegments,
     () => getMotorAutomaticSegments(selectedDeviceId ?? ''),
     () => [],
   );
 
+  const usingLiveSegments =
+    mode === 'automatic' &&
+    Boolean(selectedDeviceId) &&
+    motorAutomaticGraphRecordingActive(selectedDeviceId ?? '', graphSettingsFingerprint);
+
+  useEffect(() => {
+    if (mode !== 'automatic' || !selectedDeviceId) {
+      return;
+    }
+    if (getMotorAutomaticSegments(selectedDeviceId).length === 0) {
+      return;
+    }
+    if (motorAutomaticGraphRecordingActive(selectedDeviceId, graphSettingsFingerprint)) {
+      return;
+    }
+    clearMotorAutomaticGraphRecording(selectedDeviceId);
+  }, [graphSettingsFingerprint, mode, selectedDeviceId]);
+
   const schedule = useMemo(() => {
     if (mode === 'automatic') {
       const horizonSec = automaticHorizonSec(motorAutomatic);
-      if (motorAutomatic.running && liveSegments.length > 0) {
+      if (usingLiveSegments && liveSegments.length > 0) {
         return buildMotorSpeedScheduleFromLiveSegments(liveSegments, horizonSec);
       }
       return buildMotorAutomaticSpeedSchedule(motorAutomatic, options);
     }
     return buildMotorManualSpeedSchedule(motorManual);
-  }, [liveSegments, mode, motorAutomatic, motorManual, options]);
-
-  const usingLiveSegments =
-    mode === 'automatic' && motorAutomatic.running && liveSegments.length > 0;
+  }, [liveSegments, mode, motorAutomatic, motorManual, options, usingLiveSegments]);
 
   const [nowSec, setNowSec] = useState<number | null>(null);
 
@@ -118,10 +141,12 @@ export function MotorPatternGraphPanel({
       : 'Commanded speed — Manual';
 
   const previewHint =
-    mode === 'automatic' && !motorAutomatic.running
+    mode === 'automatic' && !usingLiveSegments
       ? 'Planned schedule from current settings'
       : mode === 'automatic' && usingLiveSegments
-        ? 'Live graph from device-reported segment targets'
+        ? motorAutomatic.running
+          ? 'Live graph from device-reported segment targets'
+          : 'Recorded segment targets from the last automatic run'
         : mode === 'automatic' && motorAutomatic.running
           ? 'Waiting for segment data from the device…'
           : 'Current manual speed setting';
@@ -135,6 +160,21 @@ export function MotorPatternGraphPanel({
           <p className="mt-1 text-xs text-slate-500">
             Before Start, random modes show a fixed example path. After Start, the graph uses
             speeds the device actually chose.
+          </p>
+        ) : null}
+        {mode === 'automatic' &&
+        motorAutomatic.burstsOn &&
+        !usingLiveSegments &&
+        motorAutomatic.automaticMode !== 'periodic' ? (
+          <p className="mt-1 text-xs text-amber-600/90">
+            Preview includes burst clusters from settings; timing matches the plan, but random
+            segment speeds are illustrative until the session runs.
+          </p>
+        ) : null}
+        {mode === 'automatic' && motorAutomatic.running && liveSegments.length === 0 ? (
+          <p className="mt-1 text-xs text-amber-600/90">
+            Waiting for live segment data — graph will update when segment acks arrive from the
+            device.
           </p>
         ) : null}
       </div>

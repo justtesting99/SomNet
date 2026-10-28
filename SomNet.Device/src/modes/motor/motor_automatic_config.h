@@ -52,8 +52,17 @@ int motorEndSessionModeToWire(MotorEndSessionMode mode);
 
 MotorAutomaticRunMode parseMotorAutomaticRunMode(const char* value);
 
+/** Wire string for automatic-stop resultJson (matches automatic-start). */
+const char* motorAutomaticRunModeToWire(MotorAutomaticRunMode mode);
+
 /** Map 0–100 speed to duty using configured duty limits. */
 int motorSpeedPercentToDuty(int speedPercent, const MotorAutomaticConfig& config);
+
+/** Inverse of motorSpeedPercentToDuty — for burst telemetry on the speed graph axis. */
+int motorDutyPercentToSpeedPercent(int dutyPercent, const MotorAutomaticConfig& config);
+
+/** Burst relative 0–100 → PWM duty using minimumDutyPercent / maximumDutyPercent (not speed band). */
+int motorResolveBurstDutyPercent(int burstRelativePower, const MotorAutomaticConfig& config);
 
 /** Target speed (0–100) for a segment boundary — mode graph sample point. */
 int motorResolveSpeedPercentForSegment(

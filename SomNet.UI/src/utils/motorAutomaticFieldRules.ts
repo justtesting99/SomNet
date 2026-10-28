@@ -20,6 +20,7 @@ import {
   MAX_BURST_STROKES,
   MIN_BURST_DELAY_SEC,
   MIN_BURST_STROKE_POWER,
+  getBurstFieldRules,
 } from '@/utils/burstFieldRules';
 
 export interface MotorAutomaticFieldRules {
@@ -117,16 +118,37 @@ function normalizeEndSessionMode(mode: EndSessionMode): EndSessionMode {
 function normalizeMotorBurstFields(
   state: MotorAutomaticControlState,
 ): MotorAutomaticControlState {
-  let burstStrokePowerMin = clampInt(state.burstStrokePowerMin, MIN_BURST_STROKE_POWER, 100);
-  let burstStrokePowerMax = clampInt(state.burstStrokePowerMax, 0, 100);
-  if (burstStrokePowerMin > burstStrokePowerMax) {
-    burstStrokePowerMax = burstStrokePowerMin;
+  const powerRules = getBurstFieldRules(state.burstStyle);
+
+  let burstStrokePowerMin: number;
+  let burstStrokePowerMax: number;
+
+  if (powerRules.disableBurstStrokePowerMin) {
+    burstStrokePowerMax = clampInt(state.burstStrokePowerMax, 0, 100);
+    burstStrokePowerMin = burstStrokePowerMax;
+  } else {
+    let min = clampInt(state.burstStrokePowerMin, MIN_BURST_STROKE_POWER, 100);
+    let max = clampInt(state.burstStrokePowerMax, 0, 100);
+    if (min > max) {
+      min = max;
+    }
+    burstStrokePowerMin = min;
+    burstStrokePowerMax = max;
   }
 
-  let burstDelayMin = clampInt(state.burstDelayMin, MIN_BURST_DELAY_SEC, MAX_BURST_DELAY_SEC);
-  let burstDelayMax = clampInt(state.burstDelayMax, 0, MAX_BURST_DELAY_SEC);
-  if (burstDelayMin > burstDelayMax) {
-    burstDelayMax = burstDelayMin;
+  const delayRules = getBurstFieldRules(state.burstStyle);
+  let burstDelayMin: number;
+  let burstDelayMax: number;
+
+  if (delayRules.disableBurstDelayMin) {
+    burstDelayMax = clampInt(state.burstDelayMax, 0, MAX_BURST_DELAY_SEC);
+    burstDelayMin = burstDelayMax;
+  } else {
+    burstDelayMin = clampInt(state.burstDelayMin, MIN_BURST_DELAY_SEC, MAX_BURST_DELAY_SEC);
+    burstDelayMax = clampInt(state.burstDelayMax, 0, MAX_BURST_DELAY_SEC);
+    if (burstDelayMin > burstDelayMax) {
+      burstDelayMax = burstDelayMin;
+    }
   }
 
   let burstStrokesMin = clampInt(state.burstStrokesMin, 1, MAX_BURST_STROKES);

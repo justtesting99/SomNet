@@ -21,4 +21,27 @@ describe('buildMotorAutomaticStartPayload', () => {
     expect(payload.indexOf('"segmentTargetRampMs":0')).toBeLessThan(80);
     expect(payload).toContain('"segmentTargetRampMs":0');
   });
+
+  it('fits motor firmware session configJson buffer (1536)', () => {
+    const payload = buildMotorAutomaticStartPayload(
+      {
+        ...defaultMotorAutomaticState,
+        automaticMode: 'randomSpeed',
+        burstsOn: true,
+        burstStrokePowerMax: 1,
+        burstStrokePowerMin: 1,
+        minimumSpeedPercent: 23,
+        maximumSpeedPercent: 55,
+        burstPlacement: 'insteadOfAfterMainStroke',
+      },
+      {
+        ...DEFAULT_APP_OPTIONS,
+        motorSegmentTargetRampMode: 'fixedMs',
+        motorSegmentTargetRampMs: 200,
+      },
+    );
+
+    expect(payload.length).toBeLessThan(1536);
+    expect(payload).toContain('"burstStrokePowerMax":1');
+  });
 });

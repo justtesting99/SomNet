@@ -64,6 +64,16 @@ bool MotorAutomaticSessionMode::beginSession(const char* payloadJson) {
     Serial.println(burstsOn_ ? F("true") : F("false"));
     Serial.print(F("[MOTOR-AUTO] segmentTargetRampMs="));
     Serial.println(config.segmentTargetRampMs);
+    if (burstsOn_) {
+        Serial.print(F("[MOTOR-AUTO] burst strokePowerMax="));
+        Serial.print(config.burstStrokePowerMax);
+        Serial.print(F(" min="));
+        Serial.print(config.burstStrokePowerMin);
+        Serial.print(F(" speedBand="));
+        Serial.print(config.minimumSpeedPercent);
+        Serial.print(F("-"));
+        Serial.println(config.maximumSpeedPercent);
+    }
     if (burstsOn_ && burstPlan_.active) {
         if (burstPlan_.burstInsteadOfMain) {
             Serial.println(F("[MOTOR-AUTO] burst timing=insteadOfMain"));
@@ -383,22 +393,27 @@ void MotorAutomaticSessionMode::buildResultJson(const char* endReason, bool inte
     const unsigned long durationMs =
         sessionStartMs_ == 0 ? 0 : millis() - sessionStartMs_;
 
-    if (burstsOn_) {
-        MotorAutomaticConfig config{};
-        const char* placementWire = "mainPlusSessionSpread";
-        if (loadConfig(&config)) {
+    MotorAutomaticConfig config{};
+    const char* modeWire = "periodic";
+    const char* placementWire = "mainPlusSessionSpread";
+    if (loadConfig(&config)) {
+        modeWire = motorAutomaticRunModeToWire(config.mode);
+        if (burstsOn_) {
             placementWire = burstPlacementToWire(config.burstPlacement);
         }
+    }
 
+    if (burstsOn_) {
         snprintf(
             resultJson_,
             sizeof(resultJson_),
             "{\"commandKey\":\"automatic-stop\",\"actuatorKind\":\"hbridge\","
-            "\"automaticMode\":\"periodic\",\"dutyPercent\":%d,\"burstsOn\":true,"
+            "\"automaticMode\":\"%s\",\"dutyPercent\":%d,\"burstsOn\":true,"
             "\"segmentsCompleted\":%d,\"burstEventsCompleted\":%d,"
             "\"burstPlacement\":\"%s\","
             "\"durationMs\":%lu,\"endSessionMode\":%d,\"endSessionValue\":%d,"
             "\"interrupted\":%s,\"endReason\":\"%s\"}",
+            modeWire,
             dutyPercent_,
             segmentsCompleted_,
             burstEventsCompleted_,
@@ -415,9 +430,10 @@ void MotorAutomaticSessionMode::buildResultJson(const char* endReason, bool inte
         resultJson_,
         sizeof(resultJson_),
         "{\"commandKey\":\"automatic-stop\",\"actuatorKind\":\"hbridge\","
-        "\"automaticMode\":\"periodic\",\"dutyPercent\":%d,\"segmentsCompleted\":%d,"
+        "\"automaticMode\":\"%s\",\"dutyPercent\":%d,\"segmentsCompleted\":%d,"
         "\"durationMs\":%lu,\"endSessionMode\":%d,\"endSessionValue\":%d,"
         "\"interrupted\":%s,\"endReason\":\"%s\"}",
+        modeWire,
         dutyPercent_,
         segmentsCompleted_,
         durationMs,
@@ -731,8 +747,8 @@ bool MotorAutomaticSessionMode::startNextBurstMicro() {
     motorBurstScheduleInput(config, &planner);
 
     const int burstRelativePower = drawBurstRelativePower(planner);
-    const int speedPercent = motorResolveBurstSpeedPercent(burstRelativePower, config);
-    const int duty = motorSpeedPercentToDuty(speedPercent, config);
+    const int duty = motorResolveBurstDutyPercent(burstRelativePower, config);
+    const int speedPercent = motorDutyPercentToSpeedPercent(duty, config);
     const int fromSpeedPercent = lastCommandedSpeedPercent_;
     const unsigned long transitionMs = burstMicroTransitionRampMs(config);
 
@@ -762,9 +778,13 @@ bool MotorAutomaticSessionMode::startNextBurstMicro() {
     Serial.print(burstStrokesCompletedInEvent_ + 1);
     Serial.print(F("/"));
     Serial.print(burstStrokesTarget_);
-    Serial.print(F(" speed="));
+    Serial.print(F(" relPower="));
+    Serial.print(burstRelativePower);
+    Serial.print(F(" programSpeed="));
+    Serial.print(fromSpeedPercent);
+    Serial.print(F("% burstSpeed="));
     Serial.print(speedPercent);
-    Serial.print(F("% duty="));
+    Serial.print(F(" burstDuty="));
     Serial.print(duty);
     Serial.print(F("% rampMs="));
     Serial.println(transitionMs);

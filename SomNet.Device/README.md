@@ -8,7 +8,7 @@ PlatformIO firmware for the SomNet hardware device (ESP32 DevKit V1 clone). Live
 **Plan:** [Documents/09-ESP32-Device-Plan.md](../Documents/09-ESP32-Device-Plan.md)  
 **Phase checklists:** [0](../Documents/09-ESP32-Phase-0-Checklist.md) · … · [12](../Documents/09-ESP32-Phase-12-Network-Hardening-Checklist.md) · [button clicks](../Documents/23-Device-Button-Clicks-Checklist.md) · [P16 session accessory](../Documents/25-Session-Accessory-In-Progress-Checklist.md)
 
-**Current firmware:** `0.15.0-session-accessory` — Phases 5–12 + device button clicks + **`session-accessory`** (GPIO32). Gates `stroke`, `burst`, and `automatic-start` when accessory output is off. Network layer per [Network Spec](../Documents/09-ESP32-Network-Spec.md).
+**Current firmware:** **`0.16.4-motor-burst-duty`** (`platformio.ini`) — unified **`env:dev`** image: relay automatic (Phases 5–12 lineage) + **burst placement** + **motor automatic** (H-bridge PWM, modes, bursts, segment telemetry). P16 **`session-accessory`** (GPIO32) — [V2 rules](../Documents/34-Operator-Session-And-Accessory-V2-Rules.md) for motion gating on new work. Hub path sign-off: [32 M1d](../Documents/32-Motor-Actuator-Implementation-Plan-And-Checklist.md#phase-m1d-sign-off) **2026-10-28**.
 
 ### Capability summary
 

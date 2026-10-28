@@ -10,7 +10,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 | Video at tool site | [Video & Camera Architecture](./13-Video-And-Camera-Architecture.md) — Pi + cameras (separate from ESP32) |
 
-**Firmware status:** Phases **0–12 + device button clicks + Session in Progress (P16)** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app, including **Bursts On** with **burst placement** (main+ vs burst-instead-of-main), live **`automatic-update`**, network hardening, GPIO **single/double click** on D33, and **`session-accessory`** on **GPIO32**. Current firmware **`0.15.2-burst-main-timing`**. See [P16 checklist](./25-Session-Accessory-In-Progress-Checklist.md) · [Burst placement](./36-Burst-Placement-Modes-Design.md) · [Device button clicks](./23-Device-Button-Clicks-Checklist.md).
+**Firmware status:** Phases **0–12 + device button clicks + Session in Progress (P16)** — relay manual **stroke / abort / burst** and **automatic** (including **Bursts On** + **burst placement**), live **`automatic-update`**, network hardening, GPIO **single/double click** on D33, and optional **`session-accessory`** on **GPIO32**. **Motor (H-bridge)** units use the **same binary** with NVS **`actuatorKind: hbridge`** — automatic modes, bursts ([MA-D28](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27) duty envelope), segment telemetry for the operator graph. Current firmware **`0.16.4-motor-burst-duty`**. See [P16 checklist](./25-Session-Accessory-In-Progress-Checklist.md) · [Burst placement](./36-Burst-Placement-Modes-Design.md) · [Motor plan](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) · [Device button clicks](./23-Device-Button-Clicks-Checklist.md).
 
 ---
 
@@ -318,7 +318,7 @@ When the operator enables **Allow automatic mode overrides** in SomNet **Options
 
 | Feature | When |
 |---------|------|
-| **Session timeline / graph** | Future — visual plan or replay of automatic session (main strokes, bursts, gaps); Automatic page and/or session history — TBD |
+| **Session timeline / graph** | **Available (hub UI)** — video column **Feeds \| Graph** for relay **power %** and motor **speed %** (live while running; **recorded last run** until settings change or Start). Rebuild **`SomNet.UI/dist`** when API hosts static UI. [03 § Motor pattern graph](./03-Frontend-Architecture.md#motor-pattern-graph-scope) |
 
 ## Relay timing validation (oscilloscope)
 

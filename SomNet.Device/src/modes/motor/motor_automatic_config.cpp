@@ -52,6 +52,24 @@ MotorAutomaticRunMode parseMotorAutomaticRunMode(const char* value) {
     return MotorAutomaticRunMode::Unknown;
 }
 
+const char* motorAutomaticRunModeToWire(MotorAutomaticRunMode mode) {
+    switch (mode) {
+        case MotorAutomaticRunMode::Periodic:
+            return "periodic";
+        case MotorAutomaticRunMode::RandomSpeed:
+            return "randomSpeed";
+        case MotorAutomaticRunMode::RandomSpeedAndTiming:
+            return "randomSpeedAndTiming";
+        case MotorAutomaticRunMode::PowerWave:
+            return "powerWave";
+        case MotorAutomaticRunMode::BuildUp:
+            return "buildUp";
+        case MotorAutomaticRunMode::Unknown:
+        default:
+            return "unknown";
+    }
+}
+
 int motorSpeedPercentToDuty(int speedPercent, const MotorAutomaticConfig& config) {
     const int speed = clampInt(speedPercent, 0, 100);
     const int minDuty = config.minimumDutyPercent;
@@ -61,6 +79,35 @@ int motorSpeedPercentToDuty(int speedPercent, const MotorAutomaticConfig& config
     }
 
     return minDuty + (maxDuty - minDuty) * speed / 100;
+}
+
+int motorDutyPercentToSpeedPercent(int dutyPercent, const MotorAutomaticConfig& config) {
+    const int duty = clampInt(dutyPercent, 0, 100);
+    const int minDuty = config.minimumDutyPercent;
+    const int maxDuty = config.maximumDutyPercent;
+    if (maxDuty <= minDuty) {
+        return 100;
+    }
+
+    return clampInt((duty - minDuty) * 100 / (maxDuty - minDuty), 0, 100);
+}
+
+int motorResolveBurstDutyPercent(int burstRelativePower, const MotorAutomaticConfig& config) {
+    int relative = burstRelativePower;
+    if (relative < 0) {
+        relative = 0;
+    }
+    if (relative > 100) {
+        relative = 100;
+    }
+
+    const int minDuty = config.minimumDutyPercent;
+    const int maxDuty = config.maximumDutyPercent;
+    if (maxDuty <= minDuty) {
+        return maxDuty;
+    }
+
+    return minDuty + (maxDuty - minDuty) * relative / 100;
 }
 
 int motorResolveSpeedPercentForSegment(

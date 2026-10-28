@@ -1,6 +1,6 @@
 # Burst placement modes — design (relay + motor)
 
-**Status:** Implemented (2026-10-27) — relay firmware **`0.15.2-burst-main-timing`** (main+ vs instead-of-main); motor burst execution **`0.16.0-motor-burst`** ([31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27), [32 M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e)).  
+**Status:** Implemented (2026-10-27) — relay firmware **`0.15.2-burst-main-timing`** (main+ vs instead-of-main); motor burst execution **`0.16.4-motor-burst-duty`** — **M1d signed 2026-10-28** ([31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27), [32 M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e), [32 Run C](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#run-c--m1d-motor-bursts--pattern-graph-after-run-b)).  
 **Parent:** [Phase 10 — Burst-in-automatic](./09-ESP32-Phase-10-Checklist.md) (signed off; behavior preserved as **session spread**)  
 **Related:** [Frontend Architecture § Burst Settings](./03-Frontend-Architecture.md), [Motor actuator design § Bursts](./31-Motor-Actuator-Device-Design.md), [SignalR & Hardware](./06-SignalR-And-Hardware.md)
 
@@ -256,7 +256,7 @@ Labels come from `burstPercentFieldLabel()` — depend on **schedule** (spread /
 | **BP-B** | Six-option dropdown + labels/warnings + preview | ☑ |
 | **BP-C** | Relay firmware: three schedules × main+ / instead-of | ☑ **`0.15.2-burst-main-timing`** |
 | **BP-D** | Operator + dev docs (this file, Phase 10 follow-on, device plan) | ☑ 2026-10-27 |
-| **BP-E** | Motor burst execution — [31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27), [32 M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e) | ☑ core firmware **`0.16.0-motor-burst`**; F10/U1/bench open |
+| **BP-E** | Motor burst execution — [31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27), [32 M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e) | ☑ **`0.16.4-motor-burst-duty`**; operator sign-off **2026-10-28** (Run C) |
 
 ---
 
@@ -289,4 +289,12 @@ Labels come from `burstPercentFieldLabel()` — depend on **schedule** (spread /
 ## 12. References
 
 - Phase 10 **rejected** Bernoulli for **`burstPercent` as event count** (P10-D1); **`chanceAfterMainStroke`** reintroduces Bernoulli **only** when placement explicitly selects it.
-- Code: `SomNet.Device` — `automatic_burst_runtime.*`, `automatic_config.*`, `automatic_session_mode.cpp`; `SomNet.UI` — `burstPlacement.ts`, `relayBurstPlan.ts`, `relayPowerSchedule.ts`; `SomNet.API` — `HardwareCommandPayloadValidator.cs`; `SomNet.Shared` — `Enums/BurstPlacement.cs`
+- Code: `SomNet.Device` — `automatic_burst_runtime.*`, `motor_automatic_*`, `automatic_session_mode.cpp`; `SomNet.UI` — `burstPlacement.ts`, `relayBurstPlan.ts`, `relayPowerSchedule.ts`, `motorSpeedSchedule.ts`, `motorBurstEffectiveSpeed.ts`; `SomNet.API` — `HardwareCommandPayloadValidator.cs`; `SomNet.Shared` — `Enums/BurstPlacement.cs`, `AutomaticSessionSummaryBuilder.cs`
+
+---
+
+## Document history
+
+| Date | Change |
+|------|--------|
+| 2026-10-28 | **BP-E** operator sign-off (Run C); motor **`0.16.4-motor-burst-duty`**; MA-D28 duty burst envelope; relay + motor pattern graph recording lifecycle |

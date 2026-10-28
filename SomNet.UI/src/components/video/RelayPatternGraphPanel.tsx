@@ -12,8 +12,11 @@ import {
   RELAY_PATTERN_PREVIEW_NO_AUTO_END_SEC,
 } from '@/utils/relayPowerSchedule';
 import { readMotorPatternRunAnchor } from '@/utils/motorPatternRunAnchor';
+import { relayAutomaticGraphSettingsFingerprint } from '@/utils/relayAutomaticGraphFingerprint';
 import {
+  clearRelayAutomaticGraphRecording,
   getRelayAutomaticSegments,
+  relayAutomaticGraphRecordingActive,
   subscribeRelayAutomaticSegments,
 } from '@/utils/relayAutomaticSegmentStore';
 import { MotorSpeedPatternChart } from '@/components/video/MotorSpeedPatternChart';
@@ -54,24 +57,45 @@ export function RelayPatternGraphPanel({
   const { selectedSub } = useSubTarget();
   const { selectedDeviceId } = useSubDevice();
 
+  const graphSettingsFingerprint = useMemo(
+    () => relayAutomaticGraphSettingsFingerprint(automatic),
+    [automatic],
+  );
+
   const liveSegments = useSyncExternalStore(
     subscribeRelayAutomaticSegments,
     () => getRelayAutomaticSegments(selectedDeviceId ?? ''),
     () => [],
   );
 
+  const usingLiveSegments =
+    mode === 'automatic' &&
+    Boolean(selectedDeviceId) &&
+    relayAutomaticGraphRecordingActive(selectedDeviceId ?? '', graphSettingsFingerprint);
+
+  useEffect(() => {
+    if (mode !== 'automatic' || !selectedDeviceId) {
+      return;
+    }
+    if (getRelayAutomaticSegments(selectedDeviceId).length === 0) {
+      return;
+    }
+    if (relayAutomaticGraphRecordingActive(selectedDeviceId, graphSettingsFingerprint)) {
+      return;
+    }
+    clearRelayAutomaticGraphRecording(selectedDeviceId);
+  }, [graphSettingsFingerprint, mode, selectedDeviceId]);
+
   const schedule = useMemo(() => {
     if (mode === 'automatic') {
       const horizonSec = automaticHorizonSec(automatic);
-      if (liveSegments.length > 0) {
+      if (usingLiveSegments && liveSegments.length > 0) {
         return buildRelayPowerScheduleFromLiveSegments(liveSegments, horizonSec);
       }
       return buildRelayAutomaticPowerSchedule(automatic);
     }
     return buildRelayManualPowerSchedule(manual);
-  }, [automatic, liveSegments, manual, mode]);
-
-  const usingLiveSegments = mode === 'automatic' && liveSegments.length > 0;
+  }, [automatic, liveSegments, manual, mode, usingLiveSegments]);
 
   const [nowSec, setNowSec] = useState<number | null>(null);
 
@@ -120,15 +144,15 @@ export function RelayPatternGraphPanel({
       : 'Commanded power — Manual';
 
   const previewHint =
-    mode === 'automatic' && usingLiveSegments && automatic.running
-      ? 'Live graph from device-reported strokes and gaps'
+    mode === 'automatic' && !usingLiveSegments
+      ? 'Planned stroke/gap envelope from current settings'
       : mode === 'automatic' && usingLiveSegments
-        ? 'Device-reported strokes and gaps (session ended — cleared on next Start)'
-        : mode === 'automatic' && !automatic.running
-          ? 'Planned stroke/gap envelope from current settings'
-          : mode === 'automatic' && automatic.running
-            ? 'Waiting for segment data from the device…'
-            : 'Current manual power setting';
+        ? automatic.running
+          ? 'Live graph from device-reported strokes and gaps'
+          : 'Recorded strokes and gaps from the last automatic run'
+        : mode === 'automatic' && automatic.running
+          ? 'Waiting for segment data from the device…'
+          : 'Current manual power setting';
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-3">
@@ -148,6 +172,12 @@ export function RelayPatternGraphPanel({
           <p className="mt-1 text-xs text-amber-600/90">
             Bursts use Burst Stroke Power max on the 0–100 scale (100 = session max). Lower that
             max (e.g. 30–50) for visibly lighter burst clusters between main strokes.
+          </p>
+        ) : null}
+        {mode === 'automatic' && automatic.running && liveSegments.length === 0 ? (
+          <p className="mt-1 text-xs text-amber-600/90">
+            Waiting for live segment data — graph will update when segment acks arrive from the
+            device.
           </p>
         ) : null}
       </div>

@@ -42,6 +42,10 @@ import {
 } from '@/utils/motorAutomaticFieldRules';
 import {
   getBurstFieldRules,
+  burstStrokePowerMinForDisplay,
+  burstStrokePowerNeedsMinSync,
+  burstDelayMinForDisplay,
+  burstDelayNeedsMinSync,
   MAX_BURST_DELAY_SEC,
   MAX_BURST_STROKES,
   MIN_BURST_DELAY_SEC,
@@ -49,7 +53,9 @@ import {
 } from '@/utils/burstFieldRules';
 import { applyMotorAutomaticModeChange } from '@/utils/motorAutomaticFieldRules';
 import { getMotorAutomaticModeInfo } from '@/utils/motorAutomaticModeInfo';
-import { clearMotorAutomaticSegments } from '@/utils/motorAutomaticSegmentStore';
+import { motorAutomaticGraphSettingsFingerprint } from '@/utils/motorAutomaticGraphFingerprint';
+import { beginMotorAutomaticGraphRecording } from '@/utils/motorAutomaticSegmentStore';
+import { describeMotorBurstEffectiveSpeed } from '@/utils/motorBurstEffectiveSpeed';
 import {
   burstMainTiming,
   burstPercentFieldLabel,
@@ -180,6 +186,25 @@ export function MotorAutomaticControls() {
       })),
     [fieldRules.disableNoAutoEnd],
   );
+
+  useEffect(() => {
+    if (!settingsLoaded) {
+      return;
+    }
+    if (!burstStrokePowerNeedsMinSync(state) && !burstDelayNeedsMinSync(state)) {
+      return;
+    }
+    updateMotorAutomatic(state);
+  }, [
+    settingsLoaded,
+    state.burstStyle,
+    state.burstStrokePowerMin,
+    state.burstStrokePowerMax,
+    state.burstDelayMin,
+    state.burstDelayMax,
+    updateMotorAutomatic,
+    state,
+  ]);
 
   useEffect(() => {
     if (!automaticSessionActive && !state.running) {
@@ -347,7 +372,10 @@ export function MotorAutomaticControls() {
 
   async function handleStart() {
     setCommandError('');
-    clearMotorAutomaticSegments(commandDeviceId);
+    beginMotorAutomaticGraphRecording(
+      commandDeviceId,
+      motorAutomaticGraphSettingsFingerprint(state, options),
+    );
     expandOnAction(commandDeviceId);
     const payloadJson = buildMotorAutomaticStartPayload(state, options);
     try {
@@ -741,18 +769,29 @@ export function MotorAutomaticControls() {
               }
             />
 
+            {state.burstsOn ? (
+              <p className="text-xs leading-relaxed text-slate-500">
+                {describeMotorBurstEffectiveSpeed(state)}
+              </p>
+            ) : null}
+
             <MinMaxRow
               label="Burst Speed in Percent (0 to 100)"
-              min={state.burstStrokePowerMin}
+              min={burstStrokePowerMinForDisplay(state)}
               max={state.burstStrokePowerMax}
               minLimit={0}
               minValueMin={MIN_BURST_STROKE_POWER}
+              maxValueMin={
+                burstFieldRules.disableBurstStrokePowerMin
+                  ? 0
+                  : state.burstStrokePowerMin
+              }
               maxLimit={100}
               disabled={burstSettingsDisabled}
               minDisabled={burstFieldRules.disableBurstStrokePowerMin}
               hint={
                 burstFieldRules.disableBurstStrokePowerMin
-                  ? 'Min not used — device uses maximum speed.'
+                  ? 'Min mirrors Max for this style — only Max is sent to the device.'
                   : undefined
               }
               onMinChange={(value) => update('burstStrokePowerMin', value)}
@@ -761,7 +800,7 @@ export function MotorAutomaticControls() {
 
             <MinMaxRow
               label="Delay Between Burst Segments in Seconds"
-              min={state.burstDelayMin}
+              min={burstDelayMinForDisplay(state)}
               max={state.burstDelayMax}
               minLimit={0}
               minValueMin={MIN_BURST_DELAY_SEC}
@@ -770,7 +809,7 @@ export function MotorAutomaticControls() {
               minDisabled={burstFieldRules.disableBurstDelayMin}
               hint={
                 burstFieldRules.disableBurstDelayMin
-                  ? 'Min not used — device uses maximum delay.'
+                  ? 'Min mirrors Max for this style — only Max is sent to the device.'
                   : undefined
               }
               onMinChange={(value) => update('burstDelayMin', value)}
