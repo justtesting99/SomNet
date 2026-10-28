@@ -13,10 +13,11 @@ That envelope is **minutes** (wall-clock), **strokes** (main-stroke count), or *
 
 Operators also want:
 
-1. **Deterministic stroke share** — about **`percent`** of main strokes get a burst **immediately after** (evenly spaced indices or stride).
-2. **Stochastic per stroke** — each main stroke has an independent **`percent`** **chance** of being followed by a burst cluster.
+1. **Deterministic stroke share** — about **`percent`** of main **opportunities** on even spacing (stride or stroke milestones).
+2. **Stochastic per stroke** — independent **`percent`** **chance** per main opportunity.
+3. **Main timing** — burst **after** the main pulse (**main + burst**) vs **instead of** that main pulse (avoids back-to-back relay energize when the air tool needs return time).
 
-This document adds a **selectable `burstPlacement`** so one percent slider has an explicit meaning, with **UI warnings** and **default = Phase 10** (`sessionSpread`).
+This document adds **`burstPlacement`** (six UI values + three legacy wire aliases) so percent meaning and **main vs burst-on-beat** are explicit, with **UI warnings** and default **`mainPlusSessionSpread`** (Phase 10 spread semantics when legacy `sessionSpread` is omitted).
 
 ---
 
@@ -24,17 +25,18 @@ This document adds a **selectable `burstPlacement`** so one percent slider has a
 
 | ID | Decision |
 |----|----------|
-| **BP-D1** | Add **`burstPlacement`** with **three** values (§3). Default **`sessionSpread`**. |
-| **BP-D2** | **`afterMainStroke`** and **`chanceAfterMainStroke`** use **stroke-based** evaluation only (after each **main** stroke completes). **No** wall-clock burst timers for either. Applies to **all** `endSessionMode` values (including **minutes**). |
+| **BP-D1** | **`burstPlacement`**: **six** operator values (§3) — main+ vs instead-of × three schedules. Legacy **`sessionSpread`** / **`afterMainStroke`** / **`chanceAfterMainStroke`** = **main+**. Default **`mainPlusSessionSpread`**. |
+| **BP-D2** | **Even** and **chance** schedules use **stroke-based** evaluation only for stride/milestones/rolls. **No** wall-clock burst timers for those schedules. Applies to **all** `endSessionMode` values (including **minutes**). **Spread** schedule keeps Phase 10 wall-clock for **minutes**. |
+| **BP-D13** | **Main +** runs burst **after** main pulse completes (or between mains for spread+minutes). **Instead of main** runs burst **before** the scheduled main pulse (`shouldTriggerBurstBeforeMainStroke`); that beat has **no** main pulse. |
 | **BP-D3** | **End session after a burst:** if a burst triggers on the same main-stroke completion as an end rule, **run the burst cluster first**, then end the session. |
 | **BP-D4** | **Load mitigation:** UI encourages **lower `burstPercent`** for stroke-linked placements; extra copy for **`chanceAfterMainStroke`** (unpredictable cluster count). No hard firmware cap in v1 beyond burst stroke min/max. |
 | **BP-D5** | **`burstPercent` label and hint depend on `burstPlacement`** from first paint. |
-| **BP-D6** | **Relay:** firmware + preview graph + live segments for all three placements. |
+| **BP-D6** | **Relay:** firmware + preview graph + live segments for all **six** placements (implemented **`0.15.2-burst-main-timing`**). |
 | **BP-D7** | **Motor:** same DTO/settings + UI; firmware **M4** — burst = short speed/duty dip (ramp) then resume program (§8). |
-| **BP-D8** | **`automatic-update`:** deterministic placements **replan** (§4.4). **`chanceAfterMainStroke`** only changes **future** rolls (no retroactive burst/no-burst changes on past strokes). |
+| **BP-D8** | **`automatic-update`:** deterministic schedules **replan** (§4.6). **Chance** only changes **future** rolls (no retroactive changes on past strokes). **Main-timing** flag follows new placement on replan. |
 | **BP-D9** | **Docs + tests** per §10. |
-| **BP-D10** | **`sessionSpread`** keeps Phase 10 rounding (`round(envelope × percent / 100)`). **`afterMainStroke`** uses stride/milestones (§4.2). **`chanceAfterMainStroke`** uses per-stroke roll (§4.3) — **percent = 0** never bursts; **100** bursts after every main stroke. |
-| **BP-D11** | **Chance roll (device):** after main stroke `n`, burst if `burstPercent > 0` and `(esp_random() % 100) < burstPercent` (uniform 0–99). **Not** the same as Phase 10 “percent = event count”; only used when placement is **`chanceAfterMainStroke`**. |
+| **BP-D10** | **Spread** keeps Phase 10 rounding. **Even** uses stride/milestones (§4.2). **Chance** uses per-opportunity roll (§4.3) — **0** never bursts; **100** always bursts on every opportunity (main+ = after every main; instead-of = every beat is burst). |
+| **BP-D11** | **Chance roll (device):** `(esp_random() % 100) < burstPercent`. **Not** Phase 10 event-count percent. Evaluated **after** main (main+) or **before** next main (instead-of). |
 | **BP-D12** | **Preview graph:** seeded PRNG per `(session seed, mainStrokeIndex)` so idle preview is **repeatable**; label as illustrative for chance mode. **Live** graph uses device segments only (actual rolls). |
 
 ---
@@ -64,31 +66,33 @@ Each row is one **schedule** (what percent means). The UI exposes **six** dropdo
 
 **When `burstsOn` is false:** `burstPlacement` is ignored (still round-trips in settings).
 
-**Not confused with `burstStyle`:** `randomPowerOnly` / `randomDelayOnly` only randomize **inside** a burst cluster (power/delay). **`chanceAfterMainStroke`** randomizes **whether** a cluster runs after a given main stroke.
+**Not confused with `burstStyle`:** `randomPowerOnly` / `randomDelayOnly` only randomize **inside** a burst cluster (power/delay). **Chance** schedules randomize **whether** a burst cluster runs on a given main **opportunity** (main+ = after main; instead-of = instead of main).
 
 ---
 
 ## 4. Execution semantics (relay firmware)
 
-Shared: burst sub-FSM (Phase 10 §2.1–2.2), `mainStrokesCompleted` excludes intra-burst strokes, stop/abort unchanged.
+Shared: burst sub-FSM (Phase 10 §2.1–2.2), `strokesCompleted_` / `mainStrokesCompleted` excludes intra-burst strokes, stop/abort unchanged. Plan field **`burstInsteadOfMain`** set from placement at session start / replan.
 
-### 4.1 `sessionSpread` (preserve Phase 10)
+**Code:** `automatic_burst_runtime.cpp` (`buildAutomaticBurstPlan`, `shouldTriggerBurstAfterMainStroke`, `shouldTriggerBurstBeforeMainStroke`), `automatic_session_mode.cpp` (`poll` before `startNextPulse`, `onRelayPulseComplete`).
 
-| `endSessionMode` | Burst plan kind | Trigger |
-|------------------|-----------------|---------|
-| `minutes` | `WallClockDeadlines` | `WaitingGap` when `now >= sessionStart + milestoneMs` |
-| `strokes` | `StrokeMilestones` | After main stroke when `mainStrokesCompleted >= milestone[k]` |
-| `noAutoEnd` | `CadenceStride` | After main stroke when `mainStrokesCompleted >= nextCadenceTriggerStroke` |
+### 4.1 Spread schedule (`*SessionSpread`)
+
+| `endSessionMode` | Burst plan kind | Trigger (main+) | Trigger (instead-of) |
+|------------------|-----------------|-----------------|----------------------|
+| `minutes` | `WallClockDeadlines` | `WaitingGap` wall-clock deadline (between mains) | Same — no main pulse on that beat |
+| `strokes` | `StrokeMilestones` | After main when `mainStrokesCompleted >= milestone[k]` | Before main when `mainStrokesCompleted + 1 >= milestone[k]` |
+| `noAutoEnd` | `CadenceStride` | After main when `mainStrokesCompleted >= nextCadenceTriggerStroke` | Before main when `mainStrokesCompleted + 1 >= nextCadenceTriggerStroke` |
 
 Formulas: [Phase 10 §3.6](./09-ESP32-Phase-10-Checklist.md).
 
-### 4.2 `afterMainStroke` (deterministic)
+### 4.2 Even schedule (`*AfterMainStroke`)
 
-| `endSessionMode` | Burst plan kind | Trigger |
-|------------------|-----------------|---------|
-| `minutes` | `CadenceStride` | After main stroke when `mainStrokesCompleted >= nextCadenceTriggerStroke` |
-| `strokes` | `StrokeMilestones` | After listed milestone main strokes (P10-D21) |
-| `noAutoEnd` | `CadenceStride` | P10-D19 stride |
+| `endSessionMode` | Burst plan kind | Main+ trigger | Instead-of trigger |
+|------------------|-----------------|---------------|-------------------|
+| `minutes` | `CadenceStride` | After main: `mainStrokesCompleted >= nextCadenceTriggerStroke` | Before main: `mainStrokesCompleted + 1 >= nextCadenceTriggerStroke` |
+| `strokes` | `StrokeMilestones` | After milestone main index | Before that main index |
+| `noAutoEnd` | `CadenceStride` | P10-D19 stride (after) | Same stride (before) |
 
 ```text
 stride = (100 + burstPercent / 2) / burstPercent   // integer, min 1 when percent > 0
@@ -103,9 +107,9 @@ milestone k: main stroke index = (k × endSessionValue) / burstEventCount
 
 **Minutes:** session ends on clock; bursts only when stride hits between mains. **BP-D3** at last stroke before minute elapses.
 
-### 4.3 `chanceAfterMainStroke` (stochastic)
+### 4.3 Chance schedule (`*ChanceAfterMainStroke`)
 
-**No milestone table.** On every main-stroke completion (all `endSessionMode` values):
+**No milestone table.** Per main **opportunity** (all `endSessionMode` values):
 
 ```text
 if burstPercent >= 100 → trigger burst
@@ -114,15 +118,18 @@ else if (esp_random() % 100) < burstPercent → trigger burst
 else → no burst
 ```
 
-Then apply **BP-D3** (burst before end-session check if triggered).
+- **Main+:** roll in **`onRelayPulseComplete`** after main pulse (`shouldTriggerBurstAfterMainStroke`).
+- **Instead-of:** roll in **`poll()`** before **`startNextPulse`** (`shouldTriggerBurstBeforeMainStroke`); on success, main pulse skipped.
+
+Then apply **BP-D3** when burst triggers on an end-rule beat.
 
 **Properties:**
 
-- Independent rolls per main stroke (memoryless).
-- Long-run frequency ≈ `burstPercent / 100`; short sessions high variance (e.g. 25% × 8 strokes may yield 0–8 bursts).
-- **Wall-clock end:** only main strokes that complete before the minute ends are rolled; no bursts “scheduled” at 60 s without a main stroke.
+- Independent rolls per opportunity (memoryless).
+- Long-run frequency ≈ `burstPercent / 100`; short sessions high variance.
+- **Wall-clock end:** only opportunities that occur before the minute ends are rolled.
 
-**`burstPlan.active`:** may be `true` with kind **`ChancePerMainStroke`** (no milestones) so session start logs `burstsOn` + placement; trigger path is **`shouldTriggerBurstAfterMainStroke`** or a dedicated **`shouldTriggerChanceBurstAfterMainStroke`**.
+**`burstPlan.kind`:** **`ChancePerMainStroke`**. Serial may log `[AUTO] burst timing=insteadOfMain` when applicable.
 
 ### 4.4 Main timing (main+ vs instead-of)
 
@@ -146,13 +153,13 @@ On **`onRelayPulseComplete`** (main+ only):
 
 After **`finishBurstEvent()`**, run stop/end checks.
 
-### 4.5 Mid-session replan (Phase 11)
+### 4.6 Mid-session replan (Phase 11)
 
-| Placement | Replan behavior |
-|-----------|-----------------|
-| `sessionSpread` | Today’s `buildAutomaticBurstPlanForReplan` |
-| `afterMainStroke` | Rebuild milestones/stride from remaining stroke budget + advance past completed |
-| `chanceAfterMainStroke` | Update `burstPercent` / placement in config only; **do not** re-roll past strokes; next main stroke uses new percent |
+| Schedule basis | Replan behavior |
+|----------------|-----------------|
+| **Spread** | `buildAutomaticBurstPlanForReplan` (wall-clock offsets + milestone advance) |
+| **Even** | Rebuild milestones/stride from remaining stroke budget + advance past completed |
+| **Chance** | Update `burstPercent` / placement / **main-timing** in config only; **do not** re-roll past strokes; next opportunity uses new settings |
 
 ---
 
@@ -163,27 +170,28 @@ After **`finishBurstEvent()`**, run stop/end checks.
 ```json
 {
   "burstsOn": true,
-  "burstPlacement": "chanceAfterMainStroke",
-  "burstPercent": 25,
+  "burstPlacement": "insteadOfAfterMainStroke",
+  "burstPercent": 50,
   ...
 }
 ```
 
 | `burstPlacement` | If omitted |
-|----------------|------------|
-| `sessionSpread` | **Default** (backward compatible) |
-| `afterMainStroke` | Explicit |
-| `chanceAfterMainStroke` | Explicit |
+|------------------|------------|
+| *(omitted)* | Firmware defaults **`sessionSpread`** (= main+ spread, Phase 10 compatible) |
+| `mainPlusSessionSpread` | Explicit default for new UI saves |
+| `insteadOfSessionSpread` … `insteadOfChanceAfterMainStroke` | Explicit instead-of variants |
+| Legacy `sessionSpread` / `afterMainStroke` / `chanceAfterMainStroke` | Parsed as **main+** for that schedule |
 
-### 5.2 Layer checklist
+### 5.2 Layer checklist (implemented)
 
-| Layer | Change |
-|-------|--------|
-| `SomNet.Shared` | `BurstPlacement` enum (3 values); DTOs relay + motor |
-| `SomNet.API` | Validator allows three strings when `burstsOn` |
-| `SomNet.UI` | Dropdown, dynamic percent labels, preview + hints |
-| `SomNet.Device` | Parse placement; plan kind + chance roll in `onRelayPulseComplete` path |
-| Tests | §10 + seeded preview tests for chance |
+| Layer | Delivered |
+|-------|-----------|
+| `SomNet.Shared` | `BurstPlacement` enum (9 wire values); DTOs relay + motor; JSON camelCase |
+| `SomNet.API` | `HardwareCommandPayloadValidator` — all placement strings when `burstsOn` |
+| `SomNet.UI` | Six-option dropdown (`burstPlacement.ts`), dynamic percent labels, schedule hints, graph preview (main+ vs instead-of) |
+| `SomNet.Device` | `parseBurstPlacement`; `burstInsteadOfMain` on plan; before/after main trigger paths |
+| Tests | `relayBurstPlan.test.ts`, `relayPowerSchedule.test.ts`, `HardwareCommandPayloadValidatorBurstPlacementTests.cs` |
 
 ---
 
@@ -191,20 +199,17 @@ After **`finishBurstEvent()`**, run stop/end checks.
 
 ### 6.1 Percent labels
 
-| Placement | Label (example) |
-|-----------|-------------------|
-| `sessionSpread` | *Burst events spread across session (~% of session length)* |
-| `afterMainStroke` | *Main strokes with burst after (~% of mains, evenly spaced)* |
-| `chanceAfterMainStroke` | *Chance each main stroke is followed by a burst (%)* |
+Labels come from `burstPercentFieldLabel()` — depend on **schedule** (spread / even / chance), not main-timing.
 
-### 6.2 Warnings
+### 6.2 Warnings & hints
 
-| Condition | Message (example) |
-|-----------|-------------------|
-| `sessionSpread` + zero event count | *Schedules **0** bursts — raise % or lengthen session.* |
-| `afterMainStroke` + high % + large burst stroke max | *Many long clusters — lower % or strokes per burst.* |
-| `chanceAfterMainStroke` | *Burst count **varies each run**; ~% of mains long-term. Lower % for fewer clusters.* |
-| `chanceAfterMainStroke` + preview graph | *Preview shows one **example** path; device rolls independently.* |
+| Condition | UI behavior |
+|-----------|-------------|
+| Spread + zero event count | Schedule hint: raise % or lengthen session |
+| Even + high % + large burst max | Hint: many long clusters — lower % or strokes per burst |
+| Chance | Amber copy: count varies each run |
+| **Instead-of** any schedule | Slate copy: burst replaces scheduled main (air-tool return) |
+| Chance + preview graph | Preview uses seeded rolls; device uses `esp_random()` |
 
 ### 6.3 Pattern graph
 
@@ -219,27 +224,29 @@ After **`finishBurstEvent()`**, run stop/end checks.
 
 | Placement | % | Behavior |
 |-----------|---|----------|
-| `sessionSpread` | 50 | ~1 wall-clock cluster near **end of minute** |
-| `afterMainStroke` | 50 | Burst after mains **2, 4, 6, …** (deterministic) |
-| `chanceAfterMainStroke` | 50 | Each main stroke: **50% roll** for burst after; ~7–8 mains/min → often **3–5** bursts, sometimes **0** or **many** |
+| `mainPlusSessionSpread` | 50 | ~1 wall-clock cluster near **end of minute** (between mains) |
+| `mainPlusAfterMainStroke` | 50 | Main pulse, **then** burst after mains **2, 4, 6, …** |
+| `insteadOfAfterMainStroke` | 50 | Burst **on** beats 2, 4, 6, … **with no main pulse** on those beats |
+| `mainPlusChanceAfterMainStroke` | 50 | After each main: **50% roll** for burst cluster |
+| `insteadOfChanceAfterMainStroke` | 50 | Each beat: **50% roll** for burst **or** main, not both |
 
 ---
 
 ## 8. Motor (future — BP-D7)
 
-Same three placements. **`chanceAfterMainStroke`:** after roll succeeds, ramp to burst duty for N micro-segments, then ramp back to program target.
+UI + DTO store all **six** placements (same dropdown as relay). **Relay firmware** executes placement; **motor automatic** does not run burst FSM yet ([doc 31](./31-Motor-Actuator-Device-Design.md)).
 
 ---
 
-## 9. Implementation phases
+## 9. Implementation status
 
-| Phase | Scope |
-|-------|--------|
-| **BP-A** | Shared enum (3) + API + UI types |
-| **BP-B** | UI dropdown + labels/warnings + preview (incl. seeded chance) |
-| **BP-C** | Relay firmware: three paths + chance roll |
-| **BP-D** | Operator docs |
-| **BP-E** | Motor M4 |
+| Phase | Scope | Status |
+|-------|--------|--------|
+| **BP-A** | Shared enum + API + UI types | ☑ |
+| **BP-B** | Six-option dropdown + labels/warnings + preview | ☑ |
+| **BP-C** | Relay firmware: three schedules × main+ / instead-of | ☑ **`0.15.2-burst-main-timing`** |
+| **BP-D** | Operator + dev docs (this file, Phase 10 follow-on, device plan) | ☑ 2026-10-27 |
+| **BP-E** | Motor M4 burst execution | ☐ |
 
 ---
 
@@ -249,12 +256,13 @@ Same three placements. **`chanceAfterMainStroke`:** after roll succeeds, ramp to
 |-----------|-----|---|--------|
 | `sessionSpread` | minutes 1 | 25 | 0 events |
 | `sessionSpread` | minutes 1 | 50 | 1 wall-clock burst |
-| `afterMainStroke` | minutes 1 | 50 | Bursts after 2,4,6… |
-| `chanceAfterMainStroke` | minutes 1 | 0 | Never bursts |
-| `chanceAfterMainStroke` | minutes 1 | 100 | Burst after **every** main |
-| `chanceAfterMainStroke` | strokes 20 | 50 | Statistical: ~10 bursts ± variance (Monte Carlo / seeded unit test) |
-| `chanceAfterMainStroke` | noAutoEnd | 25 | Rolls on every main until stop |
-| BP-D3 | strokes 2 | 100 chance | Burst after stroke 2, **then** end |
+| `mainPlusAfterMainStroke` | minutes 1 | 50 | Bursts after mains 2,4,6… |
+| `insteadOfAfterMainStroke` | minutes 1 | 50 | Bursts **on** 2,4,6… **without** main on those beats |
+| `mainPlusChanceAfterMainStroke` | minutes 1 | 0 | Never bursts |
+| `mainPlusChanceAfterMainStroke` | minutes 1 | 100 | Burst after **every** main |
+| `insteadOfChanceAfterMainStroke` | minutes 1 | 50 | ~50% of beats are burst-only (no main on those beats) |
+| `mainPlusChanceAfterMainStroke` | strokes 20 | 50 | Statistical: ~10 bursts ± variance (seeded unit test) |
+| BP-D3 | strokes 2 | 100 main+ chance | Burst after stroke 2, **then** end |
 | `automatic-update` | chance | 50→10 mid-session | Past strokes unchanged; later rolls use 10% |
 
 **Firmware unit idea:** mock `esp_random()` sequence → deterministic chance path.
@@ -271,4 +279,4 @@ Same three placements. **`chanceAfterMainStroke`:** after roll succeeds, ramp to
 ## 12. References
 
 - Phase 10 **rejected** Bernoulli for **`burstPercent` as event count** (P10-D1); **`chanceAfterMainStroke`** reintroduces Bernoulli **only** when placement explicitly selects it.
-- Code: `automatic_burst_runtime.cpp`, `automatic_session_mode.cpp`, `relayBurstPlan.ts`
+- Code: `SomNet.Device` — `automatic_burst_runtime.*`, `automatic_config.*`, `automatic_session_mode.cpp`; `SomNet.UI` — `burstPlacement.ts`, `relayBurstPlan.ts`, `relayPowerSchedule.ts`; `SomNet.API` — `HardwareCommandPayloadValidator.cs`; `SomNet.Shared` — `Enums/BurstPlacement.cs`

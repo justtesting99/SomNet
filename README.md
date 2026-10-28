@@ -53,7 +53,7 @@ Full documentation lives in the [`Documents/`](Documents/) folder. See [Document
 
 ## ESP32 firmware (quick pointer)
 
-Firmware lives in [`SomNet.Device/`](SomNet.Device/). Current release track: **`0.15.0-session-accessory`** — Phases 0–12 + device button clicks + **`session-accessory`** on GPIO32 (gates stroke/burst/automatic-start). See [P16 checklist](Documents/25-Session-Accessory-In-Progress-Checklist.md).
+Firmware lives in [`SomNet.Device/`](SomNet.Device/). Current release track: **`0.15.2-burst-main-timing`** — Phases 0–12 + device button clicks + **`session-accessory`** on GPIO32 (P16 sign-off **`0.15.0-session-accessory`**) + **burst placement** modes ([doc 36](Documents/36-Burst-Placement-Modes-Design.md)). See [P16 checklist](Documents/25-Session-Accessory-In-Progress-Checklist.md).
 
 ```bash
 cd SomNet.Device
@@ -78,7 +78,7 @@ Copy `secrets.ini.example` → `secrets.ini` with your Wi‑Fi and PC **LAN IP**
 | React UI (auth, modes, settings, history) | Complete |
 | Dom/Sub management | Complete |
 | SignalR hub + device pairing (API) | Complete |
-| ESP32 firmware (pairing, stroke/burst/automatic, session accessory) | **Phases 0–12 + P16 signed off** — firmware **`0.15.0-session-accessory`** |
+| ESP32 firmware (pairing, stroke/burst/automatic, session accessory, burst placement) | **Phases 0–12 + P16 signed off** — firmware **`0.15.2-burst-main-timing`** |
 | Session in Progress (UI + GPIO32 lock) | **Signed off** — [P16 checklist](Documents/25-Session-Accessory-In-Progress-Checklist.md) |
 | UI device pairing | **Hardware** toolbar dialog (Phase 8) |
 | UI → hardware command dispatch | **Complete** — REST + operator hub listener (Phases 8–11) |

@@ -146,7 +146,7 @@ For the **Focus** device on the current Sub:
 **Panels:**
 - **Power Settings** — Min/max power % sliders, min/max stroke ms
 - **Timing Settings** — Stroke gaps, delay before start, end session rules
-- **Burst Settings** — Bursts On, percent, style, burst power/delay/stroke ranges (Phase 10); planned **burst placement** dropdown — [36](./36-Burst-Placement-Modes-Design.md) (`sessionSpread` \| `afterMainStroke` \| `chanceAfterMainStroke`)
+- **Burst Settings** — Bursts On, **burst placement** (six options: main+ vs instead-of × spread / even / chance — [36](./36-Burst-Placement-Modes-Design.md)), percent (label depends on placement), style, burst power/delay/stroke ranges (Phase 10). Helpers: `burstPlacement.ts`, `relayBurstPlan.ts`, `relayPowerSchedule.ts`.
 - **Controls** — Program selector, Start, Stop, Abort
 
 **Field minimums (UI):** Main-program gap **`strokeMinSeconds`** / **`strokeMaxSeconds`** — min **1** sec each (`automaticFieldRules.ts`). Burst **`burstDelayMin`** and **`burstStrokePowerMin`** — min **1** (`burstFieldRules.ts`). Max fields may use **0** where product rules allow (burst delay max; burst power max on relative 0–100 scale). Normalized on load/save.
@@ -180,7 +180,7 @@ For the **Focus** device on the current Sub:
 | Speed Wave | `powerWave` |
 | Build-Up | `buildUp` |
 
-**Panels:** speed/duty min/max, segment timing, ramp ms, delay before start, end session (`minutes` \| `noAutoEnd` — stroke count coerced away in start payload). Burst block mirrors relay settings shape but **motor firmware does not run bursts yet** (stored only).
+**Panels:** speed/duty min/max, segment timing, ramp ms, delay before start, end session (`minutes` \| `noAutoEnd` — stroke count coerced away in start payload). Burst block mirrors relay settings shape (including **burst placement** dropdown) but **motor firmware does not run bursts yet** (stored only).
 
 **Controls:** Start (ensures scene session via `ensureAutomaticSessionForDeviceStart`), Stop, **Abort always visible** (disabled when idle). Start payload: `buildMotorAutomaticStartPayload` → `automatic-start` with `actuatorKind: hbridge`.
 

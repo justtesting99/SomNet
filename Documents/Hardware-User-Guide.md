@@ -10,7 +10,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 | Video at tool site | [Video & Camera Architecture](./13-Video-And-Camera-Architecture.md) — Pi + cameras (separate from ESP32) |
 
-**Firmware status (2026-09-20):** Phases **0–12 + device button clicks + Session in Progress (P16)** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app, including **Bursts On**, live **`automatic-update`**, network hardening, GPIO **single/double click** on D33, and **`session-accessory`** on **GPIO32**. Current firmware **`0.15.0-session-accessory`**. See [P16 checklist](./25-Session-Accessory-In-Progress-Checklist.md) · [Device button clicks](./23-Device-Button-Clicks-Checklist.md) · [Phase 12 checklist](./09-ESP32-Phase-12-Network-Hardening-Checklist.md).
+**Firmware status:** Phases **0–12 + device button clicks + Session in Progress (P16)** — manual **stroke / abort / burst** and **automatic Start/Stop/Abort** from the web app, including **Bursts On** with **burst placement** (main+ vs burst-instead-of-main), live **`automatic-update`**, network hardening, GPIO **single/double click** on D33, and **`session-accessory`** on **GPIO32**. Current firmware **`0.15.2-burst-main-timing`**. See [P16 checklist](./25-Session-Accessory-In-Progress-Checklist.md) · [Burst placement](./36-Burst-Placement-Modes-Design.md) · [Device button clicks](./23-Device-Button-Clicks-Checklist.md).
 
 ---
 
@@ -284,22 +284,23 @@ Reported **`actualStrokeMs`** in session history reflects what the device measur
 
 ### Bursts during automatic
 
-**Status:** **Available** (Phase 10 — firmware **`0.10.0-phase10`**, UI burst panel enabled). Check **Bursts On** in Automatic mode **Burst Settings** before **Start**.
+**Status:** **Available** (Phase 10 + placement modes — firmware **`0.15.2-burst-main-timing`**). Check **Bursts On** in Automatic mode **Burst Settings** before **Start**.
 
 When **Bursts On** is checked, **scheduled burst clusters** run inside the same automatic session — on top of whichever program you selected (Periodic, Random, Wave, etc.):
 
 | Concept | Behavior |
 |---------|----------|
+| **Burst placement** | **Six** choices: for each scheduling style (spread across session, even spacing, or chance per beat), pick **Main + …** (main pulse then burst when scheduled) or **Burst instead of main — …** (burst **replaces** that scheduled main pulse — often better for air tools that need return time). See [burst placement doc](./36-Burst-Placement-Modes-Design.md). |
 | **Power Settings (min/max)** | Define the **power envelope for the whole session** — all main strokes and all burst strokes resolve inside this band |
 | **Burst Stroke Power (relative 0–100)** | **Relative to Power Settings** — scale 0 = session minimum power, 100 = session maximum. UI **Min** ≥ **1**; typical range **1–100** for full-strength bursts; a lower **max** (e.g. **40**) gives **lighter strokes** as a brief break between heavier main strokes |
-| **Percent** | How many **burst events** occur, **evenly spread** across the session (not random each step) — e.g. 10% over 100 main strokes → 10 burst events |
-| **End Session Strokes** | Counts **main program strokes only** — strokes inside a burst do **not** count toward the limit |
+| **Percent** | Meaning depends on **placement** — spread: burst event count vs session envelope; even: share of main opportunities; chance: % roll per opportunity. The UI label and hint under the field explain the active mode. |
+| **End Session Strokes** | Counts **main program strokes only** — strokes inside a burst do **not** count toward the limit; **instead-of-main** beats do not add a main stroke |
 | **Stop** | Finishes the current main stroke **or** the **entire current burst**, then ends; **Abort** remains available to cut off immediately |
 | **Abort** | Opens the relay **immediately**; cancels rest of burst and session |
 
 After each burst, the program waits its normal **gap between main strokes** before continuing (same cadence logic as Part 2).
 
-Developer detail: [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md).
+Developer detail: [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md) · [Burst placement](./36-Burst-Placement-Modes-Design.md).
 
 ### Live settings during automatic (Phase 11)
 
@@ -308,7 +309,7 @@ When the operator enables **Allow automatic mode overrides** in SomNet **Options
 **Operator notes:**
 
 - Default behavior remains **locked settings** while running (overrides option off).
-- **`burstPercent`** controls how **often** burst events occur, not burst pulse power.
+- **`burstPercent`** controls schedule density or chance — not burst pulse power (see **Burst placement**).
 - **Browser refresh during automatic** — supported (2026-09-10). The web app re-queries the server and device and restores **Stop / Abort** when an automatic session is still running. Idle refreshes do not change saved settings.
 - **Browser refresh during manual** — supported (2026-09-10). The web app restores the in-progress session from the server summary so strokes continue on the same session row.
 - **Multiple browser tabs** — supported (2026-09-11). Two tabs signed in as the same Dom share live session state; manual strokes from either tab append to the same in-progress history row.

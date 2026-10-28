@@ -16,7 +16,7 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Development Guide](./08-Development-Guide.md) | Developers | Local setup, build pipeline, common tasks, **recurring doc maintenance** (keep canonical docs in sync with code) |
 | [User Guide](./User-Guide.md) | Operators | How to use the web application day to day |
 | [Hardware User Guide](./Hardware-User-Guide.md) | Installers / owners | ESP32 setup, Wi‑Fi provisioning, pairing, relay + GPIO32 session accessory (updated 2026-09-21) |
-| [ESP32 Device Plan](./09-ESP32-Device-Plan.md) | Developers | **Source of truth** — firmware plan (Phases 0–12 + button clicks + P16 signed off; firmware **`0.15.0-session-accessory`**) |
+| [ESP32 Device Plan](./09-ESP32-Device-Plan.md) | Developers | **Source of truth** — firmware plan (Phases 0–12 + button clicks + P16 signed off; current build **`0.15.2-burst-main-timing`**) |
 | [ESP32 Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | Developers | Protocol capture — **Complete** (2026-09-05) |
 | [ESP32 Phase 1 Checklist](./09-ESP32-Phase-1-Checklist.md) | Developers | PlatformIO scaffold — **Complete** (2026-09-05) |
 | [ESP32 Phase 2 Checklist](./09-ESP32-Phase-2-Checklist.md) | Developers | NVS + MAC device identity — **Complete** (2026-09-05) |
@@ -60,6 +60,6 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Main app device gateway integration](./30-Main-App-Device-Gateway-Integration.md) | Developers | TheSystem / scheduler → `IDeviceGatewayClient`, config, persisted run fields; §5 device registry (DB) |
 | [Motor (H-bridge) actuator — design](./31-Motor-Actuator-Device-Design.md) | Developers | Platform board, payloads, MA-D* decisions |
 | [Motor actuator — implementation plan & checklists](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) | Developers | **M1/M1b/M1c signed off** (hub path); **M2+** standalone/gateway; see [31 §13](./31-Motor-Actuator-Device-Design.md#13-as-built--hub-path-motor-programs-ui-telemetry) |
-| [Burst placement modes — design](./36-Burst-Placement-Modes-Design.md) | Developers / operators | **`sessionSpread`** \| **`afterMainStroke`** \| **`chanceAfterMainStroke`**; BP-D* — **design locked 2026-10-27** |
+| [Burst placement modes](./36-Burst-Placement-Modes-Design.md) | Developers / operators | **`burstPlacement`**: main+ vs instead-of × spread / even / chance — **implemented** relay **`0.15.2-burst-main-timing`** |
 | [Operator session & accessory — V2 rules](./34-Operator-Session-And-Accessory-V2-Rules.md) | Developers / operators | **Canonical** Scene + Accessory + multi-device gating; supersedes P16 (V1) for new work |
 | [SomNet integration runbook](./SomNetIntegrationRunbook.md) | Developers / operators | Admin test bed, gateway payloads, TheSystem recipes |
