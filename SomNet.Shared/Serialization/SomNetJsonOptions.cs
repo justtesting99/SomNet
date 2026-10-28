@@ -7,6 +7,20 @@ namespace SomNet.Shared.Serialization;
 
 public static class SomNetJsonOptions
 {
+    public static JsonSerializerOptions Default { get; } = CreateDefault();
+
+    public static JsonSerializerOptions CreateDefault()
+    {
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNameCaseInsensitive = true,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        };
+        Configure(options);
+        return options;
+    }
+
     public static void Configure(JsonSerializerOptions options)
     {
         options.Converters.Add(new JsonStringEnumConverter<ConnectionState>(JsonNamingPolicy.CamelCase));

@@ -593,11 +593,22 @@ After **M2-B–G** complete (minimum: **B + E + F1** and either **C** or curl-on
 
 **Exit:** `automatic/run` on motor `deviceId`; TheSystem registration + motor preset; relay + motor **parallel** jobs (P7-D2); runbook updated.
 
+### 7.0 M3 implementation status (2026-10-28)
+
+| Slice | Status | Notes |
+|-------|--------|--------|
+| **Shared + LocalClient + Gateway** | **In progress** | `MotorAutomaticStartPayloadBuilder`, `AutomaticRunRequestDto` motor fields, caps probe, **M3-G2** validation |
+| **TheSystem admin VO** | **In progress** | `SomNetAutomaticRunRequestVO.actuatorKind` + `motorParameters` |
+| **TheSystem EF registry (T1–T2)** | Open | [SOMNET_DEVICE_REGISTRY.md](../../TheSystem/Docs/SOMNET_DEVICE_REGISTRY.md) still planned |
+| **Runbook / doc 30 (D1, S1)** | Partial | Motor gateway payload section — extend as M3 closes |
+
+**Bench next:** Configure gateway `Device:Devices[]` with motor ESP (`actuatorKind` optional hint) → `POST /api/v1/devices/{id}/automatic/run` with **`motorParameters`** → parallel relay job on second `deviceId` (**M3-V1**).
+
 ### 7.1 Gateway (`TheSystem` repo)
 
-- [ ] **M3-G1** Motor row in `Device:Devices[]`; pass-through motor JSON on `RunAutomaticAsync`.
-- [ ] **M3-G2** Reject relay preset body to motor `deviceId` (optional caps probe).
-- [ ] **M3-G3** Optional `GET /api/v1/devices` includes `actuatorKind` from caps cache.
+- [ ] **M3-G1** Motor row in `Device:Devices[]`; pass-through motor JSON on `RunAutomaticAsync`. *(Code: `motorParameters` + `MotorAutomaticStartPayloadBuilder` — verify on hardware.)*
+- [ ] **M3-G2** Reject relay preset body to motor `deviceId` (optional caps probe). *( **`AutomaticRunRequestValidator`** + caps — unit/gateway tests.)*
+- [ ] **M3-G3** Optional `GET /api/v1/devices` includes `actuatorKind` from caps cache. *( **`DeviceGatewayCapsService`** — verify list returns `hbridge`.)*
 
 ### 7.2 TheSystem
 
@@ -665,7 +676,7 @@ Update this table when a phase is signed off.
 | M2 | **Signed off** — SomEsp / LAN local API + **`/operate`** motor + relay (**Run D**, **`somesp-0.16.4-motor-burst-duty`**) | 2026-10-28 |
 | **X-6** | **Complete** (§2.3 S4) | 2026-10-27 |
 | **X-4** | **Done** (Run A) | 2026-10-27 |
-| M3 | **Unblocked** — gateway & TheSystem | |
+| M3 | **In progress** — gateway motor `automatic/run` + caps (G1–G3 code landed); TheSystem registry/UI open | |
 | M4 | Optional | |
 
 ---

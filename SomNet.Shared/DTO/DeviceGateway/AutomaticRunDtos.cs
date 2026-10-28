@@ -1,10 +1,22 @@
 using SomNet.Shared.DTO.Modes;
+using SomNet.Shared.DTO.Options;
+using SomNet.Shared.Enums;
 
 namespace SomNet.Shared.DTO.DeviceGateway;
 
 public sealed class AutomaticRunRequestDto
 {
-    public required AutomaticControlStateDto Parameters { get; init; }
+    /// <summary>Explicit profile hint; validated against device caps when present.</summary>
+    public ActuatorKind ActuatorKind { get; init; } = ActuatorKind.Relay;
+
+    /// <summary>Relay automatic snapshot (omit on motor runs — use <see cref="MotorParameters"/>).</summary>
+    public AutomaticControlStateDto? Parameters { get; init; }
+
+    /// <summary>Motor automatic snapshot (M3 gateway / scheduler).</summary>
+    public MotorAutomaticControlStateDto? MotorParameters { get; init; }
+
+    /// <summary>Optional Options slice for motor <c>segmentTargetRampMs</c> (defaults apply when null).</summary>
+    public AppOptionsDto? AppOptions { get; init; }
 
     public int? WaitTimeoutSeconds { get; init; }
 

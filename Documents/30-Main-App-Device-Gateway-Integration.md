@@ -131,7 +131,28 @@ public sealed class AutomaticDeviceScheduledJob
 }
 ```
 
-Preflight (optional): `await _gateway.GetDeviceStatusAsync(deviceId)` before POST when you want to skip early if Wi‑Fi is down. `await _gateway.ListDevicesAsync()` to populate admin device pickers.
+Preflight (optional): `await _gateway.GetDeviceStatusAsync(deviceId)` before POST when you want to skip early if Wi‑Fi is down. `await _gateway.ListDevicesAsync()` to populate admin device pickers (includes **`actuatorKind`** from caps when reachable — **M3-G3**).
+
+### 3.1 Motor automatic run (**M3**)
+
+For NVS **`hbridge`**, send **`motorParameters`** (not relay `parameters`). Gateway builds hub-identical **`automatic-start`** JSON via **`MotorAutomaticStartPayloadBuilder`** (`SomNet.Shared`).
+
+```csharp
+var request = new AutomaticRunRequestDto
+{
+    ActuatorKind = ActuatorKind.Hbridge,
+    MotorParameters = new MotorAutomaticControlStateDto
+    {
+        AutomaticMode = AutomaticRunMode.Periodic,
+        EndSessionMode = EndSessionMode.Minutes,
+        EndSessionValue = 1,
+    },
+    WaitTimeoutSeconds = 7200,
+    DisarmAfterRun = true,
+};
+```
+
+Gateway config (**M3-G1**): add a motor ESP to **`Device:Devices[]`** (optional **`actuatorKind`: `hbridge`** hint when caps probe fails). Relay jobs on a second **`deviceId`** unchanged (**P7-D2** parallel).
 
 ---
 
