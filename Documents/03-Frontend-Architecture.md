@@ -180,7 +180,7 @@ For the **Focus** device on the current Sub:
 | Speed Wave | `powerWave` |
 | Build-Up | `buildUp` |
 
-**Panels:** speed/duty min/max, segment timing, ramp ms, delay before start, end session (`minutes` \| `noAutoEnd` — stroke count coerced away in start payload). Burst block mirrors relay settings shape (including **burst placement** dropdown) but **motor firmware does not run bursts yet** (stored only).
+**Panels:** speed/duty min/max, segment timing, ramp ms, delay before start, end session (`minutes` \| `noAutoEnd` — stroke count coerced away in start payload). Burst block mirrors relay (including **burst placement**); execution spec [31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27), checklist **M1d** — firmware not shipped yet.
 
 **Controls:** Start (ensures scene session via `ensureAutomaticSessionForDeviceStart`), Stop, **Abort always visible** (disabled when idle). Start payload: `buildMotorAutomaticStartPayload` → `automatic-start` with `actuatorKind: hbridge`.
 

@@ -13,8 +13,9 @@
 | Integration runbook | [SomNet integration runbook](./SomNetIntegrationRunbook.md) §9.7 |
 | Wire payloads (relay today) | [SomNet.Device/docs/PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md) §6 |
 | Relay automatic parameters (today) | `SomNet.Shared` → `AutomaticControlStateDto` |
+| Burst placement (relay shipped; motor BP-E) | [36 — Burst placement modes](./36-Burst-Placement-Modes-Design.md) · [§5.2.1](#521-bursts-in-motor-automatic-design-locked-2026-10-27) |
 | ESP32 pin map (relay today) | [SomNet.Device/include/boardDefs.h](../SomNet.Device/include/boardDefs.h) |
-| **Implementation plan & sign-off** | [32 — Motor plan & checklists](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) |
+| **Implementation plan & sign-off** | [32 — Motor plan & checklists](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) · [Phase M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e) |
 
 ---
 
@@ -179,7 +180,7 @@ These layers should remain stable across actuator types:
 | **Stroke duration (ms)** | **Not used** for motor (or ignored); segment length uses **stroke min/max seconds** (or equivalent segment timers) |
 | **Periodic** | **v1 first ship** — same timing ideas as relay; duty held or stepped per segment within min/max duty band |
 | **Random power/timing** | Same **mode family** as relay after periodic; duty targets change between segments — motor FSM must **ramp** PWM between speeds (relay may jump % instantly) — **MA-D14** |
-| **Bursts** | Follow relay **pattern** later; burst steps should **ramp** duty, not step instantly |
+| **Bursts** | Same **schedule + placement** as relay ([doc 36](./36-Burst-Placement-Modes-Design.md)); burst **clusters** use **ramped speed** steps — [§5.2.1](#521-bursts-in-motor-automatic-design-locked-2026-10-27) |
 | **End session** | **v1:** time-based (**minutes**) and **no auto end**; **segment** stop in software if needed — **not** rotation/**count** (**MA-D20**). **`resultJson`** documents actual end reason. |
 
 **MA-D14 — speed transitions:** Motor automatic FSM includes a **ramp** state (duty Δ over time) when moving from one target duty to another. Parameters (ramp ms, max slew rate) TBD in motor DTO/caps; **no instant** duty jumps for random/burst modes. Periodic v1 may use simpler hold/ramp-at-segment-start only.
@@ -234,6 +235,94 @@ Similar **operator concepts** do not imply a **shared JSON schema**. Relay and m
 **Duty fields (MA-D19):** `minimumDutyPercent` / `maximumDutyPercent` are the v1 program fields; firmware may apply an internal scale factor later if module duty ≠ perceived speed.
 
 Only include **shared** envelope pieces in both schemas when product signs off they are truly common (MA-D2).
+
+### 5.2.1 Bursts in motor automatic (design locked 2026-10-27)
+
+**Status:** **Design locked** — firmware **not implemented** (checklist [32 — Phase M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e), doc 36 **BP-E**). **UI + API + DTO** already round-trip `burstsOn`, `burstPlacement`, and burst sub-fields; **`MotorAutomaticSessionMode` ignores them today**.
+
+**Goal:** Operators use the **same six placement options** and percent semantics as relay ([36 §3](./36-Burst-Placement-Modes-Design.md)), without learning a second product. Motor execution differs: **PWM ramps** and **segment timing**, not relay pulses.
+
+#### Main beat (what “main stroke” means on motor)
+
+| Program mode | Main beat | `mainSegmentsCompleted` counter |
+|--------------|-----------|----------------------------------|
+| **`periodic` (set-speed hold)** | **No segment boundaries** after initial ramp — motor holds one target speed until stop or minutes end | Stays at **1**; **do not** use stride/milestone/chance placements that need repeating beats |
+| **`randomSpeed`**, **`randomSpeedAndTiming`**, **`powerWave`**, **`buildUp`** | End of each **program segment** (when a segment ramp finishes and the next segment would start) | **`segmentsCompleted_`** after each completed segment ramp (same index used for schedule math) |
+
+**Placement support matrix (v1 motor burst):**
+
+| Schedule | `periodic` | Segmented modes |
+|----------|------------|-----------------|
+| **Spread** (`*SessionSpread`) | **Minutes only** — wall-clock deadlines between holds (reuse `WallClockDeadlines` in gap polling) | Minutes + `noAutoEnd` (wall-clock / cadence per doc 36) |
+| **Even** (`*AfterMainStroke`) | **Not offered in UI** when mode = periodic, **or** firmware treats as no-op with serial hint | Full support (stride / stroke milestones on segment index) |
+| **Chance** (`*ChanceAfterMainStroke`) | **Not offered** for periodic (same as even) | Full support |
+
+**UI rule (M1d):** When `automaticMode === 'periodic'`, disable or auto-coerce placements that require a repeating main beat (even/chance; spread non-minutes). Segmented modes expose all six placements.
+
+#### Main+ vs instead-of (doc 36)
+
+| Timing | Motor hook (segmented modes) |
+|--------|------------------------------|
+| **Main +** | After segment ramp completes (`segmentsCompleted_` incremented), if schedule fires → enter **burst sub-FSM**, then continue program |
+| **Instead of main** | Before `beginSegmentTransition()` for the next segment, if schedule fires → **burst sub-FSM** and **skip** that segment’s program transition |
+
+Wall-clock **session spread + minutes** runs in **`poll`** while idle between segment work (same idea as relay `WaitingGap`).
+
+#### Burst cluster (motor shape — MA-D14)
+
+Relay burst = `burstStrokes` relay pulses + `burstDelayMs` open gaps. Motor burst = **`burstStrokesMin`–`burstStrokesMax` micro-cycles**, each cycle:
+
+1. **Ramp** commanded speed from current program target toward **burst target speed** over `rampMs` (or a burst-specific ramp cap TBD — default: session `rampMs`).
+2. **Hold** at burst target for a **fixed micro-duration** derived from session stroke-ms limits **or** a motor-specific default (e.g. 200–400 ms equivalent “pulse width” at burst duty) — **MA-D26** bench tune.
+3. **Intra-burst gap:** ramp/hold at **reduced speed** (or duty floor) for `burstDelayMin`–`burstDelayMax` **seconds** (drawn per gap like relay).
+
+**Burst target speed:** Map `burstStrokePowerMin` / `burstStrokePowerMax` (0–100 **relative**) into the session **`minimumSpeedPercent`–`maximumSpeedPercent`** envelope (same idea as relay `resolveBurstEffectivePower` on `minimumPower`/`maximumPower`), then `motorSpeedPercentToDuty`.
+
+**`burstStyle`:** Same four styles as relay — random draws per micro-cycle for power and/or delay (`drawBurstRelativePower` / `drawBurstDelaySec` logic shared or ported).
+
+**Abort / Stop:** Match Phase 10 intent — **Abort** cuts PWM immediately; **Stop** finishes current ramp/micro-hold or **entire burst cluster** (cooperative, same as relay P10-D3).
+
+#### Shared firmware module
+
+Reuse **`automatic_burst_runtime`** (plan build, milestone/stride/chance, `burstInsteadOfMain`, replan) by feeding a **motor adapter**:
+
+- `endSessionMode`: only **`minutes`** \| **`noAutoEnd`** (map to relay plan input).
+- `mainStrokesCompleted` ↔ `segmentsCompleted_` (segmented modes only).
+- Parse `burstPlacement` via same strings as relay (`parseBurstPlacement` or shared helper).
+
+Do **not** fork placement formulas in a second TS/C++ implementation.
+
+#### Safety until M1d ships
+
+**Interim (M1d-F2):** `parseMotorAutomaticConfig` should **`reject` `burstsOn: true`** with serial  
+`[MOTOR-AUTO] reject: burstsOn not implemented on motor`  
+so operators are not misled. Remove when burst FSM is complete.
+
+#### `resultJson` (motor burst tier 1)
+
+Extend motor automatic stop summary (align with relay tier 1):
+
+| Field | Notes |
+|-------|--------|
+| `burstEventsCompleted` | Count of finished burst clusters |
+| `burstPlacement` | Wire string echo |
+| `segmentsCompleted` | Main program segments only (exclude intra-burst micro-cycles) |
+
+Optional later: chance roll audit fields (doc 36 §11).
+
+#### Telemetry
+
+During burst micro-cycles, emit **`motor-automatic-segment`** acks (same correlation id as M1c) so the **live pattern graph** shows dips/clusters. Preview graph uses seeded placement logic in `motorSpeedSchedule.ts` (M1d-U1).
+
+#### Decisions (this section)
+
+| ID | Decision |
+|----|----------|
+| **MA-D25** | Motor burst uses **doc 36** placements and percent meanings; execution is **ramped speed clusters**, not relay pulses |
+| **MA-D26** | Micro-hold duration per burst stroke: **bench-tuned constant or cap** in v1 (not operator `strokeMs` on motor DTO) — document in PROTOCOL when fixed |
+| **MA-D27** | **`periodic`** + bursts: **session spread + minutes only**; even/chance disabled in UI for periodic |
+
+---
 
 ### 5.4 Host integration (web API & TheSystem)
 
@@ -439,7 +528,7 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 | **`automatic-update`** | Queued replan via `queueSessionUpdate` when session active (same JSON shape as start). |
 | **PWM init** | Motor hardware init **deferred until Wi‑Fi up** (`main.cpp`) to avoid LEDC/Wi‑Fi contention on boot. |
 | **Segment telemetry** | At each ramp, unsolicited hub ack `correlationId: motor-automatic-segment` with `fromSpeedPercent`, `toSpeedPercent`, `durationMs`, `programElapsedMs` (`emitSegmentRamp`). |
-| **Bursts** | **Not implemented** on motor FSM — UI burst fields persist in settings but are not sent as a motor burst program. |
+| **Bursts** | **Not implemented** on motor FSM — see [§5.2.1](#521-bursts-in-motor-automatic-design-locked-2026-10-27) + [M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e). UI/API send burst fields; firmware ignores until M1d. |
 
 ### 13.2 SomNet.API / Shared
 
@@ -466,7 +555,8 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 |------|--------|
 | Standalone `/api/local/*` motor parity | **M2** |
 | Gateway / TheSystem presets + scheduler | **M3** |
-| Motor automatic **bursts**, reverse channel, Hall end modes | **M4** (optional) |
+| Motor automatic **bursts** + placement | **M1d** ([32 §5.2](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e)) — was listed under M4 |
+| Reverse channel, Hall end modes | **M4** (optional) |
 | Relay automatic **pattern graph** | Deferred |
 
 ---
@@ -487,6 +577,9 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 | **MA-D18** | PWM / enable constants | **`MOTOR_PWM_FREQUENCY_HZ`**, **`MOTOR_ENABLE_ACTIVE_HIGH`** in `boardDefs.h` — bench tuning | 2026-10-25 |
 | **MA-D19** | Duty % fields | **`minimumDutyPercent` / `maximumDutyPercent`** for v1; optional duty→speed scaling later | 2026-10-25 |
 | **MA-D20** | End session (motor v1) | **No count/rotation** end mode; **minutes** + **noAutoEnd**; **v2** Hall+magnets may enable rotation-based end | 2026-10-25 |
+| **MA-D25** | Motor automatic bursts | Same **burstPlacement** as relay ([36](./36-Burst-Placement-Modes-Design.md)); **ramped speed clusters** — [§5.2.1](#521-bursts-in-motor-automatic-design-locked-2026-10-27) | 2026-10-27 |
+| **MA-D26** | Burst micro-hold duration | v1 **bench-tuned** per micro-cycle (not motor `strokeMs` DTO) | 2026-10-27 |
+| **MA-D27** | Periodic + burst placement | **Session spread + minutes** only; disable even/chance for periodic in UI | 2026-10-27 |
 | **MA-D6** | Hardware driver | **Unified MCU board**; motor header → **BTS7960** (**D25/D27**, **D26/D14**); relay header → **D4**; shared **D33/D2/D32** | 2026-10-25 |
 | **MA-D11** | Product hardware | **One platform PCB** + **either** relay **or** H-bridge module; future alternate modules possible, none planned | 2026-10-25 |
 | **MA-D12** | Actuator binding | **`actuatorKind` chosen at device registration** (pair / add device: relay or motor?) → **NVS on ESP** + **server registration row**; `PairDevice` carries kind to firmware; commands validated vs NVS | 2026-10-25 |

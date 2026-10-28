@@ -1,6 +1,14 @@
 import type { BurstPlacement, BurstStyle, EndSessionMode } from '@/types/modes';
 import type { MotorAutomaticRunMode } from '@/types/motorAutomaticModes';
 
+/** Same wire values as relay `BURST_STYLE_OPTIONS`; labels use speed (motor UI). */
+export const MOTOR_BURST_STYLE_OPTIONS: { value: BurstStyle; label: string }[] = [
+  { value: 'fixedPowerDelay', label: 'Fixed Speed/Delay' },
+  { value: 'randomPowerOnly', label: 'Random Speed Only' },
+  { value: 'randomDelayOnly', label: 'Random Delay Only' },
+  { value: 'randomPowerAndDelay', label: 'Random Speed/Delay' },
+];
+
 export interface MotorManualControlState {
   minimumDutyPercent: number;
   maximumDutyPercent: number;

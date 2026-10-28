@@ -232,9 +232,19 @@ Labels come from `burstPercentFieldLabel()` — depend on **schedule** (spread /
 
 ---
 
-## 8. Motor (future — BP-D7)
+## 8. Motor (BP-E / Phase M1d)
 
-UI + DTO store all **six** placements (same dropdown as relay). **Relay firmware** executes placement; **motor automatic** does not run burst FSM yet ([doc 31](./31-Motor-Actuator-Device-Design.md)).
+**Relay:** implemented **`0.15.2-burst-main-timing`**.
+
+**Motor:** UI + DTO + API validation already store/send all **six** placements. **Execution** is specified in [31 — §5.2.1 Bursts in motor automatic](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27) (MA-D25–D27) and tracked in [32 — Phase M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e).
+
+| Topic | Motor rule (summary) |
+|-------|----------------------|
+| Main beat | **Segment end** on random/wave/build-up; **periodic** has no repeating beat |
+| Periodic + placement | **Session spread + minutes** only; UI disables even/chance (MA-D27) |
+| Burst shape | Ramped **speed %** micro-cycles + intra-burst gaps — not relay pulses |
+| Code reuse | Shared `automatic_burst_runtime` via motor adapter |
+| Until shipped | Firmware should **reject** `burstsOn: true` (M1d-F2) |
 
 ---
 
@@ -246,7 +256,7 @@ UI + DTO store all **six** placements (same dropdown as relay). **Relay firmware
 | **BP-B** | Six-option dropdown + labels/warnings + preview | ☑ |
 | **BP-C** | Relay firmware: three schedules × main+ / instead-of | ☑ **`0.15.2-burst-main-timing`** |
 | **BP-D** | Operator + dev docs (this file, Phase 10 follow-on, device plan) | ☑ 2026-10-27 |
-| **BP-E** | Motor M4 burst execution | ☐ |
+| **BP-E** | Motor burst execution — [31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27), [32 M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e) | ☐ design ☑ / firmware ☐ |
 
 ---
 

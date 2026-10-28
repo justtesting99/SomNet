@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BURST_STYLE_OPTIONS, type EndSessionMode } from '@/types/modes';
+import type { EndSessionMode } from '@/types/modes';
 import {
   MOTOR_AUTOMATIC_RUN_MODE_OPTIONS,
   type MotorAutomaticRunMode,
 } from '@/types/motorAutomaticModes';
-import type { MotorAutomaticControlState } from '@/types/motorModes';
+import {
+  MOTOR_BURST_STYLE_OPTIONS,
+  type MotorAutomaticControlState,
+} from '@/types/motorModes';
 import { useOptions } from '@/context/OptionsProvider';
 import { useControlPanelSettings } from '@/hooks/useControlPanelSettings';
 import { useOperationSession } from '@/hooks/useOperationSession';
@@ -711,7 +714,7 @@ export function MotorAutomaticControls() {
               label="Burst Style"
               value={state.burstStyle}
               disabled={burstSettingsDisabled}
-              options={BURST_STYLE_OPTIONS}
+              options={MOTOR_BURST_STYLE_OPTIONS}
               onChange={(event) =>
                 update('burstStyle', event.target.value as MotorAutomaticControlState['burstStyle'])
               }
