@@ -241,30 +241,26 @@ bool NvsStore::hasHubServerUrl() const {
 }
 
 bool NvsStore::isHubRuntimeEnabled() const {
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
     if (!open_) {
         return false;
     }
     if (!preferences.isKey(kKeyHubRuntimeEn)) {
-        // Devices that saved server_url before hub_run existed: keep hub on until user toggles.
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+        // Saved server_url before hub_run existed: hub on until user toggles off for local /operate.
         return hasHubServerUrl();
+#else
+        return true;
+#endif
     }
     return preferences.getBool(kKeyHubRuntimeEn, false);
-#else
-    return true;
-#endif
 }
 
 bool NvsStore::setHubRuntimeEnabled(bool value) {
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
     if (!open_) {
         return false;
     }
     preferences.putBool(kKeyHubRuntimeEn, value);
     return true;
-#else
-    return true;
-#endif
 }
 
 bool NvsStore::getAccessToken(char* out, size_t outLen) const {

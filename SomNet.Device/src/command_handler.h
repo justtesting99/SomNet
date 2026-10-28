@@ -36,6 +36,12 @@ public:
 
     void enqueueExecuteCommand(const ExecuteCommandPayload& command);
 
+    /** True when relay or motor motion/automatic work is in flight (local status M2-F1). */
+    bool isMotionBusy() const;
+
+    /** True when relay or motor automatic session is active (local status M2-F1). */
+    bool isAutomaticProgramActive() const;
+
     static void onStrokeComplete(
         void* context,
         const char* correlationId,

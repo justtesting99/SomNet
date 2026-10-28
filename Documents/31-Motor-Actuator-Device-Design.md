@@ -15,7 +15,7 @@
 | Relay automatic parameters (today) | `SomNet.Shared` → `AutomaticControlStateDto` |
 | Burst placement (relay shipped; motor BP-E) | [36 — Burst placement modes](./36-Burst-Placement-Modes-Design.md) · [§5.2.1](#521-bursts-in-motor-automatic-design-locked-2026-10-27) |
 | ESP32 pin map (relay today) | [SomNet.Device/include/boardDefs.h](../SomNet.Device/include/boardDefs.h) |
-| **Implementation plan & sign-off** | [32 — Motor plan & checklists](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) · [Phase M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e) |
+| **Implementation plan & sign-off** | [32 — Motor plan §6 M2](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#6-phase-m2--somesp-standalone-local-api--operate) |
 
 ---
 

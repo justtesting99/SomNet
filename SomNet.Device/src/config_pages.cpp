@@ -184,14 +184,24 @@ void renderStatus(
 
     const bool somespHasServer = kSomNetStandaloneBuild && escServer[0] != '\0';
     const bool somespPaired = kSomNetStandaloneBuild && nvs.isPaired();
-    const bool somespHubEnabled = kSomNetStandaloneBuild && nvs.isHubRuntimeEnabled();
+    const bool hubRuntimeEnabled = nvs.isHubRuntimeEnabled();
+    const bool hasServerUrl = escServer[0] != '\0';
+    const bool devicePaired = nvs.isPaired();
+    const bool showHubModeToggle =
+        kSomNetLocalOperateEnabled && !provisioningMode && hasServerUrl && devicePaired;
 
-    if (kSomNetStandaloneBuild && !provisioningMode) {
+    if (kSomNetLocalOperateEnabled && !provisioningMode) {
         append(out, outLen, &offset,
             "<div class=\"panel note\"><strong>Local control.</strong> "
             "<a class=\"btn btn-primary\" href=\"/operate\">Control panel</a> "
-            "(PIN unlock + arm). Works with or without the SomNet hub.</div>");
-        if (somespPaired && somespHasServer) {
+            "(PIN unlock + arm).");
+        if (kSomNetStandaloneBuild) {
+            append(out, outLen, &offset, " Works with or without the SomNet hub.");
+        } else {
+            append(out, outLen, &offset, " LAN mirror of hub commands when the hub is offline or for bench tests.");
+        }
+        append(out, outLen, &offset, "</div>");
+        if (showHubModeToggle) {
             append(out, outLen, &offset,
                 "<div class=\"panel\" id=\"hub-mode-panel\"><p><strong>Remote hub</strong></p>"
                 "<p class=\"note\">Switch off for LAN-only <code>/operate</code>. Switch on for SomNet UI / cloud commands "
@@ -199,7 +209,7 @@ void renderStatus(
                 "<div class=\"switch-row\"><span>Connect SomNet hub</span>"
                 "<label class=\"switch\"><input type=\"checkbox\" id=\"hub-remote\"><span class=\"slider\"></span></label>"
                 "</div><p id=\"hub-mode-status\" class=\"note\"></p></div>");
-        } else if (!somespHasServer) {
+        } else if (kSomNetStandaloneBuild && !somespHasServer) {
             append(out, outLen, &offset,
                 "<div class=\"panel\"><p><strong>SomNet server (one-time)</strong></p>"
                 "<p class=\"note\">Save your API base URL (LAN IP, not <code>localhost</code>), enable the hub, "
@@ -209,7 +219,7 @@ void renderStatus(
                 "placeholder=\"http://192.168.x.x:5031\" maxlength=128></label>"
                 "<p class=\"actions\"><button class=\"btn btn-primary\" type=submit>Save server &amp; connect hub</button></p>"
                 "</form></div>");
-        } else if (!somespPaired) {
+        } else if (kSomNetStandaloneBuild && !somespPaired) {
             append(out, outLen, &offset,
                 "<div class=\"panel note\"><strong>Pair in SomNet</strong> — hub should connect automatically. "
                 "Paste the Device ID below in Dom &rarr; Sub &rarr; Options &rarr; Hardware device. "
@@ -270,7 +280,7 @@ void renderStatus(
     append(out, outLen, &offset, "</p><p class=\"row\"><strong>Hub:</strong> ");
     if (kSomNetStandaloneBuild && !somespHasServer) {
         append(out, outLen, &offset, "not configured");
-    } else if (kSomNetStandaloneBuild && !somespHubEnabled) {
+    } else if (!hubRuntimeEnabled && kSomNetLocalOperateEnabled) {
         append(out, outLen, &offset, "paused (local only)");
     } else if (provisioningMode) {
         append(out, outLen, &offset, "off (provisioning)");
@@ -284,11 +294,11 @@ void renderStatus(
     append(out, outLen, &offset, "</p></div>");
 
     append(out, outLen, &offset, "<p class=\"actions\">");
-    if (kSomNetStandaloneBuild && !provisioningMode) {
+    if (kSomNetLocalOperateEnabled && !provisioningMode) {
         append(out, outLen, &offset, "<a class=\"btn btn-primary\" href=\"/operate\">Control panel</a> ");
     }
     append(out, outLen, &offset, "<a class=\"btn btn-secondary\" href=\"/config\">Configure</a></p>");
-    if (kSomNetStandaloneBuild && !provisioningMode && somespPaired && somespHasServer) {
+    if (showHubModeToggle) {
         append(out, outLen, &offset,
             "<script>(function(){var sw=document.getElementById('hub-remote');var st=document.getElementById('hub-mode-status');"
             "if(!sw||!st)return;var busy=false;"

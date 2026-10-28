@@ -12,8 +12,10 @@
 #include "session_accessory_controller.h"
 #include "signalr_client.h"
 
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#if SOMNET_LOCAL_OPERATE_ENABLED
 #include "local_command_status.h"
+#endif
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
 #include "local_history_store.h"
 #endif
 
@@ -230,7 +232,7 @@ void CommandHandler::sendAck(
         Serial.println(resultJson);
     }
 
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#if SOMNET_LOCAL_OPERATE_ENABLED
     if (correlationId != nullptr &&
         (strncmp(correlationId, "local-", 6) == 0 ||
             strcmp(correlationId, "automatic-session-complete") == 0 ||
@@ -241,9 +243,11 @@ void CommandHandler::sendAck(
         Serial.print(F(" success="));
         Serial.println(success ? F("true") : F("false"));
         localCommandStatusOnAck(correlationId, success, message, resultJson);
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
         if (resultJson != nullptr && resultJson[0] != '\0') {
             localHistoryOnLocalAck(correlationId, success, message, resultJson);
         }
+#endif
         return;
     }
 #endif
@@ -648,4 +652,33 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
             &CommandHandler::onStrokeComplete)) {
         sendAck(command.correlationId, false, "invalid stroke payload", nullptr);
     }
+}
+
+bool CommandHandler::isMotionBusy() const {
+    if (pendingCommandReady_) {
+        return true;
+    }
+    if (executionContext_ != nullptr && executionContext_->isActive()) {
+        return true;
+    }
+    if (motorManualRunActive_) {
+        return true;
+    }
+    if (motor_ != nullptr && motor_->isActive()) {
+        return true;
+    }
+    if (motorAutomatic_ != nullptr && motorAutomatic_->isActive()) {
+        return true;
+    }
+    return false;
+}
+
+bool CommandHandler::isAutomaticProgramActive() const {
+    if (executionContext_ != nullptr && executionContext_->isAutomaticSessionActive()) {
+        return true;
+    }
+    if (motorAutomatic_ != nullptr && motorAutomatic_->isActive()) {
+        return true;
+    }
+    return false;
 }

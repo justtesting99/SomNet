@@ -40,7 +40,7 @@ Serial banner includes **`Mode: STANDALONE`** and **`Control: http://<ip>/operat
 
 1. On **status** (`http://<device-ip>/`), save **SomNet server URL** (API base, LAN IP, no `/hubs/hardware`). Hub connects **without reboot**.
 2. Pair **Device ID** in SomNet (Dom → Sub → Options → Hardware device).
-3. Use **Connect SomNet hub** on/off to switch between **remote hub** and **local-only** `/operate` (pairing and `server_url` stay in NVS).
+3. Use **Connect SomNet hub** on the device **status page** (or `POST /api/hub/mode`) to switch between **remote hub** and **local-only** `/operate` (pairing and `server_url` stay in NVS). Same toggle exists on **`env:dev`** when `SOMNET_LOCAL_API=1` (default hub firmware).
 
 | API | Notes |
 |-----|--------|
@@ -62,11 +62,57 @@ Serial banner includes **`Mode: STANDALONE`** and **`Control: http://<ip>/operat
 | POST | `/api/local/lock` | Bearer | Clears session + disarm |
 | POST | `/api/local/arm` | Bearer | GPIO32 ON |
 | POST | `/api/local/disarm` | Bearer | GPIO32 OFF |
-| GET | `/api/local/status` | — | `busy`, `automaticActive`, `commandComplete`, `resultJson`, … |
-| GET | `/api/local/caps` | — | `maxStrokeMs`, burst limits |
-| POST | `/api/local/commands` | Bearer + armed | `commandKey` + `payloadJson` — [PROTOCOL.md](./PROTOCOL.md) §6 |
-| GET | `/api/local/settings` | Bearer | `{ "stored": false }` or `{ "manual", "automatic", "activeTab" }` |
-| PUT | `/api/local/settings` | Bearer | Same JSON shape; saved to NVS (`loc_oper_set`) |
+| GET | `/api/local/status` | — | `busy`, `automaticActive`, **`actuatorKind`**, `commandComplete`, `resultJson`, … — **motor** automatic/manual included in busy/automatic (M2-F1) |
+| GET | `/api/local/caps` | — | **`actuatorKind`**: relay stroke limits **or** motor `minDutyPercent` / `maxDutyPercent` |
+| POST | `/api/local/commands` | Bearer + armed | `commandKey` + `payloadJson` — **same JSON as hub** ([PROTOCOL.md](./PROTOCOL.md) §6) |
+| GET | `/api/local/settings` | Bearer | `{ "stored": false }` or settings blob (see below) |
+| PUT | `/api/local/settings` | Bearer | Saved to NVS (`loc_oper_set`); max **1536** bytes |
+
+### Settings JSON (hub parity — M2-D)
+
+**Relay profile** (`actuatorKind: relay`):
+
+```json
+{
+  "manual": { "minimumStrokeMs": 25, "maximumStrokeMs": 400, "powerPercent": 50 },
+  "automatic": { "automaticMode": "randomPowerAndTiming", "burstsOn": false },
+  "activeTab": "auto"
+}
+```
+
+**Motor profile** (`actuatorKind: hbridge` — set via **`/config` POST `actuator_kind=hbridge`**):
+
+```json
+{
+  "motorManual": { "minimumDutyPercent": 20, "maximumDutyPercent": 80, "speedPercent": 0 },
+  "motorAutomatic": {
+    "automaticMode": "periodic",
+    "minimumDutyPercent": 20,
+    "maximumDutyPercent": 80,
+    "minimumSpeedPercent": 30,
+    "maximumSpeedPercent": 50,
+    "segmentMinSeconds": 5,
+    "segmentMaxSeconds": 20,
+    "rampMs": 500,
+    "endSessionMode": "minutes",
+    "endSessionValue": 2,
+    "burstsOn": true,
+    "burstPlacement": "mainPlusAfterMainStroke",
+    "burstPercent": 50
+  },
+  "appOptions": {
+    "motorSegmentTargetRampMode": "segmentDuration",
+    "motorSegmentTargetRampMs": 200
+  },
+  "activeTab": "auto"
+}
+```
+
+PUT rejects **`motorManual` / `motorAutomatic` on relay** (`400 motor_settings_on_relay_profile`) and **`manual` / `automatic` on motor** (`relay_settings_on_motor_profile`). **`appOptions`** is motor-only.
+
+### Motor automatic-start (curl sketch)
+
+After unlock + arm, POST **`/api/local/commands`** with the same **`payloadJson`** the hub sends (include `actuatorKind`, `segmentTargetRampMs`, and program fields). Example keys: `automaticMode`, duty/speed bands, `endSessionMode`, burst fields — see [PROTOCOL §6](../PROTOCOL.md) motor automatic. Poll **`GET /api/local/status`** until `automaticActive` is false and `resultJson` is present.
 
 On setup AP, local API returns **`403 setup_mode`**.
 

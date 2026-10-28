@@ -1,6 +1,6 @@
 # SomEsp — standalone ESP32 trial (device-only)
 
-**Status:** **In progress** — Phase 0 scaffold done in **SomNet.Device** (`env:somesp`); Phases 1+ pending.
+**Status:** **In progress** — Phase 0 scaffold done in **SomNet.Device** (`env:somesp`); Phases 1–5 relay **`/operate`** signed; **Motor profile (M2)** scoped in [32 §6](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#6-phase-m2--somesp-standalone-local-api--operate).
 
 **Parent design:** [26 — Site operating profiles](./26-ESP32-Local-Offline-Mode-Design.md) **tier 3 / Mode A** (narrowed for trial).
 
@@ -231,6 +231,23 @@ Only after Phase 4 sign-off.
 - [x] Hook on local ack with `resultJson`
 - [x] `GET/DELETE /api/local/history`, `GET /api/local/history/{id}`
 - [x] History tab on `/operate`; factory reset clears history
+
+---
+
+## 4.1 Motor profile (M2 — hub parity on LAN)
+
+SomEsp relay MVP (Phases 1–5) is **signed off**. **Motor (H-bridge)** uses the same **`CommandHandler`** as hub when NVS = `hbridge`; **M2** closes **API + `/operate` parity** with SomNet hub payloads ([32 §6 M2-P0](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#601-hub-vs-local--parity-matrix-target)).
+
+| Area | Relay today | Motor M2 work |
+|------|-------------|----------------|
+| **Parity rule** | Relay **`automatic-start`** JSON = hub | Motor start/update JSON = hub **`buildMotorAutomaticStartPayload`** (not relay stroke-ms) |
+| NVS **`actuatorKind`** | Default `relay`; set via **`/config` POST** | Same — use **`hbridge`** before motor bench |
+| **`/api/local/commands`** | `stroke`, relay automatic JSON | **`motor-run`**, motor automatic JSON — **engine ☑** |
+| **`/api/local/settings`** | Relay `manual` + `automatic` | Add **`motorManual` + `motorAutomatic` + optional `appOptions`** — [32 §6-D](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#64-slice-m2-d--local-settings-nvs-api-parity) |
+| **`/operate`** | Stroke/burst + relay automatic | Caps-driven UI calling local API only — [32 §6-C](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#63-slice-m2-c--operate-ui-client-of-local-api) |
+| **Status poll** | Relay `busy` / `automaticActive` | Include **motor** FSM — [32 §6-F](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#66-slice-m2-f--status-history-shell) |
+
+**Sign-off:** [32 Run D (M2-R1–R6)](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#69-run-d--m2-operator--bench-sign-off). Pattern graph stays **SomNet.UI only** (no `/operate` chart in M2).
 
 ---
 

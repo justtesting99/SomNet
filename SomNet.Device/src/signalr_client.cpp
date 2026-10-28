@@ -223,8 +223,11 @@ void buildEffectiveServerUrl(NvsStore& nvs, char* out, size_t outLen) {
 }
 
 bool hasHubServerConfig(NvsStore& nvs) {
+    if (!nvs.isHubRuntimeEnabled()) {
+        return false;
+    }
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
-    return nvs.hasHubServerUrl() && nvs.isHubRuntimeEnabled();
+    return nvs.hasHubServerUrl();
 #endif
     if (nvs.isFullyProvisioned()) {
         return true;
@@ -1218,6 +1221,10 @@ bool SignalRClient::begin(NvsStore* nvsStore, DeviceIdentity* identity, WifiMana
 
     if (!ensureHubStackReady()) {
         return false;
+    }
+    if (!nvsStore->isHubRuntimeEnabled()) {
+        Serial.println(F("[HUB] hub suspended (local /operate)"));
+        return true;
     }
     return true;
 }

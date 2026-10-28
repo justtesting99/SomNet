@@ -212,10 +212,18 @@ void handleLocalStatus(AsyncWebServerRequest* request) {
     }
     const bool unlocked = gLocalOperate != nullptr && gLocalOperate->isUnlocked();
     const bool armed = gLocalOperate != nullptr && gLocalOperate->isArmed();
-    const bool busy = gExecutionContext != nullptr && gExecutionContext->isActive();
+    const bool busy =
+        gCommandHandler != nullptr ? gCommandHandler->isMotionBusy()
+                                 : (gExecutionContext != nullptr && gExecutionContext->isActive());
     const bool automaticActive =
-        gExecutionContext != nullptr && gExecutionContext->isAutomaticSessionActive();
+        gCommandHandler != nullptr ? gCommandHandler->isAutomaticProgramActive()
+                                   : (gExecutionContext != nullptr &&
+                                      gExecutionContext->isAutomaticSessionActive());
     const bool wifiConnected = gWifi != nullptr && gWifi->isConnected() && !gWifi->isSoftAp();
+
+    NvsStore* nvsStatus = nvsStoreInstance();
+    const DeviceActuatorKind actuatorKind =
+        nvsStatus != nullptr ? nvsStatus->getActuatorKind() : DeviceActuatorKind_Relay;
 
     char correlationId[64];
     bool cmdComplete = false;
@@ -237,6 +245,7 @@ void handleLocalStatus(AsyncWebServerRequest* request) {
     doc["armed"] = armed;
     doc["busy"] = busy;
     doc["automaticActive"] = automaticActive;
+    doc["actuatorKind"] = actuatorKindToJson(actuatorKind);
     doc["wifiConnected"] = wifiConnected;
     doc["expiresAtMs"] = unlocked ? gLocalOperate->sessionExpiresAtMs() : 0ULL;
     doc["commandComplete"] = cmdComplete;
@@ -441,27 +450,102 @@ void handleLocalHistoryDelete(AsyncWebServerRequest* request) {
     sendJson(request, 200, "{\"cleared\":true}");
 }
 
-bool validateLocalOperateSettingsJson(const char* body, size_t len) {
+bool validateLocalOperateSettingsJson(
+    const char* body,
+    size_t len,
+    NvsStore* nvs,
+    char* errorOut,
+    size_t errorOutLen) {
+    if (errorOut != nullptr && errorOutLen > 0) {
+        errorOut[0] = '\0';
+    }
     if (body == nullptr || len == 0 || len >= kMaxLocalOperateSettingsBytes) {
+        if (errorOut != nullptr && errorOutLen > 0) {
+            strncpy(errorOut, "invalid_settings", errorOutLen - 1);
+            errorOut[errorOutLen - 1] = '\0';
+        }
         return false;
     }
 
     JsonDocument doc;
     const DeserializationError err = deserializeJson(doc, body, len);
     if (err || !doc.is<JsonObject>()) {
+        if (errorOut != nullptr && errorOutLen > 0) {
+            strncpy(errorOut, "invalid_json", errorOutLen - 1);
+            errorOut[errorOutLen - 1] = '\0';
+        }
         return false;
     }
 
     const bool hasManual = doc["manual"].is<JsonObject>();
     const bool hasAutomatic = doc["automatic"].is<JsonObject>();
+    const bool hasMotorManual = doc["motorManual"].is<JsonObject>();
+    const bool hasMotorAutomatic = doc["motorAutomatic"].is<JsonObject>();
     const bool hasTab = doc["activeTab"].is<const char*>();
-    if (!hasManual && !hasAutomatic && !hasTab) {
+    const bool hasAppOptions = doc["appOptions"].is<JsonObject>();
+    if (!hasManual && !hasAutomatic && !hasMotorManual && !hasMotorAutomatic && !hasTab &&
+        !hasAppOptions) {
+        if (errorOut != nullptr && errorOutLen > 0) {
+            strncpy(errorOut, "settings_empty", errorOutLen - 1);
+            errorOut[errorOutLen - 1] = '\0';
+        }
         return false;
     }
 
     if (hasTab) {
         const char* tab = doc["activeTab"];
         if (tab == nullptr || strlen(tab) > 16) {
+            if (errorOut != nullptr && errorOutLen > 0) {
+                strncpy(errorOut, "invalid_activeTab", errorOutLen - 1);
+                errorOut[errorOutLen - 1] = '\0';
+            }
+            return false;
+        }
+    }
+
+    if (hasAppOptions) {
+        JsonObject ao = doc["appOptions"].as<JsonObject>();
+        for (JsonPair kv : ao) {
+            const char* key = kv.key().c_str();
+            if (strcmp(key, "motorSegmentTargetRampMode") == 0) {
+                if (!kv.value().is<const char*>()) {
+                    if (errorOut != nullptr && errorOutLen > 0) {
+                        strncpy(errorOut, "invalid_appOptions", errorOutLen - 1);
+                    }
+                    return false;
+                }
+                continue;
+            }
+            if (strcmp(key, "motorSegmentTargetRampMs") == 0) {
+                if (!kv.value().is<int>() && !kv.value().is<long>()) {
+                    if (errorOut != nullptr && errorOutLen > 0) {
+                        strncpy(errorOut, "invalid_appOptions", errorOutLen - 1);
+                    }
+                    return false;
+                }
+                continue;
+            }
+            if (errorOut != nullptr && errorOutLen > 0) {
+                strncpy(errorOut, "invalid_appOptions", errorOutLen - 1);
+            }
+            return false;
+        }
+    }
+
+    if (nvs != nullptr && nvs->isOpen()) {
+        const DeviceActuatorKind kind = nvs->getActuatorKind();
+        if (kind == DeviceActuatorKind_Relay && (hasMotorManual || hasMotorAutomatic || hasAppOptions)) {
+            if (errorOut != nullptr && errorOutLen > 0) {
+                strncpy(errorOut, "motor_settings_on_relay_profile", errorOutLen - 1);
+                errorOut[errorOutLen - 1] = '\0';
+            }
+            return false;
+        }
+        if (kind == DeviceActuatorKind_HBridge && (hasManual || hasAutomatic)) {
+            if (errorOut != nullptr && errorOutLen > 0) {
+                strncpy(errorOut, "relay_settings_on_motor_profile", errorOutLen - 1);
+                errorOut[errorOutLen - 1] = '\0';
+            }
             return false;
         }
     }
@@ -500,8 +584,13 @@ void handleLocalSettingsPutBody(AsyncWebServerRequest* request, const char* body
         return;
     }
 
-    if (!validateLocalOperateSettingsJson(body, len)) {
-        sendJsonError(request, 400, "invalid_settings");
+    char settingsError[48];
+    NvsStore* nvsValidate = nvsStoreInstance();
+    if (!validateLocalOperateSettingsJson(body, len, nvsValidate, settingsError, sizeof(settingsError))) {
+        sendJsonError(
+            request,
+            400,
+            settingsError[0] != '\0' ? settingsError : "invalid_settings");
         return;
     }
 

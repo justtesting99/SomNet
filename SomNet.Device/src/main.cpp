@@ -17,9 +17,11 @@
 #include "status_led.h"
 #include "wifi_manager.h"
 
+#if SOMNET_LOCAL_OPERATE_ENABLED
+#include "local_operate.h"
+#endif
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
 #include "local_history_store.h"
-#include "local_operate.h"
 #endif
 
 namespace {
@@ -36,7 +38,7 @@ ButtonInput buttonInput;
 SignalRClient signalRClient;
 ConfigWebServer configWebServer;
 StatusLed statusLed;
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#if SOMNET_LOCAL_OPERATE_ENABLED
 LocalOperate localOperate;
 #endif
 
@@ -61,7 +63,7 @@ void maybeBeginMotorHardwareAfterWifi() {
     motorHardwareDeferredBeginDone = true;
     Serial.println(F("[MOTOR] hardware init deferred until Wi-Fi up"));
 }
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#if SOMNET_LOCAL_OPERATE_ENABLED
 bool wasWifiConnectedForLocal = false;
 #endif
 
@@ -121,9 +123,9 @@ void onButtonClick(ButtonClickKind kind, void*) {
         Serial.println(F("[BTN] click dropped (provisioning)"));
         return;
     }
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
-    if (!nvsStore.hasHubServerUrl() || !nvsStore.isHubRuntimeEnabled()) {
-        Serial.println(F("[BTN] click ignored (standalone, hub paused)"));
+#if SOMNET_LOCAL_OPERATE_ENABLED
+    if (!nvsStore.isHubRuntimeEnabled()) {
+        Serial.println(F("[BTN] click ignored (hub paused — use /operate)"));
         return;
     }
 #endif
@@ -269,12 +271,14 @@ void setup() {
     statusLed.begin();
 
     startNetwork();
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#if SOMNET_LOCAL_OPERATE_ENABLED
     localOperate.begin(&nvsStore, &sessionAccessoryController);
-    localHistoryBegin(&nvsStore, &wifiManager);
     localApiSetExecutionContext(&executionContext);
     localApiSetWifiManager(&wifiManager);
     localApiSetCommandHandler(&commandHandler, &deviceIdentity);
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    localHistoryBegin(&nvsStore, &wifiManager);
+#endif
     configWebServer.begin(
         bootMode,
         &nvsStore,
@@ -290,7 +294,7 @@ void setup() {
 void loop() {
     wifiManager.poll();
     maybeBeginMotorHardwareAfterWifi();
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#if SOMNET_LOCAL_OPERATE_ENABLED
     const bool wifiStaUp = wifiManager.isConnected() && !wifiManager.isSoftAp();
     if (wasWifiConnectedForLocal && !wifiStaUp) {
         localOperate.onWifiDisconnected();
@@ -306,12 +310,8 @@ void loop() {
     signalRClient.poll();
     if (buttonInput.isAwaitingCredentialResetRelease()) {
         statusLed.pollCredentialResetFlash();
-    } else if (kSomNetStandaloneBuild) {
-        if (nvsStore.hasHubServerUrl() && nvsStore.isHubRuntimeEnabled()) {
-            statusLed.poll(signalRClient.isHubConnected());
-        } else {
-            statusLed.poll(wifiManager.isConnected() && !wifiManager.isSoftAp());
-        }
+    } else if (kSomNetLocalOperateEnabled && !nvsStore.isHubRuntimeEnabled()) {
+        statusLed.poll(wifiManager.isConnected() && !wifiManager.isSoftAp());
     } else {
         statusLed.poll(signalRClient.isHubConnected());
     }

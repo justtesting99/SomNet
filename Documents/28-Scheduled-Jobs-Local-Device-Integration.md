@@ -50,6 +50,8 @@
 
 **Do not** route scheduled work through **SomNet.UI**. **Do not** require **SomNet.API** for the core path.
 
+**Payload parity (M2):** The **`payloadJson`** on **`POST /api/local/commands`** must match what the hub sends on **`POST /api/devices/commands`** for the same program (motor: include `actuatorKind`, `segmentTargetRampMs`, and fields from `MotorAutomaticControlStateDto`; relay: existing automatic JSON). See [32 §6 M2-P0](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#601-hub-vs-local--parity-matrix-target). Prefer building JSON from **Shared DTOs** in the job host rather than ad-hoc strings.
+
 **Firmware:** PlatformIO **`env:somesp`** (`SOMNET_STANDALONE=1`). Standard **`env:dev`** hub firmware does **not** expose `/api/local/commands`.
 
 **Configuration (per device or job):**

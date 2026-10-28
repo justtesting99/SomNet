@@ -10,6 +10,15 @@ constexpr bool kSomNetStandaloneBuild = true;
 constexpr bool kSomNetStandaloneBuild = false;
 #endif
 
+/** LAN /operate + /api/local/* (env:somesp, or env:dev with SOMNET_LOCAL_API=1). */
+#if (defined(SOMNET_STANDALONE) && SOMNET_STANDALONE) || (defined(SOMNET_LOCAL_API) && SOMNET_LOCAL_API)
+#define SOMNET_LOCAL_OPERATE_ENABLED 1
+constexpr bool kSomNetLocalOperateEnabled = true;
+#else
+#define SOMNET_LOCAL_OPERATE_ENABLED 0
+constexpr bool kSomNetLocalOperateEnabled = false;
+#endif
+
 #ifndef FIRMWARE_VERSION
 #define FIRMWARE_VERSION "0.1.0-phase1"
 #endif

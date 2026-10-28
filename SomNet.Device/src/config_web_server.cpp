@@ -7,10 +7,12 @@
 #include "signalr_client.h"
 #include "wifi_manager.h"
 
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#if SOMNET_LOCAL_OPERATE_ENABLED
 #include "local_operate.h"
-#include "local_history_store.h"
 #include "operate_pages.h"
+#endif
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#include "local_history_store.h"
 #endif
 
 #include <ESPAsyncWebServer.h>
@@ -27,7 +29,7 @@ NvsStore* gNvs = nullptr;
 DeviceIdentity* gIdentity = nullptr;
 WifiManager* gWifi = nullptr;
 SignalRClient* gSignalR = nullptr;
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#if SOMNET_LOCAL_OPERATE_ENABLED
 LocalOperate* gLocalOperate = nullptr;
 #endif
 
@@ -562,10 +564,13 @@ void handleApiStatus(AsyncWebServerRequest* request) {
                 gHttpMode == DeviceBootMode::Provisioning ? "provisioning" : "running");
         }
     } else {
+        const bool hubEnabled = gNvs->isHubRuntimeEnabled();
         snprintf(
             json,
             sizeof(json),
-            "{\"standalone\":false,\"deviceId\":\"%s\",\"mac\":\"%s\",\"friendlyName\":\"%s\",\"paired\":%s,\"wifiConnected\":%s,\"ip\":\"%s\",\"serverUrl\":\"%s\",\"mode\":\"%s\",\"hubConnected\":%s,\"hubState\":\"%s\"}",
+            "{\"standalone\":false,\"localOperate\":%s,\"hubEnabled\":%s,\"deviceId\":\"%s\",\"mac\":\"%s\",\"friendlyName\":\"%s\",\"paired\":%s,\"wifiConnected\":%s,\"ip\":\"%s\",\"serverUrl\":\"%s\",\"mode\":\"%s\",\"hubConnected\":%s,\"hubState\":\"%s\"}",
+            kSomNetLocalOperateEnabled ? "true" : "false",
+            hubEnabled ? "true" : "false",
             gIdentity->deviceId(),
             gIdentity->macAddress(),
             friendly,
@@ -574,8 +579,8 @@ void handleApiStatus(AsyncWebServerRequest* request) {
             gWifi->localIp(),
             serverUrl,
             gHttpMode == DeviceBootMode::Provisioning ? "provisioning" : "running",
-            gSignalR != nullptr && gSignalR->isHubConnected() ? "true" : "false",
-            gSignalR != nullptr ? gSignalR->hubStateLabel() : "offline");
+            hubEnabled && gSignalR != nullptr && gSignalR->isHubConnected() ? "true" : "false",
+            hubEnabled && gSignalR != nullptr ? gSignalR->hubStateLabel() : "local");
     }
     request->send(200, "application/json", json);
 }
@@ -632,6 +637,8 @@ void registerRoutes(AsyncWebServer& server) {
     server.on("/api/status", HTTP_GET, handleApiStatus);
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
     server.on("/config/connect-somnet", HTTP_POST, handleConnectSomNet);
+#endif
+#if SOMNET_LOCAL_OPERATE_ENABLED
     server.on("/api/hub/mode", HTTP_GET, handleApiHubModeGet);
     server.on(
         "/api/hub/mode",
@@ -648,6 +655,9 @@ void registerRoutes(AsyncWebServer& server) {
         }
         OperatePages::handleOperateGet(request);
     });
+    server.on("/operate/", HTTP_GET, [](AsyncWebServerRequest* request) {
+        request->redirect("/operate");
+    });
     if (gLocalOperate != nullptr) {
         registerLocalApiRoutes(server, gLocalOperate);
     }
@@ -655,6 +665,20 @@ void registerRoutes(AsyncWebServer& server) {
     server.onNotFound([](AsyncWebServerRequest* request) {
         Serial.print(F("[HTTP] 404 "));
         Serial.println(request->url());
+        const char* url = request->url().c_str();
+        if (url != nullptr &&
+            (strcmp(url, "/operate") == 0 || strncmp(url, "/operate/", 9) == 0) &&
+            !kSomNetLocalOperateEnabled) {
+            request->send(
+                404,
+                "text/html",
+                "<!DOCTYPE html><html><body style=\"font-family:system-ui;background:#020617;"
+                "color:#cbd5e1;padding:1.5rem\"><h1>/operate not available</h1>"
+                "<p>This firmware was built without LAN local control "
+                "(<code>SOMNET_LOCAL_API</code> / <code>env:somesp</code>).</p>"
+                "<p><a href=\"/\" style=\"color:#818cf8\">Back to status</a></p></body></html>");
+            return;
+        }
         request->redirect("/");
     });
 }
@@ -715,7 +739,7 @@ bool ConfigWebServer::begin(
     gIdentity = identity;
     gWifi = wifi;
     gSignalR = signalRClient;
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#if SOMNET_LOCAL_OPERATE_ENABLED
     gLocalOperate = localOperate;
 #endif
     gHttpMode = mode;
