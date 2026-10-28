@@ -114,6 +114,8 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
     Serial.print(automaticMode_);
     Serial.print(F(" delaySec="));
     Serial.print(config.delayBeforeStartSeconds);
+    Serial.print(F(" burstsOn="));
+    Serial.print(burstsOn_ ? F("true") : F("false"));
     Serial.println(F(" (stroke-first)"));
 
     if (burstsOn_) {

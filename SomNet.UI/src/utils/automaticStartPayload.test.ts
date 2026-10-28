@@ -24,7 +24,7 @@ describe('buildAutomaticStartPayload', () => {
     expect(payload.burstsOn).toBe(true);
     expect(payload.burstPercent).toBe(25);
     expect(payload.burstStyle).toBe('randomPowerOnly');
-    expect(payload.burstStrokePowerMin).toBe(defaultAutomaticState.burstStrokePowerMin);
+    expect(payload.burstStrokePowerMin).toBe(1);
     expect(payload.burstStrokesMax).toBe(defaultAutomaticState.burstStrokesMax);
   });
 

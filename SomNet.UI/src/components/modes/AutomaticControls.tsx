@@ -45,6 +45,10 @@ import { useHardwareCommand } from '@/context/HardwareCommandProvider';
 import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCommand';
 import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
 import { buildAutomaticStartPayload } from '@/utils/automaticStartPayload';
+import {
+  burstPreviewLikelyMatchesMainPower,
+  describeRelayBurstScheduleHint,
+} from '@/utils/relayBurstPlan';
 import { clearRelayAutomaticSegments } from '@/utils/relayAutomaticSegmentStore';
 import { parseAutomaticResultJson } from '@/utils/automaticResultJson';
 import { waitForAutomaticHubFinalize, computeAutomaticStopGraceMs } from '@/utils/automaticSessionFinalize';
@@ -116,6 +120,8 @@ export function AutomaticControls() {
   const configLocked = sessionRunning && !allowLiveOverrides;
   /** Master gate for burst sub-controls — Bursts On must be checked (Phase 10). */
   const burstSettingsDisabled = configLocked || !state.burstsOn;
+  const burstScheduleHint = describeRelayBurstScheduleHint(state);
+  const burstPowerMatchesMain = burstPreviewLikelyMatchesMainPower(state);
   const delayStartLocked = sessionRunning;
   const hardwareReady = isHardwareCommandReady(systemStatus) && sceneSessionActive;
   const lastPushedUpdateRef = useRef<string | null>(null);
@@ -640,6 +646,16 @@ export function AutomaticControls() {
               automatic program. Burst stroke power 0–100 is relative to main Power Settings
               min/max.
             </p>
+            {burstScheduleHint ? (
+              <p className="text-xs leading-relaxed text-slate-600">{burstScheduleHint}</p>
+            ) : null}
+            {burstPowerMatchesMain ? (
+              <p className="text-xs leading-relaxed text-amber-600/90">
+                Burst stroke power max is near 100 on the relative scale, so clusters may sound
+                like main strokes — lower max (e.g. 30–50) for lighter bursts. Each cluster is
+                still several rapid strokes with short gaps.
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-4">
               <Checkbox
                 label="Bursts On"

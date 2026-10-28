@@ -3,6 +3,16 @@ import type { AutomaticRunMode } from '@/types/modes';
 import type { RelayAutomaticSegmentEvent } from '@/utils/relayAutomaticSegmentJson';
 import { computeStrokeMs } from '@/utils/stroke';
 import {
+  advanceBurstPlan,
+  buildRelayBurstPlan,
+  previewBurstDelaySec,
+  previewBurstRelativePower,
+  previewBurstStrokeCount,
+  resolveBurstEffectivePower,
+  shouldTriggerBurstAfterMainStroke,
+  shouldTriggerBurstInWaitingGap,
+} from '@/utils/relayBurstPlan';
+import {
   createSeededRandom,
   type MotorSpeedSchedule,
   type MotorSpeedSchedulePoint,
@@ -84,6 +94,14 @@ export function hashRelayAutomaticScheduleSeed(state: AutomaticControlState): nu
     state.endSessionMode,
     state.endSessionValue,
     state.burstsOn,
+    state.burstPercent,
+    state.burstStyle,
+    state.burstStrokePowerMin,
+    state.burstStrokePowerMax,
+    state.burstDelayMin,
+    state.burstDelayMax,
+    state.burstStrokesMin,
+    state.burstStrokesMax,
   ].join('|');
 
   let hash = 2166136261;
@@ -247,6 +265,107 @@ function usesTableSchedule(mode: AutomaticRunMode): boolean {
   return mode === 'powerWave' || mode === 'powerAndTimingWave' || mode === 'buildUp';
 }
 
+function sessionElapsedMs(tSec: number, delayBeforeStartSeconds: number): number {
+  return Math.max(0, (tSec - delayBeforeStartSeconds) * 1000);
+}
+
+function appendStrokePulse(
+  points: MotorSpeedSchedulePoint[],
+  tSec: number,
+  level: number,
+  powerPercent: number,
+  state: AutomaticControlState,
+  horizonSec: number,
+): { tSec: number; level: number } {
+  const strokeMs = computeStrokeMs(
+    powerPercent,
+    state.minimumStrokeMs,
+    state.maximumStrokeMs,
+  );
+  const strokeSec = Math.max(0.001, strokeMs / 1000);
+  const strokeEnd = Math.min(tSec + strokeSec, horizonSec);
+
+  if (powerPercent !== level) {
+    pushPoint(points, tSec, level);
+    pushPoint(points, tSec, powerPercent);
+  } else {
+    pushPoint(points, tSec, level);
+  }
+  pushPoint(points, strokeEnd, powerPercent);
+
+  return { tSec: strokeEnd, level: powerPercent };
+}
+
+function appendGapInterval(
+  points: MotorSpeedSchedulePoint[],
+  tSec: number,
+  level: number,
+  gapSec: number,
+  horizonSec: number,
+): { tSec: number; level: number } {
+  const gapEnd = Math.min(tSec + Math.max(0, gapSec), horizonSec);
+  if (level !== 0) {
+    pushPoint(points, tSec, level);
+    pushPoint(points, tSec, 0);
+  } else {
+    pushPoint(points, tSec, 0);
+  }
+  pushPoint(points, gapEnd, 0);
+  return { tSec: gapEnd, level: 0 };
+}
+
+function appendBurstCluster(
+  state: AutomaticControlState,
+  scheduleSeed: number,
+  burstEventIndex: number,
+  points: MotorSpeedSchedulePoint[],
+  tSec: number,
+  level: number,
+  horizonSec: number,
+): { tSec: number; level: number; burstEventIndex: number } {
+  const strokeCount = previewBurstStrokeCount(state, burstEventIndex, scheduleSeed);
+  let cursor = tSec;
+  let currentLevel = level;
+
+  for (let strokeInBurst = 0; strokeInBurst < strokeCount; strokeInBurst += 1) {
+    if (cursor >= horizonSec) {
+      break;
+    }
+
+    const relativePower = previewBurstRelativePower(
+      state,
+      burstEventIndex,
+      strokeInBurst,
+      scheduleSeed,
+    );
+    const effectivePower = resolveBurstEffectivePower(relativePower, state);
+    const stroke = appendStrokePulse(
+      points,
+      cursor,
+      currentLevel,
+      effectivePower,
+      state,
+      horizonSec,
+    );
+    cursor = stroke.tSec;
+    currentLevel = stroke.level;
+
+    if (strokeInBurst < strokeCount - 1 && cursor < horizonSec) {
+      const delaySec = previewBurstDelaySec(
+        state,
+        burstEventIndex,
+        strokeInBurst,
+        scheduleSeed,
+      );
+      const gap = appendGapInterval(points, cursor, currentLevel, delaySec, horizonSec);
+      cursor = gap.tSec;
+      currentLevel = gap.level;
+    }
+  }
+
+  return { tSec: cursor, level: currentLevel, burstEventIndex: burstEventIndex + 1 };
+}
+
 export function buildRelayAutomaticPowerSchedule(state: AutomaticControlState): RelayPowerSchedule {
   const horizonSec = automaticHorizonSec(state);
   const scheduleSeed = hashRelayAutomaticScheduleSeed(state);
@@ -268,40 +387,82 @@ export function buildRelayAutomaticPowerSchedule(state: AutomaticControlState): 
 
   let strokeIndex = 0;
   let level = 0;
+  let mainStrokesCompleted = 0;
+  let burstEventIndex = 0;
+  const burstPlan = buildRelayBurstPlan(state);
 
   while (tSec < horizonSec) {
     const row = resolveStrokeRow(state, strokeIndex, scheduleSeed, tableRows);
-    const strokeMs = computeStrokeMs(
-      row.powerPercent,
-      state.minimumStrokeMs,
-      state.maximumStrokeMs,
-    );
-    const strokeSec = Math.max(0.001, strokeMs / 1000);
     const gapSec = Math.max(0, row.gapSec);
 
-    const strokeEnd = Math.min(tSec + strokeSec, horizonSec);
-    if (row.powerPercent !== level) {
-      pushPoint(points, tSec, level);
-      pushPoint(points, tSec, row.powerPercent);
-    } else {
-      pushPoint(points, tSec, level);
+    const mainStroke = appendStrokePulse(
+      points,
+      tSec,
+      level,
+      row.powerPercent,
+      state,
+      horizonSec,
+    );
+    tSec = mainStroke.tSec;
+    level = mainStroke.level;
+    mainStrokesCompleted += 1;
+
+    if (
+      state.burstsOn &&
+      burstPlan.active &&
+      shouldTriggerBurstAfterMainStroke(burstPlan, mainStrokesCompleted)
+    ) {
+      const burst = appendBurstCluster(
+        state,
+        scheduleSeed,
+        burstEventIndex,
+        points,
+        tSec,
+        level,
+        horizonSec,
+      );
+      tSec = burst.tSec;
+      level = burst.level;
+      burstEventIndex = burst.burstEventIndex;
+      advanceBurstPlan(burstPlan);
     }
-    pushPoint(points, strokeEnd, row.powerPercent);
-    level = row.powerPercent;
-    tSec = strokeEnd;
 
     if (tSec >= horizonSec) {
       break;
     }
 
-    const gapEnd = Math.min(tSec + gapSec, horizonSec);
-    if (level !== 0) {
-      pushPoint(points, tSec, level);
-      pushPoint(points, tSec, 0);
+    const gapEndTarget = Math.min(tSec + gapSec, horizonSec);
+    let gapCursor = tSec;
+
+    while (
+      state.burstsOn &&
+      burstPlan.active &&
+      burstPlan.kind === 'wallClock' &&
+      gapCursor < gapEndTarget
+    ) {
+      const elapsedMs = sessionElapsedMs(gapCursor, state.delayBeforeStartSeconds);
+      if (!shouldTriggerBurstInWaitingGap(burstPlan, elapsedMs)) {
+        break;
+      }
+
+      const burst = appendBurstCluster(
+        state,
+        scheduleSeed,
+        burstEventIndex,
+        points,
+        gapCursor,
+        level,
+        horizonSec,
+      );
+      gapCursor = burst.tSec;
+      level = burst.level;
+      burstEventIndex = burst.burstEventIndex;
+      advanceBurstPlan(burstPlan);
     }
-    pushPoint(points, gapEnd, 0);
-    level = 0;
-    tSec = gapEnd;
+
+    const gap = appendGapInterval(points, gapCursor, level, gapEndTarget - gapCursor, horizonSec);
+    tSec = gap.tSec;
+    level = gap.level;
     strokeIndex += 1;
 
     if (state.endSessionMode === 'strokes' && strokeIndex >= state.endSessionValue) {
@@ -316,6 +477,10 @@ export function buildRelayAutomaticPowerSchedule(state: AutomaticControlState): 
   return { points, horizonSec, illustrativeRandom };
 }
 
+function relaySegmentEndSec(segment: RelayAutomaticSegmentEvent): number {
+  return segment.programElapsedMs / 1000 + segment.durationMs / 1000;
+}
+
 export function buildRelayPowerScheduleFromLiveSegments(
   segments: RelayAutomaticSegmentEvent[],
   horizonSec: number,
@@ -323,6 +488,11 @@ export function buildRelayPowerScheduleFromLiveSegments(
   const sorted = [...segments].sort(
     (left, right) => left.programElapsedMs - right.programElapsedMs,
   );
+
+  let effectiveHorizonSec = Math.max(1, horizonSec);
+  for (const segment of sorted) {
+    effectiveHorizonSec = Math.max(effectiveHorizonSec, relaySegmentEndSec(segment));
+  }
 
   const points: MotorSpeedSchedulePoint[] = [];
   pushPoint(points, 0, 0);
@@ -348,11 +518,11 @@ export function buildRelayPowerScheduleFromLiveSegments(
   }
 
   const last = points[points.length - 1];
-  if (last.tSec < horizonSec) {
-    pushPoint(points, horizonSec, last.speedPercent);
+  if (last.tSec < effectiveHorizonSec) {
+    pushPoint(points, effectiveHorizonSec, last.speedPercent);
   }
 
-  return { points, horizonSec, illustrativeRandom: false };
+  return { points, horizonSec: effectiveHorizonSec, illustrativeRandom: false };
 }
 
 export function buildRelayManualPowerSchedule(

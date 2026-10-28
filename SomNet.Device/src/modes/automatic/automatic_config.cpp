@@ -172,8 +172,8 @@ bool parseAutomaticConfig(const char* payloadJson, AutomaticConfig* outConfig) {
 
     *outConfig = AutomaticConfig{};
 
-    // Payload may include burst fields (Phase 10); keep headroom under 768-char wire limit.
-    StaticJsonDocument<512> doc;
+    // Full automatic-start snapshot (~450+ chars) + ArduinoJson overhead — match motor parser headroom.
+    StaticJsonDocument<1024> doc;
     const DeserializationError err = deserializeJson(doc, payloadJson != nullptr ? payloadJson : "{}");
     if (err) {
         Serial.print(F("[AUTO] payload JSON error: "));
@@ -200,7 +200,13 @@ bool parseAutomaticConfig(const char* payloadJson, AutomaticConfig* outConfig) {
     outConfig->strokeMaxSeconds = doc["strokeMaxSeconds"] | 0;
     outConfig->delayBeforeStartSeconds = doc["delayBeforeStartSeconds"] | 0;
     outConfig->endSessionValue = doc["endSessionValue"] | 0;
-    outConfig->burstsOn = doc["burstsOn"] | false;
+    if (doc["burstsOn"].is<bool>()) {
+        outConfig->burstsOn = doc["burstsOn"].as<bool>();
+    } else if (doc["burstsOn"].is<int>()) {
+        outConfig->burstsOn = doc["burstsOn"].as<int>() != 0;
+    } else {
+        outConfig->burstsOn = false;
+    }
 
     outConfig->burstPercent = doc["burstPercent"] | 10;
     if (doc["burstStyle"].is<const char*>()) {

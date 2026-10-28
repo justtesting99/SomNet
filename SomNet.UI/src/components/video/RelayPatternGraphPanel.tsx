@@ -17,6 +17,7 @@ import {
   subscribeRelayAutomaticSegments,
 } from '@/utils/relayAutomaticSegmentStore';
 import { MotorSpeedPatternChart } from '@/components/video/MotorSpeedPatternChart';
+import { burstPreviewLikelyMatchesMainPower } from '@/utils/relayBurstPlan';
 
 interface RelayPatternGraphPanelProps {
   mode: OperationMode;
@@ -62,7 +63,7 @@ export function RelayPatternGraphPanel({
   const schedule = useMemo(() => {
     if (mode === 'automatic') {
       const horizonSec = automaticHorizonSec(automatic);
-      if (automatic.running && liveSegments.length > 0) {
+      if (liveSegments.length > 0) {
         return buildRelayPowerScheduleFromLiveSegments(liveSegments, horizonSec);
       }
       return buildRelayAutomaticPowerSchedule(automatic);
@@ -70,7 +71,7 @@ export function RelayPatternGraphPanel({
     return buildRelayManualPowerSchedule(manual);
   }, [automatic, liveSegments, manual, mode]);
 
-  const usingLiveSegments = mode === 'automatic' && automatic.running && liveSegments.length > 0;
+  const usingLiveSegments = mode === 'automatic' && liveSegments.length > 0;
 
   const [nowSec, setNowSec] = useState<number | null>(null);
 
@@ -119,13 +120,15 @@ export function RelayPatternGraphPanel({
       : 'Commanded power — Manual';
 
   const previewHint =
-    mode === 'automatic' && !automatic.running
-      ? 'Planned stroke/gap envelope from current settings'
+    mode === 'automatic' && usingLiveSegments && automatic.running
+      ? 'Live graph from device-reported strokes and gaps'
       : mode === 'automatic' && usingLiveSegments
-        ? 'Live graph from device-reported strokes and gaps'
-        : mode === 'automatic' && automatic.running
-          ? 'Waiting for segment data from the device…'
-          : 'Current manual power setting';
+        ? 'Device-reported strokes and gaps (session ended — cleared on next Start)'
+        : mode === 'automatic' && !automatic.running
+          ? 'Planned stroke/gap envelope from current settings'
+          : mode === 'automatic' && automatic.running
+            ? 'Waiting for segment data from the device…'
+            : 'Current manual power setting';
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900/50 px-3 py-3">
@@ -136,6 +139,15 @@ export function RelayPatternGraphPanel({
           <p className="mt-1 text-xs text-slate-500">
             Before Start, random modes show a fixed example path. After Start, the graph uses
             strokes the device actually chose.
+          </p>
+        ) : null}
+        {mode === 'automatic' &&
+        automatic.burstsOn &&
+        !usingLiveSegments &&
+        burstPreviewLikelyMatchesMainPower(automatic) ? (
+          <p className="mt-1 text-xs text-amber-600/90">
+            Bursts use Burst Stroke Power max on the 0–100 scale (100 = session max). Lower that
+            max (e.g. 30–50) for visibly lighter burst clusters between main strokes.
           </p>
         ) : null}
       </div>
