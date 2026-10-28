@@ -226,6 +226,14 @@ internal static class HardwareCommandPayloadValidator
                 }
             }
 
+            if (root.TryGetProperty("segmentTargetRampMs", out var segmentRampElement) &&
+                segmentRampElement.TryGetInt32(out var segmentRampMs) &&
+                segmentRampMs < -1)
+            {
+                errorMessage = "segmentTargetRampMs must be -1 or greater.";
+                return false;
+            }
+
             if (!TryValidateIntMinMax(
                     root,
                     "minimumDutyPercent",

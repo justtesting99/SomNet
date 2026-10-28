@@ -9,6 +9,8 @@ public static class AppOptionsDefaults
         EnableSoundAlerts = true,
         ConfirmBeforeCommands = false,
         AllowAutomaticModeOverrides = false,
+        MotorSegmentTargetRampMode = "segmentDuration",
+        MotorSegmentTargetRampMs = 200,
         AutoExpandVideoOnMobile = true,
         MobileVideoExpandDefault = VideoExpandMode.Both,
         LiveVideoFeeds = VideoExpandMode.Both,

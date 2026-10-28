@@ -64,6 +64,9 @@ private:
     bool maybeTriggerWallClockBurst();
     void pollBurstStates();
     bool tryContinueProgramAfterGap();
+    unsigned long segmentTransitionRampMs(const MotorAutomaticConfig& config) const;
+    unsigned long periodicInitialRampMs(const MotorAutomaticConfig& config) const;
+    unsigned long burstMicroTransitionRampMs(const MotorAutomaticConfig& config) const;
 
     MotorController* motor_ = nullptr;
     State state_ = State::Idle;
@@ -73,6 +76,12 @@ private:
     /** Used for stop/abort ramps (payload rampMs). Between-segment ramps use segment duration. */
     unsigned long stopRampMs_ = 500;
     unsigned long segmentDurationMs_ = 0;
+    unsigned long segmentHoldDeadlineMs_ = 0;
+    unsigned long segmentHoldTelemetryPendingMs_ = 0;
+    int segmentHoldTelemetrySpeedPercent_ = 0;
+    unsigned long burstMicroHoldTelemetryPendingMs_ = 0;
+    int burstMicroHoldTelemetrySpeedPercent_ = 0;
+    int lastCommandedSpeedPercent_ = 0;
     int segmentsCompleted_ = 0;
     int endSessionValue_ = 0;
     int endSessionModeWire_ = 0;

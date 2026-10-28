@@ -151,6 +151,11 @@ bool parseMotorAutomaticConfig(const char* payloadJson, MotorAutomaticConfig* ou
     config.segmentMaxSeconds = root["segmentMaxSeconds"] | 20;
     config.delayBeforeStartSeconds = root["delayBeforeStartSeconds"] | 0;
     config.rampMs = root["rampMs"] | 500;
+    if (doc["segmentTargetRampMs"].is<int>() || doc["segmentTargetRampMs"].is<long>()) {
+        config.segmentTargetRampMs = doc["segmentTargetRampMs"].as<int>();
+    } else {
+        config.segmentTargetRampMs = -1;
+    }
     config.endSessionValue = root["endSessionValue"] | 0;
 
     const char* endMode = root["endSessionMode"] | "noAutoEnd";
@@ -201,6 +206,10 @@ bool parseMotorAutomaticConfig(const char* payloadJson, MotorAutomaticConfig* ou
     }
     if (config.rampMs < 0) {
         config.rampMs = 0;
+    }
+    if (config.segmentTargetRampMs < -1 || config.segmentTargetRampMs > 30000) {
+        Serial.println(F("[MOTOR-AUTO] reject: segmentTargetRampMs out of range"));
+        return false;
     }
 
     if (config.endSessionMode == MotorEndSessionMode::Minutes && config.endSessionValue <= 0) {

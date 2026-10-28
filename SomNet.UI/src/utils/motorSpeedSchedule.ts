@@ -1,6 +1,8 @@
 import type { MotorAutomaticControlState, MotorManualControlState } from '@/types/motorModes';
+import type { AppOptions } from '@/types/options';
 import type { MotorAutomaticRunMode } from '@/types/motorAutomaticModes';
 import type { MotorAutomaticSegmentEvent } from '@/utils/motorAutomaticSegmentJson';
+import { resolveMotorSegmentTargetRampMs } from '@/utils/motorSegmentTargetRamp';
 
 export const MOTOR_PATTERN_PREVIEW_NO_AUTO_END_SEC = 180;
 
@@ -171,7 +173,11 @@ function pushPoint(points: MotorSpeedSchedulePoint[], tSec: number, speedPercent
 
 export function buildMotorAutomaticSpeedSchedule(
   state: MotorAutomaticControlState,
+  appOptions?: Pick<AppOptions, 'motorSegmentTargetRampMode' | 'motorSegmentTargetRampMs'>,
 ): MotorSpeedSchedule {
+  const segmentTargetRampMs = appOptions
+    ? resolveMotorSegmentTargetRampMs(state.automaticMode, appOptions)
+    : -1;
   const horizonSec =
     state.endSessionMode === 'minutes'
       ? Math.max(1, state.endSessionValue * 60)
@@ -201,7 +207,12 @@ export function buildMotorAutomaticSpeedSchedule(
       0,
       scheduleSeed,
     );
-    const rampSec = Math.max(state.rampMs / 1000, 0.001);
+    const rampSec =
+      segmentTargetRampMs === 0
+        ? 0.001
+        : segmentTargetRampMs > 0
+          ? Math.max(segmentTargetRampMs / 1000, 0.001)
+          : Math.max(state.rampMs / 1000, 0.001);
     pushPoint(points, tSec, 0);
     tSec += rampSec;
     pushPoint(points, tSec, target);
@@ -227,12 +238,31 @@ export function buildMotorAutomaticSpeedSchedule(
     );
 
     const segmentEnd = Math.min(tSec + durationSec, horizonSec);
-    const fraction = (segmentEnd - tSec) / durationSec;
-    const endSpeed = fromSpeed + (toSpeed - fromSpeed) * fraction;
 
-    pushPoint(points, tSec, fromSpeed);
-    pushPoint(points, segmentEnd, endSpeed);
-    commandedSpeed = endSpeed;
+    if (segmentTargetRampMs < 0) {
+      const fraction = (segmentEnd - tSec) / durationSec;
+      const endSpeed = fromSpeed + (toSpeed - fromSpeed) * fraction;
+      pushPoint(points, tSec, fromSpeed);
+      pushPoint(points, segmentEnd, endSpeed);
+      commandedSpeed = endSpeed;
+    } else if (segmentTargetRampMs === 0) {
+      pushPoint(points, tSec, fromSpeed);
+      if (fromSpeed !== toSpeed) {
+        pushPoint(points, tSec, toSpeed);
+      }
+      pushPoint(points, segmentEnd, toSpeed);
+      commandedSpeed = toSpeed;
+    } else {
+      const transitionSec = Math.min(durationSec, segmentTargetRampMs / 1000);
+      const rampEnd = Math.min(tSec + transitionSec, segmentEnd);
+      pushPoint(points, tSec, fromSpeed);
+      pushPoint(points, rampEnd, toSpeed);
+      if (rampEnd < segmentEnd) {
+        pushPoint(points, segmentEnd, toSpeed);
+      }
+      commandedSpeed = toSpeed;
+    }
+
     tSec = segmentEnd;
     segmentIndex += 1;
   }
@@ -263,7 +293,19 @@ export function buildMotorSpeedScheduleFromLiveSegments(
 
   for (const segment of sorted) {
     const tStartSec = segment.programElapsedMs / 1000;
-    const tEndSec = tStartSec + segment.durationMs / 1000;
+    const durationSec = Math.max(segment.durationMs / 1000, 0);
+    const tEndSec = tStartSec + durationSec;
+    if (
+      durationSec <= 0.05 &&
+      segment.fromSpeedPercent !== segment.toSpeedPercent
+    ) {
+      pushPoint(points, tStartSec, segment.fromSpeedPercent);
+      pushPoint(points, tStartSec, segment.toSpeedPercent);
+      if (tEndSec > tStartSec) {
+        pushPoint(points, tEndSec, segment.toSpeedPercent);
+      }
+      continue;
+    }
     pushPoint(points, tStartSec, segment.fromSpeedPercent);
     pushPoint(points, tEndSec, segment.toSpeedPercent);
   }

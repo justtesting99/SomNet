@@ -238,7 +238,7 @@ export function MotorAutomaticControls() {
       return;
     }
 
-    const payload = buildMotorAutomaticStartPayload(state);
+    const payload = buildMotorAutomaticStartPayload(state, options);
     if (lastPushedUpdateRef.current === null) {
       lastPushedUpdateRef.current = payload;
       return;
@@ -275,7 +275,16 @@ export function MotorAutomaticControls() {
         window.clearTimeout(updateDebounceRef.current);
       }
     };
-  }, [commandDeviceId, isLoading, settingsLoaded, liveOverridesActive, selectedSub, state]);
+  }, [
+    commandDeviceId,
+    isLoading,
+    options.motorSegmentTargetRampMode,
+    options.motorSegmentTargetRampMs,
+    settingsLoaded,
+    liveOverridesActive,
+    selectedSub,
+    state,
+  ]);
 
   function setRunningLocal(running: boolean) {
     setMotorAutomaticRunningLocal(running);
@@ -340,7 +349,7 @@ export function MotorAutomaticControls() {
     setCommandError('');
     clearMotorAutomaticSegments(commandDeviceId);
     expandOnAction(commandDeviceId);
-    const payloadJson = buildMotorAutomaticStartPayload(state);
+    const payloadJson = buildMotorAutomaticStartPayload(state, options);
     try {
       await sendHardwareCommand(
         selectedSub,

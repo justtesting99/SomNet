@@ -4,6 +4,7 @@ import type { MotorAutomaticControlState, MotorManualControlState } from '@/type
 import type { OperationMode } from '@/types/modes';
 import { useSubDevice } from '@/context/SubDeviceProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useOptions } from '@/context/OptionsProvider';
 import {
   buildMotorAutomaticSpeedSchedule,
   buildMotorManualSpeedSchedule,
@@ -48,6 +49,7 @@ export function MotorPatternGraphPanel({
 }: MotorPatternGraphPanelProps) {
   const { selectedSub } = useSubTarget();
   const { selectedDeviceId } = useSubDevice();
+  const { options } = useOptions();
 
   const liveSegments = useSyncExternalStore(
     subscribeMotorAutomaticSegments,
@@ -61,10 +63,10 @@ export function MotorPatternGraphPanel({
       if (motorAutomatic.running && liveSegments.length > 0) {
         return buildMotorSpeedScheduleFromLiveSegments(liveSegments, horizonSec);
       }
-      return buildMotorAutomaticSpeedSchedule(motorAutomatic);
+      return buildMotorAutomaticSpeedSchedule(motorAutomatic, options);
     }
     return buildMotorManualSpeedSchedule(motorManual);
-  }, [liveSegments, mode, motorAutomatic, motorManual]);
+  }, [liveSegments, mode, motorAutomatic, motorManual, options]);
 
   const usingLiveSegments =
     mode === 'automatic' && motorAutomatic.running && liveSegments.length > 0;

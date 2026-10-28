@@ -32,6 +32,8 @@ struct MotorAutomaticConfig {
     MotorEndSessionMode endSessionMode = MotorEndSessionMode::NoAutoEnd;
     int endSessionValue = 0;
     int rampMs = 500;
+    /** -1 = ramp over full segment; 0 = instant; >0 = ms ramp then hold (wave/build-up ignore). */
+    int segmentTargetRampMs = -1;
     bool burstsOn = false;
     BurstPlacement burstPlacement = BurstPlacement::MainPlusSessionSpread;
     int burstPercent = 10;

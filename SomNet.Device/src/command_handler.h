@@ -2,6 +2,8 @@
 
 #include <stddef.h>
 
+#include "config.h"
+
 class DeviceIdentity;
 class ExecutionContext;
 class NvsStore;
@@ -17,7 +19,7 @@ struct ExecuteCommandPayload {
     char domTarget[64];
     char subTarget[64];
     char deviceId[32];
-    char payloadJson[768];
+    char payloadJson[kMaxHardwareCommandPayloadJson];
     bool fromLocal = false;
 };
 

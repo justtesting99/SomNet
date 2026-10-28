@@ -106,6 +106,9 @@ constexpr size_t kLocalOperatePinMaxLen = 16;
 /** Max JSON bytes for GET/PUT /api/local/settings (manual + automatic + tab). */
 constexpr size_t kMaxLocalOperateSettingsBytes = 1536;
 
+/** Hub/local execute-command payloadJson (motor automatic-start with bursts). */
+constexpr size_t kMaxHardwareCommandPayloadJson = 1536;
+
 /** WPA2 password for SomNetSetup-XXXX provisioning AP (required by many phones/Windows). */
 constexpr char SETUP_AP_PASSWORD[] = "somnetsetup";
 constexpr int SETUP_AP_CHANNEL = 6;

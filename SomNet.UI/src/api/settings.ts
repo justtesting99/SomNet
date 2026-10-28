@@ -5,6 +5,7 @@ import {
   DEFAULT_APP_OPTIONS,
   type ActionSnapshotFeeds,
   type AppOptions,
+  type MotorSegmentTargetRampMode,
 } from '@/types/options';
 import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
 import { clampVideoFeedTimeoutSeconds } from '@/utils/videoFeedTimeout';
@@ -30,6 +31,13 @@ function normalizeActionSnapshotFeeds(value: unknown): ActionSnapshotFeeds {
   return value === 'rear' ? 'rear' : 'both';
 }
 
+function normalizeMotorSegmentTargetRampMode(value: unknown): MotorSegmentTargetRampMode {
+  if (value === 'instant' || value === 'fixedMs' || value === 'segmentDuration') {
+    return value;
+  }
+  return DEFAULT_APP_OPTIONS.motorSegmentTargetRampMode;
+}
+
 function normalizeAppOptions(appOptions: PairingSettingsResponse['appOptions']): AppOptions {
   return {
     ...DEFAULT_APP_OPTIONS,
@@ -44,6 +52,11 @@ function normalizeAppOptions(appOptions: PairingSettingsResponse['appOptions']):
     mobileVideoExpandDefault: normalizeMobileVideoExpandDefault(
       appOptions.mobileVideoExpandDefault,
     ),
+    motorSegmentTargetRampMode: normalizeMotorSegmentTargetRampMode(
+      appOptions.motorSegmentTargetRampMode,
+    ),
+    motorSegmentTargetRampMs:
+      appOptions.motorSegmentTargetRampMs ?? DEFAULT_APP_OPTIONS.motorSegmentTargetRampMs,
     videoFeedBandwidth: normalizeVideoFeedBandwidth(appOptions.videoFeedBandwidth),
   };
 }

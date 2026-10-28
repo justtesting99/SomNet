@@ -2,13 +2,15 @@ import {
   ACTION_SNAPSHOT_FEED_OPTIONS,
   LIVE_VIDEO_FEEDS_OPTIONS,
   MOBILE_VIDEO_EXPAND_OPTIONS,
-  VIDEO_FEED_BANDWIDTH_OPTIONS,
+  MOTOR_SEGMENT_TARGET_RAMP_MODE_OPTIONS,
   type ActionSnapshotFeeds,
   type AppOptions,
   type LiveVideoFeeds,
   type MobileVideoExpandDefault,
+  type MotorSegmentTargetRampMode,
   type VideoFeedBandwidth,
 } from '@/types/options';
+import { VIDEO_FEED_BANDWIDTH_OPTIONS } from '@/utils/videoFeedBandwidth';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Input } from '@/components/ui/Input';
 import { NumberField } from '@/components/ui/NumberField';
@@ -39,6 +41,34 @@ export function OptionsGeneralPanel({ pendingOptions, onUpdate }: OptionsGeneral
         <p className="text-xs leading-relaxed text-slate-500">
           When enabled, automatic settings stay editable during a session and changes are sent to
           the device after the current stroke. When disabled, settings lock until Stop or Abort.
+        </p>
+        <SelectField
+          label="Motor automatic — reach each target speed"
+          value={pendingOptions.motorSegmentTargetRampMode}
+          options={MOTOR_SEGMENT_TARGET_RAMP_MODE_OPTIONS}
+          onChange={(event) =>
+            onUpdate(
+              'motorSegmentTargetRampMode',
+              event.target.value as MotorSegmentTargetRampMode,
+            )
+          }
+        />
+        {pendingOptions.motorSegmentTargetRampMode === 'fixedMs' ? (
+          <NumberField
+            label="Quick ramp duration (ms)"
+            value={pendingOptions.motorSegmentTargetRampMs}
+            min={0}
+            max={30_000}
+            onChange={(event) =>
+              onUpdate('motorSegmentTargetRampMs', Number(event.target.value))
+            }
+          />
+        ) : null}
+        <p className="text-xs leading-relaxed text-slate-500">
+          Applies to Set Speed, Random Speed, and Random Speed and Timing, and to
+          burst micro-cycles inside automatic sessions. Speed Wave and Build-Up always ramp
+          over the full segment interval. When set to the default (full segment interval),
+          Stop and burst steps use the Ramp (ms) field on the motor automatic panel.
         </p>
         <SelectField
           label="Live video feeds"

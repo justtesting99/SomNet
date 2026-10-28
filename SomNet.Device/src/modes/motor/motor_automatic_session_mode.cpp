@@ -46,6 +46,8 @@ bool MotorAutomaticSessionMode::beginSession(const char* payloadJson) {
     rebuildBurstPlan();
     segmentsCompleted_ = 0;
     dutyPercent_ = 0;
+    lastCommandedSpeedPercent_ = 0;
+    burstMicroHoldTelemetryPendingMs_ = 0;
     stopRequested_ = false;
     stopCorrelationId_[0] = '\0';
     callbackContext_ = nullptr;
@@ -60,6 +62,8 @@ bool MotorAutomaticSessionMode::beginSession(const char* payloadJson) {
     Serial.print(config.delayBeforeStartSeconds);
     Serial.print(F(" burstsOn="));
     Serial.println(burstsOn_ ? F("true") : F("false"));
+    Serial.print(F("[MOTOR-AUTO] segmentTargetRampMs="));
+    Serial.println(config.segmentTargetRampMs);
     if (burstsOn_ && burstPlan_.active) {
         if (burstPlan_.burstInsteadOfMain) {
             Serial.println(F("[MOTOR-AUTO] burst timing=insteadOfMain"));
@@ -193,6 +197,7 @@ void MotorAutomaticSessionMode::emitSegmentRamp(
         durationMs,
         programElapsedMs);
     segmentNotify_(segmentNotifyContext_, segmentJson);
+    lastCommandedSpeedPercent_ = toSpeedPercent;
 }
 
 bool MotorAutomaticSessionMode::requestStop(
@@ -250,7 +255,7 @@ bool MotorAutomaticSessionMode::beginSetSpeedHold() {
     const int toSpeedPercent =
         motorResolveSpeedPercentForSegment(config, 0, sessionStartMs_, millis());
     dutyPercent_ = motorSpeedPercentToDuty(toSpeedPercent, config);
-    const unsigned long rampMs = stopRampMs_ > 0UL ? stopRampMs_ : 1UL;
+    const unsigned long rampMs = periodicInitialRampMs(config);
 
     if (!motor_->beginRampToDuty(dutyPercent_, rampMs)) {
         Serial.println(F("[MOTOR-AUTO] reject: motor busy"));
@@ -301,18 +306,41 @@ bool MotorAutomaticSessionMode::beginSegmentTransition() {
     const int toDuty = motorSpeedPercentToDuty(toSpeedPercent, config);
     dutyPercent_ = toDuty;
 
-    if (!motor_->beginRampToDuty(toDuty, segmentDurationMs_)) {
+    segmentHoldDeadlineMs_ = millis() + segmentDurationMs_;
+    unsigned long transitionMs = segmentTransitionRampMs(config);
+    if (transitionMs > segmentDurationMs_) {
+        transitionMs = segmentDurationMs_;
+    }
+
+    if (!motor_->beginRampToDuty(toDuty, transitionMs)) {
         Serial.println(F("[MOTOR-AUTO] reject: motor busy"));
         return false;
     }
 
     state_ = State::SegmentRamp;
 
-    emitSegmentRamp(
-        segmentsCompleted_,
-        fromSpeedPercent,
-        toSpeedPercent,
-        segmentDurationMs_);
+    segmentHoldTelemetryPendingMs_ = 0;
+    if (transitionMs == 0) {
+        emitSegmentRamp(
+            segmentsCompleted_,
+            toSpeedPercent,
+            toSpeedPercent,
+            segmentDurationMs_);
+    } else if (transitionMs >= segmentDurationMs_) {
+        emitSegmentRamp(
+            segmentsCompleted_,
+            fromSpeedPercent,
+            toSpeedPercent,
+            segmentDurationMs_);
+    } else {
+        emitSegmentRamp(
+            segmentsCompleted_,
+            fromSpeedPercent,
+            toSpeedPercent,
+            transitionMs);
+        segmentHoldTelemetryPendingMs_ = segmentDurationMs_ - transitionMs;
+        segmentHoldTelemetrySpeedPercent_ = toSpeedPercent;
+    }
 
     Serial.print(F("[MOTOR-AUTO] segment #"));
     Serial.print(segmentsCompleted_);
@@ -320,9 +348,10 @@ bool MotorAutomaticSessionMode::beginSegmentTransition() {
     Serial.print(fromDuty);
     Serial.print(F("% -> "));
     Serial.print(toDuty);
-    Serial.print(F("% over "));
-    Serial.print(segmentDurationMs_ / 1000UL);
-    Serial.println(F("s"));
+    Serial.print(F("% rampMs="));
+    Serial.print(transitionMs);
+    Serial.print(F(" holdMs="));
+    Serial.println(segmentDurationMs_);
     return true;
 }
 
@@ -539,6 +568,19 @@ void MotorAutomaticSessionMode::poll() {
             return;
         }
 
+        if (motor_ != nullptr && !motor_->isRamping() && segmentHoldTelemetryPendingMs_ > 0) {
+            emitSegmentRamp(
+                segmentsCompleted_,
+                segmentHoldTelemetrySpeedPercent_,
+                segmentHoldTelemetrySpeedPercent_,
+                segmentHoldTelemetryPendingMs_);
+            segmentHoldTelemetryPendingMs_ = 0;
+        }
+
+        if (millis() < segmentHoldDeadlineMs_) {
+            return;
+        }
+
         handleCompletedMainSegment();
         return;
     }
@@ -561,6 +603,38 @@ bool MotorAutomaticSessionMode::loadConfig(MotorAutomaticConfig* outConfig) cons
         return false;
     }
     return parseMotorAutomaticConfig(configJson_, outConfig);
+}
+
+unsigned long MotorAutomaticSessionMode::segmentTransitionRampMs(
+    const MotorAutomaticConfig& config) const {
+    if (config.mode == MotorAutomaticRunMode::PowerWave ||
+        config.mode == MotorAutomaticRunMode::BuildUp) {
+        return segmentDurationMs_;
+    }
+
+    if (config.segmentTargetRampMs < 0) {
+        return segmentDurationMs_;
+    }
+
+    return static_cast<unsigned long>(config.segmentTargetRampMs);
+}
+
+unsigned long MotorAutomaticSessionMode::periodicInitialRampMs(
+    const MotorAutomaticConfig& config) const {
+    if (config.segmentTargetRampMs < 0) {
+        return stopRampMs_ > 0UL ? stopRampMs_ : 1UL;
+    }
+
+    return static_cast<unsigned long>(config.segmentTargetRampMs);
+}
+
+unsigned long MotorAutomaticSessionMode::burstMicroTransitionRampMs(
+    const MotorAutomaticConfig& config) const {
+    if (config.segmentTargetRampMs < 0) {
+        return stopRampMs_ > 0UL ? stopRampMs_ : 1UL;
+    }
+
+    return static_cast<unsigned long>(config.segmentTargetRampMs);
 }
 
 void MotorAutomaticSessionMode::rebuildBurstPlan() {
@@ -659,15 +733,30 @@ bool MotorAutomaticSessionMode::startNextBurstMicro() {
     const int burstRelativePower = drawBurstRelativePower(planner);
     const int speedPercent = motorResolveBurstSpeedPercent(burstRelativePower, config);
     const int duty = motorSpeedPercentToDuty(speedPercent, config);
-    const unsigned long rampMs = stopRampMs_ > 0UL ? stopRampMs_ : 1UL;
+    const int fromSpeedPercent = lastCommandedSpeedPercent_;
+    const unsigned long transitionMs = burstMicroTransitionRampMs(config);
 
-    if (!motor_->beginRampToDuty(duty, rampMs)) {
+    burstMicroHoldTelemetryPendingMs_ = 0;
+
+    if (!motor_->beginRampToDuty(duty, transitionMs)) {
         Serial.println(F("[MOTOR-AUTO] reject: motor busy (burst)"));
         return false;
     }
 
     dutyPercent_ = duty;
     state_ = State::BurstMicroRamp;
+
+    if (transitionMs == 0) {
+        emitSegmentRamp(
+            segmentsCompleted_,
+            speedPercent,
+            speedPercent,
+            kMotorBurstMicroHoldMs);
+    } else {
+        emitSegmentRamp(segmentsCompleted_, fromSpeedPercent, speedPercent, transitionMs);
+        burstMicroHoldTelemetryPendingMs_ = kMotorBurstMicroHoldMs;
+        burstMicroHoldTelemetrySpeedPercent_ = speedPercent;
+    }
 
     Serial.print(F("[MOTOR-AUTO] burst micro "));
     Serial.print(burstStrokesCompletedInEvent_ + 1);
@@ -678,7 +767,7 @@ bool MotorAutomaticSessionMode::startNextBurstMicro() {
     Serial.print(F("% duty="));
     Serial.print(duty);
     Serial.print(F("% rampMs="));
-    Serial.println(rampMs);
+    Serial.println(transitionMs);
     return true;
 }
 
@@ -767,6 +856,16 @@ void MotorAutomaticSessionMode::pollBurstStates() {
         if (motor_ != nullptr && motor_->isRamping()) {
             return;
         }
+
+        if (burstMicroHoldTelemetryPendingMs_ > 0) {
+            emitSegmentRamp(
+                segmentsCompleted_,
+                burstMicroHoldTelemetrySpeedPercent_,
+                burstMicroHoldTelemetrySpeedPercent_,
+                burstMicroHoldTelemetryPendingMs_);
+            burstMicroHoldTelemetryPendingMs_ = 0;
+        }
+
         state_ = State::BurstHold;
         burstPhaseDeadlineMs_ = millis() + kMotorBurstMicroHoldMs;
         return;

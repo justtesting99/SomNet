@@ -136,6 +136,8 @@ public static class PairingSettingsSerializer
             EnableSoundAlerts = source.EnableSoundAlerts,
             ConfirmBeforeCommands = source.ConfirmBeforeCommands,
             AllowAutomaticModeOverrides = source.AllowAutomaticModeOverrides,
+            MotorSegmentTargetRampMode = NormalizeMotorSegmentTargetRampMode(source.MotorSegmentTargetRampMode),
+            MotorSegmentTargetRampMs = Math.Clamp(source.MotorSegmentTargetRampMs, 0, 30_000),
             AutoExpandVideoOnMobile = source.AutoExpandVideoOnMobile,
             MobileVideoExpandDefault = source.MobileVideoExpandDefault,
             LiveVideoFeeds = Enum.IsDefined(source.LiveVideoFeeds)
@@ -155,6 +157,22 @@ public static class PairingSettingsSerializer
             VideoFeedBandwidth = Enum.IsDefined(source.VideoFeedBandwidth)
                 ? source.VideoFeedBandwidth
                 : VideoFeedBandwidth.High,
+        };
+    }
+
+    private static string NormalizeMotorSegmentTargetRampMode(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return AppOptionsDefaults.Value.MotorSegmentTargetRampMode;
+        }
+
+        return value.Trim() switch
+        {
+            "segmentDuration" => "segmentDuration",
+            "instant" => "instant",
+            "fixedMs" => "fixedMs",
+            _ => AppOptionsDefaults.Value.MotorSegmentTargetRampMode,
         };
     }
 

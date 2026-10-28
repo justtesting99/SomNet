@@ -10,6 +10,14 @@ public sealed class AppOptionsDto
 
     public bool AllowAutomaticModeOverrides { get; init; }
 
+    /// <summary>
+    /// Motor automatic segment target transition: segmentDuration | instant | fixedMs (Options → General).
+    /// </summary>
+    public string MotorSegmentTargetRampMode { get; init; } = "segmentDuration";
+
+    /// <summary>Quick ramp duration when MotorSegmentTargetRampMode is fixedMs.</summary>
+    public int MotorSegmentTargetRampMs { get; init; } = 200;
+
     public bool AutoExpandVideoOnMobile { get; init; } = true;
 
     public VideoExpandMode MobileVideoExpandDefault { get; init; } = VideoExpandMode.Both;
