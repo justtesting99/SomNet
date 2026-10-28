@@ -38,6 +38,7 @@ import { computeStrokeMs } from '@/utils/stroke';
 import { MIN_STROKE_GAP_SECONDS } from '@/utils/automaticFieldRules';
 import {
   getMotorAutomaticFieldRules,
+  getMotorBurstPlacementOptions,
 } from '@/utils/motorAutomaticFieldRules';
 import {
   getBurstFieldRules,
@@ -50,7 +51,6 @@ import { applyMotorAutomaticModeChange } from '@/utils/motorAutomaticFieldRules'
 import { getMotorAutomaticModeInfo } from '@/utils/motorAutomaticModeInfo';
 import { clearMotorAutomaticSegments } from '@/utils/motorAutomaticSegmentStore';
 import {
-  BURST_PLACEMENT_OPTIONS,
   burstMainTiming,
   burstPercentFieldLabel,
   burstPlacementSchedule,
@@ -127,6 +127,11 @@ export function MotorAutomaticControls() {
   const burstPlacement = resolveBurstPlacement(state);
   const burstChanceMode = burstPlacementSchedule(burstPlacement) === 'chanceAfterMainStroke';
   const burstInsteadOfMain = burstMainTiming(burstPlacement) === 'insteadOf';
+  const periodicBurstMode = state.automaticMode === 'periodic';
+  const burstPlacementOptions = useMemo(
+    () => getMotorBurstPlacementOptions(state.automaticMode),
+    [state.automaticMode],
+  );
   const delayStartLocked = sessionRunning;
   const hardwareReady = isHardwareCommandReady(systemStatus) && sceneSessionActive;
   const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart, commandDeviceId);
@@ -688,7 +693,7 @@ export function MotorAutomaticControls() {
               label="Burst placement"
               value={state.burstPlacement}
               disabled={burstSettingsDisabled}
-              options={BURST_PLACEMENT_OPTIONS}
+              options={burstPlacementOptions}
               onChange={(event) =>
                 update(
                   'burstPlacement',
@@ -697,10 +702,17 @@ export function MotorAutomaticControls() {
               }
             />
 
+            {periodicBurstMode && state.burstsOn ? (
+              <p className="text-xs leading-relaxed text-slate-500">
+                Set Speed uses session spread only (even and chance placements apply to waveform
+                modes). Bursts require End Session After in minutes.
+              </p>
+            ) : null}
+
             {burstInsteadOfMain && state.burstsOn ? (
               <p className="text-xs leading-relaxed text-slate-500">
-                Instead-of-main timing is saved for relay testing; motor burst execution is not yet
-                on device.
+                Instead-of-main: the burst cluster replaces that scheduled segment (helps the motor
+                return before the next ramp).
               </p>
             ) : null}
 

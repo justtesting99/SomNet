@@ -3,6 +3,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "modes/automatic/automatic_config.h"
+
 enum class MotorEndSessionMode : uint8_t {
     NoAutoEnd = 0,
     Minutes = 1,
@@ -30,6 +32,16 @@ struct MotorAutomaticConfig {
     MotorEndSessionMode endSessionMode = MotorEndSessionMode::NoAutoEnd;
     int endSessionValue = 0;
     int rampMs = 500;
+    bool burstsOn = false;
+    BurstPlacement burstPlacement = BurstPlacement::MainPlusSessionSpread;
+    int burstPercent = 10;
+    BurstStyle burstStyle = BurstStyle::FixedPowerDelay;
+    int burstStrokePowerMin = 0;
+    int burstStrokePowerMax = 100;
+    int burstDelayMin = 1;
+    int burstDelayMax = 5;
+    int burstStrokesMin = 5;
+    int burstStrokesMax = 10;
 };
 
 bool parseMotorAutomaticConfig(const char* payloadJson, MotorAutomaticConfig* outConfig);

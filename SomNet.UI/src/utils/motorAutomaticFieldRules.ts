@@ -8,7 +8,13 @@ import {
   type MotorAutomaticControlState,
 } from '@/types/motorModes';
 import { coerceEndSessionMode, MIN_STROKE_GAP_SECONDS } from '@/utils/automaticFieldRules';
-import { resolveBurstPlacement } from '@/utils/burstPlacement';
+import {
+  BURST_PLACEMENT_OPTIONS,
+  burstMainTiming,
+  burstPlacementSchedule,
+  type BurstPlacement,
+  resolveBurstPlacement,
+} from '@/utils/burstPlacement';
 import {
   MAX_BURST_DELAY_SEC,
   MAX_BURST_STROKES,
@@ -43,6 +49,53 @@ export function getMotorAutomaticFieldRules(
     disableSegmentMinSeconds: MODES_DISABLE_SEGMENT_MIN_SECONDS.includes(mode),
     disableSegmentMaxSeconds: MODES_DISABLE_SEGMENT_MAX_SECONDS.includes(mode),
     disableNoAutoEnd: MODES_REQUIRING_END_SESSION.includes(mode),
+  };
+}
+
+/** MA-D27: Set Speed (periodic) allows session-spread burst placements only. */
+export function coerceMotorBurstPlacementForMode(
+  placement: BurstPlacement,
+  mode: MotorAutomaticRunMode,
+): BurstPlacement {
+  if (mode !== 'periodic') {
+    return placement;
+  }
+  if (burstPlacementSchedule(placement) === 'sessionSpread') {
+    return placement;
+  }
+  return burstMainTiming(placement) === 'insteadOf'
+    ? 'insteadOfSessionSpread'
+    : 'mainPlusSessionSpread';
+}
+
+export function getMotorBurstPlacementOptions(mode: MotorAutomaticRunMode) {
+  const periodic = mode === 'periodic';
+  return BURST_PLACEMENT_OPTIONS.map((option) => ({
+    ...option,
+    disabled: periodic && burstPlacementSchedule(option.value) !== 'sessionSpread',
+  }));
+}
+
+function applyMotorPeriodicBurstRules(
+  state: MotorAutomaticControlState,
+): MotorAutomaticControlState {
+  if (state.automaticMode !== 'periodic' || !state.burstsOn) {
+    return state;
+  }
+
+  const burstPlacement = coerceMotorBurstPlacementForMode(
+    resolveBurstPlacement(state),
+    state.automaticMode,
+  );
+
+  if (state.endSessionMode === 'minutes') {
+    return { ...state, burstPlacement };
+  }
+
+  return {
+    ...state,
+    burstPlacement,
+    endSessionMode: 'minutes',
   };
 }
 
@@ -82,7 +135,7 @@ function normalizeMotorBurstFields(
     burstStrokesMin = burstStrokesMax;
   }
 
-  return {
+  const withPlacement = {
     ...state,
     burstPlacement: resolveBurstPlacement(state),
     burstPercent: clampInt(state.burstPercent, 0, 100),
@@ -93,6 +146,8 @@ function normalizeMotorBurstFields(
     burstStrokesMin,
     burstStrokesMax,
   };
+
+  return applyMotorPeriodicBurstRules(withPlacement);
 }
 
 export function applyMotorAutomaticModeChange(
@@ -101,11 +156,17 @@ export function applyMotorAutomaticModeChange(
 ): MotorAutomaticControlState {
   const rules = getMotorAutomaticFieldRules(nextMode);
 
-  return {
+  const withMode: MotorAutomaticControlState = {
     ...state,
     automaticMode: nextMode,
     endSessionMode: coerceEndSessionMode(state.endSessionMode, rules.disableNoAutoEnd),
+    burstPlacement: coerceMotorBurstPlacementForMode(
+      resolveBurstPlacement(state),
+      nextMode,
+    ),
   };
+
+  return applyMotorPeriodicBurstRules(withMode);
 }
 
 /** Clamp motor automatic form state (per-device pairing settings). */

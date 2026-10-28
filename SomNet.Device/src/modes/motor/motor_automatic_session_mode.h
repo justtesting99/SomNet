@@ -1,5 +1,7 @@
 #pragma once
 
+#include "modes/automatic/automatic_burst_runtime.h"
+#include "modes/motor/motor_automatic_config.h"
 #include "modes/motor/motor_session_callbacks.h"
 
 class MotorController;
@@ -35,6 +37,9 @@ private:
         SetSpeedHold,
         /** Cooperative stop / end session — ramp to zero using configured stop rampMs. */
         RampToStop,
+        BurstMicroRamp,
+        BurstHold,
+        BurstGap,
     };
 
     void buildResultJson(const char* endReason, bool interrupted);
@@ -50,6 +55,15 @@ private:
         int fromSpeedPercent,
         int toSpeedPercent,
         unsigned long durationMs);
+    bool loadConfig(MotorAutomaticConfig* outConfig) const;
+    void rebuildBurstPlan();
+    bool beginBurstEvent();
+    bool startNextBurstMicro();
+    void finishBurstEvent();
+    void handleCompletedMainSegment();
+    bool maybeTriggerWallClockBurst();
+    void pollBurstStates();
+    bool tryContinueProgramAfterGap();
 
     MotorController* motor_ = nullptr;
     State state_ = State::Idle;
@@ -65,10 +79,19 @@ private:
     unsigned long sessionStartMs_ = 0;
     unsigned long phaseDeadlineMs_ = 0;
     unsigned long delayStartMs_ = 0;
-    char configJson_[768] = {};
-    char pendingConfigJson_[768] = {};
+    bool burstsOn_ = false;
+    AutomaticBurstPlan burstPlan_{};
+    int burstEventsCompleted_ = 0;
+    int burstStrokesTarget_ = 0;
+    int burstStrokesCompletedInEvent_ = 0;
+    int burstGapSec_ = 0;
+    unsigned long burstPhaseDeadlineMs_ = 0;
+    int resumeSpeedPercent_ = 0;
+    State resumeState_ = State::Idle;
+    char configJson_[1024] = {};
+    char pendingConfigJson_[1024] = {};
     bool pendingUpdate_ = false;
-    char resultJson_[512] = {};
+    char resultJson_[640] = {};
     char stopCorrelationId_[64] = {};
     void* callbackContext_ = nullptr;
     AutomaticCompleteCallback onComplete_ = nullptr;

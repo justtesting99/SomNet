@@ -337,7 +337,7 @@ When **M1-B1–B8** pass → fill **§4 Phase M1 sign-off** (☑ all M1 items) a
 ### 5.2.4 UI
 
 - [ ] **M1d-U1** `motorSpeedSchedule.ts` — burst preview using shared placement helpers (`burstPlacement.ts` / `relayBurstPlan` logic)
-- [ ] **M1d-U2** `MotorAutomaticControls`: disable even/chance placements when mode = periodic (MA-D27)
+- [x] **M1d-U2** `MotorAutomaticControls`: disable even/chance placements when mode = periodic (MA-D27)
 - [ ] **M1d-U3** Remove “settings only / not on device” banner when **M1d-F4** ships
 
 ### 5.2.5 Tests & bench

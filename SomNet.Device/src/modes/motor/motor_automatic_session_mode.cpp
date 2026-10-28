@@ -1,6 +1,7 @@
 #include "modes/motor/motor_automatic_session_mode.h"
 
 #include "modes/automatic/automatic_config.h"
+#include "modes/motor/motor_automatic_burst.h"
 #include "modes/motor/motor_automatic_config.h"
 #include "motor_controller.h"
 
@@ -38,6 +39,11 @@ bool MotorAutomaticSessionMode::beginSession(const char* payloadJson) {
     stopRampMs_ = static_cast<unsigned long>(config.rampMs);
     endSessionValue_ = config.endSessionValue;
     endSessionModeWire_ = motorEndSessionModeToWire(config.endSessionMode);
+    burstsOn_ = config.burstsOn;
+    burstEventsCompleted_ = 0;
+    burstStrokesTarget_ = 0;
+    burstStrokesCompletedInEvent_ = 0;
+    rebuildBurstPlan();
     segmentsCompleted_ = 0;
     dutyPercent_ = 0;
     stopRequested_ = false;
@@ -50,15 +56,26 @@ bool MotorAutomaticSessionMode::beginSession(const char* payloadJson) {
     delayStartMs_ = millis();
     active_ = true;
 
-    Serial.print(F("[MOTOR-AUTO] start continuous delaySec="));
-    Serial.println(config.delayBeforeStartSeconds);
+    Serial.print(F("[MOTOR-AUTO] start delaySec="));
+    Serial.print(config.delayBeforeStartSeconds);
+    Serial.print(F(" burstsOn="));
+    Serial.println(burstsOn_ ? F("true") : F("false"));
+    if (burstsOn_ && burstPlan_.active) {
+        if (burstPlan_.burstInsteadOfMain) {
+            Serial.println(F("[MOTOR-AUTO] burst timing=insteadOfMain"));
+        }
+        if (burstPlan_.kind == BurstScheduleKind::ChancePerMainStroke) {
+            Serial.print(F("[MOTOR-AUTO] burst plan chance percent="));
+            Serial.println(config.burstPercent);
+        }
+    }
 
     if (config.delayBeforeStartSeconds > 0) {
         state_ = State::StartDelay;
         phaseDeadlineMs_ = delayStartMs_ + static_cast<unsigned long>(config.delayBeforeStartSeconds) * 1000UL;
     } else {
         sessionStartMs_ = millis();
-        if (!beginSegmentTransition()) {
+        if (!tryContinueProgramAfterGap()) {
             active_ = false;
             state_ = State::Idle;
             return false;
@@ -112,6 +129,24 @@ bool MotorAutomaticSessionMode::applyPendingUpdate() {
     if (state_ == State::StartDelay) {
         phaseDeadlineMs_ =
             delayStartMs_ + static_cast<unsigned long>(config.delayBeforeStartSeconds) * 1000UL;
+    }
+
+    const bool cancelBurst =
+        !config.burstsOn &&
+        (state_ == State::BurstMicroRamp || state_ == State::BurstHold || state_ == State::BurstGap);
+
+    burstsOn_ = config.burstsOn;
+    rebuildBurstPlan();
+
+    if (cancelBurst) {
+        burstStrokesTarget_ = 0;
+        burstStrokesCompletedInEvent_ = 0;
+        if (resumeState_ == State::SetSpeedHold) {
+            state_ = State::SetSpeedHold;
+        } else if (!tryContinueProgramAfterGap()) {
+            finishSession(false, "automatic session failed", "error", true);
+            return true;
+        }
     }
 
     Serial.print(F("[MOTOR-AUTO] update applied segments="));
@@ -319,6 +354,26 @@ void MotorAutomaticSessionMode::buildResultJson(const char* endReason, bool inte
     const unsigned long durationMs =
         sessionStartMs_ == 0 ? 0 : millis() - sessionStartMs_;
 
+    if (burstsOn_) {
+        snprintf(
+            resultJson_,
+            sizeof(resultJson_),
+            "{\"commandKey\":\"automatic-stop\",\"actuatorKind\":\"hbridge\","
+            "\"automaticMode\":\"periodic\",\"dutyPercent\":%d,\"burstsOn\":true,"
+            "\"segmentsCompleted\":%d,\"burstEventsCompleted\":%d,"
+            "\"durationMs\":%lu,\"endSessionMode\":%d,\"endSessionValue\":%d,"
+            "\"interrupted\":%s,\"endReason\":\"%s\"}",
+            dutyPercent_,
+            segmentsCompleted_,
+            burstEventsCompleted_,
+            durationMs,
+            endSessionModeWire_,
+            endSessionValue_,
+            interrupted ? "true" : "false",
+            endReason != nullptr ? endReason : "");
+        return;
+    }
+
     snprintf(
         resultJson_,
         sizeof(resultJson_),
@@ -397,13 +452,20 @@ void MotorAutomaticSessionMode::poll() {
     }
 
     if (stopRequested_ && state_ != State::SegmentRamp && state_ != State::SetSpeedHold &&
-        state_ != State::RampToStop) {
+        state_ != State::RampToStop && state_ != State::BurstMicroRamp &&
+        state_ != State::BurstHold && state_ != State::BurstGap) {
         finishSession(true, "automatic session stopped", "manualStop", false);
         return;
     }
 
     if (motor_ != nullptr) {
         motor_->poll();
+    }
+
+    if (state_ == State::BurstMicroRamp || state_ == State::BurstHold ||
+        state_ == State::BurstGap) {
+        pollBurstStates();
+        return;
     }
 
     if (state_ == State::StartDelay) {
@@ -414,7 +476,7 @@ void MotorAutomaticSessionMode::poll() {
         if (pendingUpdate_) {
             applyPendingUpdate();
         }
-        if (!beginSegmentTransition()) {
+        if (!tryContinueProgramAfterGap()) {
             finishSession(false, "automatic session failed", "error", true);
         }
         return;
@@ -436,6 +498,10 @@ void MotorAutomaticSessionMode::poll() {
         }
         if (shouldEndSession()) {
             requestRampToStop();
+            return;
+        }
+
+        if (burstsOn_ && maybeTriggerWallClockBurst()) {
             return;
         }
 
@@ -465,13 +531,7 @@ void MotorAutomaticSessionMode::poll() {
             return;
         }
 
-        segmentsCompleted_++;
-        if (pendingUpdate_) {
-            applyPendingUpdate();
-        }
-        if (!beginSegmentTransition()) {
-            finishSession(false, "automatic session failed", "error", true);
-        }
+        handleCompletedMainSegment();
         return;
     }
 
@@ -486,4 +546,270 @@ void MotorAutomaticSessionMode::poll() {
 
 bool MotorAutomaticSessionMode::isActive() const {
     return active_;
+}
+
+bool MotorAutomaticSessionMode::loadConfig(MotorAutomaticConfig* outConfig) const {
+    if (outConfig == nullptr) {
+        return false;
+    }
+    return parseMotorAutomaticConfig(configJson_, outConfig);
+}
+
+void MotorAutomaticSessionMode::rebuildBurstPlan() {
+    MotorAutomaticConfig config{};
+    if (!loadConfig(&config)) {
+        burstPlan_ = AutomaticBurstPlan{};
+        return;
+    }
+
+    AutomaticConfig planner{};
+    motorBurstScheduleInput(config, &planner);
+
+    if (!burstsOn_) {
+        burstPlan_ = AutomaticBurstPlan{};
+        return;
+    }
+
+    if (sessionStartMs_ > 0UL && active_) {
+        buildAutomaticBurstPlanForReplan(
+            planner, segmentsCompleted_, sessionStartMs_, millis(), &burstPlan_);
+    } else {
+        buildAutomaticBurstPlan(planner, &burstPlan_);
+    }
+}
+
+bool MotorAutomaticSessionMode::tryContinueProgramAfterGap() {
+    MotorAutomaticConfig config{};
+    if (!loadConfig(&config)) {
+        return false;
+    }
+
+    if (burstsOn_) {
+        AutomaticConfig planner{};
+        motorBurstScheduleInput(config, &planner);
+        if (shouldTriggerBurstBeforeMainStroke(burstPlan_, planner, segmentsCompleted_)) {
+            resumeState_ = State::SegmentRamp;
+            return beginBurstEvent();
+        }
+    }
+
+    return beginSegmentTransition();
+}
+
+bool MotorAutomaticSessionMode::maybeTriggerWallClockBurst() {
+    if (!burstsOn_ || !burstPlan_.active) {
+        return false;
+    }
+    if (burstPlan_.kind != BurstScheduleKind::WallClockDeadlines) {
+        return false;
+    }
+    if (!shouldTriggerBurstInWaitingGap(burstPlan_, sessionStartMs_, millis())) {
+        return false;
+    }
+
+    resumeState_ = State::SetSpeedHold;
+    return beginBurstEvent();
+}
+
+bool MotorAutomaticSessionMode::beginBurstEvent() {
+    if (motor_ == nullptr || !active_) {
+        return false;
+    }
+
+    MotorAutomaticConfig config{};
+    if (!loadConfig(&config)) {
+        return false;
+    }
+
+    AutomaticConfig planner{};
+    motorBurstScheduleInput(config, &planner);
+
+    burstStrokesTarget_ = drawBurstStrokeCount(planner);
+    burstStrokesCompletedInEvent_ = 0;
+
+    Serial.print(F("[MOTOR-AUTO] burst start event="));
+    Serial.print(burstEventsCompleted_ + 1);
+    Serial.print(F(" micros="));
+    Serial.println(burstStrokesTarget_);
+
+    return startNextBurstMicro();
+}
+
+bool MotorAutomaticSessionMode::startNextBurstMicro() {
+    if (motor_ == nullptr || !active_) {
+        return false;
+    }
+
+    MotorAutomaticConfig config{};
+    if (!loadConfig(&config)) {
+        return false;
+    }
+
+    AutomaticConfig planner{};
+    motorBurstScheduleInput(config, &planner);
+
+    const int burstRelativePower = drawBurstRelativePower(planner);
+    const int speedPercent = motorResolveBurstSpeedPercent(burstRelativePower, config);
+    const int duty = motorSpeedPercentToDuty(speedPercent, config);
+    const unsigned long rampMs = stopRampMs_ > 0UL ? stopRampMs_ : 1UL;
+
+    if (!motor_->beginRampToDuty(duty, rampMs)) {
+        Serial.println(F("[MOTOR-AUTO] reject: motor busy (burst)"));
+        return false;
+    }
+
+    dutyPercent_ = duty;
+    state_ = State::BurstMicroRamp;
+
+    Serial.print(F("[MOTOR-AUTO] burst micro "));
+    Serial.print(burstStrokesCompletedInEvent_ + 1);
+    Serial.print(F("/"));
+    Serial.print(burstStrokesTarget_);
+    Serial.print(F(" speed="));
+    Serial.print(speedPercent);
+    Serial.print(F("% duty="));
+    Serial.print(duty);
+    Serial.print(F("% rampMs="));
+    Serial.println(rampMs);
+    return true;
+}
+
+void MotorAutomaticSessionMode::finishBurstEvent() {
+    burstEventsCompleted_++;
+    advanceBurstPlan(&burstPlan_);
+
+    Serial.print(F("[MOTOR-AUTO] burst event complete total="));
+    Serial.println(burstEventsCompleted_);
+
+    burstStrokesTarget_ = 0;
+    burstStrokesCompletedInEvent_ = 0;
+
+    if (stopRequested_) {
+        requestRampToStop();
+        return;
+    }
+    if (shouldEndSession()) {
+        requestRampToStop();
+        return;
+    }
+
+    if (resumeState_ == State::SetSpeedHold) {
+        state_ = State::SetSpeedHold;
+        return;
+    }
+
+    if (pendingUpdate_) {
+        applyPendingUpdate();
+    }
+    if (!tryContinueProgramAfterGap()) {
+        finishSession(false, "automatic burst failed to resume", "error", true);
+    }
+}
+
+void MotorAutomaticSessionMode::handleCompletedMainSegment() {
+    if (stopRequested_) {
+        requestRampToStop();
+        return;
+    }
+    if (shouldEndSession()) {
+        requestRampToStop();
+        return;
+    }
+
+    segmentsCompleted_++;
+
+    MotorAutomaticConfig config{};
+    if (!loadConfig(&config)) {
+        finishSession(false, "automatic session failed", "error", true);
+        return;
+    }
+
+    if (burstsOn_) {
+        AutomaticConfig planner{};
+        motorBurstScheduleInput(config, &planner);
+        if (shouldTriggerBurstAfterMainStroke(burstPlan_, planner, segmentsCompleted_)) {
+            resumeState_ = State::SegmentRamp;
+            if (!beginBurstEvent()) {
+                finishSession(false, "automatic burst failed to start", "error", true);
+            }
+            return;
+        }
+    }
+
+    if (pendingUpdate_) {
+        applyPendingUpdate();
+    }
+
+    if (!tryContinueProgramAfterGap()) {
+        finishSession(false, "automatic session failed", "error", true);
+    }
+}
+
+void MotorAutomaticSessionMode::pollBurstStates() {
+    if (stopRequested_) {
+        requestRampToStop();
+        return;
+    }
+    if (shouldEndSession()) {
+        requestRampToStop();
+        return;
+    }
+
+    if (state_ == State::BurstMicroRamp) {
+        if (motor_ != nullptr && motor_->isRamping()) {
+            return;
+        }
+        state_ = State::BurstHold;
+        burstPhaseDeadlineMs_ = millis() + kMotorBurstMicroHoldMs;
+        return;
+    }
+
+    if (state_ == State::BurstHold) {
+        if (millis() < burstPhaseDeadlineMs_) {
+            return;
+        }
+
+        burstStrokesCompletedInEvent_++;
+        if (burstStrokesCompletedInEvent_ >= burstStrokesTarget_) {
+            finishBurstEvent();
+            return;
+        }
+
+        MotorAutomaticConfig config{};
+        if (!loadConfig(&config)) {
+            finishSession(false, "automatic session failed", "error", true);
+            return;
+        }
+
+        AutomaticConfig planner{};
+        motorBurstScheduleInput(config, &planner);
+        burstGapSec_ = drawBurstDelaySec(planner);
+        if (burstGapSec_ <= 0) {
+            if (!startNextBurstMicro()) {
+                finishSession(false, "automatic burst failed", "error", true);
+            }
+            return;
+        }
+
+        state_ = State::BurstGap;
+        burstPhaseDeadlineMs_ = millis() + static_cast<unsigned long>(burstGapSec_) * 1000UL;
+        return;
+    }
+
+    if (state_ == State::BurstGap) {
+        if (millis() < burstPhaseDeadlineMs_) {
+            return;
+        }
+
+        if (pendingUpdate_) {
+            applyPendingUpdate();
+            if (state_ == State::SetSpeedHold || state_ == State::SegmentRamp) {
+                return;
+            }
+        }
+
+        if (!startNextBurstMicro()) {
+            finishSession(false, "automatic burst failed", "error", true);
+        }
+    }
 }
