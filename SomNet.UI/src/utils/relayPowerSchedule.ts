@@ -10,9 +10,10 @@ import {
   previewBurstStrokeCount,
   resolveBurstEffectivePower,
   shouldPreviewBurstAfterMainStroke,
+  shouldPreviewBurstBeforeMainStroke,
   shouldTriggerBurstInWaitingGap,
 } from '@/utils/relayBurstPlan';
-import { resolveBurstPlacement } from '@/utils/burstPlacement';
+import { burstPlacementSchedule, resolveBurstPlacement } from '@/utils/burstPlacement';
 import {
   createSeededRandom,
   type MotorSpeedSchedule,
@@ -373,7 +374,8 @@ export function buildRelayAutomaticPowerSchedule(state: AutomaticControlState): 
   const scheduleSeed = hashRelayAutomaticScheduleSeed(state);
   const placement = resolveBurstPlacement(state);
   const illustrativeRandom =
-    isRandomMode(state.automaticMode) || placement === 'chanceAfterMainStroke';
+    isRandomMode(state.automaticMode) ||
+    burstPlacementSchedule(placement) === 'chanceAfterMainStroke';
   const tableRows = usesTableSchedule(state.automaticMode)
     ? buildTableRows(state, scheduleSeed)
     : null;
@@ -398,6 +400,37 @@ export function buildRelayAutomaticPowerSchedule(state: AutomaticControlState): 
   while (tSec < horizonSec) {
     const row = resolveStrokeRow(state, strokeIndex, scheduleSeed, tableRows);
     const gapSec = Math.max(0, row.gapSec);
+
+    if (
+      state.burstsOn &&
+      burstPlan.active &&
+      shouldPreviewBurstBeforeMainStroke(state, burstPlan, mainStrokesCompleted, scheduleSeed)
+    ) {
+      const burst = appendBurstCluster(
+        state,
+        scheduleSeed,
+        burstEventIndex,
+        points,
+        tSec,
+        level,
+        horizonSec,
+      );
+      tSec = burst.tSec;
+      level = burst.level;
+      burstEventIndex = burst.burstEventIndex;
+      advanceBurstPlan(burstPlan);
+      strokeIndex += 1;
+
+      if (tSec >= horizonSec) {
+        break;
+      }
+
+      const gapEndTarget = Math.min(tSec + gapSec, horizonSec);
+      const gap = appendGapInterval(points, tSec, level, gapEndTarget - tSec, horizonSec);
+      tSec = gap.tSec;
+      level = gap.level;
+      continue;
+    }
 
     const mainStroke = appendStrokePulse(
       points,

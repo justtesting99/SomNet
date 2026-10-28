@@ -28,11 +28,17 @@ enum class BurstStyle {
     RandomPowerAndDelay,
 };
 
-/** Doc 36 — how burstPercent maps to burst events. */
+/** Doc 36 — how burstPercent maps to burst events (+ main vs instead-of timing). */
 enum class BurstPlacement {
     SessionSpread,
     AfterMainStroke,
     ChanceAfterMainStroke,
+    MainPlusSessionSpread,
+    MainPlusAfterMainStroke,
+    MainPlusChanceAfterMainStroke,
+    InsteadOfSessionSpread,
+    InsteadOfAfterMainStroke,
+    InsteadOfChanceAfterMainStroke,
     Unknown,
 };
 

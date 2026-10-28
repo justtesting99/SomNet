@@ -133,6 +133,24 @@ BurstPlacement parseBurstPlacement(const char* value) {
     if (strcmp(value, "chanceAfterMainStroke") == 0) {
         return BurstPlacement::ChanceAfterMainStroke;
     }
+    if (strcmp(value, "mainPlusSessionSpread") == 0) {
+        return BurstPlacement::MainPlusSessionSpread;
+    }
+    if (strcmp(value, "mainPlusAfterMainStroke") == 0) {
+        return BurstPlacement::MainPlusAfterMainStroke;
+    }
+    if (strcmp(value, "mainPlusChanceAfterMainStroke") == 0) {
+        return BurstPlacement::MainPlusChanceAfterMainStroke;
+    }
+    if (strcmp(value, "insteadOfSessionSpread") == 0) {
+        return BurstPlacement::InsteadOfSessionSpread;
+    }
+    if (strcmp(value, "insteadOfAfterMainStroke") == 0) {
+        return BurstPlacement::InsteadOfAfterMainStroke;
+    }
+    if (strcmp(value, "insteadOfChanceAfterMainStroke") == 0) {
+        return BurstPlacement::InsteadOfChanceAfterMainStroke;
+    }
 
     return BurstPlacement::Unknown;
 }

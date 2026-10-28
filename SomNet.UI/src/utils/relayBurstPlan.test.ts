@@ -5,6 +5,7 @@ import {
   describeRelayBurstScheduleHint,
   resolveBurstEffectivePower,
   shouldTriggerBurstAfterMainStroke,
+  shouldTriggerBurstBeforeMainStroke,
 } from '@/utils/relayBurstPlan';
 
 describe('buildRelayBurstPlan', () => {
@@ -46,7 +47,7 @@ describe('buildRelayBurstPlan', () => {
     const plan = buildRelayBurstPlan({
       ...defaultAutomaticState,
       burstsOn: true,
-      burstPlacement: 'afterMainStroke',
+      burstPlacement: 'mainPlusAfterMainStroke',
       burstPercent: 50,
       endSessionMode: 'minutes',
       endSessionValue: 1,
@@ -56,11 +57,26 @@ describe('buildRelayBurstPlan', () => {
     expect(plan.cadenceStride).toBe(2);
   });
 
+  it('insteadOfAfterMainStroke triggers before the matching main stroke', () => {
+    const plan = buildRelayBurstPlan({
+      ...defaultAutomaticState,
+      burstsOn: true,
+      burstPlacement: 'insteadOfAfterMainStroke',
+      burstPercent: 50,
+      endSessionMode: 'minutes',
+      endSessionValue: 1,
+    });
+    expect(plan.burstInsteadOfMain).toBe(true);
+    expect(plan.cadenceStride).toBe(2);
+    expect(shouldTriggerBurstBeforeMainStroke(plan, 1)).toBe(true);
+    expect(shouldTriggerBurstAfterMainStroke(plan, 2)).toBe(false);
+  });
+
   it('chanceAfterMainStroke activates without envelope', () => {
     const plan = buildRelayBurstPlan({
       ...defaultAutomaticState,
       burstsOn: true,
-      burstPlacement: 'chanceAfterMainStroke',
+      burstPlacement: 'mainPlusChanceAfterMainStroke',
       burstPercent: 25,
       endSessionMode: 'minutes',
       endSessionValue: 1,

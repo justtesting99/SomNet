@@ -90,6 +90,37 @@ void buildWallClockPlan(int endSessionMinutes, int burstPercent, AutomaticBurstP
     }
 }
 
+bool burstPlacementInsteadOfMain(BurstPlacement placement) {
+    switch (placement) {
+        case BurstPlacement::InsteadOfSessionSpread:
+        case BurstPlacement::InsteadOfAfterMainStroke:
+        case BurstPlacement::InsteadOfChanceAfterMainStroke:
+            return true;
+        default:
+            return false;
+    }
+}
+
+BurstPlacement burstPlacementScheduleBasis(BurstPlacement placement) {
+    switch (placement) {
+        case BurstPlacement::AfterMainStroke:
+        case BurstPlacement::MainPlusAfterMainStroke:
+        case BurstPlacement::InsteadOfAfterMainStroke:
+            return BurstPlacement::AfterMainStroke;
+
+        case BurstPlacement::ChanceAfterMainStroke:
+        case BurstPlacement::MainPlusChanceAfterMainStroke:
+        case BurstPlacement::InsteadOfChanceAfterMainStroke:
+            return BurstPlacement::ChanceAfterMainStroke;
+
+        case BurstPlacement::SessionSpread:
+        case BurstPlacement::MainPlusSessionSpread:
+        case BurstPlacement::InsteadOfSessionSpread:
+        default:
+            return BurstPlacement::SessionSpread;
+    }
+}
+
 void buildCadenceStridePlan(int burstPercent, AutomaticBurstPlan* outPlan) {
     const int stride = burstCadenceStride(burstPercent);
     if (stride <= 0) {
@@ -146,13 +177,16 @@ void buildAutomaticBurstPlan(const AutomaticConfig& config, AutomaticBurstPlan* 
             ? BurstPlacement::SessionSpread
             : config.burstPlacement;
 
-    if (placement == BurstPlacement::ChanceAfterMainStroke) {
+    outPlan->burstInsteadOfMain = burstPlacementInsteadOfMain(placement);
+    const BurstPlacement scheduleBasis = burstPlacementScheduleBasis(placement);
+
+    if (scheduleBasis == BurstPlacement::ChanceAfterMainStroke) {
         outPlan->active = true;
         outPlan->kind = BurstScheduleKind::ChancePerMainStroke;
         return;
     }
 
-    if (placement == BurstPlacement::AfterMainStroke) {
+    if (scheduleBasis == BurstPlacement::AfterMainStroke) {
         switch (config.endSessionMode) {
             case EndSessionMode::Strokes:
                 if (config.endSessionValue > 0) {
@@ -256,7 +290,7 @@ bool shouldTriggerBurstAfterMainStroke(
     const AutomaticBurstPlan& plan,
     const AutomaticConfig& config,
     int mainStrokesCompleted) {
-    if (!plan.active) {
+    if (!plan.active || plan.burstInsteadOfMain) {
         return false;
     }
 
@@ -270,6 +304,41 @@ bool shouldTriggerBurstAfterMainStroke(
         case BurstScheduleKind::CadenceStride:
             return plan.nextCadenceTriggerStroke > 0 &&
                    mainStrokesCompleted >= plan.nextCadenceTriggerStroke;
+
+        case BurstScheduleKind::ChancePerMainStroke:
+            if (config.burstPercent >= 100) {
+                return true;
+            }
+            if (config.burstPercent <= 0) {
+                return false;
+            }
+            return (esp_random() % 100U) < static_cast<uint32_t>(config.burstPercent);
+
+        default:
+            return false;
+    }
+}
+
+bool shouldTriggerBurstBeforeMainStroke(
+    const AutomaticBurstPlan& plan,
+    const AutomaticConfig& config,
+    int mainStrokesCompleted) {
+    if (!plan.active || !plan.burstInsteadOfMain) {
+        return false;
+    }
+
+    const int upcomingMainStroke = mainStrokesCompleted + 1;
+
+    switch (plan.kind) {
+        case BurstScheduleKind::StrokeMilestones:
+            if (plan.nextMilestoneIndex >= plan.burstEventCount) {
+                return false;
+            }
+            return upcomingMainStroke >= plan.milestones[plan.nextMilestoneIndex];
+
+        case BurstScheduleKind::CadenceStride:
+            return plan.nextCadenceTriggerStroke > 0 &&
+                   upcomingMainStroke >= plan.nextCadenceTriggerStroke;
 
         case BurstScheduleKind::ChancePerMainStroke:
             if (config.burstPercent >= 100) {

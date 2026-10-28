@@ -48,7 +48,9 @@ import { getMotorAutomaticModeInfo } from '@/utils/motorAutomaticModeInfo';
 import { clearMotorAutomaticSegments } from '@/utils/motorAutomaticSegmentStore';
 import {
   BURST_PLACEMENT_OPTIONS,
+  burstMainTiming,
   burstPercentFieldLabel,
+  burstPlacementSchedule,
   resolveBurstPlacement,
 } from '@/utils/burstPlacement';
 
@@ -120,7 +122,8 @@ export function MotorAutomaticControls() {
   const updateDebounceRef = useRef<number | null>(null);
   const burstSettingsDisabled = configLocked || !state.burstsOn;
   const burstPlacement = resolveBurstPlacement(state);
-  const burstChanceMode = burstPlacement === 'chanceAfterMainStroke';
+  const burstChanceMode = burstPlacementSchedule(burstPlacement) === 'chanceAfterMainStroke';
+  const burstInsteadOfMain = burstMainTiming(burstPlacement) === 'insteadOf';
   const delayStartLocked = sessionRunning;
   const hardwareReady = isHardwareCommandReady(systemStatus) && sceneSessionActive;
   const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart, commandDeviceId);
@@ -690,6 +693,13 @@ export function MotorAutomaticControls() {
                 )
               }
             />
+
+            {burstInsteadOfMain && state.burstsOn ? (
+              <p className="text-xs leading-relaxed text-slate-500">
+                Instead-of-main timing is saved for relay testing; motor burst execution is not yet
+                on device.
+              </p>
+            ) : null}
 
             {burstChanceMode && state.burstsOn ? (
               <p className="text-xs leading-relaxed text-amber-600/90">

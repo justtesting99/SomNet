@@ -52,7 +52,7 @@ export const defaultMotorAutomaticState: MotorAutomaticControlState = {
   endSessionMode: 'minutes',
   endSessionValue: 30,
   burstsOn: false,
-  burstPlacement: 'sessionSpread',
+  burstPlacement: 'mainPlusSessionSpread',
   burstPercent: 10,
   burstStyle: 'fixedPowerDelay',
   burstStrokePowerMin: 0,

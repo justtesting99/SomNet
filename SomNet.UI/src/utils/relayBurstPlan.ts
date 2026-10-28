@@ -1,5 +1,9 @@
 import type { AutomaticControlState, BurstStyle } from '@/types/modes';
-import { resolveBurstPlacement } from '@/utils/burstPlacement';
+import {
+  burstMainTiming,
+  burstPlacementSchedule,
+  resolveBurstPlacement,
+} from '@/utils/burstPlacement';
 import { createSeededRandom } from '@/utils/motorSpeedSchedule';
 
 export type BurstScheduleKind =
@@ -11,6 +15,7 @@ export type BurstScheduleKind =
 
 export interface RelayBurstPlan {
   active: boolean;
+  burstInsteadOfMain: boolean;
   kind: BurstScheduleKind;
   burstEventCount: number;
   nextMilestoneIndex: number;
@@ -54,6 +59,7 @@ function buildStrokeMilestonePlan(
   }
   return {
     active: true,
+    burstInsteadOfMain: false,
     kind: 'strokeMilestones',
     burstEventCount: cappedCount,
     nextMilestoneIndex: 0,
@@ -76,6 +82,7 @@ function buildWallClockPlan(endSessionMinutes: number, burstPercent: number): Re
   }
   return {
     active: true,
+    burstInsteadOfMain: false,
     kind: 'wallClock',
     burstEventCount: cappedCount,
     nextMilestoneIndex: 0,
@@ -92,6 +99,7 @@ function buildCadenceStridePlan(burstPercent: number): RelayBurstPlan | null {
   }
   return {
     active: true,
+    burstInsteadOfMain: false,
     kind: 'cadenceStride',
     burstEventCount: 0,
     nextMilestoneIndex: 0,
@@ -103,6 +111,7 @@ function buildCadenceStridePlan(burstPercent: number): RelayBurstPlan | null {
 
 const emptyPlan = (): RelayBurstPlan => ({
   active: false,
+  burstInsteadOfMain: false,
   kind: 'none',
   burstEventCount: 0,
   nextMilestoneIndex: 0,
@@ -117,10 +126,13 @@ export function buildRelayBurstPlan(state: AutomaticControlState): RelayBurstPla
   }
 
   const placement = resolveBurstPlacement(state);
+  const insteadOfMain = burstMainTiming(placement) === 'insteadOf';
+  const schedule = burstPlacementSchedule(placement);
 
-  if (placement === 'chanceAfterMainStroke') {
+  if (schedule === 'chanceAfterMainStroke') {
     return {
       active: true,
+      burstInsteadOfMain: insteadOfMain,
       kind: 'chancePerMainStroke',
       burstEventCount: 0,
       nextMilestoneIndex: 0,
@@ -130,27 +142,34 @@ export function buildRelayBurstPlan(state: AutomaticControlState): RelayBurstPla
     };
   }
 
-  if (placement === 'afterMainStroke') {
+  if (schedule === 'afterMainStroke') {
     if (state.endSessionMode === 'strokes' && state.endSessionValue > 0) {
-      return buildStrokeMilestonePlan(state.endSessionValue, state.burstPercent) ?? emptyPlan();
+      const plan =
+        buildStrokeMilestonePlan(state.endSessionValue, state.burstPercent) ?? emptyPlan();
+      return { ...plan, burstInsteadOfMain: insteadOfMain };
     }
     if (state.endSessionMode === 'minutes' && state.endSessionValue > 0) {
-      return buildCadenceStridePlan(state.burstPercent) ?? emptyPlan();
+      const plan = buildCadenceStridePlan(state.burstPercent) ?? emptyPlan();
+      return { ...plan, burstInsteadOfMain: insteadOfMain };
     }
     if (state.endSessionMode === 'noAutoEnd') {
-      return buildCadenceStridePlan(state.burstPercent) ?? emptyPlan();
+      const plan = buildCadenceStridePlan(state.burstPercent) ?? emptyPlan();
+      return { ...plan, burstInsteadOfMain: insteadOfMain };
     }
     return emptyPlan();
   }
 
   if (state.endSessionMode === 'strokes' && state.endSessionValue > 0) {
-    return buildStrokeMilestonePlan(state.endSessionValue, state.burstPercent) ?? emptyPlan();
+    const plan = buildStrokeMilestonePlan(state.endSessionValue, state.burstPercent) ?? emptyPlan();
+    return { ...plan, burstInsteadOfMain: insteadOfMain };
   }
   if (state.endSessionMode === 'minutes' && state.endSessionValue > 0) {
-    return buildWallClockPlan(state.endSessionValue, state.burstPercent) ?? emptyPlan();
+    const plan = buildWallClockPlan(state.endSessionValue, state.burstPercent) ?? emptyPlan();
+    return { ...plan, burstInsteadOfMain: insteadOfMain };
   }
   if (state.endSessionMode === 'noAutoEnd') {
-    return buildCadenceStridePlan(state.burstPercent) ?? emptyPlan();
+    const plan = buildCadenceStridePlan(state.burstPercent) ?? emptyPlan();
+    return { ...plan, burstInsteadOfMain: insteadOfMain };
   }
 
   return emptyPlan();
@@ -175,7 +194,7 @@ export function shouldTriggerBurstAfterMainStroke(
   plan: RelayBurstPlan,
   mainStrokesCompleted: number,
 ): boolean {
-  if (!plan.active) {
+  if (!plan.active || plan.burstInsteadOfMain) {
     return false;
   }
 
@@ -196,6 +215,33 @@ export function shouldTriggerBurstAfterMainStroke(
   return false;
 }
 
+export function shouldTriggerBurstBeforeMainStroke(
+  plan: RelayBurstPlan,
+  mainStrokesCompleted: number,
+): boolean {
+  if (!plan.active || !plan.burstInsteadOfMain) {
+    return false;
+  }
+
+  const upcomingMainStroke = mainStrokesCompleted + 1;
+
+  if (plan.kind === 'strokeMilestones') {
+    if (plan.nextMilestoneIndex >= plan.burstEventCount) {
+      return false;
+    }
+    return upcomingMainStroke >= plan.milestones[plan.nextMilestoneIndex]!;
+  }
+
+  if (plan.kind === 'cadenceStride') {
+    return (
+      plan.nextCadenceTriggerStroke > 0 &&
+      upcomingMainStroke >= plan.nextCadenceTriggerStroke
+    );
+  }
+
+  return false;
+}
+
 export function shouldPreviewBurstAfterMainStroke(
   state: AutomaticControlState,
   plan: RelayBurstPlan,
@@ -209,6 +255,21 @@ export function shouldPreviewBurstAfterMainStroke(
     return previewChanceBurstAfterStroke(state, mainStrokesCompleted, scheduleSeed);
   }
   return shouldTriggerBurstAfterMainStroke(plan, mainStrokesCompleted);
+}
+
+export function shouldPreviewBurstBeforeMainStroke(
+  state: AutomaticControlState,
+  plan: RelayBurstPlan,
+  mainStrokesCompleted: number,
+  scheduleSeed: number,
+): boolean {
+  if (!plan.active || !plan.burstInsteadOfMain) {
+    return false;
+  }
+  if (plan.kind === 'chancePerMainStroke') {
+    return previewChanceBurstAfterStroke(state, mainStrokesCompleted + 1, scheduleSeed);
+  }
+  return shouldTriggerBurstBeforeMainStroke(plan, mainStrokesCompleted);
 }
 
 export function shouldTriggerBurstInWaitingGap(
@@ -326,14 +387,20 @@ export function describeRelayBurstScheduleHint(state: AutomaticControlState): st
   }
 
   const placement = resolveBurstPlacement(state);
+  const schedule = burstPlacementSchedule(placement);
+  const insteadOf = burstMainTiming(placement) === 'insteadOf';
+  const timingNote = insteadOf
+    ? 'Burst runs instead of the scheduled main stroke (no main pulse on that beat).'
+    : 'Main stroke completes, then burst cluster runs.';
 
-  if (placement === 'chanceAfterMainStroke') {
-    return `Each main stroke has a ${state.burstPercent}% chance of a burst cluster after it. Count varies each run; preview shows one example path.`;
+  if (schedule === 'chanceAfterMainStroke') {
+    const when = insteadOf ? 'before that main stroke' : 'after it';
+    return `${timingNote} Each main opportunity has a ${state.burstPercent}% chance of a burst cluster ${when}. Count varies each run.`;
   }
 
   const plan = buildRelayBurstPlan(state);
   if (!plan.active) {
-    if (placement === 'sessionSpread') {
+    if (schedule === 'sessionSpread') {
       const envelope =
         state.endSessionMode === 'minutes' || state.endSessionMode === 'strokes'
           ? state.endSessionValue
@@ -349,19 +416,21 @@ export function describeRelayBurstScheduleHint(state: AutomaticControlState): st
 
   if (plan.kind === 'cadenceStride') {
     const cadenceNote =
-      placement === 'afterMainStroke' && state.endSessionMode === 'minutes'
+      schedule === 'afterMainStroke' && state.endSessionMode === 'minutes'
         ? ' (stroke-linked during timed session)'
         : '';
-    return `First burst after main stroke ${plan.nextCadenceTriggerStroke}, then every ${plan.cadenceStride} main strokes${cadenceNote}.`;
+    const beat = insteadOf ? 'instead of main stroke' : 'after main stroke';
+    return `${timingNote} First burst ${beat} ${plan.nextCadenceTriggerStroke}, then every ${plan.cadenceStride} main opportunities${cadenceNote}.`;
   }
 
   if (plan.kind === 'strokeMilestones' && plan.milestones.length > 0) {
-    return `About ${plan.burstEventCount} burst event(s) — first after main stroke ${plan.milestones[0]}.`;
+    const beat = insteadOf ? 'instead of main stroke' : 'after main stroke';
+    return `${timingNote} About ${plan.burstEventCount} burst event(s) — first ${beat} ${plan.milestones[0]}.`;
   }
 
   if (plan.kind === 'wallClock' && plan.milestones.length > 0) {
     const firstMin = Math.max(1, Math.round(plan.milestones[0]! / 60_000));
-    return `About ${plan.burstEventCount} burst event(s) spread across ${state.endSessionValue} min — first near minute ${firstMin} (between main strokes).`;
+    return `${timingNote} About ${plan.burstEventCount} burst event(s) spread across ${state.endSessionValue} min — first near minute ${firstMin} (between main strokes).`;
   }
 
   return null;

@@ -120,6 +120,9 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
 
     if (burstsOn_) {
         if (burstPlan_.active) {
+            if (burstPlan_.burstInsteadOfMain) {
+                Serial.println(F("[AUTO] burst timing=insteadOfMain"));
+            }
             switch (burstPlan_.kind) {
                 case BurstScheduleKind::StrokeMilestones:
                     Serial.print(F("[AUTO] burst plan strokes events="));
@@ -472,6 +475,18 @@ void AutomaticSessionMode::poll() {
 
     if (pendingUpdate_) {
         applyPendingUpdate();
+    }
+
+    if (burstsOn_) {
+        AutomaticConfig burstConfig{};
+        if (parseAutomaticConfig(configJson_, &burstConfig) &&
+            shouldTriggerBurstBeforeMainStroke(
+                burstPlan_, burstConfig, strokesCompleted_)) {
+            if (!beginBurstEvent()) {
+                finishSession(false, "automatic burst failed to start", "error", true);
+            }
+            return;
+        }
     }
 
     if (!startNextPulse()) {

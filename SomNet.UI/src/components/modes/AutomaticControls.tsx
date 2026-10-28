@@ -47,7 +47,9 @@ import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
 import { buildAutomaticStartPayload } from '@/utils/automaticStartPayload';
 import {
   BURST_PLACEMENT_OPTIONS,
+  burstMainTiming,
   burstPercentFieldLabel,
+  burstPlacementSchedule,
   resolveBurstPlacement,
 } from '@/utils/burstPlacement';
 import {
@@ -128,7 +130,8 @@ export function AutomaticControls() {
   const burstPlacement = resolveBurstPlacement(state);
   const burstScheduleHint = describeRelayBurstScheduleHint(state);
   const burstPowerMatchesMain = burstPreviewLikelyMatchesMainPower(state);
-  const burstChanceMode = burstPlacement === 'chanceAfterMainStroke';
+  const burstChanceMode = burstPlacementSchedule(burstPlacement) === 'chanceAfterMainStroke';
+  const burstInsteadOfMain = burstMainTiming(burstPlacement) === 'insteadOf';
   const delayStartLocked = sessionRunning;
   const hardwareReady = isHardwareCommandReady(systemStatus) && sceneSessionActive;
   const lastPushedUpdateRef = useRef<string | null>(null);
@@ -693,6 +696,13 @@ export function AutomaticControls() {
                 )
               }
             />
+
+            {burstInsteadOfMain && state.burstsOn ? (
+              <p className="text-xs leading-relaxed text-slate-500">
+                Instead-of-main: the burst cluster replaces that scheduled main stroke (helps air
+                tools return before the next pulse).
+              </p>
+            ) : null}
 
             {burstChanceMode && state.burstsOn ? (
               <p className="text-xs leading-relaxed text-amber-600/90">

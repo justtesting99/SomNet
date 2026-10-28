@@ -1,6 +1,6 @@
 # Burst placement modes — design (relay + motor)
 
-**Status:** Implemented (2026-10-27) — firmware, API, relay UI preview; motor UI mirrors placement fields (burst execution on motor device TBD per doc 31).  
+**Status:** Implemented (2026-10-27) — firmware **`0.15.2-burst-main-timing`** (main+ vs instead-of-main), API, relay UI preview; motor UI mirrors placement fields (burst execution on motor device TBD per doc 31).  
 **Parent:** [Phase 10 — Burst-in-automatic](./09-ESP32-Phase-10-Checklist.md) (signed off; behavior preserved as **session spread**)  
 **Related:** [Frontend Architecture § Burst Settings](./03-Frontend-Architecture.md), [Motor actuator design § Bursts](./31-Motor-Actuator-Device-Design.md), [SignalR & Hardware](./06-SignalR-And-Hardware.md)
 
@@ -41,13 +41,26 @@ This document adds a **selectable `burstPlacement`** so one percent slider has a
 
 ## 3. Placement modes (operator-facing)
 
-| UI label (proposed) | JSON `burstPlacement` | Meaning of **Percent (0–100)** |
-|---------------------|-------------------------|--------------------------------|
-| **Spread across session** | `sessionSpread` | **Phase 10:** burst **event count** ≈ `round(envelope × percent / 100)`, **evenly spaced** (minutes → wall-clock; strokes → milestones; `noAutoEnd` → every Nth main). |
-| **After main strokes (even)** | `afterMainStroke` | **Deterministic:** about **`percent`** of main strokes get a burst **after** that stroke — **even spacing** (stride or stroke milestones). Same main-stroke index every run for same settings. |
-| **Chance after each main stroke** | `chanceAfterMainStroke` | **Random:** each main stroke, independent **`percent`** probability of a burst **immediately after** that stroke. Expected share ≈ `percent`, but **count varies** run to run. |
+Each row is one **schedule** (what percent means). The UI exposes **six** dropdown values: **main + burst** vs **burst instead of main** for each schedule.
 
-**Default:** `sessionSpread`.
+| UI label | JSON `burstPlacement` | Timing |
+|----------|-------------------------|--------|
+| Main + spread across session | `mainPlusSessionSpread` | Main pulse, then burst when schedule fires (minutes: between mains on wall-clock). |
+| Burst instead of main — spread | `insteadOfSessionSpread` | Burst **replaces** the scheduled main on that beat (no main pulse first). |
+| Main + after main strokes (even) | `mainPlusAfterMainStroke` | Main completes, then burst on stride/milestones. |
+| Burst instead of main — even spacing | `insteadOfAfterMainStroke` | Burst **instead of** the main on stride/milestones (air-tool return time). |
+| Main + chance after each main | `mainPlusChanceAfterMainStroke` | Main completes, then independent % roll for burst. |
+| Burst instead of main — chance | `insteadOfChanceAfterMainStroke` | Roll before each main opportunity; burst **or** main, not both. |
+
+**Legacy wire values** (still accepted): `sessionSpread`, `afterMainStroke`, `chanceAfterMainStroke` — treated as **main +** variants.
+
+| Schedule | **Percent (0–100)** meaning |
+|----------|------------------------------|
+| **Spread** (`*SessionSpread`) | Phase 10: burst event count ≈ `round(envelope × percent / 100)`, evenly spaced. |
+| **Even** (`*AfterMainStroke`) | About **percent** of main **opportunities** on even spacing (stride or stroke milestones). |
+| **Chance** (`*ChanceAfterMainStroke`) | Independent **percent** chance per main **opportunity**. |
+
+**Default:** `mainPlusSessionSpread`.
 
 **When `burstsOn` is false:** `burstPlacement` is ignored (still round-trips in settings).
 
@@ -111,16 +124,25 @@ Then apply **BP-D3** (burst before end-session check if triggered).
 
 **`burstPlan.active`:** may be `true` with kind **`ChancePerMainStroke`** (no milestones) so session start logs `burstsOn` + placement; trigger path is **`shouldTriggerBurstAfterMainStroke`** or a dedicated **`shouldTriggerChanceBurstAfterMainStroke`**.
 
-### 4.4 End session vs burst (BP-D3)
+### 4.4 Main timing (main+ vs instead-of)
 
-On **`onRelayPulseComplete`**:
+| Timing | Firmware trigger point |
+|--------|-------------------------|
+| **Main +** (`burstInsteadOfMain = false`) | After main pulse in **`onRelayPulseComplete`** (`shouldTriggerBurstAfterMainStroke`). |
+| **Instead of main** (`burstInsteadOfMain = true`) | Before **`startNextPulse`** in **`poll()`** (`shouldTriggerBurstBeforeMainStroke`); main pulse is skipped on that beat. |
+
+Wall-clock **session spread** (minutes) still uses **`shouldTriggerBurstInWaitingGap`** for both timings (burst between mains, not stacked on a main pulse).
+
+### 4.5 End session vs burst (BP-D3)
+
+On **`onRelayPulseComplete`** (main+ only):
 
 1. Increment `mainStrokesCompleted`.
 2. Apply pending `automatic-update`.
-3. If `burstsOn` && placement triggers (**milestone / stride / chance roll**) → `beginBurstEvent()`; **return**.
+3. If `burstsOn` && **main+** placement triggers → `beginBurstEvent()`; **return**.
 4. Stop / end-session checks.
 
-**`poll()` `WaitingGap`:** wall-clock bursts only for **`sessionSpread` + minutes**. Chance and deterministic stroke modes **never** use `shouldTriggerBurstInWaitingGap`.
+**`poll()` `WaitingGap`:** wall-clock bursts for **session spread + minutes**; **instead-of** stroke/chance modes call **`shouldTriggerBurstBeforeMainStroke`** before the next main pulse.
 
 After **`finishBurstEvent()`**, run stop/end checks.
 

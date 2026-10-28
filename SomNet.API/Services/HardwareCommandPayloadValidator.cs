@@ -48,6 +48,12 @@ internal static class HardwareCommandPayloadValidator
         "sessionSpread",
         "afterMainStroke",
         "chanceAfterMainStroke",
+        "mainPlusSessionSpread",
+        "mainPlusAfterMainStroke",
+        "mainPlusChanceAfterMainStroke",
+        "insteadOfSessionSpread",
+        "insteadOfAfterMainStroke",
+        "insteadOfChanceAfterMainStroke",
     };
 
     private static readonly HashSet<string> BurstStyles = new(StringComparer.OrdinalIgnoreCase)
@@ -274,6 +280,15 @@ internal static class HardwareCommandPayloadValidator
                 if (endSessionValue <= 0)
                 {
                     errorMessage = "Motor minutes end session requires endSessionValue greater than zero.";
+                    return false;
+                }
+            }
+
+            if (root.TryGetProperty("burstsOn", out var burstsOnElement) &&
+                burstsOnElement.ValueKind == JsonValueKind.True)
+            {
+                if (!TryValidateAutomaticBurstSettings(root, out errorMessage))
+                {
                     return false;
                 }
             }
@@ -551,7 +566,7 @@ internal static class HardwareCommandPayloadValidator
             if (string.IsNullOrWhiteSpace(burstPlacement) || !BurstPlacements.Contains(burstPlacement))
             {
                 errorMessage =
-                    "burstPlacement must be sessionSpread, afterMainStroke, or chanceAfterMainStroke.";
+                    "burstPlacement must be a supported sessionSpread / afterMainStroke / chanceAfterMainStroke value (mainPlus or insteadOf variants).";
                 return false;
             }
         }

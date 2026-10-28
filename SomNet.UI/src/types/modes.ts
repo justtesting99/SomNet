@@ -8,7 +8,16 @@ export type BurstStyle =
   | 'randomDelayOnly'
   | 'randomPowerAndDelay';
 
-export type BurstPlacement = 'sessionSpread' | 'afterMainStroke' | 'chanceAfterMainStroke';
+export type BurstPlacement =
+  | 'sessionSpread'
+  | 'afterMainStroke'
+  | 'chanceAfterMainStroke'
+  | 'mainPlusSessionSpread'
+  | 'mainPlusAfterMainStroke'
+  | 'mainPlusChanceAfterMainStroke'
+  | 'insteadOfSessionSpread'
+  | 'insteadOfAfterMainStroke'
+  | 'insteadOfChanceAfterMainStroke';
 
 export type AutomaticRunMode =
   | 'periodic'
@@ -89,7 +98,7 @@ export const defaultAutomaticState: AutomaticControlState = {
   endSessionValue: 100,
   endSessionMode: 'noAutoEnd',
   burstsOn: false,
-  burstPlacement: 'sessionSpread',
+  burstPlacement: 'mainPlusSessionSpread',
   burstPercent: 10,
   burstStyle: 'fixedPowerDelay',
   burstStrokePowerMin: 0,
