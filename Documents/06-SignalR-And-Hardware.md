@@ -5,7 +5,7 @@ SomNet provides real-time communication between the API and ESP32 hardware devic
 | Layer | Status (2026-09-20) |
 |-------|------------------------|
 | **API + hub** | Complete — pairing, dispatch, ack registry, per-command ack timeouts, **`ReportButtonEvent`**, **`session-accessory`** validation |
-| **ESP32 firmware** | **Phases 0–12 + button clicks + P16 signed off** — current **`0.15.2-burst-main-timing`** (P16 sign-off **`0.15.0-session-accessory`**) |
+| **ESP32 firmware** | **Phases 0–12 + button clicks + P16 signed off** — current **`0.16.0-motor-burst`** (relay burst placement **`0.15.2-burst-main-timing`**; P16 **`0.15.0-session-accessory`**) |
 | **React UI** | **Complete** — Hardware dialog pairing; REST command dispatch; operator hub for automatic session end + **device button events**; **Session in Progress** slide switch ([P16](./25-Session-Accessory-In-Progress-Checklist.md)) |
 
 **Related docs:** [ESP32 Device Plan](./09-ESP32-Device-Plan.md) (source of truth) · [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md) (wire capture) · [Hardware User Guide](./Hardware-User-Guide.md) · [SomNet.Device/README](../SomNet.Device/README.md)
@@ -208,7 +208,7 @@ Example — device rejected missing `strokeMs`:
 
 ## Command Keys
 
-Aligned with UI constants (`types/hardwareCommand.ts`) and `HardwareCommandKeys` (Shared). **Firmware status** as of **`0.15.2-burst-main-timing`**:
+Aligned with UI constants (`types/hardwareCommand.ts`) and `HardwareCommandKeys` (Shared). **Firmware status** as of **`0.16.0-motor-burst`**:
 
 **Automatic-start snapshot** (when `burstsOn: true`) includes **`burstPlacement`** — six operator values + three legacy aliases; validated in `HardwareCommandPayloadValidator`. See [36-Burst-Placement-Modes-Design.md](./36-Burst-Placement-Modes-Design.md).
 

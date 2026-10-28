@@ -30,6 +30,10 @@ constexpr bool MOTOR_ENABLES_GANGED_ON_D27 = true;
 constexpr bool MOTOR_FORWARD_PWM_ON_D26 = true;
 /** LEDC PWM frequency for motor channels (Hz). Bench: 5 kHz matched to BTS7960 module (2026-10-26). */
 constexpr unsigned long MOTOR_PWM_FREQUENCY_HZ = 5000;
+/**
+ * Motor automatic burst micro-hold after ramp reaches burst duty (ms). MA-D26 / M1d — canonical
+ * value in `modes/motor/motor_automatic_burst.h` (`kMotorBurstMicroHoldMs`, bench 300 ms).
+ */
 
 // Optional production straps (3 inputs → 3-bit actuatorProfileId at boot). Not v1 — see Documents/31-Motor-Actuator-Device-Design.md §2.4
 // constexpr int PIN_ACTUATOR_STRAP_0 = TBD;

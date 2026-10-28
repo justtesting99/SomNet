@@ -314,31 +314,31 @@ When **M1-B1–B8** pass → fill **§4 Phase M1 sign-off** (☑ all M1 items) a
 ### 5.2.1 Design & product
 
 - [ ] **M1d-D1** Operator sign-off on §5.2.1 (main beat, periodic matrix, burst cluster shape)
-- [ ] **M1d-D2** PROTOCOL / `boardDefs` note for burst micro-hold ms once bench value chosen (MA-D26)
+- [x] **M1d-D2** PROTOCOL / `boardDefs` note for burst micro-hold ms once bench value chosen (MA-D26) — **300 ms** in `motor_automatic_burst.h`; pointer in `boardDefs.h`
 
 ### 5.2.2 Firmware (`MotorAutomaticSessionMode`)
 
-- [ ] **M1d-F1** Parse `burstsOn`, `burstPlacement`, burst percent/style/ranges in `parseMotorAutomaticConfig`
-- [ ] **M1d-F2** Until burst FSM complete: **reject** `burstsOn: true` with clear serial (remove when done)
-- [ ] **M1d-F3** Motor config adapter → shared `buildAutomaticBurstPlan` / replan (`automatic_burst_runtime`)
-- [ ] **M1d-F4** Burst sub-FSM: micro-cycles (ramp → hold → intra-gap) using `MotorController` ramps (MA-D14)
-- [ ] **M1d-F5** **Main+** triggers after segment complete; **instead-of** before next `beginSegmentTransition`
-- [ ] **M1d-F6** Wall-clock **session spread** in `poll` between segment work
-- [ ] **M1d-F7** **Chance** rolls at same hook points as relay (`esp_random`)
-- [ ] **M1d-F8** `automatic-update` rebuilds burst plan (Phase 11 parity)
-- [ ] **M1d-F9** `resultJson`: `burstEventsCompleted`, `burstPlacement` echo
+- [x] **M1d-F1** Parse `burstsOn`, `burstPlacement`, burst percent/style/ranges in `parseMotorAutomaticConfig`
+- [x] **M1d-F2** ~~Until burst FSM complete: reject `burstsOn`~~ — **N/A**; shipped with FSM + **MA-D27** validation (`motorBurstSettingsAllowed`) instead of blanket reject
+- [x] **M1d-F3** Motor config adapter → shared `buildAutomaticBurstPlan` / replan (`automatic_burst_runtime`)
+- [x] **M1d-F4** Burst sub-FSM: micro-cycles (ramp → hold → intra-gap) using `MotorController` ramps (MA-D14)
+- [x] **M1d-F5** **Main+** triggers after segment complete; **instead-of** before next `beginSegmentTransition`
+- [x] **M1d-F6** Wall-clock **session spread** in `poll` between segment work
+- [x] **M1d-F7** **Chance** rolls at same hook points as relay (`esp_random`)
+- [x] **M1d-F8** `automatic-update` rebuilds burst plan (Phase 11 parity)
+- [x] **M1d-F9** `resultJson`: `burstEventsCompleted`, `burstPlacement` echo
 - [ ] **M1d-F10** `emitSegmentRamp` during burst clusters (live graph parity)
 
 ### 5.2.3 Shared / API
 
-- [ ] **M1d-S1** `MotorAutomaticControlStateDto` / pairing serializer — verify burst fields (likely already ☑)
+- [x] **M1d-S1** `MotorAutomaticControlStateDto` / pairing serializer — verify burst fields (likely already ☑)
 - [ ] **M1d-S2** Motor automatic history / summary strings mention burst events when present
 
 ### 5.2.4 UI
 
 - [ ] **M1d-U1** `motorSpeedSchedule.ts` — burst preview using shared placement helpers (`burstPlacement.ts` / `relayBurstPlan` logic)
 - [x] **M1d-U2** `MotorAutomaticControls`: disable even/chance placements when mode = periodic (MA-D27)
-- [ ] **M1d-U3** Remove “settings only / not on device” banner when **M1d-F4** ships
+- [x] **M1d-U3** Remove “settings only / not on device” banner when **M1d-F4** ships
 
 ### 5.2.5 Tests & bench
 
@@ -354,9 +354,9 @@ When **M1-B1–B8** pass → fill **§4 Phase M1 sign-off** (☑ all M1 items) a
 |-------|--------|
 | **Date** | |
 | **Signed by** | |
-| **Firmware version** | (target e.g. `0.16.0-motor-burst`) |
+| **Firmware version** | **`0.16.0-motor-burst`** (relay placement remains **`0.15.2-burst-main-timing`** lineage on same binary tag) |
 | **Test deviceId** | |
-| **Notes** | |
+| **Notes** | Core burst FSM + UI MA-D27 shipped; **F10**, **U1**, **S2**, **T***, **V*** pending operator bench |
 | **All M1d items complete** | ☐ |
 
 ---
@@ -465,7 +465,7 @@ Update this table when a phase is signed off.
 | M1 | **Signed off** (Run B) | 2026-10-27 |
 | M1b | **Done** (modes + ramp + manual; bursts **M4**) | 2026-10-27 |
 | M1c | **Done** (pattern graph + segment telemetry) | 2026-10-27 |
-| M1d | **Not started** — motor bursts + placement ([31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27)) | |
+| M1d | **In progress** — firmware **`0.16.0-motor-burst`**; UI U2/U3; bench sign-off open ([31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27)) | |
 | M2 | **Unblocked** — begin standalone parity (M1 + X-6 done); may overlap M1d | |
 | **X-6** | **Complete** (§2.3 S4) | 2026-10-27 |
 | **X-4** | **Done** (Run A) | 2026-10-27 |
@@ -503,3 +503,4 @@ Update this table when a phase is signed off.
 | 2026-10-27 | **M1b** — motor automatic modes + `automatic-update` + manual `motor-run`; bursts deferred **M4** |
 | 2026-10-27 | **M1c** — segment hub telemetry + operator pattern graph (Feeds \| Graph) |
 | 2026-10-27 | **M1d** — motor burst + placement design ([31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27)); checklist BP-E; bursts moved from M4/M1b-F4 |
+| 2026-10-27 | **M1d firmware** — `MotorAutomaticSessionMode` burst FSM + adapter; **`0.16.0-motor-burst`**; UI periodic placement gating (U2/U3) |

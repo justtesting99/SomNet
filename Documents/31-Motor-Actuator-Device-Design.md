@@ -238,7 +238,7 @@ Only include **shared** envelope pieces in both schemas when product signs off t
 
 ### 5.2.1 Bursts in motor automatic (design locked 2026-10-27)
 
-**Status:** **Design locked** — firmware **not implemented** (checklist [32 — Phase M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e), doc 36 **BP-E**). **UI + API + DTO** already round-trip `burstsOn`, `burstPlacement`, and burst sub-fields; **`MotorAutomaticSessionMode` ignores them today**.
+**Status:** **Implemented (core)** — firmware **`0.16.0-motor-burst`** ([32 — Phase M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e), doc 36 **BP-E**). **UI + API + DTO** round-trip burst fields; **`MotorAutomaticSessionMode`** runs burst clusters via shared `automatic_burst_runtime`. **Open:** burst segment telemetry during clusters (M1d-F10), preview graph (U1), operator bench sign-off.
 
 **Goal:** Operators use the **same six placement options** and percent semantics as relay ([36 §3](./36-Burst-Placement-Modes-Design.md)), without learning a second product. Motor execution differs: **PWM ramps** and **segment timing**, not relay pulses.
 
@@ -292,11 +292,9 @@ Reuse **`automatic_burst_runtime`** (plan build, milestone/stride/chance, `burst
 
 Do **not** fork placement formulas in a second TS/C++ implementation.
 
-#### Safety until M1d ships
+#### Validation (MA-D27)
 
-**Interim (M1d-F2):** `parseMotorAutomaticConfig` should **`reject` `burstsOn: true`** with serial  
-`[MOTOR-AUTO] reject: burstsOn not implemented on motor`  
-so operators are not misled. Remove when burst FSM is complete.
+**Periodic + bursts:** `parseMotorAutomaticConfig` rejects invalid combos (e.g. even/chance placement or `noAutoEnd` without minutes envelope) via `motorBurstSettingsAllowed()` — aligns with UI coercion in **M1d-U2**.
 
 #### `resultJson` (motor burst tier 1)
 
@@ -319,7 +317,7 @@ During burst micro-cycles, emit **`motor-automatic-segment`** acks (same correla
 | ID | Decision |
 |----|----------|
 | **MA-D25** | Motor burst uses **doc 36** placements and percent meanings; execution is **ramped speed clusters**, not relay pulses |
-| **MA-D26** | Micro-hold duration per burst stroke: **bench-tuned constant or cap** in v1 (not operator `strokeMs` on motor DTO) — document in PROTOCOL when fixed |
+| **MA-D26** | Micro-hold duration per burst stroke: **`kMotorBurstMicroHoldMs` = 300** (`motor_automatic_burst.h`); noted in `boardDefs.h` |
 | **MA-D27** | **`periodic`** + bursts: **session spread + minutes only**; even/chance disabled in UI for periodic |
 
 ---
@@ -515,7 +513,7 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 
 ## 13. As-built — hub path (motor programs, UI, telemetry)
 
-**Status:** **Signed M1** (periodic + ramp, **2026-10-27**). **M1b modes**, **live `automatic-update`**, **segment graph telemetry**, and **manual `motor-run`** are implemented on the same hub path; bursts in motor automatic UI are **stored only** (firmware **M4**).
+**Status:** **Signed M1** (periodic + ramp, **2026-10-27**). **M1b modes**, **live `automatic-update`**, **segment graph telemetry**, **manual `motor-run`**, and **motor automatic bursts** (**`0.16.0-motor-burst`**, [M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e)) on the hub path.
 
 ### 13.1 Firmware (`MotorAutomaticSessionMode`)
 
@@ -528,7 +526,7 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 | **`automatic-update`** | Queued replan via `queueSessionUpdate` when session active (same JSON shape as start). |
 | **PWM init** | Motor hardware init **deferred until Wi‑Fi up** (`main.cpp`) to avoid LEDC/Wi‑Fi contention on boot. |
 | **Segment telemetry** | At each ramp, unsolicited hub ack `correlationId: motor-automatic-segment` with `fromSpeedPercent`, `toSpeedPercent`, `durationMs`, `programElapsedMs` (`emitSegmentRamp`). |
-| **Bursts** | **Not implemented** on motor FSM — see [§5.2.1](#521-bursts-in-motor-automatic-design-locked-2026-10-27) + [M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e). UI/API send burst fields; firmware ignores until M1d. |
+| **Bursts** | **Implemented** — [§5.2.1](#521-bursts-in-motor-automatic-design-locked-2026-10-27), firmware **`0.16.0-motor-burst`**. Live graph during burst clusters (**M1d-F10**) still open. |
 
 ### 13.2 SomNet.API / Shared
 

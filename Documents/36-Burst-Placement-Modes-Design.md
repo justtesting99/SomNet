@@ -1,6 +1,6 @@
 # Burst placement modes — design (relay + motor)
 
-**Status:** Implemented (2026-10-27) — firmware **`0.15.2-burst-main-timing`** (main+ vs instead-of-main), API, relay UI preview; motor UI mirrors placement fields (burst execution on motor device TBD per doc 31).  
+**Status:** Implemented (2026-10-27) — relay firmware **`0.15.2-burst-main-timing`** (main+ vs instead-of-main); motor burst execution **`0.16.0-motor-burst`** ([31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27), [32 M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e)).  
 **Parent:** [Phase 10 — Burst-in-automatic](./09-ESP32-Phase-10-Checklist.md) (signed off; behavior preserved as **session spread**)  
 **Related:** [Frontend Architecture § Burst Settings](./03-Frontend-Architecture.md), [Motor actuator design § Bursts](./31-Motor-Actuator-Device-Design.md), [SignalR & Hardware](./06-SignalR-And-Hardware.md)
 
@@ -244,7 +244,7 @@ Labels come from `burstPercentFieldLabel()` — depend on **schedule** (spread /
 | Periodic + placement | **Session spread + minutes** only; UI disables even/chance (MA-D27) |
 | Burst shape | Ramped **speed %** micro-cycles + intra-burst gaps — not relay pulses |
 | Code reuse | Shared `automatic_burst_runtime` via motor adapter |
-| Until shipped | Firmware should **reject** `burstsOn: true` (M1d-F2) |
+| Validation | **MA-D27** — periodic allows session spread + minutes only (`motorBurstSettingsAllowed`) |
 
 ---
 
@@ -256,7 +256,7 @@ Labels come from `burstPercentFieldLabel()` — depend on **schedule** (spread /
 | **BP-B** | Six-option dropdown + labels/warnings + preview | ☑ |
 | **BP-C** | Relay firmware: three schedules × main+ / instead-of | ☑ **`0.15.2-burst-main-timing`** |
 | **BP-D** | Operator + dev docs (this file, Phase 10 follow-on, device plan) | ☑ 2026-10-27 |
-| **BP-E** | Motor burst execution — [31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27), [32 M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e) | ☐ design ☑ / firmware ☐ |
+| **BP-E** | Motor burst execution — [31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27), [32 M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e) | ☑ core firmware **`0.16.0-motor-burst`**; F10/U1/bench open |
 
 ---
 

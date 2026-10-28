@@ -355,17 +355,25 @@ void MotorAutomaticSessionMode::buildResultJson(const char* endReason, bool inte
         sessionStartMs_ == 0 ? 0 : millis() - sessionStartMs_;
 
     if (burstsOn_) {
+        MotorAutomaticConfig config{};
+        const char* placementWire = "mainPlusSessionSpread";
+        if (loadConfig(&config)) {
+            placementWire = burstPlacementToWire(config.burstPlacement);
+        }
+
         snprintf(
             resultJson_,
             sizeof(resultJson_),
             "{\"commandKey\":\"automatic-stop\",\"actuatorKind\":\"hbridge\","
             "\"automaticMode\":\"periodic\",\"dutyPercent\":%d,\"burstsOn\":true,"
             "\"segmentsCompleted\":%d,\"burstEventsCompleted\":%d,"
+            "\"burstPlacement\":\"%s\","
             "\"durationMs\":%lu,\"endSessionMode\":%d,\"endSessionValue\":%d,"
             "\"interrupted\":%s,\"endReason\":\"%s\"}",
             dutyPercent_,
             segmentsCompleted_,
             burstEventsCompleted_,
+            placementWire,
             durationMs,
             endSessionModeWire_,
             endSessionValue_,

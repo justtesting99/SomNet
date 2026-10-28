@@ -356,7 +356,7 @@ Feature checklists (e.g. [25-Session-Accessory-In-Progress-Checklist.md](./25-Se
 - [ ] **Options:** New `AppOptions` fields in `SomNet.Shared/DTO/Options/AppOptionsDto.cs`, `types/options.ts`, [02 API](./02-API-Reference.md), and User Guide / Frontend Architecture (tab: General | Notifications | Debug | Account).
 - [ ] **Index:** [Documents/README.md](./README.md) row descriptions and dates where “synced YYYY-MM-DD” is used ([06](./06-SignalR-And-Hardware.md) is an example).
 - [ ] **Root README:** ESP32 version and status table match `platformio.ini`.
-- [ ] **No false “current” on old phases:** Phase checklist headers keep their sign-off firmware tag; only canonical docs say **`0.15.2-burst-main-timing`** (or whatever `platformio.ini` reads today).
+- [ ] **No false “current” on old phases:** Phase checklist headers keep their sign-off firmware tag; only canonical docs say **`0.16.0-motor-burst`** (or whatever `platformio.ini` reads today).
 
 ### Quick stale scan (PowerShell, repo root)
 
@@ -389,6 +389,8 @@ Provider tree: diff mental model against `SomNet.UI/src/App.tsx` nesting (see [0
 **2026-09-21** — P16 Session in Progress, Options **Debug** tab, `DELETE /api/sessions/{id}`, firmware **`0.15.0-session-accessory`**, session history action captions + per-action mode badges ([07 § History Views](./07-Session-And-History.md#history-views)). Tracked in [25 § Docs / bench](./25-Session-Accessory-In-Progress-Checklist.md).
 
 **2026-10-27** — **Burst placement** (`burstPlacement` main+ vs instead-of × spread / even / chance) — relay firmware **`0.15.2-burst-main-timing`**, UI six-option dropdown, API validator, preview graph. [36-Burst-Placement-Modes-Design.md](./36-Burst-Placement-Modes-Design.md); Phase 10 follow-on in [09-ESP32-Phase-10-Checklist.md](./09-ESP32-Phase-10-Checklist.md).
+
+**2026-10-27** — **Motor automatic bursts** (doc 36 BP-E) — firmware **`0.16.0-motor-burst`**, shared `automatic_burst_runtime` adapter, UI periodic placement gating (MA-D27). [31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27), [32 M1d](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e).
 
 Update this **Last full audit** line whenever you complete a canonical sweep.
 

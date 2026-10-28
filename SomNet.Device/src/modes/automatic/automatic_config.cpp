@@ -155,6 +155,32 @@ BurstPlacement parseBurstPlacement(const char* value) {
     return BurstPlacement::Unknown;
 }
 
+const char* burstPlacementToWire(BurstPlacement placement) {
+    switch (placement) {
+        case BurstPlacement::SessionSpread:
+            return "sessionSpread";
+        case BurstPlacement::AfterMainStroke:
+            return "afterMainStroke";
+        case BurstPlacement::ChanceAfterMainStroke:
+            return "chanceAfterMainStroke";
+        case BurstPlacement::MainPlusSessionSpread:
+            return "mainPlusSessionSpread";
+        case BurstPlacement::MainPlusAfterMainStroke:
+            return "mainPlusAfterMainStroke";
+        case BurstPlacement::MainPlusChanceAfterMainStroke:
+            return "mainPlusChanceAfterMainStroke";
+        case BurstPlacement::InsteadOfSessionSpread:
+            return "insteadOfSessionSpread";
+        case BurstPlacement::InsteadOfAfterMainStroke:
+            return "insteadOfAfterMainStroke";
+        case BurstPlacement::InsteadOfChanceAfterMainStroke:
+            return "insteadOfChanceAfterMainStroke";
+        case BurstPlacement::Unknown:
+        default:
+            return "mainPlusSessionSpread";
+    }
+}
+
 BurstStyle parseBurstStyle(const char* value) {
     if (value == nullptr || value[0] == '\0') {
         return BurstStyle::FixedPowerDelay;

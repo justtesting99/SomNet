@@ -71,6 +71,9 @@ EndSessionMode parseEndSessionMode(const char* value);
 BurstStyle parseBurstStyle(const char* value);
 BurstPlacement parseBurstPlacement(const char* value);
 
+/** Wire JSON string for `burstPlacement` (doc 36). */
+const char* burstPlacementToWire(BurstPlacement placement);
+
 /** Parse automatic-start payload (camelCase, P9P2-D4). */
 bool parseAutomaticConfig(const char* payloadJson, AutomaticConfig* outConfig);
 
