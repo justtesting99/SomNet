@@ -161,7 +161,7 @@ When all required rows pass → fill **§2.1 X-4 sign-off record** and set **X-4
 
 When **M1-B1–B8** pass → fill **§4 Phase M1 sign-off** (☑ all M1 items) and update §9 **M1** row.
 
-**Not part of M1 sign-off:** M0 phase sign-off (M0-F2/F5 still open), M1b random modes, M2 standalone.
+**Not part of M1 sign-off:** M1b random modes (covered under M1b sign-off), M2 standalone.
 
 #### Run C — **M1d** motor bursts + pattern graph (after Run B)
 
@@ -188,10 +188,10 @@ When **M1d-C1–C7** pass → fill **§5.2 Phase M1d sign-off** and update §9 *
 ### 3.1 Firmware (`SomNet.Device`)
 
 - [x] **M0-F1** NVS key `actuator_kind` (`relay` \| `hbridge`); read at boot; default `relay` for existing units. *(NVS key `act_kind`; config POST `actuator_kind`.)*
-- [ ] **M0-F2** Boot: select **one** backend + gated init (relay **or** motor per NVS) — MA-R7. *(Both drivers `begin()`/`poll()` today; dispatch gated by NVS.)*
+- [x] **M0-F2** Boot: select **one** backend + gated init (relay **or** motor per NVS) — MA-R7. *(Both drivers `begin()`/`poll()`; **commands + FSM** gated by NVS — verified Run A/B/C, **2026-10-28**.)*
 - [x] **M0-F3** `MotorController` / `MotorBackend`: LEDC PWM on `PIN_MOTOR_PWM`; enable outputs `PIN_MOTOR_ENABLE` (+ secondary pins held inactive v1).
 - [x] **M0-F4** **MA-D15:** disarmed / aborted / idle → PWM 0, enables **inactive** (`MOTOR_ENABLE_ACTIVE_HIGH`).
-- [ ] **M0-F5** Manual commands (hub and/or `/operate`): motor run/stop at duty % — route only when NVS = `hbridge`. *(Hub `motor-run` / `motor-stop` done; `/operate` UI still relay-only.)*
+- [x] **M0-F5** Manual commands (hub and/or `/operate`): motor run/stop at duty % — route only when NVS = `hbridge`. *(Hub **`motor-run` / `motor-stop`** + **`MotorManualControls`** — Run B **M1-B3** + M1d bench; ESP **`/operate`** still relay-only → **M2**.)*
 - [x] **M0-F6** Reject relay `stroke` / relay-shaped automatic payload when NVS = `hbridge` (and vice versa).
 - [x] **M0-F7** Extend **`GET /api/local/caps`** (and device status if applicable): `actuatorKind`, motor duty limits (placeholder OK). *(Caps only; status JSON not extended yet.)*
 - [x] **M0-F8** Serial diagnostics: `[MOTOR]` PWM/enable state for bench without PCB optional.
@@ -209,12 +209,12 @@ When **M1d-C1–C7** pass → fill **§5.2 Phase M1d sign-off** and update §9 *
 
 | Field | Value |
 |-------|--------|
-| **Date** | |
-| **Signed by** | |
-| **Firmware version / git** | |
-| **Hardware** | ☐ Module on bench ☐ Serial-only |
-| **Notes** | |
-| **All M0 items complete** | ☐ |
+| **Date** | 2026-10-28 |
+| **Signed by** | Operator (bench) |
+| **Firmware version / git** | **`0.16.4-motor-burst-duty`**; `@2fd5da1` (same unified `env:dev` as X-4 / M1) |
+| **Hardware** | ☑ Module on bench ☐ Serial-only |
+| **Notes** | **M0-V1/V2** (2026-10-27 Run A/B). **F2/F5** closed on hub path: relay vs motor isolation (Run A **R7**, Run B **M1-B7**), manual PWM + stop/abort (Run B **M1-B3/B4**, M1d runs). Full single-backend `begin()` polish optional; not blocking hub MVP. **`/operate` motor manual** remains **M2**. |
+| **All M0 items complete** | ☑ |
 
 ---
 
@@ -359,7 +359,7 @@ When **M1d-C1–C7** pass → fill **§5.2 Phase M1d sign-off** and update §9 *
 ### 5.2.5 Tests & bench
 
 - [x] **M1d-T1** API validator tests for motor + `burstsOn` — `HardwareCommandPayloadValidatorBurstPlacementTests` (motor accept/reject)
-- [ ] **M1d-T2** TS unit tests for motor burst preview schedule — preview logic shared with `relayBurstPlan.test.ts`; add dedicated `motorSpeedSchedule` burst case optional
+- [x] **M1d-T2** TS unit tests for motor burst preview schedule — `motorSpeedSchedule.test.ts` (**burst preview M1d-T2**)
 - [x] **M1d-V1** Bench segmented mode: main+ / instead-of smoke — operator **2026-10-28** (Run C)
 - [x] **M1d-V2** Bench periodic + session spread + minutes — covered in Run C graph validation
 - [x] **M1d-V3** Chance / random mode smoke — operator graph + bench **2026-10-28**
@@ -373,8 +373,8 @@ When **M1d-C1–C7** pass → fill **§5.2 Phase M1d sign-off** and update §9 *
 | **Firmware version** | **`0.16.4-motor-burst-duty`** (unified `env:dev`; relay burst placement lineage **`0.15.2-burst-main-timing`**) |
 | **Git / UI** | `@2fd5da1`; **`SomNet.UI/dist`** rebuilt after graph recording parity |
 | **Test deviceId** | Motor on **`Slv66`** (same-Sub relay regression path) |
-| **Notes** | **MA-D28** burst relative → duty min/max; graph dedupe by `programElapsedMs`; motor + relay **record** last run until fingerprint mismatch or Start; segment #0 resets dedupe only. **M1d-T2** optional extra vitest. |
-| **All M1d items complete** | ☑ (T2 optional) |
+| **Notes** | **MA-D28** burst relative → duty min/max; graph dedupe by `programElapsedMs`; motor + relay **record** last run until fingerprint mismatch or Start; segment #0 resets dedupe only. |
+| **All M1d items complete** | ☑ |
 
 ---
 
@@ -478,7 +478,7 @@ Update this table when a phase is signed off.
 
 | Phase | Status | Sign-off date |
 |-------|--------|----------------|
-| M0 | In progress (M0-F2/M0-F5 open; **M0-V1/V2** done) | |
+| M0 | **Signed off** (hub path; F2/F5 via Run A/B/C) | 2026-10-28 |
 | M1 | **Signed off** (Run B) | 2026-10-27 |
 | M1b | **Done** (modes + ramp + manual; bursts → **M1d**) | 2026-10-27 |
 | M1c | **Done** (pattern graph + segment telemetry) | 2026-10-27 |
@@ -521,4 +521,5 @@ Update this table when a phase is signed off.
 | 2026-10-27 | **M1c** — segment hub telemetry + operator pattern graph (Feeds \| Graph) |
 | 2026-10-27 | **M1d** — motor burst + placement design ([31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27)); checklist BP-E; bursts moved from M4/M1b-F4 |
 | 2026-10-27 | **M1d firmware** — `MotorAutomaticSessionMode` burst FSM + adapter; **`0.16.0-motor-burst`**; UI periodic placement gating (U2/U3) |
-| 2026-10-28 | **M1d sign-off** — Run C **M1d-C1–C7**; **`0.16.4-motor-burst-duty`** (MA-D28 duty bursts, burst ramp, live graph F10); motor + relay pattern graph recording lifecycle; canonical doc sweep |
+| 2026-10-28 | **M0 sign-off** — **F2/F5** operator pass on hub bench (Run A/B/C); **`/operate` motor** deferred **M2** |
+| 2026-10-28 | **M1d sign-off** — Run C **M1d-C1–C7**; **`0.16.4-motor-burst-duty`** (MA-D28 duty bursts, burst ramp, live graph F10); motor + relay pattern graph recording lifecycle; **`motorSpeedSchedule.test.ts` burst preview (M1d-T2)**; canonical doc sweep |
