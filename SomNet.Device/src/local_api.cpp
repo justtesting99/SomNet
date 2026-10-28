@@ -11,6 +11,7 @@
 #include "wifi_manager.h"
 
 #include <ArduinoJson.h>
+#include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 
 namespace {
@@ -618,6 +619,96 @@ void handleLocalSettingsPut(
     handleJsonPost(request, data, len, index, total, &ctx, kMaxLocalOperateSettingsBytes);
 }
 
+void scheduleLocalApiRestart(AsyncWebServerRequest* request) {
+    request->onDisconnect([]() {
+        Serial.println(F("[HTTP] actuator profile saved — rebooting"));
+        delay(100);
+        ESP.restart();
+    });
+}
+
+void handleLocalActuatorKindPutBody(AsyncWebServerRequest* request, const char* body, size_t len) {
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+    if (gLocalOperate != nullptr && gLocalOperate->isArmed()) {
+        gLocalOperate->disarm();
+    }
+
+    const bool busy =
+        gCommandHandler != nullptr ? gCommandHandler->isMotionBusy()
+                                   : (gExecutionContext != nullptr && gExecutionContext->isActive());
+    const bool automaticActive =
+        gCommandHandler != nullptr ? gCommandHandler->isAutomaticProgramActive()
+                                   : (gExecutionContext != nullptr &&
+                                      gExecutionContext->isAutomaticSessionActive());
+    if (busy || automaticActive) {
+        sendJsonError(request, 409, "motion_busy");
+        return;
+    }
+
+    JsonDocument doc;
+    if (deserializeJson(doc, body, len) || !doc["actuatorKind"].is<const char*>()) {
+        sendJsonError(request, 400, "actuatorKind_required");
+        return;
+    }
+
+    const char* kindJson = doc["actuatorKind"];
+    DeviceActuatorKind kind = DeviceActuatorKind_Relay;
+    if (!actuatorKindFromJson(kindJson, &kind)) {
+        sendJsonError(request, 400, "invalid_actuatorKind");
+        return;
+    }
+
+    NvsStore* nvs = nvsStoreInstance();
+    if (nvs == nullptr || !nvs->isOpen()) {
+        sendJsonError(request, 503, "nvs_unavailable");
+        return;
+    }
+
+    if (nvs->getActuatorKind() == kind) {
+        char response[96];
+        snprintf(
+            response,
+            sizeof(response),
+            "{\"saved\":true,\"reboot\":false,\"actuatorKind\":\"%s\"}",
+            actuatorKindToJson(kind));
+        sendJson(request, 200, response);
+        return;
+    }
+
+    if (!nvs->setActuatorKind(kind)) {
+        sendJsonError(request, 500, "nvs_failed");
+        return;
+    }
+
+    Serial.print(F("[HTTP] actuatorKind="));
+    Serial.println(actuatorKindToJson(kind));
+
+    char response[96];
+    snprintf(
+        response,
+        sizeof(response),
+        "{\"saved\":true,\"reboot\":true,\"actuatorKind\":\"%s\"}",
+        actuatorKindToJson(kind));
+    scheduleLocalApiRestart(request);
+    sendJson(request, 200, response);
+}
+
+void handleLocalActuatorKindPut(
+    AsyncWebServerRequest* request,
+    uint8_t* data,
+    size_t len,
+    size_t index,
+    size_t total) {
+    logLocalRequest(request, "/api/local/actuator-kind");
+    static JsonPostContext ctx = {"/api/local/actuator-kind", handleLocalActuatorKindPutBody};
+    handleJsonPost(request, data, len, index, total, &ctx, 128);
+}
+
 } // namespace
 
 void registerLocalApiRoutes(AsyncWebServer& server, LocalOperate* localOperate) {
@@ -661,6 +752,14 @@ void registerLocalApiRoutes(AsyncWebServer& server, LocalOperate* localOperate) 
         nullptr,
         [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
             handleLocalSettingsPut(request, data, len, index, total);
+        });
+    server.on(
+        "/api/local/actuator-kind",
+        HTTP_PUT,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handleLocalActuatorKindPut(request, data, len, index, total);
         });
 }
 

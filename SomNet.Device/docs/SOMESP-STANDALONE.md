@@ -63,6 +63,7 @@ Serial banner includes **`Mode: STANDALONE`** and **`Control: http://<ip>/operat
 | POST | `/api/local/arm` | Bearer | GPIO32 ON |
 | POST | `/api/local/disarm` | Bearer | GPIO32 OFF |
 | GET | `/api/local/status` | — | `busy`, `automaticActive`, **`actuatorKind`**, `commandComplete`, `resultJson`, … — **motor** automatic/manual included in busy/automatic (M2-F1) |
+| PUT | `/api/local/actuator-kind` | Bearer | `{"actuatorKind":"relay"\|"hbridge"}` — unlocked, **disarmed**, idle; reboot if kind changed |
 | GET | `/api/local/caps` | — | **`actuatorKind`**: relay stroke limits **or** motor `minDutyPercent` / `maxDutyPercent` |
 | POST | `/api/local/commands` | Bearer + armed | `commandKey` + `payloadJson` — **same JSON as hub** ([PROTOCOL.md](./PROTOCOL.md) §6) |
 | GET | `/api/local/settings` | Bearer | `{ "stored": false }` or settings blob (see below) |
@@ -80,7 +81,7 @@ Serial banner includes **`Mode: STANDALONE`** and **`Control: http://<ip>/operat
 }
 ```
 
-**Motor profile** (`actuatorKind: hbridge` — set via **`/config` POST `actuator_kind=hbridge`**):
+**Motor profile** (`actuatorKind: hbridge` — set on **`/operate`** (Save profile), **`/config`** (`actuator_kind`), or `PUT /api/local/actuator-kind`):
 
 ```json
 {

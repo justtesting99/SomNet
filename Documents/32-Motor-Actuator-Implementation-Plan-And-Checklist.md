@@ -435,7 +435,7 @@ Same **`MotorAutomaticSessionMode`** / **`CommandHandler`** as hub when NVS = `h
 | **M2-A7** | **`/config` POST `actuator_kind`** (relay \| hbridge) | ☑ | `config_web_server.cpp` — hub PairDevice equivalent for LAN |
 | **M2-A8** | **`/operate`** relay manual + relay automatic UI | ☑ | Phases 2–5 SomEsp — **relay-shaped JSON only** |
 | **M2-A9** | **`POST /api/local/unlock`** carries **`actuatorKind`** | ☐ | Unlock is PIN-only today; kind via **`/config`** only |
-| **M2-A10** | **`/operate`** motor manual / motor automatic UI | ☐ | Still stroke/burst + relay automatic modes |
+| **M2-A10** | **`/operate`** motor manual / motor automatic UI | ☑ | Caps-driven relay vs motor panels (M2-C); bench **M2-C sign-off** pending |
 | **M2-A11** | **`/api/local/settings`** motor snapshot shape | ☑ | **`motorManual` + `motorAutomatic` + `appOptions`** validated on PUT — **`/operate` still relay-shaped (M2-C)** |
 | **M2-A12** | **`GET /api/local/status`** `automaticActive` for **motor** session | ☑ | **`CommandHandler::isMotionBusy` / `isAutomaticProgramActive`** (M2-F1) |
 | **M2-A13** | Local history summaries readable for motor `resultJson` | ☐ | Verify after Run D; extend captions if needed |
@@ -473,14 +473,14 @@ These are **intentionally different** on standalone; everything else should matc
 
 **Rule:** Every control action maps to **`POST /api/local/commands`** with the **same `payloadJson` the hub would send** (see [UI `buildMotorAutomaticStartPayload`](../SomNet.UI/src/utils/motorAutomaticStartPayload.ts) rules). No relay **`minimumStrokeMs`** on motor profile.
 
-- [ ] **M2-C1** On load (after unlock): **`GET /api/local/caps`** → branch UI (relay vs motor).
-- [ ] **M2-C2** **Motor manual:** duty slider + **`motor-run`** / **`motor-stop`** — payload `{ dutyPercent, durationMs? }` per PROTOCOL §6.9.
-- [ ] **M2-C3** **Motor automatic:** all hub modes + fields (**M1b/M1d**); build start/update JSON via same normalization rules as UI (end session coercion, burst placement).
-- [ ] **M2-C4** **Motor bursts:** MA-D27 / MA-D28 copy and field rules aligned with **`MotorAutomaticControls`** / `motorAutomaticFieldRules.ts` (reference implementation — do not invent parallel rules in JS).
-- [ ] **M2-C5** **Relay profile:** keep current `/operate` (regression **M2-E8**).
-- [ ] **M2-C6** Live **`automatic-update`** debounce (~400 ms); payload = full snapshot like hub **`automatic-update`**.
+- [x] **M2-C1** On load (after unlock): **`GET /api/local/caps`** → branch UI (relay vs motor).
+- [x] **M2-C2** **Motor manual:** duty slider + **`motor-run`** / **`motor-stop`** — payload `{ dutyPercent }` per PROTOCOL §6.9.
+- [x] **M2-C3** **Motor automatic:** hub modes + fields (**M1b/M1d**); start/update JSON incl. `actuatorKind`, `segmentTargetRampMs`, burst fields.
+- [x] **M2-C4** **Motor bursts:** MA-D27 / MA-D28 field rules + placement coercion for **periodic** (ported from UI rules).
+- [x] **M2-C5** **Relay profile:** keep current `/operate` (regression **M2-E8**).
+- [x] **M2-C6** Live **`automatic-update`** debounce (~400 ms); payload = full snapshot like hub **`automatic-update`**.
 
-**Pass:** Operator can run a 1 min **Set Speed** + bursts session from phone browser without curl.
+**Pass:** Operator can run a 1 min **Set Speed** + bursts session from phone browser without curl. *(Firmware ready — run **M2-R** / M2-C sign-off on bench.)*
 
 ---
 
@@ -493,7 +493,7 @@ Goal: **`GET/PUT /api/local/settings`** returns the same **logical fields** the 
 - [x] **M2-D3** Optional top-level **`appOptions`**: `{ "motorSegmentTargetRampMode", "motorSegmentTargetRampMs" }` so `/operate` and job hosts can build **`automatic-start`** identical to [hub `buildMotorAutomaticStartPayload`](../SomNet.UI/src/utils/motorAutomaticStartPayload.ts) (`segmentTargetRampMs` in start payload).
 - [x] **M2-D4** Validation: reject motor-shaped keys when caps = relay and vice versa (or ignore foreign keys with clear error).
 - [ ] **M2-D5** Confirm **`kMaxLocalOperateSettingsBytes` (1536)** fits motor automatic + bursts + `appOptions` (same budget as **`kMaxHardwareCommandPayloadJson`**).
-- [ ] **M2-D6** **`/operate`**: read/write settings through API only (localStorage = cache optional); PUT debounce like hub settings save.
+- [ ] **M2-D6** **`/operate`**: read/write settings through API only (localStorage = cache optional); PUT debounce like hub settings save. *(Motor + relay PUT on change — **M2-C**; full D6 sign-off with Run D.)*
 
 **Pass:** Serialize a hub motor start payload from stored settings + `appOptions`; byte-identical to a known-good hub example for the same operator inputs.
 

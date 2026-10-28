@@ -1,5 +1,6 @@
 #include "config_pages.h"
 
+#include "actuator_kind.h"
 #include "config.h"
 #include "device_identity.h"
 #include "nvs_store.h"
@@ -277,7 +278,11 @@ void renderStatus(
         append(out, outLen, &offset, "</p><p class=\"row\"><strong>Server:</strong> ");
         append(out, outLen, &offset, escServer[0] != '\0' ? escServer : "(not configured)");
     }
-    append(out, outLen, &offset, "</p><p class=\"row\"><strong>Hub:</strong> ");
+    append(out, outLen, &offset, "</p><p class=\"row\"><strong>Actuator:</strong> ");
+    append(out, outLen, &offset, actuatorKindToJson(nvs.getActuatorKind()));
+    append(out, outLen, &offset, " (relay stroke/burst or motor PWM — change in ");
+    append(out, outLen, &offset, kSomNetLocalOperateEnabled ? "<a href=\"/operate\">Control panel</a> or " : "");
+    append(out, outLen, &offset, "<a href=\"/config\">Configure</a>)</p><p class=\"row\"><strong>Hub:</strong> ");
     if (kSomNetStandaloneBuild && !somespHasServer) {
         append(out, outLen, &offset, "not configured");
     } else if (!hubRuntimeEnabled && kSomNetLocalOperateEnabled) {
@@ -380,6 +385,16 @@ void renderConfigForm(
     append(out, outLen, &offset, "\"></label><label>Wi-Fi password<input required type=password name=wifi_pass maxlength=64 value=\"");
     append(out, outLen, &offset, escPass);
     append(out, outLen, &offset, "\"></label>");
+    append(out, outLen, &offset, "<label>Actuator profile<select name=actuator_kind>");
+    if (nvs.getActuatorKind() == DeviceActuatorKind_HBridge) {
+        append(out, outLen, &offset, "<option value=\"relay\">Relay — stroke / burst</option>");
+        append(out, outLen, &offset, "<option value=\"hbridge\" selected>Motor — H-bridge PWM</option>");
+    } else {
+        append(out, outLen, &offset, "<option value=\"relay\" selected>Relay — stroke / burst</option>");
+        append(out, outLen, &offset, "<option value=\"hbridge\">Motor — H-bridge PWM</option>");
+    }
+    append(out, outLen, &offset,
+        "</select></label><p class=\"note\">Must match the hardware module on this ESP. Save reboots the device.</p>");
     if (!kSomNetStandaloneBuild) {
         append(out, outLen, &offset, "<label>SomNet server URL<input required type=url name=server_url placeholder=\"http://192.168.x.x:5031\" maxlength=128 value=\"");
         append(out, outLen, &offset, escServer);
