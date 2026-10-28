@@ -614,7 +614,7 @@ After **M2-B–G** complete (minimum: **B + E + F1** and either **C** or curl-on
 
 - [ ] **M3-T1** EF/device registry: `ActuatorKind` on registration ([registry doc](../../TheSystem/Docs/SOMNET_DEVICE_REGISTRY.md)).
 - [ ] **M3-T2** Admin add device: **relay or motor?**; presets per kind.
-- [ ] **M3-T3** `SomNetVOController` / admin UI: motor preset + run + stop/abort.
+- [ ] **M3-T3** `SomNetVOController` / admin UI: motor preset + run + stop/abort. *(Admin **SomNet** page: run profile + motor fields — **2026-10-28**; stop/abort shared.)*
 - [ ] **M3-T4** Run history: motor `ParametersSnapshot` + `ResultJson` + kind column.
 
 ### 7.3 SomNet.Shared & docs
