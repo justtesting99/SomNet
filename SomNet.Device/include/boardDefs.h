@@ -19,6 +19,10 @@ constexpr int PIN_MOTOR_PWM_SECONDARY = 26; // D26
 /** Secondary enable (e.g. L_EN) — unused when enables are ganged on D27. */
 constexpr int PIN_MOTOR_ENABLE_SECONDARY = 14; // D14
 
+constexpr int PIN_LED_R = 23 // D23
+constexpr int PIN_LED_G = 22 // D22
+constexpr int PIN_LED_B = 1  // D1
+
 /** BTS7960 module enable pin polarity (ESP output → module EN). Tune on bench — doc 31. */
 constexpr bool MOTOR_ENABLE_ACTIVE_HIGH = true;
 /** Both module EN inputs tied to D27; D14 not used. */
