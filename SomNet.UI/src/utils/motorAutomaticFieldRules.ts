@@ -8,6 +8,7 @@ import {
   type MotorAutomaticControlState,
 } from '@/types/motorModes';
 import { coerceEndSessionMode, MIN_STROKE_GAP_SECONDS } from '@/utils/automaticFieldRules';
+import { resolveBurstPlacement } from '@/utils/burstPlacement';
 import {
   MAX_BURST_DELAY_SEC,
   MAX_BURST_STROKES,
@@ -83,6 +84,7 @@ function normalizeMotorBurstFields(
 
   return {
     ...state,
+    burstPlacement: resolveBurstPlacement(state),
     burstPercent: clampInt(state.burstPercent, 0, 100),
     burstStrokePowerMin,
     burstStrokePowerMax,

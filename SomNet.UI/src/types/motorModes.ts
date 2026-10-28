@@ -1,4 +1,4 @@
-import type { BurstStyle, EndSessionMode } from '@/types/modes';
+import type { BurstPlacement, BurstStyle, EndSessionMode } from '@/types/modes';
 import type { MotorAutomaticRunMode } from '@/types/motorAutomaticModes';
 
 export interface MotorManualControlState {
@@ -27,6 +27,7 @@ export interface MotorAutomaticControlState {
   endSessionMode: EndSessionMode;
   endSessionValue: number;
   burstsOn: boolean;
+  burstPlacement: BurstPlacement;
   burstPercent: number;
   burstStyle: BurstStyle;
   burstStrokePowerMin: number;
@@ -51,6 +52,7 @@ export const defaultMotorAutomaticState: MotorAutomaticControlState = {
   endSessionMode: 'minutes',
   endSessionValue: 30,
   burstsOn: false,
+  burstPlacement: 'sessionSpread',
   burstPercent: 10,
   burstStyle: 'fixedPowerDelay',
   burstStrokePowerMin: 0,

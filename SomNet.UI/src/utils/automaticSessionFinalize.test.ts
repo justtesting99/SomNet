@@ -75,6 +75,8 @@ describe('applyAutomaticDeviceComplete', () => {
       { commandKey: 'automatic-stop', strokesCompleted: 3, endReason: 'abort', interrupted: true },
       clearAutomaticRunning,
       endAutomaticSession,
+      true,
+      true,
     );
 
     expect(clearAutomaticRunning).toHaveBeenCalledTimes(1);

@@ -141,6 +141,41 @@ void buildAutomaticBurstPlan(const AutomaticConfig& config, AutomaticBurstPlan* 
         return;
     }
 
+    const BurstPlacement placement =
+        config.burstPlacement == BurstPlacement::Unknown
+            ? BurstPlacement::SessionSpread
+            : config.burstPlacement;
+
+    if (placement == BurstPlacement::ChanceAfterMainStroke) {
+        outPlan->active = true;
+        outPlan->kind = BurstScheduleKind::ChancePerMainStroke;
+        return;
+    }
+
+    if (placement == BurstPlacement::AfterMainStroke) {
+        switch (config.endSessionMode) {
+            case EndSessionMode::Strokes:
+                if (config.endSessionValue > 0) {
+                    buildStrokeMilestonePlan(config.endSessionValue, config.burstPercent, outPlan);
+                }
+                break;
+
+            case EndSessionMode::Minutes:
+                if (config.endSessionValue > 0) {
+                    buildCadenceStridePlan(config.burstPercent, outPlan);
+                }
+                break;
+
+            case EndSessionMode::NoAutoEnd:
+                buildCadenceStridePlan(config.burstPercent, outPlan);
+                break;
+
+            default:
+                break;
+        }
+        return;
+    }
+
     switch (config.endSessionMode) {
         case EndSessionMode::Strokes:
             if (config.endSessionValue > 0) {
@@ -217,7 +252,10 @@ void buildAutomaticBurstPlanForReplan(
     }
 }
 
-bool shouldTriggerBurstAfterMainStroke(const AutomaticBurstPlan& plan, int mainStrokesCompleted) {
+bool shouldTriggerBurstAfterMainStroke(
+    const AutomaticBurstPlan& plan,
+    const AutomaticConfig& config,
+    int mainStrokesCompleted) {
     if (!plan.active) {
         return false;
     }
@@ -232,6 +270,15 @@ bool shouldTriggerBurstAfterMainStroke(const AutomaticBurstPlan& plan, int mainS
         case BurstScheduleKind::CadenceStride:
             return plan.nextCadenceTriggerStroke > 0 &&
                    mainStrokesCompleted >= plan.nextCadenceTriggerStroke;
+
+        case BurstScheduleKind::ChancePerMainStroke:
+            if (config.burstPercent >= 100) {
+                return true;
+            }
+            if (config.burstPercent <= 0) {
+                return false;
+            }
+            return (esp_random() % 100U) < static_cast<uint32_t>(config.burstPercent);
 
         default:
             return false;

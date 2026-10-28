@@ -46,6 +46,11 @@ import {
 import { applyMotorAutomaticModeChange } from '@/utils/motorAutomaticFieldRules';
 import { getMotorAutomaticModeInfo } from '@/utils/motorAutomaticModeInfo';
 import { clearMotorAutomaticSegments } from '@/utils/motorAutomaticSegmentStore';
+import {
+  BURST_PLACEMENT_OPTIONS,
+  burstPercentFieldLabel,
+  resolveBurstPlacement,
+} from '@/utils/burstPlacement';
 
 const MOTOR_STOP_GRACE_MS = 60_000;
 const DUTY_MIN = 0;
@@ -114,6 +119,8 @@ export function MotorAutomaticControls() {
   const lastPushedUpdateRef = useRef<string | null>(null);
   const updateDebounceRef = useRef<number | null>(null);
   const burstSettingsDisabled = configLocked || !state.burstsOn;
+  const burstPlacement = resolveBurstPlacement(state);
+  const burstChanceMode = burstPlacement === 'chanceAfterMainStroke';
   const delayStartLocked = sessionRunning;
   const hardwareReady = isHardwareCommandReady(systemStatus) && sceneSessionActive;
   const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart, commandDeviceId);
@@ -656,7 +663,7 @@ export function MotorAutomaticControls() {
                 onChange={(event) => update('burstsOn', event.target.checked)}
               />
               <NumberField
-                label="Percent (0 to 100)"
+                label={burstPercentFieldLabel(burstPlacement)}
                 inline
                 value={state.burstPercent}
                 min={0}
@@ -670,6 +677,25 @@ export function MotorAutomaticControls() {
                 }}
               />
             </div>
+
+            <SelectField
+              label="Burst placement"
+              value={state.burstPlacement}
+              disabled={burstSettingsDisabled}
+              options={BURST_PLACEMENT_OPTIONS}
+              onChange={(event) =>
+                update(
+                  'burstPlacement',
+                  event.target.value as MotorAutomaticControlState['burstPlacement'],
+                )
+              }
+            />
+
+            {burstChanceMode && state.burstsOn ? (
+              <p className="text-xs leading-relaxed text-amber-600/90">
+                Burst count varies each session. Use a lower percent if clusters feel too frequent.
+              </p>
+            ) : null}
 
             <SelectField
               label="Burst Style"

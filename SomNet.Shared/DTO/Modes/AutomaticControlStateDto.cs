@@ -28,6 +28,8 @@ public sealed class AutomaticControlStateDto
 
     public bool BurstsOn { get; init; }
 
+    public BurstPlacement BurstPlacement { get; init; } = BurstPlacement.SessionSpread;
+
     public int BurstPercent { get; init; } = 10;
 
     public BurstStyle BurstStyle { get; init; } = BurstStyle.FixedPowerDelay;

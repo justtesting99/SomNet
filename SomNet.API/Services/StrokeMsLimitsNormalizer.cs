@@ -61,6 +61,7 @@ public static class StrokeMsLimitsNormalizer
             EndSessionValue = automatic.EndSessionValue,
             EndSessionMode = automatic.EndSessionMode,
             BurstsOn = automatic.BurstsOn,
+            BurstPlacement = automatic.BurstPlacement,
             BurstPercent = automatic.BurstPercent,
             BurstStyle = automatic.BurstStyle,
             BurstStrokePowerMin = automatic.BurstStrokePowerMin,

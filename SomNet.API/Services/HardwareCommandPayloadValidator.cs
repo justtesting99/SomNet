@@ -43,6 +43,13 @@ internal static class HardwareCommandPayloadValidator
         "noAutoEnd",
     };
 
+    private static readonly HashSet<string> BurstPlacements = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "sessionSpread",
+        "afterMainStroke",
+        "chanceAfterMainStroke",
+    };
+
     private static readonly HashSet<string> BurstStyles = new(StringComparer.OrdinalIgnoreCase)
     {
         "fixedPowerDelay",
@@ -535,6 +542,18 @@ internal static class HardwareCommandPayloadValidator
         {
             errorMessage = "burstPercent must be between 0 and 100.";
             return false;
+        }
+
+        if (root.TryGetProperty("burstPlacement", out var placementElement) &&
+            placementElement.ValueKind == JsonValueKind.String)
+        {
+            var burstPlacement = placementElement.GetString();
+            if (string.IsNullOrWhiteSpace(burstPlacement) || !BurstPlacements.Contains(burstPlacement))
+            {
+                errorMessage =
+                    "burstPlacement must be sessionSpread, afterMainStroke, or chanceAfterMainStroke.";
+                return false;
+            }
         }
 
         if (root.TryGetProperty("burstStyle", out var styleElement) &&

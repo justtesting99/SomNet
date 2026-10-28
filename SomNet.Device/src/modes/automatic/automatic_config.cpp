@@ -119,6 +119,24 @@ EndSessionMode parseEndSessionMode(const char* value) {
     return EndSessionMode::Unknown;
 }
 
+BurstPlacement parseBurstPlacement(const char* value) {
+    if (value == nullptr || value[0] == '\0') {
+        return BurstPlacement::SessionSpread;
+    }
+
+    if (strcmp(value, "sessionSpread") == 0) {
+        return BurstPlacement::SessionSpread;
+    }
+    if (strcmp(value, "afterMainStroke") == 0) {
+        return BurstPlacement::AfterMainStroke;
+    }
+    if (strcmp(value, "chanceAfterMainStroke") == 0) {
+        return BurstPlacement::ChanceAfterMainStroke;
+    }
+
+    return BurstPlacement::Unknown;
+}
+
 BurstStyle parseBurstStyle(const char* value) {
     if (value == nullptr || value[0] == '\0') {
         return BurstStyle::FixedPowerDelay;
@@ -206,6 +224,16 @@ bool parseAutomaticConfig(const char* payloadJson, AutomaticConfig* outConfig) {
         outConfig->burstsOn = doc["burstsOn"].as<int>() != 0;
     } else {
         outConfig->burstsOn = false;
+    }
+
+    if (doc["burstPlacement"].is<const char*>()) {
+        outConfig->burstPlacement = parseBurstPlacement(doc["burstPlacement"].as<const char*>());
+        if (outConfig->burstPlacement == BurstPlacement::Unknown) {
+            Serial.println(F("[AUTO] reject: unknown burstPlacement"));
+            return false;
+        }
+    } else {
+        outConfig->burstPlacement = BurstPlacement::SessionSpread;
     }
 
     outConfig->burstPercent = doc["burstPercent"] | 10;

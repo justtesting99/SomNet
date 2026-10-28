@@ -28,6 +28,14 @@ enum class BurstStyle {
     RandomPowerAndDelay,
 };
 
+/** Doc 36 — how burstPercent maps to burst events. */
+enum class BurstPlacement {
+    SessionSpread,
+    AfterMainStroke,
+    ChanceAfterMainStroke,
+    Unknown,
+};
+
 struct AutomaticConfig {
     AutomaticRunMode mode = AutomaticRunMode::Unknown;
     int minimumStrokeMs = 25;
@@ -40,6 +48,7 @@ struct AutomaticConfig {
     int endSessionValue = 0;
     EndSessionMode endSessionMode = EndSessionMode::NoAutoEnd;
     bool burstsOn = false;
+    BurstPlacement burstPlacement = BurstPlacement::SessionSpread;
     int burstPercent = 0;
     BurstStyle burstStyle = BurstStyle::FixedPowerDelay;
     int burstStrokePowerMin = 0;
@@ -54,6 +63,7 @@ struct AutomaticConfig {
 AutomaticRunMode parseAutomaticRunMode(const char* value);
 EndSessionMode parseEndSessionMode(const char* value);
 BurstStyle parseBurstStyle(const char* value);
+BurstPlacement parseBurstPlacement(const char* value);
 
 /** Parse automatic-start payload (camelCase, P9P2-D4). */
 bool parseAutomaticConfig(const char* payloadJson, AutomaticConfig* outConfig);

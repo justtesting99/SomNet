@@ -146,7 +146,7 @@ For the **Focus** device on the current Sub:
 **Panels:**
 - **Power Settings** — Min/max power % sliders, min/max stroke ms
 - **Timing Settings** — Stroke gaps, delay before start, end session rules
-- **Burst Settings** — Bursts On, percent, style, burst power/delay/stroke ranges (Phase 10)
+- **Burst Settings** — Bursts On, percent, style, burst power/delay/stroke ranges (Phase 10); planned **burst placement** dropdown — [36](./36-Burst-Placement-Modes-Design.md) (`sessionSpread` \| `afterMainStroke` \| `chanceAfterMainStroke`)
 - **Controls** — Program selector, Start, Stop, Abort
 
 **Field minimums (UI):** Main-program gap **`strokeMinSeconds`** / **`strokeMaxSeconds`** — min **1** sec each (`automaticFieldRules.ts`). Burst **`burstDelayMin`** and **`burstStrokePowerMin`** — min **1** (`burstFieldRules.ts`). Max fields may use **0** where product rules allow (burst delay max; burst power max on relative 0–100 scale). Normalized on load/save.

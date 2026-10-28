@@ -67,6 +67,9 @@ public static class PairingSettingsSerializer
                 EndSessionValue = automatic.EndSessionValue,
                 EndSessionMode = automatic.EndSessionMode,
                 BurstsOn = automatic.BurstsOn,
+                BurstPlacement = Enum.IsDefined(automatic.BurstPlacement)
+                    ? automatic.BurstPlacement
+                    : BurstPlacement.SessionSpread,
                 BurstPercent = automatic.BurstPercent,
                 BurstStyle = automatic.BurstStyle,
                 BurstStrokePowerMin = automatic.BurstStrokePowerMin,
@@ -252,6 +255,9 @@ public static class PairingSettingsSerializer
             EndSessionMode = endMode,
             EndSessionValue = endValue,
             BurstsOn = source.BurstsOn,
+            BurstPlacement = Enum.IsDefined(source.BurstPlacement)
+                ? source.BurstPlacement
+                : BurstPlacement.SessionSpread,
             BurstPercent = Math.Clamp(source.BurstPercent, 0, 100),
             BurstStyle = Enum.IsDefined(source.BurstStyle)
                 ? source.BurstStyle

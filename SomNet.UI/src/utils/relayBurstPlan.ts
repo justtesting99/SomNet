@@ -1,7 +1,13 @@
 import type { AutomaticControlState, BurstStyle } from '@/types/modes';
+import { resolveBurstPlacement } from '@/utils/burstPlacement';
 import { createSeededRandom } from '@/utils/motorSpeedSchedule';
 
-export type BurstScheduleKind = 'none' | 'strokeMilestones' | 'wallClock' | 'cadenceStride';
+export type BurstScheduleKind =
+  | 'none'
+  | 'strokeMilestones'
+  | 'wallClock'
+  | 'cadenceStride'
+  | 'chancePerMainStroke';
 
 export interface RelayBurstPlan {
   active: boolean;
@@ -29,85 +35,140 @@ function burstCadenceStride(burstPercent: number): number {
   return Math.floor((100 + burstPercent / 2) / burstPercent);
 }
 
-export function buildRelayBurstPlan(state: AutomaticControlState): RelayBurstPlan {
-  const empty: RelayBurstPlan = {
-    active: false,
-    kind: 'none',
-    burstEventCount: 0,
+function buildStrokeMilestonePlan(
+  endSessionValue: number,
+  burstPercent: number,
+): RelayBurstPlan | null {
+  const burstEventCount = roundPercentOfEnvelope(endSessionValue, burstPercent);
+  if (burstEventCount <= 0) {
+    return null;
+  }
+  const cappedCount = Math.min(MAX_BURST_EVENTS, burstEventCount);
+  const milestones: number[] = [];
+  for (let k = 1; k <= cappedCount; k += 1) {
+    let milestone = Math.floor((k * endSessionValue) / cappedCount);
+    if (milestone <= 0) {
+      milestone = 1;
+    }
+    milestones.push(milestone);
+  }
+  return {
+    active: true,
+    kind: 'strokeMilestones',
+    burstEventCount: cappedCount,
     nextMilestoneIndex: 0,
-    milestones: [],
+    milestones,
     cadenceStride: 0,
     nextCadenceTriggerStroke: 0,
   };
+}
 
+function buildWallClockPlan(endSessionMinutes: number, burstPercent: number): RelayBurstPlan | null {
+  const burstEventCount = roundPercentOfEnvelope(endSessionMinutes, burstPercent);
+  if (burstEventCount <= 0) {
+    return null;
+  }
+  const cappedCount = Math.min(MAX_BURST_EVENTS, burstEventCount);
+  const sessionBudgetMs = endSessionMinutes * 60 * 1000;
+  const milestones: number[] = [];
+  for (let k = 1; k <= cappedCount; k += 1) {
+    milestones.push(Math.floor((k * sessionBudgetMs) / cappedCount));
+  }
+  return {
+    active: true,
+    kind: 'wallClock',
+    burstEventCount: cappedCount,
+    nextMilestoneIndex: 0,
+    milestones,
+    cadenceStride: 0,
+    nextCadenceTriggerStroke: 0,
+  };
+}
+
+function buildCadenceStridePlan(burstPercent: number): RelayBurstPlan | null {
+  const stride = burstCadenceStride(burstPercent);
+  if (stride <= 0) {
+    return null;
+  }
+  return {
+    active: true,
+    kind: 'cadenceStride',
+    burstEventCount: 0,
+    nextMilestoneIndex: 0,
+    milestones: [],
+    cadenceStride: stride,
+    nextCadenceTriggerStroke: stride,
+  };
+}
+
+const emptyPlan = (): RelayBurstPlan => ({
+  active: false,
+  kind: 'none',
+  burstEventCount: 0,
+  nextMilestoneIndex: 0,
+  milestones: [],
+  cadenceStride: 0,
+  nextCadenceTriggerStroke: 0,
+});
+
+export function buildRelayBurstPlan(state: AutomaticControlState): RelayBurstPlan {
   if (!state.burstsOn || state.burstPercent <= 0) {
-    return empty;
+    return emptyPlan();
   }
 
-  if (state.endSessionMode === 'strokes' && state.endSessionValue > 0) {
-    const burstEventCount = roundPercentOfEnvelope(state.endSessionValue, state.burstPercent);
-    if (burstEventCount <= 0) {
-      return empty;
-    }
-    const cappedCount = Math.min(MAX_BURST_EVENTS, burstEventCount);
-    const milestones: number[] = [];
-    for (let k = 1; k <= cappedCount; k += 1) {
-      let milestone = Math.floor((k * state.endSessionValue) / cappedCount);
-      if (milestone <= 0) {
-        milestone = 1;
-      }
-      milestones.push(milestone);
-    }
-    return {
-      active: true,
-      kind: 'strokeMilestones',
-      burstEventCount: cappedCount,
-      nextMilestoneIndex: 0,
-      milestones,
-      cadenceStride: 0,
-      nextCadenceTriggerStroke: 0,
-    };
-  }
+  const placement = resolveBurstPlacement(state);
 
-  if (state.endSessionMode === 'minutes' && state.endSessionValue > 0) {
-    const burstEventCount = roundPercentOfEnvelope(state.endSessionValue, state.burstPercent);
-    if (burstEventCount <= 0) {
-      return empty;
-    }
-    const cappedCount = Math.min(MAX_BURST_EVENTS, burstEventCount);
-    const sessionBudgetMs = state.endSessionValue * 60 * 1000;
-    const milestones: number[] = [];
-    for (let k = 1; k <= cappedCount; k += 1) {
-      milestones.push(Math.floor((k * sessionBudgetMs) / cappedCount));
-    }
+  if (placement === 'chanceAfterMainStroke') {
     return {
       active: true,
-      kind: 'wallClock',
-      burstEventCount: cappedCount,
-      nextMilestoneIndex: 0,
-      milestones,
-      cadenceStride: 0,
-      nextCadenceTriggerStroke: 0,
-    };
-  }
-
-  if (state.endSessionMode === 'noAutoEnd') {
-    const stride = burstCadenceStride(state.burstPercent);
-    if (stride <= 0) {
-      return empty;
-    }
-    return {
-      active: true,
-      kind: 'cadenceStride',
+      kind: 'chancePerMainStroke',
       burstEventCount: 0,
       nextMilestoneIndex: 0,
       milestones: [],
-      cadenceStride: stride,
-      nextCadenceTriggerStroke: stride,
+      cadenceStride: 0,
+      nextCadenceTriggerStroke: 0,
     };
   }
 
-  return empty;
+  if (placement === 'afterMainStroke') {
+    if (state.endSessionMode === 'strokes' && state.endSessionValue > 0) {
+      return buildStrokeMilestonePlan(state.endSessionValue, state.burstPercent) ?? emptyPlan();
+    }
+    if (state.endSessionMode === 'minutes' && state.endSessionValue > 0) {
+      return buildCadenceStridePlan(state.burstPercent) ?? emptyPlan();
+    }
+    if (state.endSessionMode === 'noAutoEnd') {
+      return buildCadenceStridePlan(state.burstPercent) ?? emptyPlan();
+    }
+    return emptyPlan();
+  }
+
+  if (state.endSessionMode === 'strokes' && state.endSessionValue > 0) {
+    return buildStrokeMilestonePlan(state.endSessionValue, state.burstPercent) ?? emptyPlan();
+  }
+  if (state.endSessionMode === 'minutes' && state.endSessionValue > 0) {
+    return buildWallClockPlan(state.endSessionValue, state.burstPercent) ?? emptyPlan();
+  }
+  if (state.endSessionMode === 'noAutoEnd') {
+    return buildCadenceStridePlan(state.burstPercent) ?? emptyPlan();
+  }
+
+  return emptyPlan();
+}
+
+export function previewChanceBurstAfterStroke(
+  state: AutomaticControlState,
+  mainStrokeIndex: number,
+  scheduleSeed: number,
+): boolean {
+  if (state.burstPercent >= 100) {
+    return true;
+  }
+  if (state.burstPercent <= 0) {
+    return false;
+  }
+  const rand = createSeededRandom((scheduleSeed + mainStrokeIndex * 9973) >>> 0);
+  return Math.floor(rand() * 100) < state.burstPercent;
 }
 
 export function shouldTriggerBurstAfterMainStroke(
@@ -133,6 +194,21 @@ export function shouldTriggerBurstAfterMainStroke(
   }
 
   return false;
+}
+
+export function shouldPreviewBurstAfterMainStroke(
+  state: AutomaticControlState,
+  plan: RelayBurstPlan,
+  mainStrokesCompleted: number,
+  scheduleSeed: number,
+): boolean {
+  if (!plan.active) {
+    return false;
+  }
+  if (plan.kind === 'chancePerMainStroke') {
+    return previewChanceBurstAfterStroke(state, mainStrokesCompleted, scheduleSeed);
+  }
+  return shouldTriggerBurstAfterMainStroke(plan, mainStrokesCompleted);
 }
 
 export function shouldTriggerBurstInWaitingGap(
@@ -240,7 +316,6 @@ export function previewBurstDelaySec(
   }
 }
 
-/** Operator hint: when the device will schedule the first burst (matches firmware). */
 export function describeRelayBurstScheduleHint(state: AutomaticControlState): string | null {
   if (!state.burstsOn) {
     return null;
@@ -250,37 +325,48 @@ export function describeRelayBurstScheduleHint(state: AutomaticControlState): st
     return 'Burst percent is 0 — the device will not schedule burst events until percent is above 0.';
   }
 
+  const placement = resolveBurstPlacement(state);
+
+  if (placement === 'chanceAfterMainStroke') {
+    return `Each main stroke has a ${state.burstPercent}% chance of a burst cluster after it. Count varies each run; preview shows one example path.`;
+  }
+
   const plan = buildRelayBurstPlan(state);
   if (!plan.active) {
-    const envelope =
-      state.endSessionMode === 'minutes' || state.endSessionMode === 'strokes'
-        ? state.endSessionValue
-        : 0;
-    if (envelope > 0) {
-      const minPercentForOneEvent = Math.min(100, Math.ceil(50 / envelope));
-      const unit = state.endSessionMode === 'minutes' ? 'min' : 'strokes';
-      return `Burst percent ${state.burstPercent}% on a ${envelope}-${unit} session rounds to 0 burst events on the device. Use at least ${minPercentForOneEvent}% for this length, or increase end session (e.g. 2 min at 25% → 1 burst).`;
+    if (placement === 'sessionSpread') {
+      const envelope =
+        state.endSessionMode === 'minutes' || state.endSessionMode === 'strokes'
+          ? state.endSessionValue
+          : 0;
+      if (envelope > 0) {
+        const minPercentForOneEvent = Math.min(100, Math.ceil(50 / envelope));
+        const unit = state.endSessionMode === 'minutes' ? 'min' : 'strokes';
+        return `Burst percent ${state.burstPercent}% on a ${envelope}-${unit} session rounds to 0 burst events (spread mode). Use at least ${minPercentForOneEvent}%, or switch placement to after main strokes / chance.`;
+      }
     }
-    return 'No burst schedule with current end-session settings. Use a positive end value (minutes or strokes), or raise burst percent.';
+    return 'No burst schedule with current end-session settings.';
   }
 
   if (plan.kind === 'cadenceStride') {
-    return `First burst after ${plan.nextCadenceTriggerStroke} main strokes, then about every ${plan.cadenceStride} main strokes (no auto end).`;
+    const cadenceNote =
+      placement === 'afterMainStroke' && state.endSessionMode === 'minutes'
+        ? ' (stroke-linked during timed session)'
+        : '';
+    return `First burst after main stroke ${plan.nextCadenceTriggerStroke}, then every ${plan.cadenceStride} main strokes${cadenceNote}.`;
   }
 
   if (plan.kind === 'strokeMilestones' && plan.milestones.length > 0) {
-    return `About ${plan.burstEventCount} burst event(s) across the session — first after main stroke ${plan.milestones[0]}.`;
+    return `About ${plan.burstEventCount} burst event(s) — first after main stroke ${plan.milestones[0]}.`;
   }
 
   if (plan.kind === 'wallClock' && plan.milestones.length > 0) {
     const firstMin = Math.max(1, Math.round(plan.milestones[0]! / 60_000));
-    return `About ${plan.burstEventCount} burst event(s) spread across ${state.endSessionValue} min — first near minute ${firstMin} (during gaps between main strokes).`;
+    return `About ${plan.burstEventCount} burst event(s) spread across ${state.endSessionValue} min — first near minute ${firstMin} (between main strokes).`;
   }
 
   return null;
 }
 
-/** True when fixed burst style uses relative max at session ceiling (often matches main max). */
 export function burstPreviewLikelyMatchesMainPower(state: AutomaticControlState): boolean {
   if (!state.burstsOn) {
     return false;

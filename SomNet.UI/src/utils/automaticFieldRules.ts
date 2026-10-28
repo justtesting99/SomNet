@@ -1,5 +1,6 @@
 import type { AutomaticControlState, AutomaticRunMode, EndSessionMode } from '@/types/modes';
 import { normalizeAutomaticBurstFields } from '@/utils/burstFieldRules';
+import { resolveBurstPlacement } from '@/utils/burstPlacement';
 
 /** Main-program gap between strokes (not burst intra-stroke delay). */
 export const MIN_STROKE_GAP_SECONDS = 1;
@@ -80,5 +81,6 @@ export function normalizeAutomaticControlState(
     ...withMode,
     strokeMinSeconds,
     strokeMaxSeconds,
+    burstPlacement: resolveBurstPlacement(withMode),
   });
 }

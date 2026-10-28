@@ -9,9 +9,10 @@ import {
   previewBurstRelativePower,
   previewBurstStrokeCount,
   resolveBurstEffectivePower,
-  shouldTriggerBurstAfterMainStroke,
+  shouldPreviewBurstAfterMainStroke,
   shouldTriggerBurstInWaitingGap,
 } from '@/utils/relayBurstPlan';
+import { resolveBurstPlacement } from '@/utils/burstPlacement';
 import {
   createSeededRandom,
   type MotorSpeedSchedule,
@@ -94,6 +95,7 @@ export function hashRelayAutomaticScheduleSeed(state: AutomaticControlState): nu
     state.endSessionMode,
     state.endSessionValue,
     state.burstsOn,
+    state.burstPlacement,
     state.burstPercent,
     state.burstStyle,
     state.burstStrokePowerMin,
@@ -369,7 +371,9 @@ function appendBurstCluster(
 export function buildRelayAutomaticPowerSchedule(state: AutomaticControlState): RelayPowerSchedule {
   const horizonSec = automaticHorizonSec(state);
   const scheduleSeed = hashRelayAutomaticScheduleSeed(state);
-  const illustrativeRandom = isRandomMode(state.automaticMode);
+  const placement = resolveBurstPlacement(state);
+  const illustrativeRandom =
+    isRandomMode(state.automaticMode) || placement === 'chanceAfterMainStroke';
   const tableRows = usesTableSchedule(state.automaticMode)
     ? buildTableRows(state, scheduleSeed)
     : null;
@@ -410,7 +414,7 @@ export function buildRelayAutomaticPowerSchedule(state: AutomaticControlState): 
     if (
       state.burstsOn &&
       burstPlan.active &&
-      shouldTriggerBurstAfterMainStroke(burstPlan, mainStrokesCompleted)
+      shouldPreviewBurstAfterMainStroke(state, burstPlan, mainStrokesCompleted, scheduleSeed)
     ) {
       const burst = appendBurstCluster(
         state,

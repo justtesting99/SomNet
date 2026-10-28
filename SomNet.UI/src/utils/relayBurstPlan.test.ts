@@ -42,6 +42,33 @@ describe('buildRelayBurstPlan', () => {
     expect(hint).toContain('50%');
   });
 
+  it('afterMainStroke uses cadence on minutes (not wall clock)', () => {
+    const plan = buildRelayBurstPlan({
+      ...defaultAutomaticState,
+      burstsOn: true,
+      burstPlacement: 'afterMainStroke',
+      burstPercent: 50,
+      endSessionMode: 'minutes',
+      endSessionValue: 1,
+    });
+    expect(plan.active).toBe(true);
+    expect(plan.kind).toBe('cadenceStride');
+    expect(plan.cadenceStride).toBe(2);
+  });
+
+  it('chanceAfterMainStroke activates without envelope', () => {
+    const plan = buildRelayBurstPlan({
+      ...defaultAutomaticState,
+      burstsOn: true,
+      burstPlacement: 'chanceAfterMainStroke',
+      burstPercent: 25,
+      endSessionMode: 'minutes',
+      endSessionValue: 1,
+    });
+    expect(plan.kind).toBe('chancePerMainStroke');
+    expect(plan.active).toBe(true);
+  });
+
   it('maps burst relative power into session envelope', () => {
     expect(
       resolveBurstEffectivePower(100, {

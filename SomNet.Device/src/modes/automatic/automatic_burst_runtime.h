@@ -7,6 +7,7 @@ enum class BurstScheduleKind {
     StrokeMilestones,
     WallClockDeadlines,
     CadenceStride,
+    ChancePerMainStroke,
 };
 
 struct AutomaticBurstPlan {
@@ -33,8 +34,11 @@ void buildAutomaticBurstPlanForReplan(
     unsigned long nowMs,
     AutomaticBurstPlan* outPlan);
 
-/** After a main stroke completes (stroke milestones or noAutoEnd stride). */
-bool shouldTriggerBurstAfterMainStroke(const AutomaticBurstPlan& plan, int mainStrokesCompleted);
+/** After a main stroke completes (milestones, stride, or chance roll). */
+bool shouldTriggerBurstAfterMainStroke(
+    const AutomaticBurstPlan& plan,
+    const AutomaticConfig& config,
+    int mainStrokesCompleted);
 
 /** In WaitingGap between main strokes (minutes wall-clock deadlines — P10-D22). */
 bool shouldTriggerBurstInWaitingGap(

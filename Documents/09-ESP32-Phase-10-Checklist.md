@@ -12,6 +12,8 @@
 
 **Goal:** When **Bursts On** is checked, the ESP32 runs **bursts inside an automatic session** — additive on top of the selected automatic program (Periodic, Random, Wave, etc.). Operator enables burst settings in the UI; device accepts `burstsOn: true` on `automatic-start`.
 
+**Follow-on:** [Burst placement modes](./36-Burst-Placement-Modes-Design.md) — **`burstPlacement`** (`sessionSpread` default = this checklist, `afterMainStroke`, `chanceAfterMainStroke`). Implemented in relay firmware + UI; default remains Phase 10 semantics when omitted.
+
 **Explicitly out of scope (Phase 10):** Live **`automatic-update`** mid-session → [Phase 11 checklist](./09-ESP32-Phase-11-Checklist.md) (**signed off** 2026-09-10); OTA.
 
 ---

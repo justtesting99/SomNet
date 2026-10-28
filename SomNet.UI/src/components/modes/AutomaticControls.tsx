@@ -46,6 +46,11 @@ import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCo
 import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
 import { buildAutomaticStartPayload } from '@/utils/automaticStartPayload';
 import {
+  BURST_PLACEMENT_OPTIONS,
+  burstPercentFieldLabel,
+  resolveBurstPlacement,
+} from '@/utils/burstPlacement';
+import {
   burstPreviewLikelyMatchesMainPower,
   describeRelayBurstScheduleHint,
 } from '@/utils/relayBurstPlan';
@@ -120,8 +125,10 @@ export function AutomaticControls() {
   const configLocked = sessionRunning && !allowLiveOverrides;
   /** Master gate for burst sub-controls — Bursts On must be checked (Phase 10). */
   const burstSettingsDisabled = configLocked || !state.burstsOn;
+  const burstPlacement = resolveBurstPlacement(state);
   const burstScheduleHint = describeRelayBurstScheduleHint(state);
   const burstPowerMatchesMain = burstPreviewLikelyMatchesMainPower(state);
+  const burstChanceMode = burstPlacement === 'chanceAfterMainStroke';
   const delayStartLocked = sessionRunning;
   const hardwareReady = isHardwareCommandReady(systemStatus) && sceneSessionActive;
   const lastPushedUpdateRef = useRef<string | null>(null);
@@ -664,7 +671,7 @@ export function AutomaticControls() {
                 onChange={(event) => update('burstsOn', event.target.checked)}
               />
               <NumberField
-                label="Percent (0 to 100)"
+                label={burstPercentFieldLabel(burstPlacement)}
                 inline
                 value={state.burstPercent}
                 min={0}
@@ -673,6 +680,25 @@ export function AutomaticControls() {
                 onChange={(event) => update('burstPercent', Number(event.target.value))}
               />
             </div>
+
+            <SelectField
+              label="Burst placement"
+              value={state.burstPlacement}
+              disabled={burstSettingsDisabled}
+              options={BURST_PLACEMENT_OPTIONS}
+              onChange={(event) =>
+                update(
+                  'burstPlacement',
+                  event.target.value as AutomaticControlState['burstPlacement'],
+                )
+              }
+            />
+
+            {burstChanceMode && state.burstsOn ? (
+              <p className="text-xs leading-relaxed text-amber-600/90">
+                Burst count varies each session. Use a lower percent if clusters feel too frequent.
+              </p>
+            ) : null}
 
             <SelectField
               label="Burst Style"

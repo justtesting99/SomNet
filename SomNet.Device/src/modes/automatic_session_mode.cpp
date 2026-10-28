@@ -130,8 +130,12 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
                     Serial.println(burstPlan_.burstEventCount);
                     break;
                 case BurstScheduleKind::CadenceStride:
-                    Serial.print(F("[AUTO] burst plan noAutoEnd stride="));
+                    Serial.print(F("[AUTO] burst plan cadence stride="));
                     Serial.println(burstPlan_.cadenceStride);
+                    break;
+                case BurstScheduleKind::ChancePerMainStroke:
+                    Serial.print(F("[AUTO] burst plan chanceAfterMainStroke percent="));
+                    Serial.println(config.burstPercent);
                     break;
                 default:
                     Serial.println(F("[AUTO] burst plan active"));
@@ -636,12 +640,16 @@ void AutomaticSessionMode::onRelayPulseComplete(void* context, unsigned long /*a
         mode->applyPendingUpdate();
     }
 
-    if (mode->burstsOn_ &&
-        shouldTriggerBurstAfterMainStroke(mode->burstPlan_, mode->strokesCompleted_)) {
-        if (!mode->beginBurstEvent()) {
-            mode->finishSession(false, "automatic burst failed to start", "error", true);
+    if (mode->burstsOn_) {
+        AutomaticConfig burstConfig{};
+        if (parseAutomaticConfig(mode->configJson_, &burstConfig) &&
+            shouldTriggerBurstAfterMainStroke(
+                mode->burstPlan_, burstConfig, mode->strokesCompleted_)) {
+            if (!mode->beginBurstEvent()) {
+                mode->finishSession(false, "automatic burst failed to start", "error", true);
+            }
+            return;
         }
-        return;
     }
 
     if (mode->stopRequested_) {

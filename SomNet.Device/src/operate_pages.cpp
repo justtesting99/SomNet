@@ -229,6 +229,7 @@ function readAutoSnapshot(){
     delayBeforeStartSeconds:+$('a-delay').value,
     endSessionMode:$('a-endmode').value,endSessionValue:+$('a-endval').value,
     burstsOn:$('a-bursts').checked,
+    burstPlacement:($('a-bplacement')?$('a-bplacement').value:'sessionSpread'),
     burstPercent:+$('a-bpct').value,burstStyle:$('a-bstyle').value,
     burstStrokePowerMin:+$('a-bpow-min').value,burstStrokePowerMax:+$('a-bpow-max').value,
     burstDelayMin:+$('a-bdel-min').value,burstDelayMax:+$('a-bdel-max').value,
@@ -248,6 +249,7 @@ function fillAutoForm(s){
   if(s.endSessionMode)$('a-endmode').value=s.endSessionMode;
   if(s.endSessionValue!=null)$('a-endval').value=s.endSessionValue;
   $('a-bursts').checked=!!s.burstsOn;
+  if(s.burstPlacement&&$('a-bplacement'))$('a-bplacement').value=s.burstPlacement;
   if(s.burstPercent!=null)$('a-bpct').value=s.burstPercent;
   if(s.burstStyle)$('a-bstyle').value=s.burstStyle;
   if(s.burstStrokePowerMin!=null)$('a-bpow-min').value=s.burstStrokePowerMin;
