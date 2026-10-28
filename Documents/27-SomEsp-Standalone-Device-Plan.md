@@ -240,12 +240,12 @@ SomEsp relay MVP (Phases 1–5) is **signed off**. **Motor (H-bridge)** uses the
 
 | Area | Relay today | Motor M2 work |
 |------|-------------|----------------|
-| **Parity rule** | Relay **`automatic-start`** JSON = hub | Motor start/update JSON = hub **`buildMotorAutomaticStartPayload`** (not relay stroke-ms) |
-| NVS **`actuatorKind`** | Default `relay`; set via **`/config` POST** | Same — use **`hbridge`** before motor bench |
-| **`/api/local/commands`** | `stroke`, relay automatic JSON | **`motor-run`**, motor automatic JSON — **engine ☑** |
-| **`/api/local/settings`** | Relay `manual` + `automatic` | Add **`motorManual` + `motorAutomatic` + optional `appOptions`** — [32 §6-D](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#64-slice-m2-d--local-settings-nvs-api-parity) |
-| **`/operate`** | Stroke/burst + relay automatic | Caps-driven UI calling local API only — [32 §6-C](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#63-slice-m2-c--operate-ui-client-of-local-api) |
-| **Status poll** | Relay `busy` / `automaticActive` | Include **motor** FSM — [32 §6-F](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#66-slice-m2-f--status-history-shell) |
+| **Parity rule** | Relay **`automatic-start`** JSON = hub | Motor start/update JSON = hub — **☑ `/operate` + local API** |
+| NVS **`actuatorKind`** | Default `relay`; **`/config` / `/operate` / unlock** | **☑** |
+| **`/api/local/commands`** | `stroke`, relay automatic | **`motor-run`**, motor automatic — **☑** |
+| **`/api/local/settings`** | Relay `manual` + `automatic` | **`motorManual` + `motorAutomatic` + `appOptions`** — **☑** |
+| **`/operate`** | Stroke/burst + relay automatic | Caps-driven motor UI — **☑ M2-C** |
+| **Status poll** | Relay `busy` / `automaticActive` | Motor FSM — **☑ M2-F1** |
 
 **Sign-off:** [32 Run D (M2-R1–R6)](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#69-run-d--m2-operator--bench-sign-off). Pattern graph stays **SomNet.UI only** (no `/operate` chart in M2).
 

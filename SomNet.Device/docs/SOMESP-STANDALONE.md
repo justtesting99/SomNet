@@ -58,7 +58,7 @@ Serial banner includes **`Mode: STANDALONE`** and **`Control: http://<ip>/operat
 
 | Method | Path | Auth | Notes |
 |--------|------|------|--------|
-| POST | `/api/local/unlock` | — | `{"pin":"1234"}` optional `"newPin":"..."` |
+| POST | `/api/local/unlock` | — | `{"pin":"1234"}` optional `"newPin":"..."`; optional **`actuatorKind`** when NVS unbound (**M2-B2**) |
 | POST | `/api/local/lock` | Bearer | Clears session + disarm |
 | POST | `/api/local/arm` | Bearer | GPIO32 ON |
 | POST | `/api/local/disarm` | Bearer | GPIO32 OFF |
@@ -117,14 +117,97 @@ After unlock + arm, POST **`/api/local/commands`** with the same **`payloadJson`
 
 On setup AP, local API returns **`403 setup_mode`**.
 
+## Actuator profile (MA-D12 LAN)
+
+Set **`relay`** vs **`hbridge`** before motor bench (must match the module wired to the ESP):
+
+| Where | How |
+|-------|-----|
+| **`/operate`** | Actuator profile dropdown → **Save profile & reboot** (unlock first) |
+| **`/config`** | **Actuator profile** on the form → Save and reboot |
+| **`PUT /api/local/actuator-kind`** | Bearer + `{ "actuatorKind": "hbridge" }` while idle |
+| **`POST /api/local/unlock`** | Optional `{ "pin":"1234", "actuatorKind":"hbridge" }` when NVS kind **unbound** (rejects mismatch when bound) |
+
+Status page shows current kind. **`GET /api/local/caps`** returns relay stroke limits or motor **`minDutyPercent` / `maxDutyPercent`**.
+
+Hub pairing still sends **`actuatorKind`** on **`PairDevice`**; device NVS must agree.
+
+## M2-E command parity runbook (curl)
+
+Use **`env:dev`** (hub + **`SOMNET_LOCAL_API`**) or **`env:somesp`**. Replace **`BASE`** (`http://192.168.1.11`) and capture **`TOKEN`** from unlock. **Pause hub** on status toggle when testing local-only ([28 §hub competition](../../Documents/28-Scheduled-Jobs-Local-Device-Integration.md)).
+
+```bash
+BASE=http://192.168.1.11
+# Unlock → copy token
+curl -s -X POST "$BASE/api/local/unlock" -H "Content-Type: application/json" \
+  -d '{"pin":"1234"}'
+TOKEN=<paste>
+AUTH="Authorization: Bearer $TOKEN"
+curl -s -X POST "$BASE/api/local/arm" -H "$AUTH"
+```
+
+### Hub vs local (M2-P0)
+
+| Hub | Local |
+|-----|-------|
+| `POST /api/devices/commands` + operator JWT | `POST /api/local/commands` + Bearer + **armed** |
+| `commandKey` + `payloadJson` in REST body | Same **`commandKey`** + **`payloadJson`** in JSON body |
+
+Local body shape:
+
+```json
+{ "commandKey": "motor-run", "payloadJson": "{\"dutyPercent\":45}" }
+```
+
+(`payloadJson` is a **string** containing JSON.)
+
+### M2-E1–E2 Motor manual
+
+```bash
+curl -s -X POST "$BASE/api/local/commands" -H "$AUTH" -H "Content-Type: application/json" \
+  -d '{"commandKey":"motor-run","payloadJson":"{\"dutyPercent\":45}"}'
+curl -s "$BASE/api/local/status"
+curl -s -X POST "$BASE/api/local/commands" -H "$AUTH" -H "Content-Type: application/json" \
+  -d '{"commandKey":"motor-stop","payloadJson":"{}"}'
+```
+
+### M2-E3–E6 Motor automatic (periodic example)
+
+```bash
+curl -s -X POST "$BASE/api/local/commands" -H "$AUTH" -H "Content-Type: application/json" \
+  -d '{"commandKey":"automatic-start","payloadJson":"{\"actuatorKind\":\"hbridge\",\"segmentTargetRampMs\":-1,\"automaticMode\":\"periodic\",\"minimumDutyPercent\":20,\"maximumDutyPercent\":80,\"minimumSpeedPercent\":30,\"maximumSpeedPercent\":50,\"segmentMinSeconds\":5,\"segmentMaxSeconds\":20,\"delayBeforeStartSeconds\":0,\"rampMs\":500,\"endSessionMode\":\"minutes\",\"endSessionValue\":2,\"burstsOn\":false}"}'
+# Poll until automaticActive false and resultJson set:
+curl -s "$BASE/api/local/status"
+curl -s -X POST "$BASE/api/local/commands" -H "$AUTH" -H "Content-Type: application/json" \
+  -d '{"commandKey":"automatic-stop","payloadJson":"{}"}'
+curl -s -X POST "$BASE/api/local/commands" -H "$AUTH" -H "Content-Type: application/json" \
+  -d '{"commandKey":"abort","payloadJson":"{}"}'
+```
+
+(PowerShell: build `payloadJson` as a single escaped string; or use **`/operate`** UI.)
+
+### M2-E7 Motor bursts
+
+Add to start payload: `"burstsOn":true,"burstPlacement":"mainPlusAfterMainStroke","burstPercent":50,"burstStyle":"fixedPowerDelay",…` — same fields as hub / **`/operate`**. Expect **`burstEventsCompleted`** in terminal **`resultJson`**.
+
+### M2-E8 Relay regression
+
+Set profile **`relay`**. **`stroke`** / relay **`automatic-start`** with relay JSON (`minimumStrokeMs`, …) — see [PROTOCOL §6.3–6.5](./PROTOCOL.md).
+
+### M2-E9 Cross-kind negative
+
+With NVS **`hbridge`**, POST **`stroke`** → firmware rejects (400-class ack / error).
+
 ## Differences from `env:dev`
 
 | Area | SomNet (`dev`) | SomEsp (`somesp`) |
 |------|----------------|-------------------|
 | NVS “fully provisioned” | Wi‑Fi + `server_url` | Wi‑Fi only |
-| SignalR | When configured | Disabled |
-| Button D33 clicks | Hub event | Ignored (log only) |
-| Status LED | Wi‑Fi + hub | Wi‑Fi only |
+| **`SOMNET_LOCAL_API`** | **`/operate` + `/api/local/*`** on STA (default **dev**) | Same + standalone provisioning |
+| SignalR | When configured | Optional hybrid; off for LAN-only |
+| Button D33 clicks | Hub event when hub enabled | Ignored when hub paused / standalone |
+| Status LED | Wi‑Fi + hub | Wi‑Fi (+ hub when hybrid enabled) |
+| Session history (LittleFS) | Not mounted on **`dev`** partition | **`env:somesp`** — `/api/local/history` |
 
 ## Session history (LittleFS)
 

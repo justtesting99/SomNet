@@ -348,6 +348,23 @@ Same JSON shape for **`automatic-start`** and **`automatic-update`** while a mot
 
 SomNet.API forwards to operators as `CommandAcknowledged`; SomNet.UI builds the live motor pattern graph from these events.
 
+### 6.11 Local LAN API (`POST /api/local/commands`) — M2-P0
+
+When firmware is built with **`SOMNET_LOCAL_API=1`** (`env:dev` default) or **`env:somesp`**, the device exposes HTTP on STA:
+
+| Step | Endpoint | Notes |
+|------|----------|--------|
+| Unlock | `POST /api/local/unlock` | PIN → Bearer token (RAM); optional **`actuatorKind`** on first bind |
+| Arm | `POST /api/local/arm` | GPIO accessory enable (SE-D5) |
+| Command | `POST /api/local/commands` | Same **`commandKey`** + **`payloadJson`** as hub **`ExecuteCommand`** (§6.2–§6.9) |
+| Poll | `GET /api/local/status` | `busy`, `automaticActive`, `resultJson`, **`actuatorKind`** |
+| Settings | `GET/PUT /api/local/settings` | Relay **`manual`/`automatic`** or motor **`motorManual`/`motorAutomatic`/`appOptions`** |
+| Caps | `GET /api/local/caps` | Relay stroke limits or motor duty bounds |
+
+**Parity rule:** The **`payloadJson`** string for `stroke`, `burst`, relay/motor **`automatic-start`**, **`automatic-update`**, **`motor-run`**, etc. is **identical** to what SomNet.API sends on the hub path — only transport and auth differ (Bearer + arm vs SignalR + device JWT). See [SOMESP-STANDALONE.md](./SOMESP-STANDALONE.md) **M2-E runbook** for curl recipes.
+
+**Exceptions (intentional):** No Dom/Sub routing on device; no live segment graph on `/operate`; history on **`env:somesp`** LittleFS only.
+
 **Relay segment telemetry (unsolicited hub ack):** While a **relay** automatic session runs, firmware may emit **`AckCommand`** with `correlationId` **`relay-automatic-segment`** (Shared: `HardwareCommandKeys.RelayAutomaticSegmentCorrelationId`). Each event is one **stroke** (relay on at `powerPercent` for `durationMs`) or **gap** (off for `durationMs`):
 
 ```json
@@ -684,6 +701,7 @@ If ack arrives within the per-command timeout:
 
 | Date | Change |
 |------|--------|
+| 2026-10-28 | **§6.11** — Local LAN API (`/api/local/*`) parity with hub ExecuteCommand (**M2-P0**) |
 | 2026-09-05 | Phase 0 capture complete; `sub_target` JWT claim documented |
 | 2026-09-07 | P10-D3 — immediate `automatic-stop` accept; hub summary on cooperative stop; Abort during stop-wait |
 | 2026-09-07 | Phase 9 Part 2 — `automatic-start`/`automatic-stop` payload + stop `resultJson`; burst payload; per-command ack timeouts |

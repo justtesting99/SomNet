@@ -139,6 +139,27 @@ void handleLocalUnlockBody(AsyncWebServerRequest* request, const char* body, siz
         return;
     }
 
+    if (doc["actuatorKind"].is<const char*>()) {
+        NvsStore* nvs = nvsStoreInstance();
+        const char* kindJson = doc["actuatorKind"];
+        DeviceActuatorKind incoming = DeviceActuatorKind_Relay;
+        if (kindJson == nullptr || !actuatorKindFromJson(kindJson, &incoming)) {
+            sendJsonError(request, 400, "invalid_actuatorKind");
+            return;
+        }
+        if (nvs != nullptr && nvs->isOpen()) {
+            if (nvs->hasActuatorKindBound()) {
+                if (nvs->getActuatorKind() != incoming) {
+                    sendJsonError(request, 409, "actuatorKind_mismatch");
+                    return;
+                }
+            } else if (!nvs->setActuatorKind(incoming)) {
+                sendJsonError(request, 500, "nvs_failed");
+                return;
+            }
+        }
+    }
+
     char token[kLocalOperateTokenHexLen + 1];
     uint64_t expiresAtMs = 0;
     if (!gLocalOperate->unlockWithPin(pin, newPin, token, sizeof(token), &expiresAtMs)) {

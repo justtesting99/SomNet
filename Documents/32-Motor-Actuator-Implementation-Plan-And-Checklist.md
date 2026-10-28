@@ -435,10 +435,10 @@ Same **`MotorAutomaticSessionMode`** / **`CommandHandler`** as hub when NVS = `h
 | **M2-A7** | **`/config` POST `actuator_kind`** (relay \| hbridge) | ☑ | `config_web_server.cpp` — hub PairDevice equivalent for LAN |
 | **M2-A8** | **`/operate`** relay manual + relay automatic UI | ☑ | Phases 2–5 SomEsp — **relay-shaped JSON only** |
 | **M2-A9** | **`POST /api/local/unlock`** carries **`actuatorKind`** | ☐ | Unlock is PIN-only today; kind via **`/config`** only |
-| **M2-A10** | **`/operate`** motor manual / motor automatic UI | ☑ | Caps-driven relay vs motor panels (M2-C); bench **M2-C sign-off** pending |
-| **M2-A11** | **`/api/local/settings`** motor snapshot shape | ☑ | **`motorManual` + `motorAutomatic` + `appOptions`** validated on PUT — **`/operate` still relay-shaped (M2-C)** |
+| **M2-A10** | **`/operate`** motor manual / motor automatic UI | ☑ | **M2-C** operator pass **2026-10-28** (LAN `/operate`, `hbridge`) |
+| **M2-A11** | **`/api/local/settings`** motor snapshot shape | ☑ | **`motorManual` + `motorAutomatic` + `appOptions`**; **`/operate`** read/write via PUT (**M2-C/D6**) |
 | **M2-A12** | **`GET /api/local/status`** `automaticActive` for **motor** session | ☑ | **`CommandHandler::isMotionBusy` / `isAutomaticProgramActive`** (M2-F1) |
-| **M2-A13** | Local history summaries readable for motor `resultJson` | ☐ | Verify after Run D; extend captions if needed |
+| **M2-A13** | Local history summaries readable for motor `resultJson` | ☑* | **LittleFS on `env:somesp` only**; **`env:dev`** → **`503 history_unavailable`** (Run D **M2-R6**, 2026-10-28) |
 | **M2-A14** | **Pattern graph / segment UI on device** | **Out of M2** | Hub UI only ([03 § Motor pattern graph](./03-Frontend-Architecture.md#motor-pattern-graph-scope)); local status may expose segment JSON in status/history only |
 
 #### 6.1.1 Accepted parity exceptions (cloud / product shell)
@@ -460,10 +460,10 @@ These are **intentionally different** on standalone; everything else should matc
 
 ### 6.2 Slice M2-B — Provisioning & caps (MA-D12 LAN)
 
-- [ ] **M2-B1** Document installer flow: **`/config` → actuator_kind = hbridge** before motor bench (or factory label).
-- [ ] **M2-B2** *(Optional)* **`POST /api/local/unlock`** accept optional **`actuatorKind`** when NVS unbound (mirror PairDevice); reject mismatch when bound.
-- [ ] **M2-B3** Status page (`/`) show bound **`actuatorKind`** (read-only) on SomEsp.
-- [ ] **M2-B4** **`SOMESP-STANDALONE.md`** caps table: motor row (`minDutyPercent` / `maxDutyPercent`).
+- [x] **M2-B1** Document installer flow: **`/config` / `/operate` / unlock** → **`hbridge`** before motor bench — [SOMESP-STANDALONE.md](../SomNet.Device/docs/SOMESP-STANDALONE.md) **Actuator profile**.
+- [x] **M2-B2** *(Optional)* **`POST /api/local/unlock`** accept optional **`actuatorKind`** when NVS unbound (mirror PairDevice); reject mismatch when bound.
+- [x] **M2-B3** Status page (`/`) show bound **`actuatorKind`** (read-only) — all builds with local API.
+- [x] **M2-B4** **`SOMESP-STANDALONE.md`** caps table: motor row (`minDutyPercent` / `maxDutyPercent`).
 
 **Pass:** Flash `somesp` → set **`hbridge`** via config → `GET /api/local/caps` returns motor caps; relay unit unchanged.
 
@@ -480,7 +480,16 @@ These are **intentionally different** on standalone; everything else should matc
 - [x] **M2-C5** **Relay profile:** keep current `/operate` (regression **M2-E8**).
 - [x] **M2-C6** Live **`automatic-update`** debounce (~400 ms); payload = full snapshot like hub **`automatic-update`**.
 
-**Pass:** Operator can run a 1 min **Set Speed** + bursts session from phone browser without curl. *(Firmware ready — run **M2-R** / M2-C sign-off on bench.)*
+**Pass:** Operator can run a 1 min **Set Speed** + bursts session from phone browser without curl. **Operator verified manual + automatic on `/operate` — 2026-10-28.**
+
+#### M2-C sign-off (slice)
+
+| Field | Value |
+|-------|--------|
+| **Date** | 2026-10-28 |
+| **Signed by** | Operator (chat) |
+| **Build** | `env:dev` + `SOMNET_LOCAL_API` (hub firmware with LAN `/operate`) |
+| **Notes** | Motor **manual** (`motor-run`/`motor-stop`) and **automatic** from Control panel confirmed working. Relay regression (**M2-E8**) not re-run this session. |
 
 ---
 
@@ -492,8 +501,8 @@ Goal: **`GET/PUT /api/local/settings`** returns the same **logical fields** the 
 - [x] **M2-D2** **Motor profile:** add **`motorManual`** + **`motorAutomatic`** objects aligned with [Shared](../SomNet.Shared/DTO/Settings/PairingSettingsDto.cs) / UI types (`MotorManualControlStateDto`, `MotorAutomaticControlStateDto` field names in JSON).
 - [x] **M2-D3** Optional top-level **`appOptions`**: `{ "motorSegmentTargetRampMode", "motorSegmentTargetRampMs" }` so `/operate` and job hosts can build **`automatic-start`** identical to [hub `buildMotorAutomaticStartPayload`](../SomNet.UI/src/utils/motorAutomaticStartPayload.ts) (`segmentTargetRampMs` in start payload).
 - [x] **M2-D4** Validation: reject motor-shaped keys when caps = relay and vice versa (or ignore foreign keys with clear error).
-- [ ] **M2-D5** Confirm **`kMaxLocalOperateSettingsBytes` (1536)** fits motor automatic + bursts + `appOptions` (same budget as **`kMaxHardwareCommandPayloadJson`**).
-- [ ] **M2-D6** **`/operate`**: read/write settings through API only (localStorage = cache optional); PUT debounce like hub settings save. *(Motor + relay PUT on change — **M2-C**; full D6 sign-off with Run D.)*
+- [x] **M2-D5** Confirm **`kMaxLocalOperateSettingsBytes` (1536)** fits motor automatic + bursts + `appOptions` (same budget as **`kMaxHardwareCommandPayloadJson`**). **Operator PASS — 2026-10-28 (Run D).**
+- [x] **M2-D6** **`/operate`**: read/write settings through API only (localStorage = cache optional); PUT debounce like hub settings save. **Operator PASS — 2026-10-28 (Run D).**
 
 **Pass:** Serialize a hub motor start payload from stored settings + `appOptions`; byte-identical to a known-good hub example for the same operator inputs.
 
@@ -511,30 +520,28 @@ Use **`pio run -e somesp`**, motor on bench, NVS **`hbridge`**. Bearer from unlo
 | ☐ | **M2-E4** | **`automatic-stop`** cooperative | Finishes ramp/cluster |
 | ☐ | **M2-E5** | **`abort`** during automatic | PWM off immediately |
 | ☐ | **M2-E6** | **`automatic-update`** mid-session | Replan after current segment/burst micro |
-| ☐ | **M2-E7** | **`automatic-start`** + **`burstsOn`** + **`mainPlusAfterMainStroke`** (segmented mode) | `burstEventsCompleted` in `resultJson` |
-| ☐ | **M2-E8** | Relay NVS **`relay`**: **`stroke`** + relay **`automatic-start`** | SomEsp relay regression (SE-T4–T7 class) |
+| ☑ | **M2-E7** | **`automatic-start`** + **`burstsOn`** + **`mainPlusAfterMainStroke`** (segmented mode) | **M2-R4 PASS — 2026-10-28** |
+| ☑ | **M2-E8** | Relay NVS **`relay`**: **`stroke`** + relay **`automatic-start`** | **M2-R1 PASS — 2026-10-28** |
 | ☐ | **M2-E9** | Cross-kind negative: **`stroke`** on motor NVS | Rejected |
 
-Publish copy-paste recipes in **`SomNet.Device/docs/SOMESP-STANDALONE.md`** — **side-by-side** hub Swagger/`POST /api/devices/commands` vs **`POST /api/local/commands`** (payloadJson identical; only auth/arm wrapper differs). Update [28](./28-Scheduled-Jobs-Local-Device-Integration.md) §3 to reference motor **`PairingSettingsDto`** / start payload builder rules.
+Publish copy-paste recipes in **`SomNet.Device/docs/SOMESP-STANDALONE.md`** — **M2-E runbook** ☑ (2026-10-28). Update [28](./28-Scheduled-Jobs-Local-Device-Integration.md) §3 to reference motor **`PairingSettingsDto`** / start payload builder rules — *open*.
 
 ---
 
 ### 6.6 Slice M2-F — Status, history, shell
 
 - [x] **M2-F1** **`GET /api/local/status`:** `automaticActive` + `busy` true when **motor** automatic or motor manual timed run active — **`actuatorKind`** echo on status.
-- [ ] **M2-F2** **`resultJson`** on status matches motor schema (segments, burst counts) — parity with hub.
-- [ ] **M2-F3** Local **history** entries for motor sessions (mode label / summary string for `/operate` History tab).
-- [ ] **M2-F4** PIN, arm/disarm, lock, Wi‑Fi loss policy — unchanged SE-D5/D6; motor sessions disarm-safe on abort.
-
-*(Maps legacy checklist rows **M2-F3** / **M2-F4**.)*
+- [x] **M2-F3** Local **history** entries for motor sessions (mode label / summary string for `/operate` History tab) — **`buildSummary`** motor branch (`env:somesp` LittleFS).
+- [x] **M2-F2** **`resultJson`** on status matches motor schema (segments, burst counts) — parity with hub. **Spot-check PASS — M2-R6 / Run D 2026-10-28.**
+- [x] **M2-F4** PIN, arm/disarm, lock, Wi‑Fi loss policy — unchanged SE-D5/D6. *(Verified with M2-C.)*
 
 ---
 
 ### 6.7 Slice M2-G — Build tag & documentation
 
-- [ ] **M2-G1** **`env:somesp` `FIRMWARE_VERSION`** policy — e.g. **`somesp-0.16.4-motor-burst-duty`** aligned with hub feature tag (or document intentional split).
-- [ ] **M2-G2** [27 — SomEsp](./27-SomEsp-Standalone-Device-Plan.md) — **§ Motor profile (M2)** + link here.
-- [ ] **M2-G3** [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md) — **Local API** subsection: parity statement (**M2-P0**); motor command keys + example payloads = §6.9–6.10; settings JSON documents **`motorManual` / `motorAutomatic` / `appOptions`**.
+- [x] **M2-G1** **`env:somesp` `FIRMWARE_VERSION`** — **`somesp-0.16.4-motor-burst-duty`** aligned with hub tag.
+- [ ] **M2-G2** [27 — SomEsp](./27-SomEsp-Standalone-Device-Plan.md) — **§ Motor profile (M2)** refresh (partial — see §4.1).
+- [x] **M2-G3** [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md) — **§6.11 Local LAN API** (**M2-P0**).
 - [ ] **M2-G4** [32 §9](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md#9-progress-summary) + root README when M2 signed.
 
 ---
@@ -558,12 +565,12 @@ After **M2-B–G** complete (minimum: **B + E + F1** and either **C** or curl-on
 
 | ☐ | Step | Pass |
 |---|------|------|
-| ☐ | **M2-R1** | Relay SomEsp smoke (**M2-E8**) on `actuatorKind: relay` |
-| ☐ | **M2-R2** | Motor manual (**M2-E1–E2**) |
-| ☐ | **M2-R3** | Motor automatic periodic + stop/abort (**M2-E3–E5**) |
-| ☐ | **M2-R4** | Motor bursts smoke (**M2-E7**) |
-| ☐ | **M2-R5** | **`/operate` motor UI** (**M2-C**) OR documented curl-only MVP |
-| ☐ | **M2-R6** | Status/history sane for motor (**M2-F1–F3**) |
+| ☑ | **M2-R1** | Relay SomEsp smoke (**M2-E8**) on `actuatorKind: relay` — **PASS 2026-10-28** |
+| ☑ | **M2-R2** | Motor manual (**M2-E1–E2**) — **2026-10-28** `/operate` |
+| ☑ | **M2-R3** | Motor automatic periodic + stop/abort (**M2-E3–E5**) — **2026-10-28** `/operate` |
+| ☑ | **M2-R4** | Motor bursts smoke (**M2-E7**) — **PASS 2026-10-28** |
+| ☑ | **M2-R5** | **`/operate` motor UI** (**M2-C**) — **2026-10-28** |
+| ☑ | **M2-R6** | Status/history for motor (**M2-F1–F3**) — **status/`resultJson` PASS**; **`GET /api/local/history`** → **`history_unavailable`** on **`env:dev`** (expected — LittleFS on **`env:somesp` only**; see SOMESP-STANDALONE) |
 
 → Fill **Phase M2 sign-off** below and §9.
 
@@ -571,11 +578,11 @@ After **M2-B–G** complete (minimum: **B + E + F1** and either **C** or curl-on
 
 | Field | Value |
 |-------|--------|
-| **Date** | |
-| **Signed by** | |
-| **Firmware version** | `somesp-*` + git |
-| **Hardware** | ☐ Motor module ☐ Relay module (both if regression) |
-| **Notes** | |
+| **Date** | 2026-10-28 — **Run D complete** (R1–R6); slice **M2-D** signed |
+| **Signed by** | Operator |
+| **Firmware version** | `0.16.4-motor-burst-duty` + local API (uncommitted) |
+| **Hardware** | ☑ Motor module ☑ Relay module (R1 relay smoke) |
+| **Notes** | Run D: relay smoke, motor bursts, settings budget (**D5/D6**), status/`resultJson` OK. History API **503 on dev** by design; optional **`somesp`** flash to exercise LittleFS **M2-F3** on bench. Open: **M2-E1–E6/E9** curl rows, **M2-G2/G4**, doc **28 §3**. |
 | **All M2 slices complete** | ☐ |
 
 ---
@@ -655,7 +662,7 @@ Update this table when a phase is signed off.
 | M1b | **Done** (modes + ramp + manual; bursts → **M1d**) | 2026-10-27 |
 | M1c | **Done** (pattern graph + segment telemetry) | 2026-10-27 |
 | M1d | **Signed off** (Run C) — **`0.16.4-motor-burst-duty`**; graph + relay recording parity | 2026-10-28 |
-| M2 | **In progress** — scoped checklist §6 (B–G); engine ☑ on local API; **operate UI + status gaps** | |
+| M2 | **Run D signed** — relay + motor LAN **`/operate`**; history list **`somesp` only**; curl runbook + **G2/G4** open | 2026-10-28 |
 | **X-6** | **Complete** (§2.3 S4) | 2026-10-27 |
 | **X-4** | **Done** (Run A) | 2026-10-27 |
 | M3 | Blocked on M2 | |
@@ -697,3 +704,6 @@ Update this table when a phase is signed off.
 | 2026-10-28 | **M2 scoped checklist** — §6 work packages B–G, as-built audit **M2-A**, Run **D** (M2-R1–R6) |
 | 2026-10-28 | **M2 implementation start** — **M2-F1** motor busy/automatic on `/api/local/status`; **M2-D** settings PUT validation (`motorManual`, `motorAutomatic`, `appOptions`); SOMESP-STANDALONE motor docs |
 | 2026-10-28 | **M1d sign-off** — Run C **M1d-C1–C7**; **`0.16.4-motor-burst-duty`** (MA-D28 duty bursts, burst ramp, live graph F10); motor + relay pattern graph recording lifecycle; **`motorSpeedSchedule.test.ts` burst preview (M1d-T2)**; canonical doc sweep |
+| 2026-10-28 | **M2-C sign-off** — operator **`/operate`** motor manual + automatic (LAN); Run D **M2-R2**, **M2-R3**, **M2-R5** checked |
+| 2026-10-28 | **M2-B/E/G/F3** — actuator profile docs; **M2-E curl runbook**; PROTOCOL **§6.11**; **`somesp-0.16.4-motor-burst-duty`**; unlock **`actuatorKind`**; motor history summaries |
+| 2026-10-28 | **Run D** — **M2-R1**, **M2-R4**, **M2-D5/D6** PASS; **M2-R6** status/`resultJson` PASS; **`history_unavailable`** on **`env:dev`** recorded as expected |

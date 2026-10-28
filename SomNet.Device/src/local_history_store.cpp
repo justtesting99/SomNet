@@ -95,6 +95,28 @@ void buildSummary(const char* resultJson, char* out, size_t outLen) {
             doc["requestedStrokes"] | doc["strokesCompleted"].as<int>());
         return;
     }
+    const char* actuator = doc["actuatorKind"] | "";
+    if (strcmp(actuator, "hbridge") == 0) {
+        if (strcmp(key, "motor-run") == 0 && doc["dutyPercent"].is<int>()) {
+            snprintf(out, outLen, "motor run %d%% duty", doc["dutyPercent"].as<int>());
+            return;
+        }
+        if (strcmp(key, "motor-stop") == 0) {
+            strncpy(out, "motor stop", outLen - 1);
+            return;
+        }
+        if ((strcmp(key, "automatic-stop") == 0 || strcmp(key, "automatic-session-complete") == 0) &&
+            doc["segmentsCompleted"].is<int>()) {
+            const int segs = doc["segmentsCompleted"].as<int>();
+            const int bursts = doc["burstEventsCompleted"] | 0;
+            if (bursts > 0) {
+                snprintf(out, outLen, "motor auto %d seg, %d bursts", segs, bursts);
+            } else {
+                snprintf(out, outLen, "motor auto %d seg", segs);
+            }
+            return;
+        }
+    }
     if (strcmp(key, "automatic-stop") == 0 && doc["strokesCompleted"].is<int>()) {
         snprintf(out, outLen, "auto %d strokes", doc["strokesCompleted"].as<int>());
         return;
