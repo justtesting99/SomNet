@@ -130,7 +130,7 @@ void renderStatus(
 
     if (kSomNetLocalOperateEnabled && !provisioningMode) {
         append(out, outLen, &offset,
-            "<div class=\"panel note\"><strong>Local control.</strong> "
+            "<div class=\"ui-panel\"><div class=\"ui-panel-hd\"><h2>Local control</h2></div><div class=\"ui-panel-bd note\">"
             "<a class=\"btn btn-primary\" href=\"/operate\">Control panel</a> "
             "(PIN unlock + arm).");
         if (kSomNetStandaloneBuild) {
@@ -138,15 +138,15 @@ void renderStatus(
         } else {
             append(out, outLen, &offset, " LAN mirror of hub commands when the hub is offline or for bench tests.");
         }
-        append(out, outLen, &offset, "</div>");
+        append(out, outLen, &offset, "</div></div>");
         if (showHubModeToggle) {
             append(out, outLen, &offset,
-                "<div class=\"panel\" id=\"hub-mode-panel\"><p><strong>Remote hub</strong></p>"
+                "<div class=\"ui-panel\" id=\"hub-mode-panel\"><div class=\"ui-panel-hd\"><h2>Remote hub</h2></div><div class=\"ui-panel-bd\">"
                 "<p class=\"note\">Switch off for LAN-only <code>/operate</code>. Switch on for SomNet UI / cloud commands "
                 "(pairing stays in NVS).</p>"
                 "<div class=\"switch-row\"><span>Connect SomNet hub</span>"
                 "<label class=\"switch\"><input type=\"checkbox\" id=\"hub-remote\"><span class=\"slider\"></span></label>"
-                "</div><p id=\"hub-mode-status\" class=\"note\"></p></div>");
+                "</div><p id=\"hub-mode-status\" class=\"note\"></p></div></div>");
         } else if (kSomNetStandaloneBuild && !somespHasServer) {
             append(out, outLen, &offset,
                 "<div class=\"panel\"><p><strong>SomNet server (one-time)</strong></p>"
@@ -172,21 +172,21 @@ void renderStatus(
             "<strong>somnetsetup</strong>, then open <a href=\"/config\">Configure</a>.</div>");
     }
 
-    append(out, outLen, &offset, "<div class=\"panel\"><p><strong>Device ID</strong>");
+    append(out, outLen, &offset, "<div class=\"ui-panel\"><div class=\"ui-panel-hd\"><h2>Device identity</h2></div><div class=\"ui-panel-bd\">");
     if (!kSomNetStandaloneBuild || somespHasServer) {
-        append(out, outLen, &offset, " (pair in SomNet)");
+        append(out, outLen, &offset, "<p class=\"note\">Pair in SomNet (Dom &rarr; Sub &rarr; Options &rarr; Hardware).</p>");
     }
-    append(out, outLen, &offset, "</p><div class=\"device-id\">");
+    append(out, outLen, &offset, "<p class=\"note\">Device ID</p><div class=\"device-id\">");
     append(out, outLen, &offset, escId);
     append(out, outLen, &offset, "</div>");
     if (!kSomNetStandaloneBuild || somespHasServer) {
         append(out, outLen, &offset,
             "<p class=\"note\">Dom account &rarr; select Sub &rarr; Options &rarr; Hardware device &rarr; paste this ID.</p>");
     }
-    append(out, outLen, &offset, "</div>");
+    append(out, outLen, &offset, "</div></div></div>");
 
     if (escFriendly[0] != '\0' || escInstaller[0] != '\0') {
-        append(out, outLen, &offset, "<div class=\"panel\">");
+        append(out, outLen, &offset, "<div class=\"ui-panel\"><div class=\"ui-panel-hd\"><h2>Site details</h2></div><div class=\"ui-panel-bd status-kv\">");
         if (escFriendly[0] != '\0') {
             append(out, outLen, &offset, "<p class=\"row\"><strong>Friendly name:</strong> ");
             append(out, outLen, &offset, escFriendly);
@@ -197,10 +197,10 @@ void renderStatus(
             append(out, outLen, &offset, escInstaller);
             append(out, outLen, &offset, "</p>");
         }
-        append(out, outLen, &offset, "</div>");
+        append(out, outLen, &offset, "</div></div>");
     }
 
-    append(out, outLen, &offset, "<div class=\"panel\">");
+    append(out, outLen, &offset, "<div class=\"ui-panel\"><div class=\"ui-panel-hd\"><h2>Connection &amp; hardware</h2></div><div class=\"ui-panel-bd status-kv\">");
     append(out, outLen, &offset, "<p class=\"row\"><strong>MAC:</strong> ");
     append(out, outLen, &offset, escMac);
     if (!kSomNetStandaloneBuild || somespHasServer) {
@@ -233,7 +233,7 @@ void renderStatus(
     } else {
         append(out, outLen, &offset, hubStateLabel != nullptr ? hubStateLabel : "offline");
     }
-    append(out, outLen, &offset, "</p></div>");
+    append(out, outLen, &offset, "</p></div></div>");
 
     append(out, outLen, &offset, "<p class=\"actions\">");
     if (kSomNetLocalOperateEnabled && !provisioningMode) {

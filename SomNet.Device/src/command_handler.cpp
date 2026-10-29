@@ -17,7 +17,7 @@
 #include "local_command_status.h"
 #include "local_operate.h"
 #endif
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#if SOMNET_LOCAL_OPERATE_ENABLED
 #include "local_history_store.h"
 #endif
 
@@ -254,10 +254,15 @@ void CommandHandler::sendAck(
         Serial.print(F(" success="));
         Serial.println(success ? F("true") : F("false"));
         localCommandStatusOnAck(correlationId, success, message, resultJson);
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
         if (resultJson != nullptr && resultJson[0] != '\0') {
-            localHistoryOnLocalAck(correlationId, success, message, resultJson);
+            const bool segmentTelemetry =
+                strcmp(correlationId, kMotorAutomaticSegmentCorrelationId) == 0 ||
+                strcmp(correlationId, kRelayAutomaticSegmentCorrelationId) == 0;
+            if (!segmentTelemetry) {
+                localHistoryOnLocalAck(correlationId, success, message, resultJson);
+            }
         }
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
         return;
 #endif
         // env:dev + hub: local /api/local poll still works; also forward to SignalR below.

@@ -82,6 +82,8 @@ label.chk{display:flex;align-items:center;gap:.5rem;font-weight:500}label.chk in
 .tone-checking{border-color:rgba(100,116,139,.5);background:rgba(30,41,59,.65);color:#cbd5e1}
 .tone-checking .dot{background:#94a3b8}
 .gate-screen{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:1.25rem;background:rgba(2,6,23,.92);backdrop-filter:blur(8px)}
+html.session-resume #gate{display:none!important}
+html.session-resume #main.app-shell.hidden{display:flex!important}
 .gate-card{width:100%;max-width:26rem}
 .gate-card .ui-panel-bd{padding:1.25rem}
 .dashboard-grid{display:grid;gap:1rem;align-items:start}
@@ -100,13 +102,15 @@ label.chk{display:flex;align-items:center;gap:.5rem;font-weight:500}label.chk in
 .header-toggle-label{font-size:.8125rem;font-weight:600;color:#cbd5e1}
 .header-toggle-state{font-size:.625rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
 .header-toggle.on .header-toggle-state{color:#a5b4fc}
-.toggle-switch{position:relative;width:2.5rem;height:1.35rem;flex-shrink:0}
-.toggle-switch input{opacity:0;width:0;height:0;position:absolute}
-.toggle-knob{position:absolute;inset:0;background:#334155;border-radius:999px;cursor:pointer;transition:background .2s}
+.toggle-switch{position:relative;width:2.5rem;height:1.35rem;flex-shrink:0;display:inline-block}
+.toggle-switch input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:2}
+.toggle-knob{position:absolute;inset:0;background:#334155;border-radius:999px;pointer-events:none;z-index:1;transition:background .2s}
 .toggle-knob:before{content:"";position:absolute;height:1rem;width:1rem;left:.2rem;bottom:.175rem;background:#e2e8f0;border-radius:50%;transition:transform .2s}
 .toggle-switch input:checked+.toggle-knob{background:#4f46e5}
 .toggle-switch input:checked+.toggle-knob:before{transform:translateX(1.05rem)}
-.toggle-switch input:disabled+.toggle-knob{opacity:.45;cursor:not-allowed}
+.toggle-switch input:disabled{cursor:not-allowed}
+.toggle-switch input:disabled+.toggle-knob{opacity:.45}
+.header-toggle.is-disabled{opacity:.65}
 .control-grid{display:grid;gap:1rem}
 @media(min-width:768px){.control-grid.cols-2{grid-template-columns:1fr 1fr}}
 .graph-panel canvas{width:100%;height:auto;display:block;border-radius:.5rem;background:#0f172a}
@@ -128,6 +132,15 @@ label.chk{display:flex;align-items:center;gap:.5rem;font-weight:500}label.chk in
 #hub-mode-status{font-size:.875rem;color:#a5b4fc;min-height:1.25rem}
 .layout-split{display:flex;flex-direction:column;gap:1rem}
 @media(min-width:768px){.layout-split{flex-direction:row;align-items:flex-start}.layout-split>.layout-col{flex:1;min-width:0}}
+.session-banner{border-radius:.75rem;border:1px solid rgba(99,102,241,.35);background:rgba(79,70,229,.12);color:#c7d2fe;padding:.65rem .85rem;font-size:.875rem;margin:0 0 1rem;line-height:1.4}
+.power-slider-grid{display:grid;gap:1rem;grid-template-columns:1fr;min-width:0}
+@media(min-width:640px){.power-slider-grid{grid-template-columns:1fr 1fr}}
+.power-slider-cell{min-width:0;padding:.25rem 0}
+.power-slider-label{font-size:.8125rem;font-weight:600;color:#cbd5e1;margin:0 0 .35rem;text-align:center}
+.power-slider-val{text-align:center;margin:.35rem 0 0;font-size:.8125rem}
+.status-kv{display:grid;gap:.35rem;margin:0}
+.status-kv p{margin:.25rem 0;font-size:.875rem}
+.status-kv strong{color:#e2e8f0;font-weight:600}
 )raw";
 
 void appendProgmemStr(char* out, size_t outLen, size_t* offset, const char* progmemText) {

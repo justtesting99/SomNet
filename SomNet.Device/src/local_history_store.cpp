@@ -1,6 +1,8 @@
 #include "local_history_store.h"
 
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#include "config.h"
+
+#if SOMNET_LOCAL_OPERATE_ENABLED
 
 #include "nvs_store.h"
 #include "wifi_manager.h"

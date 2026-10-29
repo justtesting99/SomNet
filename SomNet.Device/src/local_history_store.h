@@ -5,7 +5,9 @@
 class NvsStore;
 class WifiManager;
 
-#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#include "config.h"
+
+#if SOMNET_LOCAL_OPERATE_ENABLED
 
 constexpr size_t kLocalHistoryMaxSessions = 30;
 

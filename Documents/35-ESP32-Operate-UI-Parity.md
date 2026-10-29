@@ -14,6 +14,14 @@ Documents/35-ESP32-Operate-UI-Parity.md
 
 Product idea (not implemented): one **master** ESP serves `/operate` for multiple **slave** devices on the LAN. Focus dropdown would list slaves; slaves would expose read-only or relay-only endpoints. Document here for planning when multi-device standalone returns.
 
+## Roadmap (feature branch)
+
+- [x] External stylesheet `/ui/somnet.css` (avoids HTML buffer overflow)
+- [x] Automatic min/max **power** and motor **speed** range sliders with stroke/ms hints
+- [x] **Session running** banner during automatic
+- [x] **Live graph** from `relay-automatic-segment` / `motor-automatic-segment` in `/api/local/status` `resultJson` (yellow now marker)
+- [x] Status page **ui-panel** layout polish
+
 ## Out of scope (unchanged)
 
 - Video, Dom/Sub auth, Accessory toggle (no `/api/local/accessory`), full React graph parity, hub segment store.

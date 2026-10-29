@@ -9,7 +9,8 @@ namespace {
 
 // Body HTML (shared CSS streamed separately in handleOperateGet).
 constexpr char kOperateHtml[] PROGMEM = R"raw(
-</head><body><div class="shell-bg"></div>
+</head><body><script>try{if(sessionStorage.getItem('somesp-bearer'))document.documentElement.classList.add('session-resume');}catch(e){}</script>
+<div class="shell-bg"></div>
 <div id="gate" class="gate-screen">
 <div class="gate-card ui-panel"><div class="ui-panel-hd"><h2>Unlock control panel</h2></div><div class="ui-panel-bd">
 <label>Actuator profile<select id="act-kind">
@@ -40,7 +41,7 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <div class="dashboard-controls">
 <div class="ui-panel"><div class="ui-panel-hd">
 <div style="flex:1;min-width:0"><h2 id="device-panel-title">Relay · …</h2>
-<p class="note" id="device-panel-sub" style="margin:0;font-size:.75rem">Loading device…</p></div>
+<p class="note hidden" id="device-panel-sub" style="margin:0;font-size:.75rem"></p></div>
 <label class="focus-label" style="max-width:14rem">Focus device<select id="focus-device" class="focus-select"><option value="">Loading…</option></select></label>
 </div><div class="ui-panel-bd">
 <div class="device-toolbar">
@@ -49,6 +50,7 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <div id="scene-toggle-wrap" class="header-toggle"><span class="header-toggle-label">Scene</span><span class="header-toggle-state" id="scene-state">Off</span><label class="toggle-switch"><input type="checkbox" id="scene-on"><span class="toggle-knob"></span></label></div>
 </div>
 <p class="note hidden" id="arm-hint">Unlocked — press D33 once (same as hub mode). Status shows <strong>ready</strong>, then enable Scene above.</p>
+<p id="auto-session-banner" class="session-banner hidden" role="status">Session running — changes apply after the current stroke. Use Stop to end gracefully; Abort stops immediately.</p>
 <div id="tab-manual">
 <div id="relay-manual-panel" class="profile-relay control-grid cols-2 layout-split">
 <div class="layout-col ui-panel"><div class="ui-panel-hd"><h2>Power settings</h2></div><div class="ui-panel-bd">
@@ -98,8 +100,14 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 </div></div>
 <div class="ui-panel"><div class="ui-panel-hd"><h2>Power settings</h2></div><div class="ui-panel-bd">
 <div class="row"><label>Minimum stroke (ms)<input id="a-minms" type="number" value="25"></label><label>Maximum stroke (ms)<input id="a-maxms" type="number" value="400"></label></div>
-<div class="row"><label>Minimum power %<input id="a-minp" type="number" min="0" max="100" value="0"></label>
-<label>Maximum power %<input id="a-maxp" type="number" min="0" max="100" value="100"></label></div>
+<div class="power-slider-grid">
+<div class="power-slider-cell"><p class="power-slider-label">Minimum power</p>
+<input id="a-minp" type="range" min="0" max="100" value="0">
+<p class="note power-slider-val"><span id="a-minp-val">0</span>% · ~ <span id="a-minp-ms">25</span> ms</p></div>
+<div class="power-slider-cell"><p class="power-slider-label">Maximum power</p>
+<input id="a-maxp" type="range" min="0" max="100" value="100">
+<p class="note power-slider-val"><span id="a-maxp-val">100</span>% · ~ <span id="a-maxp-ms">400</span> ms</p></div>
+</div>
 </div></div>
 <div class="ui-panel"><div class="ui-panel-hd"><h2>Timing settings</h2></div><div class="ui-panel-bd">
 <p class="note" style="margin-top:0">Time between strokes</p>
@@ -144,8 +152,14 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <div class="ui-panel"><div class="ui-panel-hd"><h2>Speed settings</h2></div><div class="ui-panel-bd">
 <div class="row"><label>Min duty %<input id="ma-dmin" type="number" min="0" max="100" value="20"></label>
 <label>Max duty %<input id="ma-dmax" type="number" min="0" max="100" value="80"></label></div>
-<div class="row"><label>Min speed %<input id="ma-smin" type="number" min="0" max="100" value="0"></label>
-<label>Max speed %<input id="ma-smax" type="number" min="0" max="100" value="100"></label></div>
+<div class="power-slider-grid">
+<div class="power-slider-cell"><p class="power-slider-label">Minimum speed</p>
+<input id="ma-smin" type="range" min="0" max="100" value="0">
+<p class="note power-slider-val"><span id="ma-smin-val">0</span>%</p></div>
+<div class="power-slider-cell"><p class="power-slider-label">Maximum speed</p>
+<input id="ma-smax" type="range" min="0" max="100" value="100">
+<p class="note power-slider-val"><span id="ma-smax-val">100</span>%</p></div>
+</div>
 </div></div>
 <div class="ui-panel"><div class="ui-panel-hd"><h2>Timing settings</h2></div><div class="ui-panel-bd">
 <div class="row"><label>Segment min (sec)<input id="ma-segmin" type="number" min="1" value="5"></label>
@@ -235,6 +249,10 @@ var deviceSaveTimer=null;
 var capsProfile='relay';
 var graphTimer=null;
 var focusDeviceId='';
+var liveSegments=[];
+var lastLiveSegmentIndex=-1;
+var graphNowSec=null;
+var sceneTogglePending=false;
 var MOTOR_MANUAL_KEY='somnet-local-motor-manual';
 var MOTOR_AUTO_KEY='somnet-local-motor-automatic';
 var APP_OPTIONS_KEY='somnet-local-app-options';
@@ -277,18 +295,61 @@ function syncSceneToggleUi(on){
   var st=$('scene-state');
   if(st)st.textContent=on?'On':'Off';
 }
+function updateSceneControlFromStatus(s){
+  var el=$('scene-on');
+  var wrap=$('scene-toggle-wrap');
+  if(!el||!s)return;
+  var wantOn=!!s.sceneActive;
+  if(!sceneTogglePending){
+    el.checked=wantOn;
+    syncSceneToggleUi(wantOn);
+  }
+  var blockEnable=!s.subReady&&!wantOn;
+  el.disabled=blockEnable;
+  if(wrap){
+    wrap.classList.toggle('is-disabled',blockEnable);
+    wrap.title=blockEnable?'Press device button (D33) once — status shows Ready — then turn Scene on.':'';
+  }
+}
+function endSessionResume(){
+  document.documentElement.classList.remove('session-resume');
+}
 function showMain(on){
+  endSessionResume();
   $('gate').classList.toggle('hidden',on);
   $('main').classList.toggle('hidden',!on);
   $('btn-lock').classList.toggle('hidden',!token);
   $('arm-hint').classList.toggle('hidden',!token);
   if(on)scheduleGraphUpdate();
 }
+function lockUi(message){
+  token='';
+  sessionStorage.removeItem(TOKEN_KEY);
+  endSessionResume();
+  showMain(false);
+  if(message)setStatus(message);
+  setStatusPill('checking','Locked');
+  refreshDevicePanelHeader(null);
+}
+function ensureDeviceSession(status){
+  if(!token)return true;
+  if(status&&status.unlocked)return true;
+  lockUi('PIN session ended (reboot or lock) — unlock again, then press D33');
+  return false;
+}
 function deviceConnectionLabel(s){
-  if(!token)return 'locked';
-  if(s&&(s.busy||s.automaticActive))return 'busy';
-  if(s&&s.wifiConnected===false)return 'offline';
+  if(!token||!(s&&s.unlocked))return 'locked';
+  if(s.busy||s.automaticActive)return 'busy';
+  if(s.wifiConnected===false)return 'offline';
   return 'online';
+}
+function devicePanelReadinessLine(s){
+  if(!token||!s)return '';
+  if(s.busy||s.automaticActive)return s.automaticActive?'Automatic session running':'Busy';
+  if(s.sceneActive)return 'Scene session on';
+  if(s.subReady)return 'Ready for commands';
+  if(s.unlocked)return 'Press device button (D33)';
+  return '';
 }
 function refreshDevicePanelHeader(status){
   var title=$('device-panel-title');
@@ -297,8 +358,12 @@ function refreshDevicePanelHeader(status){
   var kind=capsProfile==='hbridge'?'Motor':'Relay';
   var id=focusDeviceId||'…';
   var conn=status?deviceConnectionLabel(status):'…';
-  title.textContent=kind+' · '+id;
-  if(sub)sub.textContent='('+conn+') — local device';
+  title.textContent=kind+' · '+id+' ('+conn+')';
+  if(sub){
+    var line=devicePanelReadinessLine(status);
+    sub.textContent=line;
+    sub.classList.toggle('hidden',!line);
+  }
 }
 async function refreshFocusDevice(liveStatus){
   var sel=$('focus-device');
@@ -581,6 +646,7 @@ function onMotorManualFieldChange(){
 function onMotorAutoFieldChange(){
   applyMotorRules();
   applyMotorBurstRules();
+  refreshAutoPowerLabels();
   persistAllOperateSettings();
   queueAutoUpdate();
   scheduleGraphUpdate();
@@ -667,6 +733,7 @@ function queueAutoUpdate(){
 function onAutoFieldChange(){
   applyRules();
   applyBurstRules();
+  refreshAutoPowerLabels();
   persistAllOperateSettings();
   queueAutoUpdate();
   scheduleGraphUpdate();
@@ -675,6 +742,9 @@ async function api(path,opt){
   opt=opt||{};var h=headers();if(opt.headers)Object.assign(h,opt.headers);
   var r=await fetch(path,{method:opt.method||'GET',headers:h,body:opt.body});
   var j=null;try{j=await r.json();}catch(e){}
+  if(r.status===401&&token){
+    lockUi('Session expired — enter PIN again, then press D33');
+  }
   if(!r.ok)throw new Error((j&&j.error)||r.status);
   return j;
 }
@@ -777,6 +847,69 @@ function onManualFieldChange(){
   persistAllOperateSettings();
   scheduleGraphUpdate();
 }
+function refreshAutoPowerLabels(){
+  if($('a-minp-val'))$('a-minp-val').textContent=$('a-minp').value;
+  if($('a-maxp-val'))$('a-maxp-val').textContent=$('a-maxp').value;
+  if($('a-minp-ms'))$('a-minp-ms').textContent=strokeMs($('a-minp').value,$('a-minms').value,$('a-maxms').value);
+  if($('a-maxp-ms'))$('a-maxp-ms').textContent=strokeMs($('a-maxp').value,$('a-minms').value,$('a-maxms').value);
+  if($('ma-smin-val'))$('ma-smin-val').textContent=$('ma-smin').value;
+  if($('ma-smax-val'))$('ma-smax-val').textContent=$('ma-smax').value;
+}
+function clearLiveGraph(){
+  liveSegments=[];lastLiveSegmentIndex=-1;graphNowSec=null;
+}
+function tryIngestLiveSegment(status){
+  if(!status||!status.resultJson)return;
+  try{
+    var parsed=JSON.parse(status.resultJson);
+    var idx=+parsed.segmentIndex;
+    if(!isFinite(idx)||idx<=lastLiveSegmentIndex)return;
+    if(parsed.commandKey==='relay-automatic-segment'){
+      lastLiveSegmentIndex=idx;
+      liveSegments.push({phase:parsed.phase,powerPercent:+parsed.powerPercent,durationMs:+parsed.durationMs,programElapsedMs:+parsed.programElapsedMs});
+      graphNowSec=(+parsed.programElapsedMs+(+parsed.durationMs))/1000;
+      scheduleGraphUpdate();
+    }else if(parsed.commandKey==='motor-automatic-segment'){
+      lastLiveSegmentIndex=idx;
+      liveSegments.push({fromSpeed:+parsed.fromSpeedPercent,toSpeed:+parsed.toSpeedPercent,durationMs:+parsed.durationMs,programElapsedMs:+parsed.programElapsedMs});
+      graphNowSec=(+parsed.programElapsedMs+(+parsed.durationMs))/1000;
+      scheduleGraphUpdate();
+    }
+  }catch(e){}
+}
+function buildLiveGraphSchedule(){
+  if(!liveSegments.length||activeOperateMode()!=='auto')return null;
+  var horizon=PREVIEW_HORIZON;
+  var label=isMotorProfile()?'Speed %':'Power %';
+  if(isMotorProfile())horizon=autoHorizonSecMotor(normalizeMotorAuto(readMotorAutoSnapshot()));
+  else horizon=autoHorizonSecRelay(readAutoSnapshot());
+  var pts=[];
+  if(isMotorProfile()){
+    pts.push({t:0,v:liveSegments[0].fromSpeed||0});
+    for(var i=0;i<liveSegments.length;i++){
+      var seg=liveSegments[i];
+      var t0=seg.programElapsedMs/1000;
+      var t1=t0+seg.durationMs/1000;
+      pts.push({t:t0,v:seg.fromSpeed});pts.push({t:t0,v:seg.toSpeed});pts.push({t:t1,v:seg.toSpeed});
+      horizon=Math.max(horizon,t1+5);
+    }
+  }else{
+    pts.push({t:0,v:0});
+    var level=0;
+    for(var j=0;j<liveSegments.length;j++){
+      var r=liveSegments[j];
+      var rs=r.programElapsedMs/1000;
+      var re=rs+r.durationMs/1000;
+      var target=r.phase==='stroke'?r.powerPercent:0;
+      if(rs>pts[pts.length-1].t)pts.push({t:rs,v:level});
+      if(target!==level){pts.push({t:rs,v:level});pts.push({t:rs,v:target});}
+      pts.push({t:re,v:target});
+      level=target;
+      horizon=Math.max(horizon,re+5);
+    }
+  }
+  return {points:pts,horizon:horizon,label:label,nowSec:graphNowSec,live:true};
+}
 function activeOperateMode(){
   return $('tab-auto').classList.contains('hidden')?'manual':'auto';
 }
@@ -797,8 +930,129 @@ function lerpInt(a,b,t){return Math.round(a+(b-a)*Math.min(1,Math.max(0,t)));}
 function triangle01(p){p=p-Math.floor(p);if(p<0)p+=1;return p<0.5?p*2:2-p*2;}
 function autoHorizonSecRelay(s){
   if(s.endSessionMode==='minutes')return Math.max(60,s.endSessionValue*60);
-  if(s.endSessionMode==='strokes')return Math.max(60,s.endSessionValue*8);
+  if(s.endSessionMode==='strokes'){
+    var avgGap=(s.strokeMinSeconds+s.strokeMaxSeconds)/2;
+    var strokeSec=strokeMs(s.maximumPower,s.minimumStrokeMs,s.maximumStrokeMs)/1000;
+    return Math.max(30,s.endSessionValue*(avgGap+strokeSec));
+  }
   return PREVIEW_HORIZON;
+}
+function pushGraphPoint(points,t,v){
+  var last=points[points.length-1];
+  if(last&&last.t===t&&last.v===v)return;
+  points.push({t:t,v:v});
+}
+function relayPeriodicStrokeRow(s){
+  return {powerPercent:s.maximumPower,gapSec:s.strokeMaxSeconds};
+}
+function relayRandomStrokeRow(s,strokeIndex,seed){
+  var lo=Math.min(s.minimumPower,s.maximumPower);
+  var hi=Math.max(s.minimumPower,s.maximumPower);
+  var rand=seededRand((seed+strokeIndex*9973)>>>0);
+  if(s.automaticMode==='randomPowerOnly'){
+    return {powerPercent:lo+Math.floor(rand()*(hi-lo+1)),gapSec:s.strokeMaxSeconds};
+  }
+  if(s.automaticMode==='randomTimingOnly'){
+    return {powerPercent:hi,gapSec:s.strokeMinSeconds+Math.floor(rand()*(s.strokeMaxSeconds-s.strokeMinSeconds+1))};
+  }
+  if(s.automaticMode==='randomPowerAndTiming'){
+    return {powerPercent:lo+Math.floor(rand()*(hi-lo+1)),gapSec:s.strokeMinSeconds+Math.floor(rand()*(s.strokeMaxSeconds-s.strokeMinSeconds+1))};
+  }
+  return relayPeriodicStrokeRow(s);
+}
+function relayWaveStrokeRow(s,strokeIndex,seed,elapsedSec,tWaveSec){
+  var phase=(elapsedSec/tWaveSec+seed/4294967296)%1;
+  return {
+    powerPercent:lerpInt(s.minimumPower,s.maximumPower,triangle01(phase)),
+    gapSec:s.strokeMaxSeconds
+  };
+}
+function relayBuildUpStrokeRow(s,strokeIndex,count,seed){
+  var rowPhase=count>1?strokeIndex/(count-1):0;
+  var t=Math.min(1,rowPhase+seed/4294967296);
+  return {
+    powerPercent:lerpInt(s.minimumPower,s.maximumPower,t),
+    gapSec:lerpInt(s.strokeMaxSeconds,s.strokeMinSeconds,t)
+  };
+}
+function relayPreviewStrokeCount(s,nominalGap){
+  if(s.endSessionMode==='strokes'&&s.endSessionValue>0)return s.endSessionValue;
+  if(s.endSessionMode==='minutes'&&s.endSessionValue>0&&nominalGap>0){
+    return Math.floor((s.endSessionValue*60)/nominalGap)+1;
+  }
+  return Math.floor(PREVIEW_HORIZON/Math.max(1,nominalGap));
+}
+function appendRelayStrokePulse(points,tSec,level,powerPercent,state,horizon){
+  var ms=strokeMs(powerPercent,state.minimumStrokeMs,state.maximumStrokeMs);
+  var strokeSec=Math.max(0.001,ms/1000);
+  var strokeEnd=Math.min(tSec+strokeSec,horizon);
+  if(powerPercent!==level){
+    pushGraphPoint(points,tSec,level);
+    pushGraphPoint(points,tSec,powerPercent);
+  }else pushGraphPoint(points,tSec,level);
+  pushGraphPoint(points,strokeEnd,powerPercent);
+  return {tSec:strokeEnd,level:powerPercent};
+}
+function appendRelayGapInterval(points,tSec,level,gapSec,horizon){
+  var gapEnd=Math.min(tSec+Math.max(0,gapSec),horizon);
+  if(level!==0){
+    pushGraphPoint(points,tSec,level);
+    pushGraphPoint(points,tSec,0);
+  }else pushGraphPoint(points,tSec,0);
+  pushGraphPoint(points,gapEnd,0);
+  return {tSec:gapEnd,level:0};
+}
+function hashRelayScheduleSeed(s){
+  return hashSeed([
+    s.automaticMode,s.minimumPower,s.maximumPower,s.strokeMinSeconds,s.strokeMaxSeconds,
+    s.minimumStrokeMs,s.maximumStrokeMs,s.delayBeforeStartSeconds,s.endSessionMode,s.endSessionValue,
+    s.burstsOn,s.burstPlacement,s.burstPercent,s.burstStyle
+  ].join('|'));
+}
+function buildRelayAutoPreview(state){
+  var horizon=autoHorizonSecRelay(state);
+  var seed=hashRelayScheduleSeed(state);
+  var avgGap=(state.strokeMinSeconds+state.strokeMaxSeconds)/2;
+  var fixedGap=state.strokeMaxSeconds;
+  var count=relayPreviewStrokeCount(state,state.automaticMode==='powerWave'?fixedGap:avgGap);
+  var points=[];
+  var tSec=0;
+  if(state.delayBeforeStartSeconds>0){
+    pushGraphPoint(points,0,0);
+    tSec=state.delayBeforeStartSeconds;
+    pushGraphPoint(points,tSec,0);
+  }else pushGraphPoint(points,0,0);
+  var strokeIndex=0;
+  var level=0;
+  var waveElapsed=0;
+  var tWaveSec=(state.endSessionMode==='minutes'&&state.endSessionValue>0)
+    ?state.endSessionValue*60*2:Math.max(2,count*fixedGap);
+  while(tSec<horizon){
+    var row;
+    if(state.automaticMode==='powerWave'){
+      row=relayWaveStrokeRow(state,strokeIndex,seed,waveElapsed,tWaveSec);
+      waveElapsed+=row.gapSec;
+    }else if(state.automaticMode==='buildUp'){
+      row=relayBuildUpStrokeRow(state,strokeIndex,count,seed);
+    }else if(state.automaticMode==='periodic'){
+      row=relayPeriodicStrokeRow(state);
+    }else{
+      row=relayRandomStrokeRow(state,strokeIndex,seed);
+    }
+    var main=appendRelayStrokePulse(points,tSec,level,row.powerPercent,state,horizon);
+    tSec=main.tSec;
+    level=main.level;
+    if(tSec>=horizon)break;
+    var gap=appendRelayGapInterval(points,tSec,level,row.gapSec,horizon);
+    tSec=gap.tSec;
+    level=gap.level;
+    strokeIndex++;
+    if(state.endSessionMode==='strokes'&&strokeIndex>=state.endSessionValue)break;
+    if(state.automaticMode==='powerWave'&&strokeIndex>=count)break;
+  }
+  var last=points[points.length-1];
+  if(!last||last.t!==horizon)pushGraphPoint(points,horizon,level);
+  return {points:points,horizon:horizon,label:'Power %'};
 }
 function autoHorizonSecMotor(s){
   if(s.endSessionMode==='minutes')return Math.max(60,s.endSessionValue*60);
@@ -840,22 +1094,7 @@ function buildPreviewPoints(){
     return {points:pts,horizon:horizon,label:'Power %'};
   }
   var snap=readAutoSnapshot();
-  horizon=autoHorizonSecRelay(snap);
-  var rnd2=seededRand(hashSeed(JSON.stringify(snap)));
-  var tt=snap.delayBeforeStartSeconds||0;
-  pts.push({t:0,v:snap.minimumPower});
-  while(tt<horizon){
-    var gap=snap.strokeMinSeconds;
-    if(snap.strokeMaxSeconds>snap.strokeMinSeconds)gap=snap.strokeMinSeconds+Math.floor(rnd2()*(snap.strokeMaxSeconds-snap.strokeMinSeconds+1));
-    var end=Math.min(horizon,tt+gap);
-    var pv;
-    if(snap.automaticMode==='periodic'||snap.automaticMode==='powerWave')pv=lerpInt(snap.minimumPower,snap.maximumPower,triangle01(tt/50));
-    else if(snap.automaticMode==='randomTimingOnly')pv=snap.maximumPower;
-    else pv=lerpInt(snap.minimumPower,snap.maximumPower,rnd2());
-    pts.push({t:end,v:pv});
-    tt=end;
-  }
-  return {points:pts,horizon:horizon,label:'Power %'};
+  return buildRelayAutoPreview(snap);
 }
 function drawPatternGraph(){
   var canvas=$('pattern-graph');
@@ -863,7 +1102,8 @@ function drawPatternGraph(){
   var ctx=canvas.getContext('2d');
   var w=canvas.width,h=canvas.height;
   var padL=36,padR=12,padT=10,padB=26;
-  var sched=buildPreviewPoints();
+  var sched=buildLiveGraphSchedule();
+  if(!sched)sched=buildPreviewPoints();
   var pts=sched.points;
   var horizon=sched.horizon||PREVIEW_HORIZON;
   ctx.clearRect(0,0,w,h);
@@ -886,13 +1126,28 @@ function drawPatternGraph(){
     if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
   }
   ctx.stroke();
+  if(sched.nowSec!=null&&sched.nowSec>=0){
+    var nx=padL+(sched.nowSec/horizon)*(w-padL-padR);
+    if(nx>=padL&&nx<=w-padR){
+      ctx.strokeStyle='#fbbf24';
+      ctx.lineWidth=1.5;
+      ctx.beginPath();
+      ctx.moveTo(nx,padT);
+      ctx.lineTo(nx,h-padB);
+      ctx.stroke();
+    }
+  }
   ctx.fillStyle='#64748b';
   ctx.font='10px system-ui,sans-serif';
   ctx.fillText('0',padL-8,h-padB+14);
   ctx.fillText(Math.round(horizon)+'s',w-padR-24,h-padB+14);
-  ctx.fillText(sched.label||'',padL,padT+8);
+  ctx.fillText((sched.live?'Live · ':'Preview · ')+(sched.label||''),padL,padT+8);
   var cap=$('graph-caption');
-  if(cap)cap.textContent='Preview — '+sched.label+' over ~'+Math.round(horizon)+'s (illustrative; seeded from settings).';
+  if(cap){
+    cap.textContent=sched.live
+      ?('Recording '+liveSegments.length+' segment(s) from device telemetry. Yellow line = now.')
+      :('Preview — '+sched.label+' over ~'+Math.round(horizon)+'s (illustrative; seeded from settings).');
+  }
 }
 function scheduleGraphUpdate(){
   if(graphTimer)clearTimeout(graphTimer);
@@ -900,7 +1155,8 @@ function scheduleGraphUpdate(){
 }
 async function poll(){
   try{
-    var s=await api('/api/local/status');
+    var s=await fetch('/api/local/status').then(function(r){return r.json();});
+    if(!ensureDeviceSession(s))return;
     var parts=[];
     if(s.sceneActive)parts.push('scene');
     else if(s.subReady)parts.push('ready');
@@ -928,17 +1184,27 @@ async function poll(){
       sel.options[0].textContent=kindLabel+' · '+focusDeviceId+' ('+deviceConnectionLabel(s)+')';
     }
     if($('scene-on')){
-      $('scene-on').checked=!!s.sceneActive;
-      syncSceneToggleUi(!!s.sceneActive);
-      $('scene-on').disabled=!s.subReady||!!(s.busy||s.automaticActive);
+      updateSceneControlFromStatus(s);
     }
     $('btn-auto-start').disabled=!!(s.busy||s.automaticActive);
     if(s.automaticActive&&!autoLiveActive){
       autoLiveActive=true;
+      clearLiveGraph();
       lastPushedAuto=autoPayload();
     }else if(!s.automaticActive&&autoLiveActive){
       autoLiveActive=false;
       lastPushedAuto=null;
+    }
+    if(s.automaticActive)tryIngestLiveSegment(s);
+    var banner=$('auto-session-banner');
+    if(banner){
+      var showBanner=s.automaticActive&&activeOperateMode()==='auto';
+      banner.classList.toggle('hidden',!showBanner);
+      if(showBanner&&$('a-bursts')&&$('a-bursts').checked&&!isMotorProfile()){
+        banner.textContent='Session running — Stop finishes the current burst; Abort cuts off immediately.';
+      }else if(showBanner){
+        banner.textContent='Session running — changes apply after the current stroke. Use Stop to end gracefully; Abort stops immediately.';
+      }
     }
     var needsFastPoll=!!(s.busy||s.automaticActive||(s.unlocked&&!s.subReady));
     if(needsFastPoll){if(!pollTimer)pollTimer=setInterval(poll,800);}
@@ -969,6 +1235,7 @@ $('motor-auto-panel').querySelectorAll('input,select').forEach(function(el){
   if(el.type==='number'||el.type==='range')el.addEventListener('input',onMotorAutoFieldChange);
 });
 applyMotorRules();applyMotorBurstRules();
+refreshAutoPowerLabels();
 function activateTab(tab){
   if(tab==='hist')tab='manual';
   document.querySelectorAll('.tab').forEach(function(t){
@@ -1004,7 +1271,14 @@ async function loadHistory(){
       };
       ul.appendChild(li);
     });
-  }catch(e){$('hist-detail').textContent=e.message;}
+    if(!(j.items&&j.items.length))$('hist-detail').textContent='No sessions recorded yet.';
+  }catch(e){
+    var msg=e.message||String(e);
+    if(msg==='history_unavailable'){
+      msg='Session history is not available (filesystem not mounted). Reflash with the latest firmware; new sessions will be recorded after that.';
+    }
+    $('hist-detail').textContent=msg;
+  }
 }
 $('btn-hist-refresh').onclick=loadHistory;
 $('btn-hist-clear').onclick=async function(){try{await api('/api/local/history',{method:'DELETE'});loadHistory();}catch(e){setStatus(e.message);}};
@@ -1024,11 +1298,21 @@ $('btn-unlock').onclick=async function(){
 };
 $('btn-lock').onclick=async function(){try{await api('/api/local/lock',{method:'POST'});token='';sessionStorage.removeItem(TOKEN_KEY);showMain(false);setStatus('Locked');}catch(e){setStatus(e.message);}};
 $('scene-on').onchange=async function(){
+  if(sceneTogglePending||$('scene-on').disabled)return;
+  var want=$('scene-on').checked;
+  sceneTogglePending=true;
+  syncSceneToggleUi(want);
   try{
-    await api('/api/local/scene',{method:'POST',body:JSON.stringify({active:$('scene-on').checked})});
-    syncSceneToggleUi($('scene-on').checked);
+    await api('/api/local/scene',{method:'POST',body:JSON.stringify({active:want})});
+    setStatus(want?'Scene session on':'Scene session off');
     await poll();
-  }catch(e){setStatus(e.message);$('scene-on').checked=!$('scene-on').checked;syncSceneToggleUi($('scene-on').checked);}
+  }catch(e){
+    $('scene-on').checked=!want;
+    syncSceneToggleUi(!want);
+    setStatus(e.message||'Scene update failed');
+  }finally{
+    sceneTogglePending=false;
+  }
 };
 $('btn-stroke').onclick=async function(){
   if(isMotorProfile())return;
@@ -1058,6 +1342,7 @@ $('btn-auto-start').onclick=async function(){
     if(isMotorProfile())saveMotorSettings();else saveAutoSettings();
     var p=autoPayload();
     await cmd('automatic-start',p);
+    clearLiveGraph();
     lastPushedAuto=p;
     setStatus('Automatic started');
     poll();
@@ -1086,8 +1371,24 @@ $('btn-act-kind').onclick=async function(){
     setStatus(j.reboot?'Profile saved — rebooting…':'Profile unchanged');
   }catch(e){setStatus(e.message);}
 };
-if(token){showMain(true);applyDeviceSettingsFromNvs().then(function(){return poll();});}
-refreshFocusDevice();
+async function bootstrapOperateSession(){
+  if(!token){endSessionResume();showMain(false);refreshFocusDevice();return;}
+  try{
+    var s=await fetch('/api/local/status').then(function(r){return r.json();});
+    if(!s.unlocked){
+      lockUi('PIN session ended (reboot or lock) — unlock again, then press D33');
+      refreshFocusDevice();
+      return;
+    }
+    showMain(true);
+    await applyDeviceSettingsFromNvs();
+    await poll();
+  }catch(e){
+    lockUi('');
+  }
+  refreshFocusDevice();
+}
+bootstrapOperateSession();
 })();
 </script></body></html>
 )raw";
