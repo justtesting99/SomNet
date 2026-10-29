@@ -21,7 +21,8 @@ void appendShellHeader(
     size_t outLen,
     size_t* offset,
     const char* activePage,
-    bool includeOperateLink);
+    bool includeOperateLink,
+    bool includeStatusPill = false);
 
 void appendShellMainOpen(char* out, size_t outLen, size_t* offset, bool wide);
 void appendShellClose(char* out, size_t outLen, size_t* offset);

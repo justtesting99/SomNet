@@ -141,6 +141,11 @@ html.session-resume #main.app-shell.hidden{display:flex!important}
 .status-kv{display:grid;gap:.35rem;margin:0}
 .status-kv p{margin:.25rem 0;font-size:.875rem}
 .status-kv strong{color:#e2e8f0;font-weight:600}
+.status-dashboard{display:grid;gap:1rem;align-items:start}
+@media(min-width:900px){.status-dashboard{grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:1.25rem}}
+.status-dashboard-aside{min-width:0}
+@media(min-width:900px){.status-dashboard-aside{position:sticky;top:4.75rem}}
+.status-actions-bar{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem}
 )raw";
 
 void appendProgmemStr(char* out, size_t outLen, size_t* offset, const char* progmemText) {
@@ -191,7 +196,8 @@ void appendShellHeader(
     size_t outLen,
     size_t* offset,
     const char* activePage,
-    bool includeOperateLink) {
+    bool includeOperateLink,
+    bool includeStatusPill) {
     append(out, outLen, offset, "</head><body><div class=\"shell-bg\"></div><div class=\"app-shell\">");
     append(out, outLen, offset, "<header class=\"shell-header\"><div class=\"shell-header-inner wide\">");
     append(out, outLen, offset, "<div class=\"shell-brand\"><div class=\"brand-title\">");
@@ -203,6 +209,15 @@ void appendShellHeader(
         offset,
         kSomNetStandaloneBuild ? "Standalone device" : "Device status");
     append(out, outLen, offset, "</div></div>");
+    if (includeStatusPill) {
+        append(
+            out,
+            outLen,
+            offset,
+            "<div id=\"status-pill\" class=\"status-pill tone-checking\" role=\"status\">"
+            "<div class=\"status-pill-inner\"><span class=\"dot\"></span>"
+            "<span class=\"summary\">Checking…</span></div></div>");
+    }
     append(out, outLen, offset, "<nav class=\"shell-nav\">");
     const bool statusActive = activePage != nullptr && strcmp(activePage, "status") == 0;
     const bool operateActive = activePage != nullptr && strcmp(activePage, "operate") == 0;

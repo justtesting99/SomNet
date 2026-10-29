@@ -7,7 +7,7 @@
 
 - **Shared stylesheet** — `SomNet.Device/src/web_ui_shared.{h,cpp}` (slate/indigo shell, panels, status pill, toggles). Used by `/`, `/config`, and `/operate`.
 Documents/35-ESP32-Operate-UI-Parity.md
-- **Pattern preview** — Canvas graph from current manual/automatic fields (seeded illustrative schedule, not live segment telemetry). Live “now” marker can follow in a later pass if status exposes segment samples.
+- **Pattern preview** — Canvas graph aligned with SomNet.UI `relayPowerSchedule` / `motorSpeedSchedule`: stroke/gap pulses, table modes (power wave, power+timing wave, build-up), burst clusters, motor segment ramps (incl. periodic flat hold). **Live** graph still from `relay-automatic-segment` / `motor-automatic-segment` in `/api/local/status` `resultJson` (yellow now marker).
 - **Size** — Phase 3 ~20 KB HTML cap is **not** enforced on this branch; UI assets live in flash PROGMEM (~1.2 MB app image on `env:dev` after build).
 
 ## Future: master ESP + slave devices
@@ -20,7 +20,10 @@ Product idea (not implemented): one **master** ESP serves `/operate` for multipl
 - [x] Automatic min/max **power** and motor **speed** range sliders with stroke/ms hints
 - [x] **Session running** banner during automatic
 - [x] **Live graph** from `relay-automatic-segment` / `motor-automatic-segment` in `/api/local/status` `resultJson` (yellow now marker)
-- [x] Status page **ui-panel** layout polish
+- [x] Status `/` — same app shell as `/operate` (header pill polling `/api/status`, two-column dashboard, ui-panels)
+- [x] Relay preview — bursts, power/timing wave, stroke end horizon
+- [x] Motor automatic preview — segment ramps + burst clusters (Options ramp mode)
+- [x] Session history on **`env:dev`** (LittleFS + local ack recording)
 
 ## Out of scope (unchanged)
 

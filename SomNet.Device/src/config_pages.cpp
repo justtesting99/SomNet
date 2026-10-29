@@ -32,9 +32,10 @@ void appendHtmlHead(
     size_t outLen,
     size_t* offset,
     const char* title,
-    const char* activePage) {
+    const char* activePage,
+    bool includeStatusPill = false) {
     SomNetWebUi::appendHtmlHeadOpen(out, outLen, offset, title);
-    SomNetWebUi::appendShellHeader(out, outLen, offset, activePage, kSomNetLocalOperateEnabled);
+    SomNetWebUi::appendShellHeader(out, outLen, offset, activePage, kSomNetLocalOperateEnabled, includeStatusPill);
     SomNetWebUi::appendShellMainOpen(out, outLen, offset, true);
 }
 
@@ -117,8 +118,10 @@ void renderStatus(
     htmlEscape(installer, escInstaller, sizeof(escInstaller));
     htmlEscape(effectiveServerUrl != nullptr ? effectiveServerUrl : "", escServer, sizeof(escServer));
 
-    appendHtmlHead(out, outLen, &offset, kSomNetStandaloneBuild ? "SomEsp Device" : "SomNet Device", "status");
-    append(out, outLen, &offset, kSomNetStandaloneBuild ? "<h1 class=\"page-title\">SomEsp Device</h1>" : "<h1 class=\"page-title\">SomNet Device</h1>");
+    appendHtmlHead(out, outLen, &offset, kSomNetStandaloneBuild ? "SomEsp Device" : "SomNet Device", "status", true);
+    append(out, outLen, &offset, "<h1 class=\"page-title\">");
+    append(out, outLen, &offset, kSomNetStandaloneBuild ? "SomEsp Device" : "SomNet Device");
+    append(out, outLen, &offset, "</h1><div class=\"status-dashboard\"><div class=\"status-dashboard-main\">");
 
     const bool somespHasServer = kSomNetStandaloneBuild && escServer[0] != '\0';
     const bool somespPaired = kSomNetStandaloneBuild && nvs.isPaired();
@@ -159,17 +162,17 @@ void renderStatus(
                 "</form></div>");
         } else if (kSomNetStandaloneBuild && !somespPaired) {
             append(out, outLen, &offset,
-                "<div class=\"panel note\"><strong>Pair in SomNet</strong> — hub should connect automatically. "
+                "<div class=\"ui-panel\"><div class=\"ui-panel-bd note\"><strong>Pair in SomNet</strong> — hub should connect automatically. "
                 "Paste the Device ID below in Dom &rarr; Sub &rarr; Options &rarr; Hardware device. "
-                "When paired, the remote/local switch appears here.</div>");
+                "When paired, the remote/local switch appears here.</div></div>");
         }
     }
 
     if (provisioningMode) {
         append(out, outLen, &offset,
-            "<div class=\"panel note\"><strong>Setup mode.</strong> On your phone or PC, join Wi-Fi "
+            "<div class=\"ui-panel\"><div class=\"ui-panel-bd note\"><strong>Setup mode.</strong> On your phone or PC, join Wi-Fi "
             "<strong>SomNetSetup-XXXX</strong> (last 4 of Device ID below) with password "
-            "<strong>somnetsetup</strong>, then open <a href=\"/config\">Configure</a>.</div>");
+            "<strong>somnetsetup</strong>, then open <a href=\"/config\">Configure</a>.</div></div>");
     }
 
     append(out, outLen, &offset, "<div class=\"ui-panel\"><div class=\"ui-panel-hd\"><h2>Device identity</h2></div><div class=\"ui-panel-bd\">");
@@ -200,6 +203,7 @@ void renderStatus(
         append(out, outLen, &offset, "</div></div>");
     }
 
+    append(out, outLen, &offset, "</div><aside class=\"status-dashboard-aside\">");
     append(out, outLen, &offset, "<div class=\"ui-panel\"><div class=\"ui-panel-hd\"><h2>Connection &amp; hardware</h2></div><div class=\"ui-panel-bd status-kv\">");
     append(out, outLen, &offset, "<p class=\"row\"><strong>MAC:</strong> ");
     append(out, outLen, &offset, escMac);
@@ -233,13 +237,24 @@ void renderStatus(
     } else {
         append(out, outLen, &offset, hubStateLabel != nullptr ? hubStateLabel : "offline");
     }
-    append(out, outLen, &offset, "</p></div></div>");
+    append(out, outLen, &offset, "</p></div></div></aside></div>");
 
-    append(out, outLen, &offset, "<p class=\"actions\">");
+    append(out, outLen, &offset, "<div class=\"status-actions-bar\">");
     if (kSomNetLocalOperateEnabled && !provisioningMode) {
         append(out, outLen, &offset, "<a class=\"btn btn-primary\" href=\"/operate\">Control panel</a> ");
     }
-    append(out, outLen, &offset, "<a class=\"btn btn-secondary\" href=\"/config\">Configure</a></p>");
+    append(out, outLen, &offset, "<a class=\"btn btn-secondary\" href=\"/config\">Configure</a></div>");
+    append(out, outLen, &offset,
+        "<script>(function(){var pill=document.getElementById('status-pill');if(!pill)return;"
+        "var sum=pill.querySelector('.summary');function tone(t,s){pill.className='status-pill tone-'+(t||'checking');if(sum)sum.textContent=s||'';}"
+        "function apply(d){if(!d){tone('checking','Unavailable');return;}"
+        "if(!d.wifiConnected){tone('error','Wi-Fi disconnected');return;}"
+        "if(d.hubEnabled===false&&d.hubNetwork!==false){tone('ready','Local control — hub paused');return;}"
+        "if(d.hubConnected){tone('ready','Hub connected'+(d.hubState?' ('+d.hubState+')':''));return;}"
+        "if(d.hubEnabled){tone('warning','Hub connecting…'+(d.hubState?' '+d.hubState:''));return;}"
+        "tone('ready','Online — '+d.ip);}"
+        "function refresh(){fetch('/api/status').then(function(r){return r.json();}).then(apply).catch(function(){tone('checking','Status unavailable');});}"
+        "refresh();setInterval(refresh,5000);})();</script>");
     if (showHubModeToggle) {
         append(out, outLen, &offset,
             "<script>(function(){var sw=document.getElementById('hub-remote');var st=document.getElementById('hub-mode-status');"

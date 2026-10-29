@@ -1002,6 +1002,205 @@ function appendRelayGapInterval(points,tSec,level,gapSec,horizon){
   pushGraphPoint(points,gapEnd,0);
   return {tSec:gapEnd,level:0};
 }
+function sampleInverseTriangleGapSec(strokeMin,strokeMax,phase01){
+  return lerpInt(strokeMin,strokeMax,1-triangle01(phase01));
+}
+function burstPlacementSchedule(p){
+  p=p||'mainPlusSessionSpread';
+  if(p.indexOf('AfterMainStroke')>=0&&p.indexOf('Chance')<0)return 'afterMainStroke';
+  if(p.indexOf('Chance')>=0)return 'chanceAfterMainStroke';
+  return 'sessionSpread';
+}
+function burstMainTiming(p){
+  return p&&p.indexOf('insteadOf')===0?'insteadOf':'mainPlus';
+}
+function relayUsesTableSchedule(mode){
+  return mode==='powerWave'||mode==='powerAndTimingWave'||mode==='buildUp';
+}
+function relayBuildTableRows(state,seed){
+  var avgGap=(state.strokeMinSeconds+state.strokeMaxSeconds)/2;
+  var fixedGap=state.strokeMaxSeconds;
+  var count=relayPreviewStrokeCount(state,state.automaticMode==='powerWave'?fixedGap:avgGap);
+  var rows=[],i,elapsedSec=0,phase,tWaveSec;
+  if(state.automaticMode==='powerWave'){
+    tWaveSec=(state.endSessionMode==='minutes'&&state.endSessionValue>0)?state.endSessionValue*60*2:Math.max(2,count*fixedGap);
+    for(i=0;i<count;i++){
+      elapsedSec=i*fixedGap;
+      phase=(elapsedSec/tWaveSec+seed/4294967296)%1;
+      rows.push({powerPercent:lerpInt(state.minimumPower,state.maximumPower,triangle01(phase)),gapSec:fixedGap});
+    }
+    return rows;
+  }
+  if(state.automaticMode==='powerAndTimingWave'){
+    tWaveSec=(state.endSessionMode==='minutes'&&state.endSessionValue>0)?state.endSessionValue*60*2:Math.max(2,count*state.strokeMaxSeconds);
+    elapsedSec=0;
+    for(i=0;i<count;i++){
+      phase=(elapsedSec/tWaveSec+seed/4294967296)%1;
+      rows.push({
+        powerPercent:lerpInt(state.minimumPower,state.maximumPower,triangle01(phase)),
+        gapSec:sampleInverseTriangleGapSec(state.strokeMinSeconds,state.strokeMaxSeconds,phase)
+      });
+      elapsedSec+=rows[rows.length-1].gapSec;
+    }
+    return rows;
+  }
+  if(state.automaticMode==='buildUp'){
+    for(i=0;i<count;i++){
+      var rowPhase=count>1?i/(count-1):0;
+      var t=Math.min(1,rowPhase+seed/4294967296);
+      rows.push({
+        powerPercent:lerpInt(state.minimumPower,state.maximumPower,t),
+        gapSec:lerpInt(state.strokeMaxSeconds,state.strokeMinSeconds,t)
+      });
+    }
+  }
+  return rows;
+}
+function relayResolveStrokeRow(state,strokeIndex,seed,tableRows){
+  if(tableRows&&strokeIndex<tableRows.length)return tableRows[strokeIndex];
+  if(state.automaticMode==='periodic')return relayPeriodicStrokeRow(state);
+  return relayRandomStrokeRow(state,strokeIndex,seed);
+}
+function relayBurstSeed(scheduleSeed,eventIndex,channel){
+  return seededRand((scheduleSeed+eventIndex*7919+channel*2654435761)>>>0);
+}
+function previewBurstStrokeCount(state,eventIndex,scheduleSeed){
+  var rand=relayBurstSeed(scheduleSeed,eventIndex,1);
+  var lo=Math.min(state.burstStrokesMin,state.burstStrokesMax);
+  var hi=Math.max(state.burstStrokesMin,state.burstStrokesMax);
+  return lo+Math.floor(rand()*(hi-lo+1));
+}
+function previewBurstRelativePower(state,eventIndex,strokeInBurst,scheduleSeed){
+  var rand=relayBurstSeed(scheduleSeed,eventIndex,10+strokeInBurst);
+  var style=state.burstStyle;
+  if(style==='randomPowerOnly'||style==='randomPowerAndDelay'){
+    var lo=Math.min(state.burstStrokePowerMin,state.burstStrokePowerMax);
+    var hi=Math.max(state.burstStrokePowerMin,state.burstStrokePowerMax);
+    return lo+Math.floor(rand()*(hi-lo+1));
+  }
+  return state.burstStrokePowerMax;
+}
+function previewBurstDelaySec(state,eventIndex,strokeInBurst,scheduleSeed){
+  var rand=relayBurstSeed(scheduleSeed,eventIndex,20+strokeInBurst);
+  if(state.burstStyle==='randomDelayOnly'||state.burstStyle==='randomPowerAndDelay'){
+    return state.burstDelayMin+Math.floor(rand()*(state.burstDelayMax-state.burstDelayMin+1));
+  }
+  return state.burstDelayMax;
+}
+function resolveBurstEffectivePower(relative,state){
+  var rel=Math.min(100,Math.max(0,Math.round(relative)));
+  var lo=Math.min(state.minimumPower,state.maximumPower);
+  var hi=Math.max(state.minimumPower,state.maximumPower);
+  return lo+Math.floor(((hi-lo)*rel)/100);
+}
+function emptyBurstPlan(){return {active:false,burstInsteadOfMain:false,kind:'none',burstEventCount:0,nextMilestoneIndex:0,milestones:[],cadenceStride:0,nextCadenceTriggerStroke:0};}
+function roundPercentOfEnvelope(envelope,burstPercent){
+  if(envelope<=0||burstPercent<=0)return 0;
+  return Math.floor((envelope*burstPercent+50)/100);
+}
+function buildRelayBurstPlan(state){
+  if(!state.burstsOn||state.burstPercent<=0)return emptyBurstPlan();
+  var placement=state.burstPlacement||'mainPlusSessionSpread';
+  var schedule=burstPlacementSchedule(placement);
+  var insteadOf=burstMainTiming(placement)==='insteadOf';
+  var plan=emptyBurstPlan();
+  if(schedule==='chanceAfterMainStroke'){
+    plan.active=true;plan.burstInsteadOfMain=insteadOf;plan.kind='chancePerMainStroke';return plan;
+  }
+  if(schedule==='afterMainStroke'){
+    if(state.endSessionMode==='strokes'&&state.endSessionValue>0){
+      var n=Math.min(100,roundPercentOfEnvelope(state.endSessionValue,state.burstPercent));
+      if(n<=0)return plan;
+      plan.active=true;plan.kind='strokeMilestones';plan.burstEventCount=n;plan.burstInsteadOfMain=insteadOf;
+      for(var k=1;k<=n;k++){var m=Math.floor((k*state.endSessionValue)/n);plan.milestones.push(m>0?m:1);}
+      return plan;
+    }
+    var stride=Math.floor((100+state.burstPercent/2)/state.burstPercent);
+    if(stride<=0)return plan;
+    plan.active=true;plan.kind='cadenceStride';plan.cadenceStride=stride;plan.nextCadenceTriggerStroke=stride;plan.burstInsteadOfMain=insteadOf;
+    return plan;
+  }
+  if(state.endSessionMode==='strokes'&&state.endSessionValue>0){
+    var n2=Math.min(100,roundPercentOfEnvelope(state.endSessionValue,state.burstPercent));
+    if(n2<=0)return plan;
+    plan.active=true;plan.kind='strokeMilestones';plan.burstEventCount=n2;plan.burstInsteadOfMain=insteadOf;
+    for(var k2=1;k2<=n2;k2++){var m2=Math.floor((k2*state.endSessionValue)/n2);plan.milestones.push(m2>0?m2:1);}
+    return plan;
+  }
+  if(state.endSessionMode==='minutes'&&state.endSessionValue>0){
+    var n3=Math.min(100,roundPercentOfEnvelope(state.endSessionValue,state.burstPercent));
+    if(n3<=0)return plan;
+    plan.active=true;plan.kind='wallClock';plan.burstEventCount=n3;plan.burstInsteadOfMain=insteadOf;
+    var budget=state.endSessionValue*60*1000;
+    for(var k3=1;k3<=n3;k3++)plan.milestones.push(Math.floor((k3*budget)/n3));
+    return plan;
+  }
+  var stride2=Math.floor((100+state.burstPercent/2)/state.burstPercent);
+  if(stride2<=0)return plan;
+  plan.active=true;plan.kind='cadenceStride';plan.cadenceStride=stride2;plan.nextCadenceTriggerStroke=stride2;plan.burstInsteadOfMain=insteadOf;
+  return plan;
+}
+function advanceBurstPlan(plan){
+  if(!plan.active)return;
+  if(plan.kind==='strokeMilestones'||plan.kind==='wallClock'){
+    if(plan.nextMilestoneIndex<plan.burstEventCount)plan.nextMilestoneIndex++;
+    return;
+  }
+  if(plan.kind==='cadenceStride'&&plan.cadenceStride>0)plan.nextCadenceTriggerStroke+=plan.cadenceStride;
+}
+function previewChanceBurstAfterStroke(state,mainStrokeIndex,scheduleSeed){
+  if(state.burstPercent>=100)return true;
+  if(state.burstPercent<=0)return false;
+  var rand=seededRand((scheduleSeed+mainStrokeIndex*9973)>>>0);
+  return Math.floor(rand()*100)<state.burstPercent;
+}
+function shouldPreviewBurstAfterMainStroke(state,plan,mainStrokesCompleted,scheduleSeed){
+  if(!plan.active)return false;
+  if(plan.kind==='chancePerMainStroke')return previewChanceBurstAfterStroke(state,mainStrokesCompleted,scheduleSeed);
+  if(plan.burstInsteadOfMain)return false;
+  if(plan.kind==='strokeMilestones'){
+    if(plan.nextMilestoneIndex>=plan.burstEventCount)return false;
+    return mainStrokesCompleted>=plan.milestones[plan.nextMilestoneIndex];
+  }
+  if(plan.kind==='cadenceStride')return plan.nextCadenceTriggerStroke>0&&mainStrokesCompleted>=plan.nextCadenceTriggerStroke;
+  return false;
+}
+function shouldPreviewBurstBeforeMainStroke(state,plan,mainStrokesCompleted,scheduleSeed){
+  if(!plan.active||!plan.burstInsteadOfMain)return false;
+  var upcoming=mainStrokesCompleted+1;
+  if(plan.kind==='chancePerMainStroke')return previewChanceBurstAfterStroke(state,upcoming,scheduleSeed);
+  if(plan.kind==='strokeMilestones'){
+    if(plan.nextMilestoneIndex>=plan.burstEventCount)return false;
+    return upcoming>=plan.milestones[plan.nextMilestoneIndex];
+  }
+  if(plan.kind==='cadenceStride')return plan.nextCadenceTriggerStroke>0&&upcoming>=plan.nextCadenceTriggerStroke;
+  return false;
+}
+function shouldTriggerBurstInWaitingGap(plan,sessionElapsedMs){
+  if(!plan.active||plan.kind!=='wallClock')return false;
+  if(plan.nextMilestoneIndex>=plan.burstEventCount)return false;
+  return sessionElapsedMs>=plan.milestones[plan.nextMilestoneIndex];
+}
+function sessionElapsedMsRelay(tSec,delayBeforeStartSeconds){
+  return Math.max(0,(tSec-delayBeforeStartSeconds)*1000);
+}
+function appendRelayBurstCluster(state,scheduleSeed,burstEventIndex,points,tSec,level,horizon){
+  var strokeCount=previewBurstStrokeCount(state,burstEventIndex,scheduleSeed);
+  var cursor=tSec,currentLevel=level,i;
+  for(i=0;i<strokeCount;i++){
+    if(cursor>=horizon)break;
+    var rel=previewBurstRelativePower(state,burstEventIndex,i,scheduleSeed);
+    var effective=resolveBurstEffectivePower(rel,state);
+    var stroke=appendRelayStrokePulse(points,cursor,currentLevel,effective,state,horizon);
+    cursor=stroke.tSec;currentLevel=stroke.level;
+    if(i<strokeCount-1&&cursor<horizon){
+      var delaySec=previewBurstDelaySec(state,burstEventIndex,i,scheduleSeed);
+      var gap=appendRelayGapInterval(points,cursor,currentLevel,delaySec,horizon);
+      cursor=gap.tSec;currentLevel=gap.level;
+    }
+  }
+  return {tSec:cursor,level:currentLevel,burstEventIndex:burstEventIndex+1};
+}
 function hashRelayScheduleSeed(s){
   return hashSeed([
     s.automaticMode,s.minimumPower,s.maximumPower,s.strokeMinSeconds,s.strokeMaxSeconds,
@@ -1012,47 +1211,196 @@ function hashRelayScheduleSeed(s){
 function buildRelayAutoPreview(state){
   var horizon=autoHorizonSecRelay(state);
   var seed=hashRelayScheduleSeed(state);
-  var avgGap=(state.strokeMinSeconds+state.strokeMaxSeconds)/2;
-  var fixedGap=state.strokeMaxSeconds;
-  var count=relayPreviewStrokeCount(state,state.automaticMode==='powerWave'?fixedGap:avgGap);
-  var points=[];
-  var tSec=0;
+  var tableRows=relayUsesTableSchedule(state.automaticMode)?relayBuildTableRows(state,seed):null;
+  var points=[],tSec=0;
   if(state.delayBeforeStartSeconds>0){
     pushGraphPoint(points,0,0);
     tSec=state.delayBeforeStartSeconds;
     pushGraphPoint(points,tSec,0);
   }else pushGraphPoint(points,0,0);
-  var strokeIndex=0;
-  var level=0;
-  var waveElapsed=0;
-  var tWaveSec=(state.endSessionMode==='minutes'&&state.endSessionValue>0)
-    ?state.endSessionValue*60*2:Math.max(2,count*fixedGap);
+  var strokeIndex=0,level=0,mainStrokesCompleted=0,burstEventIndex=0;
+  var burstPlan=buildRelayBurstPlan(state);
   while(tSec<horizon){
-    var row;
-    if(state.automaticMode==='powerWave'){
-      row=relayWaveStrokeRow(state,strokeIndex,seed,waveElapsed,tWaveSec);
-      waveElapsed+=row.gapSec;
-    }else if(state.automaticMode==='buildUp'){
-      row=relayBuildUpStrokeRow(state,strokeIndex,count,seed);
-    }else if(state.automaticMode==='periodic'){
-      row=relayPeriodicStrokeRow(state);
-    }else{
-      row=relayRandomStrokeRow(state,strokeIndex,seed);
+    var row=relayResolveStrokeRow(state,strokeIndex,seed,tableRows);
+    var gapSec=Math.max(0,row.gapSec);
+    if(state.burstsOn&&burstPlan.active&&shouldPreviewBurstBeforeMainStroke(state,burstPlan,mainStrokesCompleted,seed)){
+      var b0=appendRelayBurstCluster(state,seed,burstEventIndex,points,tSec,level,horizon);
+      tSec=b0.tSec;level=b0.level;burstEventIndex=b0.burstEventIndex;advanceBurstPlan(burstPlan);
+      strokeIndex++;
+      if(tSec>=horizon)break;
+      var gap0=appendRelayGapInterval(points,tSec,level,Math.min(gapSec,horizon-tSec),horizon);
+      tSec=gap0.tSec;level=gap0.level;
+      continue;
     }
     var main=appendRelayStrokePulse(points,tSec,level,row.powerPercent,state,horizon);
-    tSec=main.tSec;
-    level=main.level;
+    tSec=main.tSec;level=main.level;mainStrokesCompleted++;
+    if(state.burstsOn&&burstPlan.active&&shouldPreviewBurstAfterMainStroke(state,burstPlan,mainStrokesCompleted,seed)){
+      var b1=appendRelayBurstCluster(state,seed,burstEventIndex,points,tSec,level,horizon);
+      tSec=b1.tSec;level=b1.level;burstEventIndex=b1.burstEventIndex;advanceBurstPlan(burstPlan);
+    }
     if(tSec>=horizon)break;
-    var gap=appendRelayGapInterval(points,tSec,level,row.gapSec,horizon);
-    tSec=gap.tSec;
-    level=gap.level;
-    strokeIndex++;
+    var gapEndTarget=Math.min(tSec+gapSec,horizon);
+    var gapCursor=tSec;
+    while(state.burstsOn&&burstPlan.active&&burstPlan.kind==='wallClock'&&gapCursor<gapEndTarget){
+      var elapsedMs=sessionElapsedMsRelay(gapCursor,state.delayBeforeStartSeconds);
+      if(!shouldTriggerBurstInWaitingGap(burstPlan,elapsedMs))break;
+      var b2=appendRelayBurstCluster(state,seed,burstEventIndex,points,gapCursor,level,horizon);
+      gapCursor=b2.tSec;level=b2.level;burstEventIndex=b2.burstEventIndex;advanceBurstPlan(burstPlan);
+    }
+    var gap=appendRelayGapInterval(points,gapCursor,level,gapEndTarget-gapCursor,horizon);
+    tSec=gap.tSec;level=gap.level;strokeIndex++;
     if(state.endSessionMode==='strokes'&&strokeIndex>=state.endSessionValue)break;
-    if(state.automaticMode==='powerWave'&&strokeIndex>=count)break;
   }
   var last=points[points.length-1];
   if(!last||last.t!==horizon)pushGraphPoint(points,horizon,level);
   return {points:points,horizon:horizon,label:'Power %'};
+}
+function hashMotorScheduleSeed(s){
+  return hashSeed([
+    s.automaticMode,s.minimumSpeedPercent,s.maximumSpeedPercent,s.segmentMinSeconds,s.segmentMaxSeconds,
+    s.delayBeforeStartSeconds,s.rampMs,s.endSessionMode,s.endSessionValue,s.burstsOn,s.burstPlacement,s.burstPercent
+  ].join('|'));
+}
+function motorSpeedBounds(s){
+  var lo=Math.min(s.minimumSpeedPercent,s.maximumSpeedPercent);
+  var hi=Math.max(s.minimumSpeedPercent,s.maximumSpeedPercent);
+  return {lo:lo,hi:hi};
+}
+function motorSegmentRandomUnit(scheduleSeed,segmentIndex,channel){
+  return seededRand((scheduleSeed+segmentIndex*9973+channel*2654435761)>>>0);
+}
+function motorPreviewSegmentDuration(state,segmentIndex,scheduleSeed){
+  var mode=state.automaticMode;
+  if(mode==='periodic'||mode==='randomSpeed'||mode==='powerWave'||mode==='buildUp')return state.segmentMaxSeconds;
+  if(state.segmentMinSeconds>=state.segmentMaxSeconds)return state.segmentMinSeconds;
+  var rand=motorSegmentRandomUnit(scheduleSeed,segmentIndex,1);
+  return state.segmentMinSeconds+Math.floor(rand()*(state.segmentMaxSeconds-state.segmentMinSeconds+1));
+}
+function motorPreviewTargetSpeed(state,segmentIndex,sessionStartSec,elapsedSec,scheduleSeed){
+  var b=motorSpeedBounds(state);
+  var rand=motorSegmentRandomUnit(scheduleSeed,segmentIndex,2);
+  if(state.automaticMode==='periodic')return b.hi;
+  if(state.automaticMode==='randomSpeed'||state.automaticMode==='randomSpeedAndTiming'){
+    if(b.lo>=b.hi)return b.hi;
+    return b.lo+Math.floor(rand()*(b.hi-b.lo+1));
+  }
+  if(state.automaticMode==='powerWave'){
+    var step=segmentIndex%20,half=10,tri=step<half?step:20-step;
+    return b.lo+Math.floor((tri*(b.hi-b.lo))/half);
+  }
+  if(state.automaticMode==='buildUp'){
+    var progress=0;
+    if(state.endSessionMode==='minutes'&&state.endSessionValue>0){
+      progress=elapsedSec/(state.endSessionValue*60);
+    }else if(segmentIndex>0)progress=segmentIndex/(segmentIndex+10);
+    progress=Math.min(1,Math.max(0,progress));
+    return b.lo+Math.floor(progress*(b.hi-b.lo));
+  }
+  return b.hi;
+}
+function motorBurstRelayState(motorState){
+  var b=motorSpeedBounds(motorState);
+  return {
+    minimumPower:b.lo,maximumPower:b.hi,
+    endSessionMode:motorState.endSessionMode==='minutes'?'minutes':'noAutoEnd',
+    endSessionValue:motorState.endSessionValue,
+    delayBeforeStartSeconds:motorState.delayBeforeStartSeconds,
+    burstsOn:motorState.burstsOn,burstPlacement:motorState.burstPlacement,burstPercent:motorState.burstPercent,
+    burstStyle:motorState.burstStyle,burstStrokePowerMin:motorState.burstStrokePowerMin,
+    burstStrokePowerMax:motorState.burstStrokePowerMax,burstDelayMin:motorState.burstDelayMin,
+    burstDelayMax:motorState.burstDelayMax,burstStrokesMin:motorState.burstStrokesMin,burstStrokesMax:motorState.burstStrokesMax,
+    strokeMinSeconds:1,strokeMaxSeconds:1,minimumStrokeMs:25,maximumStrokeMs:400
+  };
+}
+function motorBurstGraphSpeed(relativePower,motorState){
+  var rel=Math.min(100,Math.max(0,Math.round(relativePower)));
+  var b=motorSpeedBounds(motorState);
+  return b.lo+Math.floor(((b.hi-b.lo)*rel)/100);
+}
+function appendMotorBurstCluster(relayState,motorState,scheduleSeed,burstEventIndex,points,tSec,level,horizon,rampSec){
+  var strokeCount=previewBurstStrokeCount(relayState,burstEventIndex,scheduleSeed);
+  var cursor=tSec,currentLevel=level,i,holdSec=0.3;
+  for(i=0;i<strokeCount;i++){
+    if(cursor>=horizon)break;
+    var rel=previewBurstRelativePower(relayState,burstEventIndex,i,scheduleSeed);
+    var target=motorBurstGraphSpeed(rel,motorState);
+    pushGraphPoint(points,cursor,currentLevel);
+    var rampEnd=Math.min(cursor+rampSec,horizon);
+    pushGraphPoint(points,rampEnd,target);
+    currentLevel=target;cursor=rampEnd;
+    var holdEnd=Math.min(cursor+holdSec,horizon);
+    pushGraphPoint(points,holdEnd,target);
+    cursor=holdEnd;
+    if(i<strokeCount-1&&cursor<horizon){
+      cursor=Math.min(cursor+Math.max(0,previewBurstDelaySec(relayState,burstEventIndex,i,scheduleSeed)),horizon);
+      pushGraphPoint(points,cursor,currentLevel);
+    }
+  }
+  return {tSec:cursor,level:currentLevel,burstEventIndex:burstEventIndex+1};
+}
+function appendMotorProgramSegment(points,tSec,fromSpeed,toSpeed,durationSec,rampMs,state,horizon){
+  var segmentEnd=Math.min(tSec+durationSec,horizon);
+  if(rampMs<0){
+    var fraction=durationSec>0?(segmentEnd-tSec)/durationSec:1;
+    var endSpeed=fromSpeed+(toSpeed-fromSpeed)*fraction;
+    pushGraphPoint(points,tSec,fromSpeed);
+    pushGraphPoint(points,segmentEnd,endSpeed);
+    return {tSec:segmentEnd,level:endSpeed};
+  }
+  if(rampMs===0){
+    pushGraphPoint(points,tSec,fromSpeed);
+    if(fromSpeed!==toSpeed)pushGraphPoint(points,tSec,toSpeed);
+    pushGraphPoint(points,segmentEnd,toSpeed);
+    return {tSec:segmentEnd,level:toSpeed};
+  }
+  var transitionSec=Math.min(durationSec,Math.max(rampMs/1000,0.001));
+  var rampEnd=Math.min(tSec+transitionSec,segmentEnd);
+  pushGraphPoint(points,tSec,fromSpeed);
+  pushGraphPoint(points,rampEnd,toSpeed);
+  if(rampEnd<segmentEnd)pushGraphPoint(points,segmentEnd,toSpeed);
+  return {tSec:segmentEnd,level:toSpeed};
+}
+function buildMotorAutoPreview(state,opts){
+  var rampMs=resolveSegmentTargetRampMs(state.automaticMode,opts);
+  var horizon=autoHorizonSecMotor(state);
+  var scheduleSeed=hashMotorScheduleSeed(state);
+  var points=[];
+  pushGraphPoint(points,0,0);
+  var tSec=0,delaySec=Math.max(0,state.delayBeforeStartSeconds);
+  if(delaySec>0){pushGraphPoint(points,delaySec,0);tSec=delaySec;}
+  var sessionStartSec=tSec;
+  if(state.automaticMode==='periodic'){
+    var target=motorPreviewTargetSpeed(state,0,sessionStartSec,0,scheduleSeed);
+    var rampSec=rampMs===0?0.001:(rampMs>0?Math.max(rampMs/1000,0.001):Math.max(state.rampMs/1000,0.001));
+    pushGraphPoint(points,tSec,0);
+    tSec+=rampSec;
+    pushGraphPoint(points,tSec,target);
+    pushGraphPoint(points,horizon,target);
+    return {points:points,horizon:horizon,label:'Speed %'};
+  }
+  var segmentIndex=0,commandedSpeed=0;
+  var burstRelay=motorBurstRelayState(state);
+  var burstPlan=state.burstsOn?buildRelayBurstPlan(burstRelay):emptyBurstPlan();
+  var burstRampSec=Math.min(state.segmentMaxSeconds,Math.max(rampMs>0?rampMs/1000:state.rampMs/1000,0.001));
+  var mainStrokesCompleted=0,burstEventIndex=0;
+  while(tSec<horizon&&segmentIndex<5000){
+    if(burstPlan.active&&shouldPreviewBurstBeforeMainStroke(burstRelay,burstPlan,mainStrokesCompleted,scheduleSeed)){
+      var mb0=appendMotorBurstCluster(burstRelay,state,scheduleSeed,burstEventIndex,points,tSec,commandedSpeed,horizon,burstRampSec);
+      tSec=mb0.tSec;commandedSpeed=mb0.level;burstEventIndex=mb0.burstEventIndex;advanceBurstPlan(burstPlan);
+      mainStrokesCompleted++;segmentIndex++;continue;
+    }
+    var durationSec=Math.max(motorPreviewSegmentDuration(state,segmentIndex,scheduleSeed),0.001);
+    var elapsedAtStart=Math.max(0,tSec-sessionStartSec);
+    var fromSpeed=commandedSpeed;
+    var toSpeed=motorPreviewTargetSpeed(state,segmentIndex,sessionStartSec,elapsedAtStart,scheduleSeed);
+    var seg=appendMotorProgramSegment(points,tSec,fromSpeed,toSpeed,durationSec,rampMs,state,horizon);
+    tSec=seg.tSec;commandedSpeed=seg.level;mainStrokesCompleted++;segmentIndex++;
+    if(burstPlan.active&&shouldPreviewBurstAfterMainStroke(burstRelay,burstPlan,mainStrokesCompleted,scheduleSeed)){
+      var mb1=appendMotorBurstCluster(burstRelay,state,scheduleSeed,burstEventIndex,points,tSec,commandedSpeed,horizon,burstRampSec);
+      tSec=mb1.tSec;commandedSpeed=mb1.level;burstEventIndex=mb1.burstEventIndex;advanceBurstPlan(burstPlan);
+    }
+  }
+  return {points:points,horizon:horizon,label:'Speed %'};
 }
 function autoHorizonSecMotor(s){
   if(s.endSessionMode==='minutes')return Math.max(60,s.endSessionValue*60);
@@ -1070,23 +1418,7 @@ function buildPreviewPoints(){
       return {points:pts,horizon:horizon,label:'Speed %'};
     }
     var ma=normalizeMotorAuto(readMotorAutoSnapshot());
-    horizon=autoHorizonSecMotor(ma);
-    var rnd=seededRand(hashSeed(JSON.stringify(ma)));
-    var t=ma.delayBeforeStartSeconds||0;
-    var segMin=ma.segmentMinSeconds,segMax=ma.segmentMaxSeconds;
-    var pwr=lerpInt(ma.minimumSpeedPercent,ma.maximumSpeedPercent,0.5);
-    pts.push({t:0,v:pwr});
-    while(t<horizon){
-      var seg=segMin===segMax?segMin:segMin+Math.floor(rnd()*(segMax-segMin+1));
-      var next=Math.min(horizon,t+seg);
-      var v;
-      if(ma.automaticMode==='periodic')v=lerpInt(ma.minimumSpeedPercent,ma.maximumSpeedPercent,triangle01(t/60));
-      else if(ma.automaticMode==='powerWave'||ma.automaticMode==='buildUp')v=lerpInt(ma.minimumSpeedPercent,ma.maximumSpeedPercent,triangle01(t/45));
-      else v=lerpInt(ma.minimumSpeedPercent,ma.maximumSpeedPercent,rnd());
-      pts.push({t:next,v:v});
-      t=next;
-    }
-    return {points:pts,horizon:horizon,label:'Speed %'};
+    return buildMotorAutoPreview(ma,readAppOptions());
   }
   if(mode==='manual'){
     var mn=normalizeManual(readManualSnapshot());
