@@ -7,9 +7,10 @@
 
 namespace {
 
-// Body HTML (shared CSS streamed separately in handleOperateGet).
+// Full /operate page in PROGMEM (CSS at /ui/somnet.css). Served via beginResponse_P — do not use
+// beginResponseStream(..., N) where N is mistaken for HTTP status (second arg is stream buffer bytes).
 constexpr char kOperateHtml[] PROGMEM = R"raw(
-</head><body><script>try{if(sessionStorage.getItem('somesp-bearer'))document.documentElement.classList.add('session-resume');}catch(e){}</script>
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SomEsp Control</title><link rel="stylesheet" href="/ui/somnet.css"></head><body><script>try{if(sessionStorage.getItem('somesp-bearer'))document.documentElement.classList.add('session-resume');}catch(e){}</script>
 <div class="shell-bg"></div>
 <div id="gate" class="gate-screen">
 <div class="gate-card ui-panel"><div class="ui-panel-hd"><h2>Unlock control panel</h2></div><div class="ui-panel-bd">
@@ -216,7 +217,18 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 </div></div></div>
 <aside class="dashboard-aside">
 <div class="ui-panel graph-panel"><div class="ui-panel-hd"><h2>Pattern preview</h2></div><div class="ui-panel-bd">
+<div class="graph-toolbar">
+<p class="note" id="graph-range-label" style="margin:0;flex:1;min-width:8rem">0 – …</p>
+<div class="panel-actions">
+<button type="button" class="btn-ghost sm" id="btn-graph-pan-left" title="Pan earlier" aria-label="Pan earlier">◀</button>
+<button type="button" class="btn-ghost sm" id="btn-graph-pan-right" title="Pan later" aria-label="Pan later">▶</button>
+<button type="button" class="btn-ghost sm" id="btn-graph-zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+<button type="button" class="btn-ghost sm" id="btn-graph-zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
+<button type="button" class="btn-ghost sm" id="btn-graph-fit" title="Fit full session" aria-label="Fit">Fit</button>
+</div></div>
+<div class="graph-canvas-wrap">
 <canvas id="pattern-graph" width="480" height="180" role="img" aria-label="Power or speed over time preview"></canvas>
+</div>
 <p class="note" id="graph-caption">Illustrative preview from current settings (not live telemetry).</p>
 </div></div>
 </aside>
@@ -248,6 +260,13 @@ var lastPushedAuto=null;
 var deviceSaveTimer=null;
 var capsProfile='relay';
 var graphTimer=null;
+var graphWindowSec=null;
+var graphPanStartSec=null;
+var graphFollowNow=true;
+var graphDragPan=null;
+var GRAPH_ZOOM_KEY='somnet-pattern-chart-window';
+var GRAPH_MIN_WINDOW_SEC=8;
+var GRAPH_ZOOM_STEP=1.35;
 var focusDeviceId='';
 var liveSegments=[];
 var lastLiveSegmentIndex=-1;
@@ -855,23 +874,189 @@ function refreshAutoPowerLabels(){
   if($('ma-smin-val'))$('ma-smin-val').textContent=$('ma-smin').value;
   if($('ma-smax-val'))$('ma-smax-val').textContent=$('ma-smax').value;
 }
+function formatGraphAxisTime(tSec){
+  if(tSec<60)return Math.round(tSec)+'s';
+  var m=tSec/60;
+  return m<10?m.toFixed(1)+'m':Math.round(m)+'m';
+}
+function graphEffectiveWindowSec(horizon){
+  if(graphWindowSec==null||!isFinite(graphWindowSec)||graphWindowSec>=horizon-0.5)return horizon;
+  return Math.min(Math.max(GRAPH_MIN_WINDOW_SEC,graphWindowSec),horizon);
+}
+function computeGraphViewRange(horizonSec,windowSec,focusSec){
+  var horizon=Math.max(horizonSec,0.001);
+  var window=Math.min(Math.max(GRAPH_MIN_WINDOW_SEC,windowSec),horizon);
+  if(focusSec==null||!isFinite(focusSec))return {startSec:0,endSec:window,windowSec:window};
+  var focus=Math.max(0,focusSec);
+  var startSec=focus-window/2;
+  if(startSec<0)startSec=0;
+  var maxStart=Math.max(0,horizon-window);
+  if(startSec>maxStart)startSec=maxStart;
+  return {startSec:startSec,endSec:startSec+window,windowSec:window};
+}
+function persistGraphWindowSec(){
+  try{
+    if(graphWindowSec==null)sessionStorage.removeItem(GRAPH_ZOOM_KEY);
+    else sessionStorage.setItem(GRAPH_ZOOM_KEY,String(graphWindowSec));
+  }catch(e){}
+}
+function applyGraphWindowSec(next,horizon){
+  if(next==null||!isFinite(next)||next>=horizon-0.5)graphWindowSec=null;
+  else graphWindowSec=Math.min(Math.max(GRAPH_MIN_WINDOW_SEC,next),horizon);
+  persistGraphWindowSec();
+  scheduleGraphUpdate();
+}
+function graphZoomIn(horizon){
+  var w=graphEffectiveWindowSec(horizon);
+  applyGraphWindowSec(w/GRAPH_ZOOM_STEP,horizon);
+}
+function graphZoomOut(horizon){
+  var w=graphEffectiveWindowSec(horizon);
+  var next=w*GRAPH_ZOOM_STEP;
+  applyGraphWindowSec(next>=horizon-0.5?null:next,horizon);
+}
+function graphZoomFit(){
+  graphWindowSec=null;
+  graphPanStartSec=null;
+  graphFollowNow=true;
+  persistGraphWindowSec();
+  scheduleGraphUpdate();
+}
+function readGraphViewStart(horizon,effWin,followNow,nowSec){
+  var window=Math.min(Math.max(GRAPH_MIN_WINDOW_SEC,effWin),horizon);
+  if(window>=horizon-0.5)return 0;
+  if(graphFollowNow&&followNow&&nowSec!=null&&isFinite(nowSec)){
+    return computeGraphViewRange(horizon,window,nowSec).startSec;
+  }
+  if(graphPanStartSec!=null&&isFinite(graphPanStartSec)){
+    return Math.max(0,Math.min(graphPanStartSec,horizon-window));
+  }
+  return 0;
+}
+function buildGraphView(horizon,effWin,followNow,nowSec){
+  var h=Math.max(horizon,0.001);
+  var window=Math.min(Math.max(GRAPH_MIN_WINDOW_SEC,effWin),h);
+  if(window>=h-0.5)return {startSec:0,endSec:h,windowSec:h};
+  var start=readGraphViewStart(h,window,followNow,nowSec);
+  if(!graphFollowNow||!followNow)graphPanStartSec=start;
+  return {startSec:start,endSec:start+window,windowSec:window};
+}
+function graphScheduleMeta(){
+  var sched=buildLiveGraphSchedule()||buildPreviewPoints();
+  if(!sched)return {horizon:PREVIEW_HORIZON,followNow:false,nowSec:null,live:false};
+  return {
+    horizon:sched.horizon||PREVIEW_HORIZON,
+    followNow:!!(sched.live&&sched.nowSec!=null&&sched.nowSec>=0),
+    nowSec:sched.nowSec,
+    live:!!sched.live
+  };
+}
+function graphPanBy(deltaSec){
+  var meta=graphScheduleMeta();
+  var horizon=meta.horizon;
+  var effWin=graphEffectiveWindowSec(horizon);
+  if(effWin>=horizon-0.5)return;
+  graphFollowNow=false;
+  var start=readGraphViewStart(horizon,effWin,meta.followNow,meta.nowSec);
+  start=Math.max(0,Math.min(start+deltaSec,horizon-effWin));
+  graphPanStartSec=start;
+  scheduleGraphUpdate();
+}
+function bindGraphCanvasPan(){
+  var canvas=$('pattern-graph');
+  if(!canvas||canvas._panBound)return;
+  canvas._panBound=true;
+  canvas.addEventListener('pointerdown',function(e){
+    if(e.button!==0&&e.pointerType==='mouse')return;
+    var meta=graphScheduleMeta();
+    var effWin=graphEffectiveWindowSec(meta.horizon);
+    if(effWin>=meta.horizon-0.5)return;
+    var plotW=canvas.width-36-12;
+    if(plotW<=0)return;
+    graphDragPan={
+      startX:e.clientX,
+      anchor:readGraphViewStart(meta.horizon,effWin,meta.followNow,meta.nowSec),
+      plotW:plotW,
+      horizon:meta.horizon,
+      effWin:effWin
+    };
+    graphFollowNow=false;
+    canvas.classList.add('graph-dragging');
+    if(canvas.setPointerCapture)canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove',function(e){
+    if(!graphDragPan)return;
+    var dx=e.clientX-graphDragPan.startX;
+    var dt=-dx/graphDragPan.plotW*graphDragPan.effWin;
+    var start=Math.max(0,Math.min(graphDragPan.anchor+dt,graphDragPan.horizon-graphDragPan.effWin));
+    graphPanStartSec=start;
+    if(graphTimer){clearTimeout(graphTimer);graphTimer=null;}
+    drawPatternGraph();
+  });
+  function endDrag(){
+    if(!graphDragPan)return;
+    graphDragPan=null;
+    canvas.classList.remove('graph-dragging');
+    scheduleGraphUpdate();
+  }
+  canvas.addEventListener('pointerup',endDrag);
+  canvas.addEventListener('pointercancel',endDrag);
+}
+function graphXSec(tSec,viewStart,viewSpan,padL,plotW){
+  return padL+((tSec-viewStart)/viewSpan)*plotW;
+}
 function clearLiveGraph(){
   liveSegments=[];lastLiveSegmentIndex=-1;graphNowSec=null;
+  graphPanStartSec=null;
+  graphFollowNow=true;
 }
-function tryIngestLiveSegment(status){
-  if(!status||!status.resultJson)return;
+function syncLiveSegmentsFromStatus(status){
+  if(!status)return;
+  var list=status.automaticSegments;
+  if(list&&list.length){
+    liveSegments=[];
+    list.forEach(function(parsed){
+      if(!parsed||parsed.segmentIndex==null)return;
+      if(parsed.commandKey==='relay-automatic-segment'){
+        liveSegments.push({
+          index:+parsed.segmentIndex,
+          phase:parsed.phase,
+          powerPercent:+parsed.powerPercent,
+          durationMs:+parsed.durationMs,
+          programElapsedMs:+parsed.programElapsedMs
+        });
+      }else if(parsed.commandKey==='motor-automatic-segment'){
+        liveSegments.push({
+          index:+parsed.segmentIndex,
+          fromSpeed:+parsed.fromSpeedPercent,
+          toSpeed:+parsed.toSpeedPercent,
+          durationMs:+parsed.durationMs,
+          programElapsedMs:+parsed.programElapsedMs
+        });
+      }
+    });
+    liveSegments.sort(function(a,b){return a.programElapsedMs-b.programElapsedMs;});
+    lastLiveSegmentIndex=liveSegments.reduce(function(m,s){return Math.max(m,s.index||0);},-1);
+    if(liveSegments.length){
+      var last=liveSegments[liveSegments.length-1];
+      graphNowSec=(last.programElapsedMs+last.durationMs)/1000;
+    }
+    scheduleGraphUpdate();
+    return;
+  }
+  if(!status.resultJson)return;
   try{
     var parsed=JSON.parse(status.resultJson);
     var idx=+parsed.segmentIndex;
     if(!isFinite(idx)||idx<=lastLiveSegmentIndex)return;
     if(parsed.commandKey==='relay-automatic-segment'){
       lastLiveSegmentIndex=idx;
-      liveSegments.push({phase:parsed.phase,powerPercent:+parsed.powerPercent,durationMs:+parsed.durationMs,programElapsedMs:+parsed.programElapsedMs});
+      liveSegments.push({index:idx,phase:parsed.phase,powerPercent:+parsed.powerPercent,durationMs:+parsed.durationMs,programElapsedMs:+parsed.programElapsedMs});
       graphNowSec=(+parsed.programElapsedMs+(+parsed.durationMs))/1000;
       scheduleGraphUpdate();
     }else if(parsed.commandKey==='motor-automatic-segment'){
       lastLiveSegmentIndex=idx;
-      liveSegments.push({fromSpeed:+parsed.fromSpeedPercent,toSpeed:+parsed.toSpeedPercent,durationMs:+parsed.durationMs,programElapsedMs:+parsed.programElapsedMs});
+      liveSegments.push({index:idx,fromSpeed:+parsed.fromSpeedPercent,toSpeed:+parsed.toSpeedPercent,durationMs:+parsed.durationMs,programElapsedMs:+parsed.programElapsedMs});
       graphNowSec=(+parsed.programElapsedMs+(+parsed.durationMs))/1000;
       scheduleGraphUpdate();
     }
@@ -879,10 +1064,8 @@ function tryIngestLiveSegment(status){
 }
 function buildLiveGraphSchedule(){
   if(!liveSegments.length||activeOperateMode()!=='auto')return null;
-  var horizon=PREVIEW_HORIZON;
   var label=isMotorProfile()?'Speed %':'Power %';
-  if(isMotorProfile())horizon=autoHorizonSecMotor(normalizeMotorAuto(readMotorAutoSnapshot()));
-  else horizon=autoHorizonSecRelay(readAutoSnapshot());
+  var horizon=isMotorProfile()?autoHorizonSecMotor(normalizeMotorAuto(readMotorAutoSnapshot())):autoHorizonSecRelay(readAutoSnapshot());
   var pts=[];
   if(isMotorProfile()){
     pts.push({t:0,v:liveSegments[0].fromSpeed||0});
@@ -891,7 +1074,7 @@ function buildLiveGraphSchedule(){
       var t0=seg.programElapsedMs/1000;
       var t1=t0+seg.durationMs/1000;
       pts.push({t:t0,v:seg.fromSpeed});pts.push({t:t0,v:seg.toSpeed});pts.push({t:t1,v:seg.toSpeed});
-      horizon=Math.max(horizon,t1+5);
+      horizon=Math.max(horizon,t1+2);
     }
   }else{
     pts.push({t:0,v:0});
@@ -905,9 +1088,10 @@ function buildLiveGraphSchedule(){
       if(target!==level){pts.push({t:rs,v:level});pts.push({t:rs,v:target});}
       pts.push({t:re,v:target});
       level=target;
-      horizon=Math.max(horizon,re+5);
+      horizon=Math.max(horizon,re+2);
     }
   }
+  if(graphNowSec!=null)horizon=Math.max(horizon,graphNowSec+1);
   return {points:pts,horizon:horizon,label:label,nowSec:graphNowSec,live:true};
 }
 function activeOperateMode(){
@@ -1438,6 +1622,29 @@ function drawPatternGraph(){
   if(!sched)sched=buildPreviewPoints();
   var pts=sched.points;
   var horizon=sched.horizon||PREVIEW_HORIZON;
+  if(graphWindowSec!=null&&graphWindowSec>=horizon-0.5)graphWindowSec=null;
+  var effWin=graphEffectiveWindowSec(horizon);
+  var followNow=sched.live&&sched.nowSec!=null&&sched.nowSec>=0;
+  var view=buildGraphView(horizon,effWin,followNow,sched.nowSec);
+  var viewStart=view.startSec;
+  var viewEnd=view.endSec;
+  var viewSpan=Math.max(viewEnd-viewStart,0.001);
+  var plotW=w-padL-padR;
+  var plotH=h-padT-padB;
+  var isZoomed=effWin<horizon-0.5;
+  var rangeEl=$('graph-range-label');
+  if(rangeEl){
+    var panHint=(isZoomed&&!graphFollowNow)?' · pan':'';
+    rangeEl.textContent=(isZoomed?formatGraphAxisTime(viewStart)+' – '+formatGraphAxisTime(viewEnd):'0 – '+formatGraphAxisTime(horizon))+
+      (graphFollowNow&&followNow&&isZoomed?' · following now':panHint);
+  }
+  var zIn=$('btn-graph-zoom-in'),zOut=$('btn-graph-zoom-out'),zFit=$('btn-graph-fit');
+  var pL=$('btn-graph-pan-left'),pR=$('btn-graph-pan-right');
+  if(zIn)zIn.disabled=effWin<=GRAPH_MIN_WINDOW_SEC+0.5;
+  if(zOut)zOut.disabled=!isZoomed;
+  if(zFit)zFit.disabled=!isZoomed;
+  if(pL)pL.disabled=!isZoomed||viewStart<=0.01;
+  if(pR)pR.disabled=!isZoomed||viewStart>=horizon-effWin-0.01;
   ctx.clearRect(0,0,w,h);
   ctx.fillStyle='#0f172a';
   ctx.fillRect(0,0,w,h);
@@ -1448,18 +1655,38 @@ function drawPatternGraph(){
   ctx.lineTo(padL,h-padB);
   ctx.lineTo(w-padR,h-padB);
   ctx.stroke();
-  if(!pts.length)return;
-  ctx.strokeStyle='#818cf8';
-  ctx.lineWidth=2;
+  ctx.save();
   ctx.beginPath();
-  for(var i=0;i<pts.length;i++){
-    var x=padL+(pts[i].t/horizon)*(w-padL-padR);
-    var y=(h-padB)-(pts[i].v/100)*(h-padT-padB);
-    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+  ctx.rect(padL,padT,plotW,plotH);
+  ctx.clip();
+  if(pts.length){
+    ctx.strokeStyle='#818cf8';
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    for(var i=0;i<pts.length;i++){
+      var x=graphXSec(pts[i].t,viewStart,viewSpan,padL,plotW);
+      var y=(h-padB)-(pts[i].v/100)*plotH;
+      if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
   }
-  ctx.stroke();
+  if(sched.live&&!isMotorProfile()&&liveSegments.length){
+    ctx.fillStyle='rgba(129,140,248,.85)';
+    for(var si=0;si<liveSegments.length;si++){
+      var seg=liveSegments[si];
+      if(seg.phase!=='stroke')continue;
+      var t0=seg.programElapsedMs/1000;
+      var t1=t0+seg.durationMs/1000;
+      if(t1<viewStart||t0>viewEnd)continue;
+      var x0=graphXSec(Math.max(t0,viewStart),viewStart,viewSpan,padL,plotW);
+      var x1=graphXSec(Math.min(t1,viewEnd),viewStart,viewSpan,padL,plotW);
+      var barW=Math.max(2,x1-x0);
+      var yTop=(h-padB)-(seg.powerPercent/100)*plotH;
+      ctx.fillRect(x0,yTop,barW,(h-padB)-yTop);
+    }
+  }
   if(sched.nowSec!=null&&sched.nowSec>=0){
-    var nx=padL+(sched.nowSec/horizon)*(w-padL-padR);
+    var nx=graphXSec(sched.nowSec,viewStart,viewSpan,padL,plotW);
     if(nx>=padL&&nx<=w-padR){
       ctx.strokeStyle='#fbbf24';
       ctx.lineWidth=1.5;
@@ -1469,16 +1696,17 @@ function drawPatternGraph(){
       ctx.stroke();
     }
   }
+  ctx.restore();
   ctx.fillStyle='#64748b';
   ctx.font='10px system-ui,sans-serif';
-  ctx.fillText('0',padL-8,h-padB+14);
-  ctx.fillText(Math.round(horizon)+'s',w-padR-24,h-padB+14);
+  ctx.fillText(formatGraphAxisTime(viewStart),padL-4,h-padB+14);
+  ctx.fillText(formatGraphAxisTime(viewEnd),w-padR-28,h-padB+14);
   ctx.fillText((sched.live?'Live · ':'Preview · ')+(sched.label||''),padL,padT+8);
   var cap=$('graph-caption');
   if(cap){
     cap.textContent=sched.live
-      ?('Recording '+liveSegments.length+' segment(s) from device telemetry. Yellow line = now.')
-      :('Preview — '+sched.label+' over ~'+Math.round(horizon)+'s (illustrative; seeded from settings).');
+      ?('Recording '+liveSegments.length+' segment(s). Drag chart or ◀ ▶ to pan when zoomed. Yellow = now.')
+      :('Preview — '+sched.label+' over ~'+Math.round(horizon)+'s. Zoom, then drag or ◀ ▶ to pan.');
   }
 }
 function scheduleGraphUpdate(){
@@ -1527,7 +1755,7 @@ async function poll(){
       autoLiveActive=false;
       lastPushedAuto=null;
     }
-    if(s.automaticActive)tryIngestLiveSegment(s);
+    if(s.automaticActive||liveSegments.length||(s.automaticSegments&&s.automaticSegments.length))syncLiveSegmentsFromStatus(s);
     var banner=$('auto-session-banner');
     if(banner){
       var showBanner=s.automaticActive&&activeOperateMode()==='auto';
@@ -1703,6 +1931,28 @@ $('btn-act-kind').onclick=async function(){
     setStatus(j.reboot?'Profile saved — rebooting…':'Profile unchanged');
   }catch(e){setStatus(e.message);}
 };
+try{
+  var gz=sessionStorage.getItem(GRAPH_ZOOM_KEY);
+  if(gz){var n=+gz;if(isFinite(n)&&n>0)graphWindowSec=n;}
+}catch(e){}
+$('btn-graph-pan-left').onclick=function(){
+  var meta=graphScheduleMeta();
+  graphPanBy(-graphEffectiveWindowSec(meta.horizon)*0.25);
+};
+$('btn-graph-pan-right').onclick=function(){
+  var meta=graphScheduleMeta();
+  graphPanBy(graphEffectiveWindowSec(meta.horizon)*0.25);
+};
+$('btn-graph-zoom-in').onclick=function(){
+  var sched=buildLiveGraphSchedule()||buildPreviewPoints();
+  graphZoomIn((sched&&sched.horizon)||PREVIEW_HORIZON);
+};
+$('btn-graph-zoom-out').onclick=function(){
+  var sched=buildLiveGraphSchedule()||buildPreviewPoints();
+  graphZoomOut((sched&&sched.horizon)||PREVIEW_HORIZON);
+};
+$('btn-graph-fit').onclick=graphZoomFit;
+bindGraphCanvasPan();
 async function bootstrapOperateSession(){
   if(!token){endSessionResume();showMain(false);refreshFocusDevice();return;}
   try{
@@ -1731,11 +1981,13 @@ namespace OperatePages {
 
 void handleOperateGet(AsyncWebServerRequest* request) {
     Serial.println(F("[HTTP] GET /operate"));
-    AsyncResponseStream* response = request->beginResponseStream("text/html", 200);
-    response->print(F("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" "
-                      "content=\"width=device-width,initial-scale=1\"><title>SomEsp Control</title>"
-                      "<link rel=\"stylesheet\" href=\"/ui/somnet.css\">"));
-    response->print(FPSTR(kOperateHtml));
+    const size_t len = strlen_P(kOperateHtml);
+    if (strstr_P(kOperateHtml, PSTR("</html>")) == nullptr) {
+        Serial.println(F("[HTTP] warning: /operate HTML incomplete (truncated PROGMEM?)"));
+    }
+    Serial.print(F("[HTTP] /operate response bytes="));
+    Serial.println(len);
+    AsyncWebServerResponse* response = request->beginResponse_P(200, "text/html", kOperateHtml);
     request->send(response);
 }
 

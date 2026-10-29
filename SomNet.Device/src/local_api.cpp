@@ -24,7 +24,7 @@ CommandHandler* gCommandHandler = nullptr;
 DeviceIdentity* gIdentity = nullptr;
 
 // HTTP handlers run on async_tcp (small stack) — no large stack buffers.
-static char gHttpStatusJson[1536];
+static char gHttpStatusJson[8192];
 static char gHttpHistoryIndexJson[4096];
 static char gHttpHistoryEventJson[1400];
 static char gHttpLocalSettingsJson[kMaxLocalOperateSettingsBytes];
@@ -322,6 +322,21 @@ void handleLocalStatus(AsyncWebServerRequest* request) {
     }
     if (resultJson[0] != '\0') {
         doc["resultJson"] = resultJson;
+    }
+
+    if (localAutomaticSegmentsCount() > 0) {
+        JsonArray segs = doc["automaticSegments"].to<JsonArray>();
+        const size_t segCount = localAutomaticSegmentsCount();
+        for (size_t ord = 0; ord < segCount; ++ord) {
+            char segJson[220];
+            if (!localAutomaticSegmentJsonAt(ord, segJson, sizeof(segJson)) || segJson[0] == '\0') {
+                break;
+            }
+            JsonDocument segDoc;
+            if (deserializeJson(segDoc, segJson) == DeserializationError::Ok) {
+                segs.add(segDoc.as<JsonObject>());
+            }
+        }
     }
 
     RgbStatusInputs rgbIn;

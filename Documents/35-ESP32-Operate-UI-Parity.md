@@ -19,7 +19,7 @@ Product idea (not implemented): one **master** ESP serves `/operate` for multipl
 - [x] External stylesheet `/ui/somnet.css` (avoids HTML buffer overflow)
 - [x] Automatic min/max **power** and motor **speed** range sliders with stroke/ms hints
 - [x] **Session running** banner during automatic
-- [x] **Live graph** from `relay-automatic-segment` / `motor-automatic-segment` in `/api/local/status` `resultJson` (yellow now marker)
+- [x] Pattern graph **+/−/Fit** zoom (same window math as SomNet.UI `motorChartViewRange`; live mode pans on “now”)
 - [x] Status `/` — same app shell as `/operate` (header pill polling `/api/status`, two-column dashboard, ui-panels)
 - [x] Relay preview — bursts, power/timing wave, stroke end horizon
 - [x] Motor automatic preview — segment ramps + burst clusters (Options ramp mode)

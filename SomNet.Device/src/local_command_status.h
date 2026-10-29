@@ -19,3 +19,10 @@ void localCommandStatusGet(
     size_t messageLen,
     char* resultJsonOut,
     size_t resultJsonLen);
+
+/** Ring of automatic segment telemetry for live /operate graph (indexed by segmentIndex). */
+void localAutomaticSegmentsClear();
+void localAutomaticSegmentsCapture(const char* correlationId, const char* resultJson);
+/** Append JSON array into out as `"automaticSegments":[...]` fragment or full merge via ArduinoJson helper. */
+size_t localAutomaticSegmentsCount();
+bool localAutomaticSegmentJsonAt(size_t ordinal, char* out, size_t outLen);

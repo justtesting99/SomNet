@@ -1,6 +1,10 @@
 #include "local_command_status.h"
 
+#include "modes/automatic/automatic_config.h"
+#include "modes/motor/motor_automatic_config.h"
+
 #include <Arduino.h>
+#include <stdlib.h>
 #include <string.h>
 
 namespace {
@@ -11,7 +15,102 @@ bool gSuccess = false;
 char gMessage[96] = {};
 char gResultJson[768] = {};
 
+constexpr size_t kMaxAutomaticSegmentSlots = 48;
+constexpr size_t kAutomaticSegmentJsonMax = 220;
+
+struct SegmentSlot {
+    bool used = false;
+    int index = -1;
+    char json[kAutomaticSegmentJsonMax];
+};
+
+SegmentSlot gAutomaticSegments[kMaxAutomaticSegmentSlots];
+size_t gAutomaticSegmentCount = 0;
+
+bool isAutomaticSegmentCorrelation(const char* correlationId) {
+    if (correlationId == nullptr) {
+        return false;
+    }
+    return strcmp(correlationId, kRelayAutomaticSegmentCorrelationId) == 0 ||
+           strcmp(correlationId, kMotorAutomaticSegmentCorrelationId) == 0;
+}
+
+int parseSegmentIndex(const char* resultJson) {
+    if (resultJson == nullptr) {
+        return -1;
+    }
+    const char* marker = strstr(resultJson, "\"segmentIndex\":");
+    if (marker == nullptr) {
+        return -1;
+    }
+    return atoi(marker + strlen("\"segmentIndex\":"));
+}
+
 } // namespace
+
+void localAutomaticSegmentsClear() {
+    for (size_t i = 0; i < kMaxAutomaticSegmentSlots; ++i) {
+        gAutomaticSegments[i].used = false;
+        gAutomaticSegments[i].index = -1;
+        gAutomaticSegments[i].json[0] = '\0';
+    }
+    gAutomaticSegmentCount = 0;
+}
+
+void localAutomaticSegmentsCapture(const char* correlationId, const char* resultJson) {
+    if (!isAutomaticSegmentCorrelation(correlationId) || resultJson == nullptr ||
+        resultJson[0] == '\0') {
+        return;
+    }
+
+    const int segmentIndex = parseSegmentIndex(resultJson);
+    if (segmentIndex < 0 || segmentIndex >= static_cast<int>(kMaxAutomaticSegmentSlots)) {
+        return;
+    }
+
+    if (segmentIndex == 0) {
+        localAutomaticSegmentsClear();
+    }
+
+    SegmentSlot* slot = &gAutomaticSegments[static_cast<size_t>(segmentIndex)];
+    if (!slot->used) {
+        ++gAutomaticSegmentCount;
+    }
+    slot->used = true;
+    slot->index = segmentIndex;
+    strncpy(slot->json, resultJson, sizeof(slot->json) - 1);
+    slot->json[sizeof(slot->json) - 1] = '\0';
+}
+
+size_t localAutomaticSegmentsCount() {
+    size_t n = 0;
+    for (size_t i = 0; i < kMaxAutomaticSegmentSlots; ++i) {
+        if (gAutomaticSegments[i].used) {
+            ++n;
+        }
+    }
+    return n;
+}
+
+bool localAutomaticSegmentJsonAt(size_t ordinal, char* out, size_t outLen) {
+    if (out == nullptr || outLen == 0) {
+        return false;
+    }
+    out[0] = '\0';
+    size_t seen = 0;
+    for (size_t i = 0; i < kMaxAutomaticSegmentSlots; ++i) {
+        if (!gAutomaticSegments[i].used) {
+            continue;
+        }
+        if (seen == ordinal) {
+            strncpy(out, gAutomaticSegments[i].json, outLen - 1);
+            out[outLen - 1] = '\0';
+            return true;
+        }
+        ++seen;
+    }
+    return false;
+}
 
 void localCommandStatusBegin(const char* correlationId) {
     gComplete = false;
@@ -48,6 +147,13 @@ void localCommandStatusOnAck(
         gResultJson[sizeof(gResultJson) - 1] = '\0';
     } else {
         gResultJson[0] = '\0';
+    }
+
+    if (isAutomaticSegmentCorrelation(correlationId)) {
+        localAutomaticSegmentsCapture(correlationId, resultJson);
+    } else if (correlationId != nullptr &&
+               strcmp(correlationId, kAutomaticSessionCompleteCorrelationId) == 0) {
+        // Keep segments through session end so the UI can render the full run; cleared on next index 0.
     }
 }
 

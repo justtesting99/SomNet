@@ -113,7 +113,11 @@ html.session-resume #main.app-shell.hidden{display:flex!important}
 .header-toggle.is-disabled{opacity:.65}
 .control-grid{display:grid;gap:1rem}
 @media(min-width:768px){.control-grid.cols-2{grid-template-columns:1fr 1fr}}
-.graph-panel canvas{width:100%;height:auto;display:block;border-radius:.5rem;background:#0f172a}
+.graph-panel .graph-canvas-wrap{overflow:hidden;border-radius:.5rem;background:#0f172a}
+.graph-panel canvas{width:100%;height:auto;display:block;touch-action:none;cursor:grab}
+.graph-panel canvas.graph-dragging{cursor:grabbing}
+.graph-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.5rem}
+.graph-toolbar .panel-actions{margin:0;flex:0 0 auto}
 .hist-detail{white-space:pre-wrap;font-size:.75rem;margin:.5rem 0 0;max-height:min(50vh,20rem);overflow:auto;background:#1e293b;border:1px solid #334155;border-radius:.5rem;padding:.75rem}
 #hist-list{list-style:none;padding:0;margin:0}
 #hist-list li{padding:.45rem .5rem;border-radius:.375rem;cursor:pointer;font-size:.8125rem;color:#cbd5e1}
