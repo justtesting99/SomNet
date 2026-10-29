@@ -6,6 +6,7 @@
 #include "nvs_store.h"
 #include "signalr_client.h"
 #include "wifi_manager.h"
+#include "web_ui_shared.h"
 
 #if SOMNET_LOCAL_OPERATE_ENABLED
 #include "local_operate.h"
@@ -22,6 +23,10 @@
 static DeviceBootMode gHttpMode = DeviceBootMode::Running;
 static AsyncWebServer gHttpServer(CONFIG_HTTP_PORT);
 static bool gHttpRoutesRegistered = false;
+
+/** Render buffers in BSS — avoid large stacks on async_tcp (GET /, /config). */
+static char gStatusHtmlBuffer[8192];
+static char gConfigHtmlBuffer[8192];
 
 namespace {
 
@@ -315,9 +320,21 @@ void sendHtml(AsyncWebServerRequest* request, const char* html) {
         return;
     }
 
+    const size_t len = strlen(html);
+    if (strstr(html, "</html>") == nullptr) {
+        Serial.println(F("[HTTP] warning: HTML incomplete (buffer truncated?)"));
+    }
     Serial.print(F("[HTTP] response bytes="));
-    Serial.println(strlen(html));
+    Serial.println(len);
     request->send(200, "text/html", html);
+}
+
+void handleSomNetUiCss(AsyncWebServerRequest* request) {
+    logHttpRequest(request, "/ui/somnet.css");
+    AsyncWebServerResponse* response =
+        request->beginResponse_P(200, "text/css", SomNetWebUi::kCssRules);
+    response->addHeader("Cache-Control", "public, max-age=3600");
+    request->send(response);
 }
 
 void handlePing(AsyncWebServerRequest* request) {
@@ -332,12 +349,11 @@ void handleFavicon(AsyncWebServerRequest* request) {
 
 void handleStatus(AsyncWebServerRequest* request) {
     logHttpRequest(request, "/");
-    char html[8192];
     char serverUrl[NvsStore::kMaxStringLen];
     buildEffectiveServerUrl(serverUrl, sizeof(serverUrl));
     ConfigPages::renderStatus(
-        html,
-        sizeof(html),
+        gStatusHtmlBuffer,
+        sizeof(gStatusHtmlBuffer),
         *gNvs,
         *gIdentity,
         *gWifi,
@@ -345,22 +361,21 @@ void handleStatus(AsyncWebServerRequest* request) {
         gHttpMode == DeviceBootMode::Provisioning,
         gSignalR != nullptr ? gSignalR->hubStateLabel() : "offline",
         gSignalR != nullptr && gSignalR->isHubConnected());
-    sendHtml(request, html);
+    sendHtml(request, gStatusHtmlBuffer);
 }
 
 void handleConfigGet(AsyncWebServerRequest* request) {
     logHttpRequest(request, "/config");
-    char html[5120];
     char serverUrl[NvsStore::kMaxStringLen];
     buildEffectiveServerUrl(serverUrl, sizeof(serverUrl));
     ConfigPages::renderConfigForm(
-        html,
-        sizeof(html),
+        gConfigHtmlBuffer,
+        sizeof(gConfigHtmlBuffer),
         *gNvs,
         *gIdentity,
         serverUrl,
         gHttpMode == DeviceBootMode::Provisioning);
-    sendHtml(request, html);
+    sendHtml(request, gConfigHtmlBuffer);
 }
 
 void scheduleRestartAfterResponse(AsyncWebServerRequest* request) {
@@ -618,6 +633,7 @@ void handleCaptivePortalProbe(AsyncWebServerRequest* request) {
 void registerRoutes(AsyncWebServer& server) {
     server.on("/ping", HTTP_GET, handlePing);
     server.on("/favicon.ico", HTTP_GET, handleFavicon);
+    server.on("/ui/somnet.css", HTTP_GET, handleSomNetUiCss);
     server.on("/", HTTP_GET, handleStatus);
     server.on("/generate_204", HTTP_GET, handleCaptivePortalProbe);
     server.on("/gen_204", HTTP_GET, handleCaptivePortalProbe);

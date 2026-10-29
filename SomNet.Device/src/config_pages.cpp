@@ -4,51 +4,12 @@
 #include "config.h"
 #include "device_identity.h"
 #include "nvs_store.h"
+#include "web_ui_shared.h"
 #include "wifi_manager.h"
 
 #include <Arduino.h>
 
 namespace {
-
-// Phase 7 (P7-D10): SomNet web app palette — slate-950 / slate-900 / indigo-600
-constexpr char kStyle[] PROGMEM = R"raw(
-<style>
-*{box-sizing:border-box}
-body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:#020617;color:#cbd5e1;line-height:1.45;min-height:100vh;-webkit-font-smoothing:antialiased}
-.page{max-width:32rem;margin:0 auto;padding:1rem 1rem 2rem}
-h1{font-size:1.25rem;color:#f1f5f9;margin:0 0 .75rem;font-weight:600}
-.panel{background:#0f172a;border:1px solid #334155;border-radius:.75rem;padding:1rem;margin:.75rem 0}
-.note{color:#94a3b8;font-size:.875rem;margin:.5rem 0}
-label{display:block;margin:.75rem 0 .35rem;font-weight:600;color:#e2e8f0;font-size:.875rem}
-input[type=text],input[type=password],input[type=url]{width:100%;padding:.55rem .65rem;border:1px solid #475569;border-radius:.5rem;background:#1e293b;color:#f8fafc;font-size:1rem}
-input:read-only{background:#334155;color:#cbd5e1}
-.device-id{font-family:ui-monospace,monospace;font-size:1.05rem;word-break:break-all;user-select:all;color:#a5b4fc;padding:.65rem;background:#1e293b;border-radius:.5rem;border:1px solid #4338ca;margin:.35rem 0}
-.row{margin:.4rem 0}
-.row strong{color:#e2e8f0}
-a{color:#818cf8;text-decoration:none}
-a:hover{text-decoration:underline}
-.actions{margin-top:1rem;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
-button,.btn{display:inline-block;padding:.55rem 1rem;border-radius:.5rem;border:1px solid transparent;font-size:.9375rem;font-weight:600;cursor:pointer;font-family:inherit}
-.btn-primary{background:#4f46e5;color:#fff}
-.btn-primary:hover{background:#6366f1}
-.btn-primary:disabled{background:#334155;color:#64748b;cursor:not-allowed;opacity:.85}
-.btn-primary:disabled:hover{background:#334155}
-.btn-secondary{background:#334155;color:#e2e8f0;border-color:#475569}
-.btn-danger{background:#7f1d1d;color:#fecaca;border-color:#991b1b}
-.alert-success{padding:.75rem 1rem;background:rgba(79,70,229,.15);border:1px solid #4f46e5;border-radius:.5rem;color:#e0e7ff;margin:.75rem 0}
-.danger-zone{margin-top:1.5rem;padding-top:1rem;border-top:1px solid #334155}
-.danger-zone .note{margin-bottom:.5rem}
-.switch-row{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin:.5rem 0}
-.switch{position:relative;display:inline-block;width:3rem;height:1.65rem;flex:0 0 auto}
-.switch input{opacity:0;width:0;height:0}
-.switch .slider{position:absolute;cursor:pointer;inset:0;background:#334155;border-radius:999px;transition:background .2s}
-.switch .slider:before{position:absolute;content:\"\";height:1.25rem;width:1.25rem;left:.2rem;bottom:.2rem;background:#e2e8f0;border-radius:50%;transition:transform .2s}
-.switch input:checked+.slider{background:#4f46e5}
-.switch input:checked+.slider:before{transform:translateX(1.35rem)}
-.switch input:disabled+.slider{opacity:.5;cursor:not-allowed}
-#hub-mode-status{font-size:.875rem;color:#a5b4fc;min-height:1.25rem}
-</style>
-)raw";
 
 void append(char* out, size_t outLen, size_t* offset, const char* text) {
     if (text == nullptr || *offset >= outLen) {
@@ -66,43 +27,19 @@ void append(char* out, size_t outLen, size_t* offset, const char* text) {
     }
 }
 
-void appendProgmemStr(char* out, size_t outLen, size_t* offset, const char* progmemText) {
-    if (progmemText == nullptr || *offset >= outLen) {
-        return;
-    }
-    for (size_t i = 0;; ++i) {
-        const char c = static_cast<char>(pgm_read_byte(progmemText + i));
-        if (c == '\0') {
-            break;
-        }
-        if (*offset + 1 >= outLen) {
-            out[outLen - 1] = '\0';
-            return;
-        }
-        out[(*offset)++] = c;
-    }
-    out[*offset] = '\0';
-}
-
-void appendProgmem(char* out, size_t outLen, size_t* offset, const char* progmemText) {
-    char buffer[768];
-    strncpy_P(buffer, progmemText, sizeof(buffer) - 1);
-    buffer[sizeof(buffer) - 1] = '\0';
-    append(out, outLen, offset, buffer);
-}
-
-void appendHtmlHead(char* out, size_t outLen, size_t* offset, const char* title) {
-    append(out, outLen, offset, "<!DOCTYPE html><html><head><meta charset=\"utf-8\">");
-    append(out, outLen, offset, "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
-    append(out, outLen, offset, "<title>");
-    append(out, outLen, offset, title);
-    append(out, outLen, offset, "</title>");
-    appendProgmemStr(out, outLen, offset, kStyle);
-    append(out, outLen, offset, "</head><body><div class=\"page\">");
+void appendHtmlHead(
+    char* out,
+    size_t outLen,
+    size_t* offset,
+    const char* title,
+    const char* activePage) {
+    SomNetWebUi::appendHtmlHeadOpen(out, outLen, offset, title);
+    SomNetWebUi::appendShellHeader(out, outLen, offset, activePage, kSomNetLocalOperateEnabled);
+    SomNetWebUi::appendShellMainOpen(out, outLen, offset, true);
 }
 
 void appendHtmlFoot(char* out, size_t outLen, size_t* offset) {
-    append(out, outLen, offset, "</div></body></html>");
+    SomNetWebUi::appendShellClose(out, outLen, offset);
 }
 
 void htmlEscape(const char* input, char* out, size_t outLen) {
@@ -180,8 +117,8 @@ void renderStatus(
     htmlEscape(installer, escInstaller, sizeof(escInstaller));
     htmlEscape(effectiveServerUrl != nullptr ? effectiveServerUrl : "", escServer, sizeof(escServer));
 
-    appendHtmlHead(out, outLen, &offset, kSomNetStandaloneBuild ? "SomEsp Device" : "SomNet Device");
-    append(out, outLen, &offset, kSomNetStandaloneBuild ? "<h1>SomEsp Device</h1>" : "<h1>SomNet Device</h1>");
+    appendHtmlHead(out, outLen, &offset, kSomNetStandaloneBuild ? "SomEsp Device" : "SomNet Device", "status");
+    append(out, outLen, &offset, kSomNetStandaloneBuild ? "<h1 class=\"page-title\">SomEsp Device</h1>" : "<h1 class=\"page-title\">SomNet Device</h1>");
 
     const bool somespHasServer = kSomNetStandaloneBuild && escServer[0] != '\0';
     const bool somespPaired = kSomNetStandaloneBuild && nvs.isPaired();
@@ -363,8 +300,8 @@ void renderConfigForm(
     htmlEscape(wifiPass, escPass, sizeof(escPass));
     htmlEscape(server, escServer, sizeof(escServer));
 
-    appendHtmlHead(out, outLen, &offset, kSomNetStandaloneBuild ? "Configure SomEsp Device" : "Configure SomNet Device");
-    append(out, outLen, &offset, "<h1>Configure</h1>");
+    appendHtmlHead(out, outLen, &offset, kSomNetStandaloneBuild ? "Configure SomEsp Device" : "Configure SomNet Device", "config");
+    append(out, outLen, &offset, "<h1 class=\"page-title\">Configure</h1>");
     if (kSomNetStandaloneBuild) {
         append(out, outLen, &offset,
             "<p class=\"note\">Enter home Wi-Fi only. No SomNet server URL is used in standalone mode. "
@@ -433,13 +370,11 @@ void renderSavedPage(char* out, size_t outLen, const char* message) {
 
     size_t offset = 0;
     out[0] = '\0';
-    append(out, outLen, &offset, "<!DOCTYPE html><html><head><meta charset=\"utf-8\">");
-    append(out, outLen, &offset, "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+    SomNetWebUi::appendHtmlHeadOpen(out, outLen, &offset, "Saved");
     append(out, outLen, &offset, "<meta http-equiv=\"refresh\" content=\"5;url=/\">");
-    append(out, outLen, &offset, "<title>Saved</title>");
-    appendProgmemStr(out, outLen, &offset, kStyle);
-    append(out, outLen, &offset, "</head><body><div class=\"page\">");
-    append(out, outLen, &offset, "<h1>Saved</h1>");
+    SomNetWebUi::appendShellHeader(out, outLen, &offset, "status", kSomNetLocalOperateEnabled);
+    SomNetWebUi::appendShellMainOpen(out, outLen, &offset, false);
+    append(out, outLen, &offset, "<h1 class=\"page-title\">Saved</h1>");
     append(out, outLen, &offset, "<div class=\"alert-success\"><strong>Please wait for reboot.</strong><br>Your save was received. The device is restarting now &mdash; this usually takes 10&ndash;30 seconds.</div>");
     append(out, outLen, &offset, "<p>");
     append(out, outLen, &offset, escMessage);

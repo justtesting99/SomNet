@@ -1,118 +1,88 @@
 #include "operate_pages.h"
 
+#include "web_ui_shared.h"
+
 #include <ESPAsyncWebServer.h>
 #include <Arduino.h>
 
 namespace {
 
-// Shared palette with config_pages (slate / indigo).
+// Body HTML (shared CSS streamed separately in handleOperateGet).
 constexpr char kOperateHtml[] PROGMEM = R"raw(
-<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SomEsp Operate</title>
-<style>
-*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#020617;color:#cbd5e1}
-.page{width:100%;max-width:36rem;margin:0 auto;padding:1rem 1rem 2.5rem}
-h1{font-size:1.2rem;color:#f1f5f9;margin:0 0 .5rem}
-.panel-actions{display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.5rem}
-.hist-detail{white-space:pre-wrap;font-size:.75rem;margin:.5rem 0 0}
-@media (min-width:600px){
-.page{max-width:42rem;padding:1.25rem 1.5rem 2.5rem}
-#gate.gate-split{display:grid;grid-template-columns:1fr 1fr;gap:.5rem .75rem}
-#gate.gate-split .gate-actions{grid-column:1/-1}
-}
-@media (min-width:768px){
-.page{max-width:56rem;padding:1.5rem 2rem 3rem}
-h1{font-size:1.35rem}
-.tabs{max-width:28rem}
-#tab-manual.layout-split:not(.hidden),#tab-auto.layout-split:not(.hidden),#tab-hist.layout-split:not(.hidden){
-  display:grid;grid-template-columns:1fr 1fr;gap:1rem 1.25rem;align-items:start}
-#tab-manual.layout-split:not(.hidden) .panel-actions,#tab-auto.layout-split:not(.hidden) .panel-actions{grid-column:1/-1}
-#tab-manual.layout-split:not(.hidden) hr{grid-column:1/-1;margin:.25rem 0}
-#tab-hist.layout-split:not(.hidden) .hist-detail{margin:0;max-height:min(70vh,28rem);overflow:auto;
-  background:#1e293b;border:1px solid #334155;border-radius:.5rem;padding:.75rem}
-}
-@media (min-width:1024px){
-.page{max-width:68rem}
-h1{font-size:1.5rem}
-.row.quad{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
-}
-@media (min-width:1280px){
-.page{max-width:76rem;padding:1.75rem 2.5rem 3rem}
-}
-.tabs{display:flex;gap:.35rem;margin:.75rem 0}
-.tab{flex:1;padding:.5rem;border:1px solid #334155;background:#0f172a;color:#94a3b8;border-radius:.5rem;cursor:pointer;font-weight:600}
-.tab.active{background:#4f46e5;color:#fff;border-color:#4f46e5}
-.panel{background:#0f172a;border:1px solid #334155;border-radius:.75rem;padding:1rem;margin:.6rem 0}
-label{display:block;margin:.5rem 0 .25rem;font-size:.85rem;color:#e2e8f0}
-input,select{width:100%;padding:.45rem;border-radius:.4rem;border:1px solid #475569;background:#1e293b;color:#f8fafc}
-.row{display:flex;gap:.5rem}.row>*{flex:1}
-button,.btn{padding:.55rem 1rem;border-radius:.5rem;border:none;font-weight:600;cursor:pointer;margin:.25rem .25rem .25rem 0}
-.btn-primary{background:#4f46e5;color:#fff}.btn-danger{background:#7f1d1d;color:#fecaca}
-.btn-secondary{background:#334155;color:#e2e8f0}
-.note{font-size:.8rem;color:#94a3b8;margin:.35rem 0}
-.hint{font-size:.75rem;color:#64748b;margin:-.15rem 0 .35rem}
-.subpanel{border:1px solid #334155;border-radius:.5rem;padding:.75rem;margin:.75rem 0}
-.subpanel h2{font-size:.9rem;color:#e2e8f0;margin:0 0 .5rem;font-weight:600}
-label.chk{display:flex;align-items:center;gap:.5rem}label.chk input{width:auto;flex:0 0 auto}
-.status{font-size:.85rem;color:#a5b4fc;min-height:1.2rem}
-.panel.hidden{display:none!important}
-.hidden{display:none}
-a{color:#818cf8}
-</style></head><body><div class="page">
-<h1>SomEsp Operate</h1>
-<p class="note"><a href="/">Status</a> &middot; LAN only &middot; default PIN 1234</p>
-<div id="gate" class="panel gate-split">
+</head><body><div class="shell-bg"></div>
+<div id="gate" class="gate-screen">
+<div class="gate-card ui-panel"><div class="ui-panel-hd"><h2>Unlock control panel</h2></div><div class="ui-panel-bd">
 <label>Actuator profile<select id="act-kind">
 <option value="relay">Relay — stroke / burst</option>
 <option value="hbridge">Motor — H-bridge PWM</option>
 </select></label>
-<p class="note">Match the module on this board. Unlock, then save (disarms automatically if needed). Device reboots when the kind changes.</p>
+<p class="note">Match the module on this board. Save profile while unlocked (device reboots when the kind changes).</p>
 <button type="button" class="btn-secondary" id="btn-act-kind">Save profile &amp; reboot</button>
 <label>PIN<input id="pin" type="password" maxlength="16" value="1234"></label>
 <label>New PIN (optional)<input id="pin-new" type="password" maxlength="16" placeholder="change on unlock"></label>
-<div class="gate-actions panel-actions">
-<button class="btn-primary" id="btn-unlock">Unlock</button>
-<p class="note hidden" id="arm-hint">Unlocked — press D33 once (same as hub mode). Status shows <strong>ready</strong>, then enable Scene session below.</p>
-<button class="btn-secondary hidden" id="btn-lock">Lock</button>
+<div class="panel-actions">
+<button class="btn-primary lg" id="btn-unlock">Unlock</button>
 </div>
+<p class="note"><a href="/">Status</a> &middot; LAN only &middot; default PIN 1234</p>
+</div></div></div>
+<div id="main" class="app-shell hidden">
+<header class="shell-header"><div class="shell-header-inner wide">
+<div class="shell-brand"><div class="brand-title">SomEsp Control</div><div class="brand-sub">Local operate</div></div>
+<div id="status-pill" class="status-pill tone-checking"><div class="status-pill-inner"><span class="dot"></span><span class="summary">Checking…</span></div></div>
+<nav class="shell-nav">
+<a class="nav-link" href="/">Status</a>
+<button type="button" class="btn-ghost sm" id="btn-hist-open">History</button>
+<button type="button" class="btn-ghost sm hidden" id="btn-lock">Lock</button>
+</nav></div></header>
+<main class="shell-main wide">
+<div class="dashboard-grid">
+<div class="dashboard-controls">
+<div class="ui-panel"><div class="ui-panel-hd">
+<label class="focus-label">Focus device<select id="focus-device" class="focus-select"><option value="">Loading…</option></select></label>
+</div><div class="ui-panel-bd">
+<div class="device-toolbar">
+<span class="note" style="margin:0;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#64748b">Mode</span>
+<div class="mode-segment" role="tablist"><button type="button" class="mode-seg tab active" data-tab="manual">Manual</button><button type="button" class="mode-seg tab" data-tab="auto">Automatic</button></div>
+<div id="scene-toggle-wrap" class="header-toggle"><span class="header-toggle-label">Scene</span><span class="header-toggle-state" id="scene-state">Off</span><label class="toggle-switch"><input type="checkbox" id="scene-on"><span class="toggle-knob"></span></label></div>
 </div>
-<div id="main" class="hidden">
-<p class="panel note" id="scene-panel"><label><input type="checkbox" id="scene-on"> Scene session (LED solid green)</label></p>
-<div class="tabs"><button type="button" class="tab active" data-tab="manual">Manual</button><button type="button" class="tab" data-tab="auto">Automatic</button><button type="button" class="tab" data-tab="hist">History</button></div>
-<div id="tab-manual" class="panel">
-<div id="relay-manual-panel" class="profile-relay layout-split">
-<div class="layout-col">
+<p class="note hidden" id="arm-hint">Unlocked — press D33 once (same as hub mode). Status shows <strong>ready</strong>, then enable Scene above.</p>
+<div id="tab-manual">
+<div id="relay-manual-panel" class="profile-relay control-grid cols-2 layout-split">
+<div class="layout-col ui-panel"><div class="ui-panel-hd"><h2>Power settings</h2></div><div class="ui-panel-bd">
 <div class="row"><label>Min stroke ms<input id="m-min" type="number" min="1" max="30000" value="25"></label>
 <label>Max stroke ms<input id="m-max" type="number" min="1" max="30000" value="400"></label></div>
 <label>Power %<input id="m-power" type="range" min="0" max="100" value="50"></label>
 <p class="note">Stroke ~ <span id="m-stroke-ms">212</span> ms</p>
+</div></div>
+<div class="layout-col ui-panel"><div class="ui-panel-hd"><h2>Actions</h2></div><div class="ui-panel-bd">
 <div class="panel-actions">
-<button class="btn-primary" id="btn-stroke">Stroke</button>
-<button class="btn-danger" id="btn-abort">Abort</button>
+<button class="btn-primary lg" id="btn-stroke">Stroke</button>
+<button class="btn-danger lg" id="btn-abort">Abort</button>
 </div>
-</div>
-<hr style="border-color:#334155">
-<div class="layout-col">
+<div class="subpanel" style="margin-top:1rem">
 <div class="row"><label>Burst count<input id="b-count" type="number" min="1" max="100" value="5"></label>
 <label>Delay sec<input id="b-delay" type="number" min="0" max="300" value="5"></label></div>
-<button class="btn-primary" id="btn-burst">Burst</button>
+<button class="btn-primary lg" id="btn-burst">Burst</button>
 </div>
+</div></div>
 </div>
-<div id="motor-manual-panel" class="profile-motor hidden layout-split">
-<div class="layout-col">
+<div id="motor-manual-panel" class="profile-motor hidden control-grid cols-2 layout-split">
+<div class="layout-col ui-panel"><div class="ui-panel-hd"><h2>Speed settings</h2></div><div class="ui-panel-bd">
 <div class="row"><label>Min duty %<input id="mm-dmin" type="number" min="0" max="100" value="20"></label>
 <label>Max duty %<input id="mm-dmax" type="number" min="0" max="100" value="80"></label></div>
 <label>Speed %<input id="mm-speed" type="range" min="0" max="100" value="50"></label>
 <p class="note">PWM duty ~ <span id="mm-duty">50</span>%</p>
+</div></div>
+<div class="layout-col ui-panel"><div class="ui-panel-hd"><h2>Actions</h2></div><div class="ui-panel-bd">
 <div class="panel-actions">
-<button class="btn-primary" id="btn-motor-run">Run</button>
-<button class="btn-secondary" id="btn-motor-stop">Stop</button>
-<button class="btn-danger" id="btn-motor-abort">Abort</button>
+<button class="btn-primary lg" id="btn-motor-run">Run</button>
+<button class="btn-secondary lg" id="btn-motor-stop">Stop</button>
+<button class="btn-danger lg" id="btn-motor-abort">Abort</button>
+</div>
+</div></div>
 </div>
 </div>
-</div>
-</div>
-<div id="tab-auto" class="panel hidden">
+<div id="tab-auto" class="hidden">
 <div id="relay-auto-panel" class="profile-relay layout-split">
 <div class="layout-col">
 <label>Mode<select id="a-mode">
@@ -208,18 +178,27 @@ a{color:#818cf8}
 <button class="btn-secondary" id="btn-auto-update">Apply update</button>
 </div>
 </div>
-<div id="tab-hist" class="panel hidden layout-split">
-<div class="layout-col">
+</div></div></div>
+<aside class="dashboard-aside">
+<div class="ui-panel graph-panel"><div class="ui-panel-hd"><h2>Pattern preview</h2></div><div class="ui-panel-bd">
+<canvas id="pattern-graph" width="480" height="180" role="img" aria-label="Power or speed over time preview"></canvas>
+<p class="note" id="graph-caption">Illustrative preview from current settings (not live telemetry).</p>
+</div></div>
+</aside>
+</div>
+<p class="status sr-only" id="status-line">Idle</p>
+</main></div>
+<div id="hist-modal" class="modal-backdrop hidden" aria-hidden="true">
+<div class="modal ui-panel"><div class="ui-panel-hd"><h2>Session history</h2>
+<button type="button" class="btn-ghost sm" id="btn-hist-close" style="margin-left:auto">Close</button></div>
+<div class="ui-panel-bd">
 <div class="panel-actions">
 <button class="btn-secondary" id="btn-hist-refresh">Refresh</button>
 <button class="btn-danger" id="btn-hist-clear">Clear history</button>
 </div>
-<ul id="hist-list" class="note" style="padding-left:1.1rem"></ul>
-</div>
+<ul id="hist-list" class="note"></ul>
 <pre id="hist-detail" class="note hist-detail"></pre>
-</div>
-<p class="status" id="status-line">Idle</p>
-</div>
+</div></div></div>
 <script>
 (function(){
 var TOKEN_KEY='somesp-bearer';
@@ -233,6 +212,8 @@ var autoLiveActive=false;
 var lastPushedAuto=null;
 var deviceSaveTimer=null;
 var capsProfile='relay';
+var graphTimer=null;
+var focusDeviceId='';
 var MOTOR_MANUAL_KEY='somnet-local-motor-manual';
 var MOTOR_AUTO_KEY='somnet-local-motor-automatic';
 var APP_OPTIONS_KEY='somnet-local-app-options';
@@ -252,13 +233,51 @@ async function loadCapsProfile(){
     capsProfile=(c&&c.actuatorKind)||'relay';
     if($('act-kind')&&c.actuatorKind)$('act-kind').value=c.actuatorKind;
     applyProfileUi();
+    refreshFocusDevice();
+    scheduleGraphUpdate();
   }catch(e){applyProfileUi();}
 }
 function $(id){return document.getElementById(id);}
 function headers(){return token?{Authorization:'Bearer '+token,'Content-Type':'application/json'}:{'Content-Type':'application/json'};}
 function strokeMs(p,minMs,maxMs){minMs=+minMs;maxMs=+maxMs;var lo=Math.min(minMs,maxMs),hi=Math.max(minMs,maxMs);return Math.round(lo+(hi-lo)*(p/100));}
 function setStatus(t){$('status-line').textContent=t||'';}
-function showMain(on){$('main').classList.toggle('hidden',!on);$('btn-lock').classList.toggle('hidden',!token);$('arm-hint').classList.toggle('hidden',!token);}
+function setStatusPill(tone,summary){
+  var pill=$('status-pill');
+  if(!pill)return;
+  pill.className='status-pill tone-'+(tone||'checking');
+  var s=pill.querySelector('.summary');
+  if(s)s.textContent=summary||'';
+}
+function syncSceneToggleUi(on){
+  var wrap=$('scene-toggle-wrap');
+  if(wrap)wrap.classList.toggle('on',!!on);
+  var st=$('scene-state');
+  if(st)st.textContent=on?'On':'Off';
+}
+function showMain(on){
+  $('gate').classList.toggle('hidden',on);
+  $('main').classList.toggle('hidden',!on);
+  $('btn-lock').classList.toggle('hidden',!token);
+  $('arm-hint').classList.toggle('hidden',!token);
+  if(on)scheduleGraphUpdate();
+}
+async function refreshFocusDevice(){
+  var sel=$('focus-device');
+  if(!sel)return;
+  try{
+    var st=await fetch('/api/status').then(function(r){return r.json();});
+    focusDeviceId=st.deviceId||'local';
+    var kindLabel=capsProfile==='hbridge'?'Motor':'Relay';
+    sel.innerHTML='';
+    var opt=document.createElement('option');
+    opt.value=focusDeviceId;
+    opt.textContent=kindLabel+' · '+focusDeviceId+' (local)';
+    opt.selected=true;
+    sel.appendChild(opt);
+  }catch(e){
+    sel.innerHTML='<option value="">This device</option>';
+  }
+}
 function rules(mode){
   var r={disMinP:false,disGmin:false,disNoEnd:false};
   if(mode==='periodic'||mode==='randomTimingOnly')r.disMinP=true;
@@ -514,12 +533,14 @@ function refreshMotorDuty(){
 function onMotorManualFieldChange(){
   refreshMotorDuty();
   persistAllOperateSettings();
+  scheduleGraphUpdate();
 }
 function onMotorAutoFieldChange(){
   applyMotorRules();
   applyMotorBurstRules();
   persistAllOperateSettings();
   queueAutoUpdate();
+  scheduleGraphUpdate();
 }
 function readAutoSnapshot(){
   return {
@@ -605,6 +626,7 @@ function onAutoFieldChange(){
   applyBurstRules();
   persistAllOperateSettings();
   queueAutoUpdate();
+  scheduleGraphUpdate();
 }
 async function api(path,opt){
   opt=opt||{};var h=headers();if(opt.headers)Object.assign(h,opt.headers);
@@ -703,13 +725,135 @@ async function applyDeviceSettingsFromNvs(){
       applyRules();applyBurstRules();refreshManualMs();
       saveManualSettings();saveAutoSettings();
     }
-    if(j.activeTab&&document.querySelector('.tab[data-tab="'+j.activeTab+'"]'))activateTab(j.activeTab);
+    if(j.activeTab&&j.activeTab!=='hist'&&document.querySelector('.tab[data-tab="'+j.activeTab+'"]'))activateTab(j.activeTab);
   }catch(e){}
 }
 function refreshManualMs(){$('m-stroke-ms').textContent=strokeMs($('m-power').value,$('m-min').value,$('m-max').value);}
 function onManualFieldChange(){
   refreshManualMs();
   persistAllOperateSettings();
+  scheduleGraphUpdate();
+}
+function activeOperateMode(){
+  return $('tab-auto').classList.contains('hidden')?'manual':'auto';
+}
+var PREVIEW_HORIZON=300;
+function hashSeed(str){
+  var h=2166136261;
+  for(var i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}
+  return h>>>0;
+}
+function seededRand(seed){
+  var s=seed>>>0;
+  return function(){
+    s=Math.imul(s,1664525)+1013904223>>>0;
+    return s/4294967296;
+  };
+}
+function lerpInt(a,b,t){return Math.round(a+(b-a)*Math.min(1,Math.max(0,t)));}
+function triangle01(p){p=p-Math.floor(p);if(p<0)p+=1;return p<0.5?p*2:2-p*2;}
+function autoHorizonSecRelay(s){
+  if(s.endSessionMode==='minutes')return Math.max(60,s.endSessionValue*60);
+  if(s.endSessionMode==='strokes')return Math.max(60,s.endSessionValue*8);
+  return PREVIEW_HORIZON;
+}
+function autoHorizonSecMotor(s){
+  if(s.endSessionMode==='minutes')return Math.max(60,s.endSessionValue*60);
+  return PREVIEW_HORIZON;
+}
+function buildPreviewPoints(){
+  var mode=activeOperateMode();
+  var horizon=PREVIEW_HORIZON;
+  var pts=[];
+  if(isMotorProfile()){
+    if(mode==='manual'){
+      var mm=normalizeMotorManual(readMotorManualSnapshot());
+      var sp=motorDutyFromSpeed(mm.speedPercent,mm.minimumDutyPercent,mm.maximumDutyPercent);
+      pts.push({t:0,v:sp});pts.push({t:horizon,v:sp});
+      return {points:pts,horizon:horizon,label:'Speed %'};
+    }
+    var ma=normalizeMotorAuto(readMotorAutoSnapshot());
+    horizon=autoHorizonSecMotor(ma);
+    var rnd=seededRand(hashSeed(JSON.stringify(ma)));
+    var t=ma.delayBeforeStartSeconds||0;
+    var segMin=ma.segmentMinSeconds,segMax=ma.segmentMaxSeconds;
+    var pwr=lerpInt(ma.minimumSpeedPercent,ma.maximumSpeedPercent,0.5);
+    pts.push({t:0,v:pwr});
+    while(t<horizon){
+      var seg=segMin===segMax?segMin:segMin+Math.floor(rnd()*(segMax-segMin+1));
+      var next=Math.min(horizon,t+seg);
+      var v;
+      if(ma.automaticMode==='periodic')v=lerpInt(ma.minimumSpeedPercent,ma.maximumSpeedPercent,triangle01(t/60));
+      else if(ma.automaticMode==='powerWave'||ma.automaticMode==='buildUp')v=lerpInt(ma.minimumSpeedPercent,ma.maximumSpeedPercent,triangle01(t/45));
+      else v=lerpInt(ma.minimumSpeedPercent,ma.maximumSpeedPercent,rnd());
+      pts.push({t:next,v:v});
+      t=next;
+    }
+    return {points:pts,horizon:horizon,label:'Speed %'};
+  }
+  if(mode==='manual'){
+    var mn=normalizeManual(readManualSnapshot());
+    pts.push({t:0,v:mn.powerPercent});pts.push({t:horizon,v:mn.powerPercent});
+    return {points:pts,horizon:horizon,label:'Power %'};
+  }
+  var snap=readAutoSnapshot();
+  horizon=autoHorizonSecRelay(snap);
+  var rnd2=seededRand(hashSeed(JSON.stringify(snap)));
+  var tt=snap.delayBeforeStartSeconds||0;
+  pts.push({t:0,v:snap.minimumPower});
+  while(tt<horizon){
+    var gap=snap.strokeMinSeconds;
+    if(snap.strokeMaxSeconds>snap.strokeMinSeconds)gap=snap.strokeMinSeconds+Math.floor(rnd2()*(snap.strokeMaxSeconds-snap.strokeMinSeconds+1));
+    var end=Math.min(horizon,tt+gap);
+    var pv;
+    if(snap.automaticMode==='periodic'||snap.automaticMode==='powerWave')pv=lerpInt(snap.minimumPower,snap.maximumPower,triangle01(tt/50));
+    else if(snap.automaticMode==='randomTimingOnly')pv=snap.maximumPower;
+    else pv=lerpInt(snap.minimumPower,snap.maximumPower,rnd2());
+    pts.push({t:end,v:pv});
+    tt=end;
+  }
+  return {points:pts,horizon:horizon,label:'Power %'};
+}
+function drawPatternGraph(){
+  var canvas=$('pattern-graph');
+  if(!canvas||!canvas.getContext)return;
+  var ctx=canvas.getContext('2d');
+  var w=canvas.width,h=canvas.height;
+  var padL=36,padR=12,padT=10,padB=26;
+  var sched=buildPreviewPoints();
+  var pts=sched.points;
+  var horizon=sched.horizon||PREVIEW_HORIZON;
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='#0f172a';
+  ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='#334155';
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(padL,padT);
+  ctx.lineTo(padL,h-padB);
+  ctx.lineTo(w-padR,h-padB);
+  ctx.stroke();
+  if(!pts.length)return;
+  ctx.strokeStyle='#818cf8';
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  for(var i=0;i<pts.length;i++){
+    var x=padL+(pts[i].t/horizon)*(w-padL-padR);
+    var y=(h-padB)-(pts[i].v/100)*(h-padT-padB);
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.fillStyle='#64748b';
+  ctx.font='10px system-ui,sans-serif';
+  ctx.fillText('0',padL-8,h-padB+14);
+  ctx.fillText(Math.round(horizon)+'s',w-padR-24,h-padB+14);
+  ctx.fillText(sched.label||'',padL,padT+8);
+  var cap=$('graph-caption');
+  if(cap)cap.textContent='Preview — '+sched.label+' over ~'+Math.round(horizon)+'s (illustrative; seeded from settings).';
+}
+function scheduleGraphUpdate(){
+  if(graphTimer)clearTimeout(graphTimer);
+  graphTimer=setTimeout(function(){graphTimer=null;drawPatternGraph();},100);
 }
 async function poll(){
   try{
@@ -726,8 +870,17 @@ async function poll(){
       if(s.commandMessage)parts.push(s.commandMessage);
     }
     setStatus(parts.join(' · ')||'Idle');
+    var tone='checking',summary=parts.join(' · ')||'Idle';
+    if(!token){tone='checking';summary='Locked';}
+    else if(s.busy||s.automaticActive){tone='warning';summary=s.automaticActive?'Automatic running':'Busy';}
+    else if(s.sceneActive){tone='ready';summary='Scene session on';}
+    else if(s.subReady){tone='ready';summary='Ready for commands';}
+    else if(s.unlocked){tone='warning';summary='Press device button (D33)';}
+    else{tone='error';summary='Unavailable';}
+    setStatusPill(tone,summary);
     if($('scene-on')){
       $('scene-on').checked=!!s.sceneActive;
+      syncSceneToggleUi(!!s.sceneActive);
       $('scene-on').disabled=!s.subReady||!!(s.busy||s.automaticActive);
     }
     $('btn-auto-start').disabled=!!(s.busy||s.automaticActive);
@@ -768,15 +921,15 @@ $('motor-auto-panel').querySelectorAll('input,select').forEach(function(el){
 });
 applyMotorRules();applyMotorBurstRules();
 function activateTab(tab){
+  if(tab==='hist')tab='manual';
   document.querySelectorAll('.tab').forEach(function(t){
     t.classList.toggle('active',t.dataset.tab===tab);
   });
   $('tab-manual').classList.toggle('hidden',tab!=='manual');
   $('tab-auto').classList.toggle('hidden',tab!=='auto');
-  $('tab-hist').classList.toggle('hidden',tab!=='hist');
-  if(tab==='hist')loadHistory();
   try{localStorage.setItem(TAB_KEY,tab);}catch(e){}
   queueDeviceSettingsSave();
+  scheduleGraphUpdate();
 }
 document.querySelectorAll('.tab').forEach(function(b){
   b.onclick=function(){activateTab(b.dataset.tab);};
@@ -806,6 +959,11 @@ async function loadHistory(){
 }
 $('btn-hist-refresh').onclick=loadHistory;
 $('btn-hist-clear').onclick=async function(){try{await api('/api/local/history',{method:'DELETE'});loadHistory();}catch(e){setStatus(e.message);}};
+function openHistModal(){var m=$('hist-modal');if(!m)return;m.classList.remove('hidden');m.setAttribute('aria-hidden','false');loadHistory();}
+function closeHistModal(){var m=$('hist-modal');if(!m)return;m.classList.add('hidden');m.setAttribute('aria-hidden','true');}
+$('btn-hist-open').onclick=openHistModal;
+$('btn-hist-close').onclick=closeHistModal;
+$('hist-modal').onclick=function(e){if(e.target===$('hist-modal'))closeHistModal();};
 $('btn-unlock').onclick=async function(){
   try{
     var body={pin:$('pin').value};if($('pin-new').value)body.newPin=$('pin-new').value;
@@ -819,8 +977,9 @@ $('btn-lock').onclick=async function(){try{await api('/api/local/lock',{method:'
 $('scene-on').onchange=async function(){
   try{
     await api('/api/local/scene',{method:'POST',body:JSON.stringify({active:$('scene-on').checked})});
+    syncSceneToggleUi($('scene-on').checked);
     await poll();
-  }catch(e){setStatus(e.message);$('scene-on').checked=!$('scene-on').checked;}
+  }catch(e){setStatus(e.message);$('scene-on').checked=!$('scene-on').checked;syncSceneToggleUi($('scene-on').checked);}
 };
 $('btn-stroke').onclick=async function(){
   if(isMotorProfile())return;
@@ -879,8 +1038,9 @@ $('btn-act-kind').onclick=async function(){
   }catch(e){setStatus(e.message);}
 };
 if(token){showMain(true);applyDeviceSettingsFromNvs().then(function(){return poll();});}
+refreshFocusDevice();
 })();
-</script></div></body></html>
+</script></body></html>
 )raw";
 
 } // namespace
@@ -889,7 +1049,12 @@ namespace OperatePages {
 
 void handleOperateGet(AsyncWebServerRequest* request) {
     Serial.println(F("[HTTP] GET /operate"));
-    request->send_P(200, "text/html", kOperateHtml);
+    AsyncResponseStream* response = request->beginResponseStream("text/html", 200);
+    response->print(F("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" "
+                      "content=\"width=device-width,initial-scale=1\"><title>SomEsp Control</title>"
+                      "<link rel=\"stylesheet\" href=\"/ui/somnet.css\">"));
+    response->print(FPSTR(kOperateHtml));
+    request->send(response);
 }
 
 } // namespace OperatePages

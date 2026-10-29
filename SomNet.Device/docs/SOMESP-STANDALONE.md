@@ -239,4 +239,6 @@ Completed strokes, bursts, and automatic summaries are stored on the **~192 KB**
 | GET | `/api/local/history/{id}` | Bearer — full event JSON |
 | DELETE | `/api/local/history` | Bearer — wipe all |
 
-**History** tab on `/operate` lists events (newest first).
+**History** — Header **History** on `/operate` opens a modal (list + detail). Same data as `GET/DELETE /api/local/history`.
+
+**UI** — SomNet.UI-aligned shell on `/`, `/config`, and `/operate` (see [35-ESP32-Operate-UI-Parity.md](../../Documents/35-ESP32-Operate-UI-Parity.md)). Pattern **preview** graph on `/operate`; not live telemetry.
