@@ -10,7 +10,7 @@ namespace {
 // Full /operate page in PROGMEM (CSS at /ui/somnet.css). Served via beginResponse_P — do not use
 // beginResponseStream(..., N) where N is mistaken for HTTP status (second arg is stream buffer bytes).
 constexpr char kOperateHtml[] PROGMEM = R"raw(
-<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SomEsp Control</title><link rel="stylesheet" href="/ui/somnet.css"></head><body><script>try{if(sessionStorage.getItem('somesp-bearer'))document.documentElement.classList.add('session-resume');}catch(e){}</script>
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SomEsp Control</title><link rel="stylesheet" href="/ui/somnet.css?v=3"></head><body><script>try{if(sessionStorage.getItem('somesp-bearer'))document.documentElement.classList.add('session-resume');}catch(e){}</script>
 <div class="shell-bg"></div>
 <div id="gate" class="gate-screen">
 <div class="gate-card ui-panel"><div class="ui-panel-hd"><h2>Unlock control panel</h2></div><div class="ui-panel-bd">
@@ -30,7 +30,11 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <div id="main" class="app-shell hidden">
 <header class="shell-header"><div class="shell-header-inner wide">
 <div class="shell-brand"><div class="brand-title">SomEsp Control</div><div class="brand-sub">Local operate</div></div>
+<div class="shell-notify-block">
+<label class="header-focus" for="focus-device"><span class="header-focus-k">Focus:</span><select id="focus-device" class="header-focus-select"><option value="">Loading…</option></select></label>
+<span class="header-notify-k">Notify</span>
 <div id="status-pill" class="status-pill tone-checking"><div class="status-pill-inner"><span class="dot"></span><span class="summary">Checking…</span></div></div>
+</div>
 <nav class="shell-nav">
 <a class="nav-link" href="/">Status</a>
 <a class="nav-link" href="/config">Configure</a>
@@ -38,12 +42,11 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <button type="button" class="btn-ghost sm hidden" id="btn-lock">Lock</button>
 </nav></div></header>
 <main class="shell-main wide">
-<div class="dashboard-grid">
-<div class="dashboard-controls">
+<div class="status-dashboard">
+<div class="status-dashboard-main">
 <div class="ui-panel"><div class="ui-panel-hd">
-<div style="flex:1;min-width:0"><h2 id="device-panel-title">Relay · …</h2>
-<p class="note hidden" id="device-panel-sub" style="margin:0;font-size:.75rem"></p></div>
-<label class="focus-label" style="max-width:14rem">Focus device<select id="focus-device" class="focus-select"><option value="">Loading…</option></select></label>
+<h2 id="device-panel-title">Relay · …</h2>
+<p class="note hidden" id="device-panel-sub" style="margin:0;font-size:.75rem"></p>
 </div><div class="ui-panel-bd">
 <div class="device-toolbar">
 <span class="note" style="margin:0;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#64748b">Mode</span>
@@ -89,16 +92,9 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 </div>
 </div>
 <div id="tab-auto" class="hidden">
-<div id="relay-auto-panel" class="profile-relay">
 <div class="control-grid cols-2 layout-split">
 <div class="layout-col">
-<div class="ui-panel"><div class="ui-panel-hd"><h2>Program</h2></div><div class="ui-panel-bd">
-<label>Automatic mode<select id="a-mode">
-<option value="periodic">Periodic</option><option value="randomPowerOnly">Random Power Only</option>
-<option value="randomTimingOnly">Random Timing Only</option><option value="randomPowerAndTiming" selected>Random Power and Timing</option>
-<option value="powerWave">Power Wave</option><option value="powerAndTimingWave">Power and Timing Wave</option>
-<option value="buildUp">Build-Up</option></select></label>
-</div></div>
+<div id="relay-auto-panel" class="profile-relay">
 <div class="ui-panel"><div class="ui-panel-hd"><h2>Power settings</h2></div><div class="ui-panel-bd">
 <div class="row"><label>Minimum stroke (ms)<input id="a-minms" type="number" value="25"></label><label>Maximum stroke (ms)<input id="a-maxms" type="number" value="400"></label></div>
 <div class="power-slider-grid">
@@ -110,20 +106,17 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <p class="note power-slider-val"><span id="a-maxp-val">100</span>% · ~ <span id="a-maxp-ms">400</span> ms</p></div>
 </div>
 </div></div>
-<div class="ui-panel"><div class="ui-panel-hd"><h2>Timing settings</h2></div><div class="ui-panel-bd">
-<p class="note" style="margin-top:0">Time between strokes</p>
-<div class="row"><label>Minimum gap (sec)<input id="a-gmin" type="number" min="1" value="5"></label>
-<label>Maximum gap (sec)<input id="a-gmax" type="number" min="1" value="20"></label></div>
-<label>Delay before start (sec)<input id="a-delay" type="number" min="0" value="0"></label>
-<div class="row"><label>End session<select id="a-endmode"><option value="noAutoEnd">No AutoEnd</option><option value="minutes">Minutes</option><option value="strokes">Strokes</option></select></label>
-<label>End value<input id="a-endval" type="number" min="1" value="100"></label></div>
-</div></div>
-</div>
-<div class="layout-col">
 <div class="ui-panel" id="burst-panel"><div class="ui-panel-hd"><h2>Burst settings</h2></div><div class="ui-panel-bd">
 <p class="note" style="margin-top:0">Burst stroke power 0–100 is relative to main power min/max.</p>
 <div class="row"><label class="chk"><input id="a-bursts" type="checkbox"> Bursts on</label>
 <label>Burst chance %<input id="a-bpct" type="number" min="0" max="100" value="10"></label></div>
+<label>Burst placement<select id="a-bplacement">
+<option value="mainPlusSessionSpread" selected>Main + spread across session</option>
+<option value="insteadOfSessionSpread">Burst instead of main — spread across session</option>
+<option value="mainPlusAfterMainStroke">Main + after main strokes (even)</option>
+<option value="insteadOfAfterMainStroke">Burst instead of main — even spacing</option>
+<option value="mainPlusChanceAfterMainStroke">Main + chance after each main stroke</option>
+<option value="insteadOfChanceAfterMainStroke">Burst instead of main — chance per stroke</option></select></label>
 <label>Burst style<select id="a-bstyle">
 <option value="fixedPowerDelay">Fixed Power/Delay</option>
 <option value="randomPowerOnly">Random Power Only</option>
@@ -139,17 +132,7 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <label>Strokes per burst max<input id="a-bstr-max" type="number" min="1" max="100" value="10"></label></div>
 </div></div>
 </div>
-</div>
-</div>
 <div id="motor-auto-panel" class="profile-motor hidden">
-<div class="control-grid cols-2 layout-split">
-<div class="layout-col">
-<div class="ui-panel"><div class="ui-panel-hd"><h2>Program</h2></div><div class="ui-panel-bd">
-<label>Automatic mode<select id="ma-mode">
-<option value="periodic">Set Speed</option><option value="randomSpeed">Random Speed</option>
-<option value="randomSpeedAndTiming" selected>Random Speed and Timing</option>
-<option value="powerWave">Speed Wave</option><option value="buildUp">Build-Up</option></select></label>
-</div></div>
 <div class="ui-panel"><div class="ui-panel-hd"><h2>Speed settings</h2></div><div class="ui-panel-bd">
 <div class="row"><label>Min duty %<input id="ma-dmin" type="number" min="0" max="100" value="20"></label>
 <label>Max duty %<input id="ma-dmax" type="number" min="0" max="100" value="80"></label></div>
@@ -162,28 +145,11 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <p class="note power-slider-val"><span id="ma-smax-val">100</span>%</p></div>
 </div>
 </div></div>
-<div class="ui-panel"><div class="ui-panel-hd"><h2>Timing settings</h2></div><div class="ui-panel-bd">
-<div class="row"><label>Segment min (sec)<input id="ma-segmin" type="number" min="1" value="5"></label>
-<label>Segment max (sec)<input id="ma-segmax" type="number" min="1" value="20"></label></div>
-<label>Delay before start (sec)<input id="ma-delay" type="number" min="0" value="0"></label>
-<label>Ramp ms<input id="ma-ramp" type="number" min="0" max="30000" value="500"></label>
-<div class="row"><label>End session<select id="ma-endmode"><option value="noAutoEnd">No AutoEnd</option><option value="minutes" selected>Minutes</option></select></label>
-<label>End value<input id="ma-endval" type="number" min="1" value="30"></label></div>
-<div class="subpanel">
-<h2>Segment target ramp</h2>
-<div class="row"><label>Ramp mode<select id="ma-ramp-mode">
-<option value="segmentDuration" selected>Full segment</option><option value="instant">Instant step</option>
-<option value="fixedMs">Fixed ms</option></select></label>
-<label>Ramp ms (fixed)<input id="ma-ramp-ms" type="number" min="0" max="30000" value="500"></label></div>
-</div>
-</div></div>
-</div>
-<div class="layout-col">
 <div class="ui-panel" id="ma-burst-panel"><div class="ui-panel-hd"><h2>Burst settings</h2></div><div class="ui-panel-bd">
 <p class="note" style="margin-top:0">Burst speed 0–100 is relative to duty min/max.</p>
 <div class="row"><label class="chk"><input id="ma-bursts" type="checkbox"> Bursts on</label>
 <label>Burst chance %<input id="ma-bpct" type="number" min="0" max="100" value="10"></label></div>
-<label>Placement<select id="ma-bplacement">
+<label>Burst placement<select id="ma-bplacement">
 <option value="mainPlusSessionSpread" selected>Main + spread across session</option>
 <option value="insteadOfSessionSpread">Burst instead of main — spread</option>
 <option value="mainPlusAfterMainStroke">Main + after main (even)</option>
@@ -206,16 +172,63 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 </div></div>
 </div>
 </div>
+<div class="layout-col">
+<div id="relay-auto-timing" class="profile-relay">
+<div class="ui-panel"><div class="ui-panel-hd"><h2>Timing settings</h2></div><div class="ui-panel-bd">
+<p class="note" style="margin-top:0">Time between strokes</p>
+<div class="row"><label>Minimum gap (sec)<input id="a-gmin" type="number" min="1" value="5"></label>
+<label>Maximum gap (sec)<input id="a-gmax" type="number" min="1" value="20"></label></div>
+<label>Delay before start (sec)<input id="a-delay" type="number" min="0" value="0"></label>
+<div class="row"><label>End session<select id="a-endmode"><option value="noAutoEnd">No AutoEnd</option><option value="minutes">Minutes</option><option value="strokes">Strokes</option></select></label>
+<label>End value<input id="a-endval" type="number" min="1" value="100"></label></div>
+</div></div>
 </div>
-<div class="ui-panel"><div class="ui-panel-hd"><h2>Session control</h2></div><div class="ui-panel-bd">
-<div class="panel-actions">
-<button class="btn-primary lg" id="btn-auto-start">Start automatic</button>
+<div id="motor-auto-timing" class="profile-motor hidden">
+<div class="ui-panel"><div class="ui-panel-hd"><h2>Timing settings</h2></div><div class="ui-panel-bd">
+<div class="row"><label>Segment min (sec)<input id="ma-segmin" type="number" min="1" value="5"></label>
+<label>Segment max (sec)<input id="ma-segmax" type="number" min="1" value="20"></label></div>
+<label>Delay before start (sec)<input id="ma-delay" type="number" min="0" value="0"></label>
+<label>Ramp ms<input id="ma-ramp" type="number" min="0" max="30000" value="500"></label>
+<div class="row"><label>End session<select id="ma-endmode"><option value="noAutoEnd">No AutoEnd</option><option value="minutes" selected>Minutes</option></select></label>
+<label>End value<input id="ma-endval" type="number" min="1" value="30"></label></div>
+<div class="subpanel">
+<h2>Segment target ramp</h2>
+<div class="row"><label>Ramp mode<select id="ma-ramp-mode">
+<option value="segmentDuration" selected>Full segment</option><option value="instant">Instant step</option>
+<option value="fixedMs">Fixed ms</option></select></label>
+<label>Ramp ms (fixed)<input id="ma-ramp-ms" type="number" min="0" max="30000" value="500"></label></div>
+</div>
+</div></div>
+</div>
+<div class="ui-panel" id="auto-controls-panel"><div class="ui-panel-hd"><h2>Controls</h2></div><div class="ui-panel-bd">
+<div id="relay-auto-mode-wrap">
+<label>Automatic mode<select id="a-mode">
+<option value="periodic">Periodic</option><option value="randomPowerOnly">Random Power Only</option>
+<option value="randomTimingOnly">Random Timing Only</option><option value="randomPowerAndTiming" selected>Random Power and Timing</option>
+<option value="powerWave">Power Wave</option><option value="powerAndTimingWave">Power and Timing Wave</option>
+<option value="buildUp">Build-Up</option></select></label>
+<p class="hint" id="a-mode-summary"></p>
+</div>
+<div id="motor-auto-mode-wrap" class="hidden">
+<label>Automatic mode<select id="ma-mode">
+<option value="periodic">Set Speed</option><option value="randomSpeed">Random Speed</option>
+<option value="randomSpeedAndTiming" selected>Random Speed and Timing</option>
+<option value="powerWave">Speed Wave</option><option value="buildUp">Build-Up</option></select></label>
+<p class="hint" id="ma-mode-summary"></p>
+</div>
+<div class="panel-actions auto-control-actions">
+<button class="btn-primary lg" id="btn-auto-start">Start</button>
 <button class="btn-secondary lg" id="btn-auto-stop">Stop</button>
+<button class="btn-secondary lg" id="btn-auto-abort">Abort</button>
 <button class="btn-secondary" id="btn-auto-update">Apply update</button>
 </div></div></div>
 </div>
-</div></div></div>
-<aside class="dashboard-aside">
+</div>
+</div>
+</div>
+</div>
+</div>
+<aside class="status-dashboard-aside graph-aside-sticky">
 <div class="ui-panel graph-panel"><div class="ui-panel-hd"><h2>Pattern preview</h2></div><div class="ui-panel-bd">
 <div class="graph-toolbar">
 <p class="note" id="graph-range-label" style="margin:0;flex:1;min-width:8rem">0 – …</p>
@@ -284,8 +297,38 @@ function applyProfileUi(){
   $('motor-manual-panel').classList.toggle('hidden',!motor);
   $('relay-auto-panel').classList.toggle('hidden',motor);
   $('motor-auto-panel').classList.toggle('hidden',!motor);
+  if($('relay-auto-timing'))$('relay-auto-timing').classList.toggle('hidden',motor);
+  if($('motor-auto-timing'))$('motor-auto-timing').classList.toggle('hidden',!motor);
+  if($('relay-auto-mode-wrap'))$('relay-auto-mode-wrap').classList.toggle('hidden',motor);
+  if($('motor-auto-mode-wrap'))$('motor-auto-mode-wrap').classList.toggle('hidden',!motor);
   refreshDevicePanelHeader(null);
   scheduleGraphUpdate();
+}
+var RELAY_MODE_SUMMARY={
+  periodic:'Steady cadence at maximum power. Minimum power and minimum gap are ignored — the device uses your maximum settings only.',
+  randomPowerOnly:'Random power between your min and max on each stroke, with a fixed gap between strokes. Minimum gap is ignored.',
+  randomTimingOnly:'Maximum power on every stroke with a random gap between strokes. Minimum power is ignored.',
+  randomPowerAndTiming:'Both power and gap vary randomly within your min/max ranges on each stroke.',
+  powerWave:'Power follows a repeating wave between min and max while gap stays fixed at maximum interval.',
+  powerAndTimingWave:'Power and gap follow inverse periodic waves — as power rises, gap shortens, and vice versa.',
+  buildUp:'A single ramp from minimum to maximum power while gap shortens from maximum to minimum over the session.'
+};
+var MOTOR_MODE_SUMMARY={
+  periodic:'Runs continuously at maximum speed until Stop or end session. Minimum speed and graph-point timing are not used.',
+  randomSpeed:'Each segment interval ramps from the previous target to a new random target speed. Segment timing uses the maximum interval only.',
+  randomSpeedAndTiming:'Random target speed and random time until the next graph point; the motor stays running and ramps between targets.',
+  powerWave:'Target speed follows a repeating triangle wave between minimum and maximum. Segment timing uses the maximum interval only.',
+  buildUp:'A single ramp from minimum to maximum speed over the session; segment timing uses the maximum interval.'
+};
+function refreshRelayModeSummary(){
+  var el=$('a-mode-summary');
+  if(!el||!$('a-mode'))return;
+  el.textContent=RELAY_MODE_SUMMARY[$('a-mode').value]||'';
+}
+function refreshMotorModeSummary(){
+  var el=$('ma-mode-summary');
+  if(!el||!$('ma-mode'))return;
+  el.textContent=MOTOR_MODE_SUMMARY[$('ma-mode').value]||'';
 }
 async function loadCapsProfile(){
   try{
@@ -307,6 +350,31 @@ function setStatusPill(tone,summary){
   pill.className='status-pill tone-'+(tone||'checking');
   var s=pill.querySelector('.summary');
   if(s)s.textContent=summary||'';
+}
+function notifyStatusLine(s){
+  var statusText='Idle';
+  if(!token)statusText='Locked';
+  else if(s&&s.wifiConnected===false)statusText='Device offline';
+  else if(s&&(s.busy||s.automaticActive))statusText=s.automaticActive?'Automatic running':'Busy';
+  else if(s&&s.sceneActive)statusText='Scene session on';
+  else if(s&&s.subReady)statusText='Ready';
+  else if(s&&s.unlocked)statusText='Awaiting device button';
+  else if(s)statusText='Unavailable';
+  var id=focusDeviceId||'';
+  if(id)return id+' · Status: '+statusText;
+  return 'Status: '+statusText;
+}
+function notifyStatusTone(s){
+  if(!token)return 'checking';
+  if(!s)return 'checking';
+  if(s.wifiConnected===false)return 'error';
+  if(s.busy||s.automaticActive)return 'warning';
+  if(s.sceneActive||s.subReady)return 'ready';
+  if(s.unlocked)return 'warning';
+  return 'error';
+}
+function focusDeviceOptionLabel(id,kind){
+  return id+' ('+kind+')';
 }
 function syncSceneToggleUi(on){
   var wrap=$('scene-toggle-wrap');
@@ -347,7 +415,7 @@ function lockUi(message){
   endSessionResume();
   showMain(false);
   if(message)setStatus(message);
-  setStatusPill('checking','Locked');
+  setStatusPill('checking',focusDeviceId?focusDeviceId+' · Status: Locked':'Status: Locked');
   refreshDevicePanelHeader(null);
 }
 function ensureDeviceSession(status){
@@ -391,15 +459,14 @@ async function refreshFocusDevice(liveStatus){
     var st=liveStatus;
     if(!st)st=await fetch('/api/status').then(function(r){return r.json();});
     focusDeviceId=st.deviceId||'local';
-    var kindLabel=capsProfile==='hbridge'?'Motor':'Relay';
-    var conn=deviceConnectionLabel(st);
     sel.innerHTML='';
     var opt=document.createElement('option');
     opt.value=focusDeviceId;
-    opt.textContent=kindLabel+' · '+focusDeviceId+' ('+conn+')';
+    opt.textContent=focusDeviceOptionLabel(focusDeviceId,capsProfile);
     opt.selected=true;
     sel.appendChild(opt);
     refreshDevicePanelHeader(st);
+    setStatusPill(notifyStatusTone(st),notifyStatusLine(st));
   }catch(e){
     sel.innerHTML='<option value="">This device</option>';
     refreshDevicePanelHeader(null);
@@ -419,6 +486,7 @@ function applyRules(){
   if(r.disNoEnd&&$('a-endmode').value==='noAutoEnd')$('a-endmode').value='minutes';
   if(r.disNoEnd)$('a-endmode').querySelector('option[value="noAutoEnd"]').disabled=true;
   else $('a-endmode').querySelector('option[value="noAutoEnd"]').disabled=false;
+  refreshRelayModeSummary();
 }
 function clampInt(v,lo,hi){v=+v;if(!isFinite(v))return lo;return Math.min(hi,Math.max(lo,Math.round(v)));}
 function normMinMax(min,max,minLim,maxLim){
@@ -452,7 +520,7 @@ function normalizeBurst(raw){
 function applyBurstRules(){
   var on=$('a-bursts').checked;
   var br=getBurstFieldRules($('a-bstyle').value);
-  var ids=['a-bpct','a-bstyle','a-bpow-min','a-bpow-max','a-bdel-min','a-bdel-max','a-bstr-min','a-bstr-max'];
+  var ids=['a-bpct','a-bplacement','a-bstyle','a-bpow-min','a-bpow-max','a-bdel-min','a-bdel-max','a-bstr-min','a-bstr-max'];
   ids.forEach(function(id){$(id).disabled=!on;});
   if(on){
     $('a-bpow-min').disabled=br.disPowMin;
@@ -500,6 +568,7 @@ function applyMotorRules(){
     for(var j=0;j<pl.options.length;j++)pl.options[j].disabled=false;
   }
   if(m==='periodic'&&$('ma-bursts').checked&&$('ma-endmode').value!=='minutes')$('ma-endmode').value='minutes';
+  refreshMotorModeSummary();
 }
 function applyMotorBurstRules(){
   var on=$('ma-bursts').checked;
@@ -589,6 +658,7 @@ function fillMotorAutoForm(s){
   if(s.endSessionValue!=null)$('ma-endval').value=s.endSessionValue;
   $('ma-bursts').checked=!!s.burstsOn;
   if(s.burstPlacement)$('ma-bplacement').value=s.burstPlacement;
+  else $('ma-bplacement').value='mainPlusSessionSpread';
   if(s.burstPercent!=null)$('ma-bpct').value=s.burstPercent;
   if(s.burstStyle)$('ma-bstyle').value=s.burstStyle;
   if(s.burstStrokePowerMin!=null)$('ma-bpow-min').value=s.burstStrokePowerMin;
@@ -679,7 +749,7 @@ function readAutoSnapshot(){
     delayBeforeStartSeconds:+$('a-delay').value,
     endSessionMode:$('a-endmode').value,endSessionValue:+$('a-endval').value,
     burstsOn:$('a-bursts').checked,
-    burstPlacement:($('a-bplacement')?$('a-bplacement').value:'sessionSpread'),
+    burstPlacement:$('a-bplacement').value,
     burstPercent:+$('a-bpct').value,burstStyle:$('a-bstyle').value,
     burstStrokePowerMin:+$('a-bpow-min').value,burstStrokePowerMax:+$('a-bpow-max').value,
     burstDelayMin:+$('a-bdel-min').value,burstDelayMax:+$('a-bdel-max').value,
@@ -699,7 +769,8 @@ function fillAutoForm(s){
   if(s.endSessionMode)$('a-endmode').value=s.endSessionMode;
   if(s.endSessionValue!=null)$('a-endval').value=s.endSessionValue;
   $('a-bursts').checked=!!s.burstsOn;
-  if(s.burstPlacement&&$('a-bplacement'))$('a-bplacement').value=s.burstPlacement;
+  if(s.burstPlacement)$('a-bplacement').value=s.burstPlacement;
+  else $('a-bplacement').value='mainPlusSessionSpread';
   if(s.burstPercent!=null)$('a-bpct').value=s.burstPercent;
   if(s.burstStyle)$('a-bstyle').value=s.burstStyle;
   if(s.burstStrokePowerMin!=null)$('a-bpow-min').value=s.burstStrokePowerMin;
@@ -1729,19 +1800,11 @@ async function poll(){
       if(s.commandMessage)parts.push(s.commandMessage);
     }
     setStatus(parts.join(' · ')||'Idle');
-    var tone='checking',summary=parts.join(' · ')||'Idle';
-    if(!token){tone='checking';summary='Locked';}
-    else if(s.busy||s.automaticActive){tone='warning';summary=s.automaticActive?'Automatic running':'Busy';}
-    else if(s.sceneActive){tone='ready';summary='Scene session on';}
-    else if(s.subReady){tone='ready';summary='Ready for commands';}
-    else if(s.unlocked){tone='warning';summary='Press device button (D33)';}
-    else{tone='error';summary='Unavailable';}
-    setStatusPill(tone,summary);
+    setStatusPill(notifyStatusTone(s),notifyStatusLine(s));
     refreshDevicePanelHeader(s);
     var sel=$('focus-device');
     if(sel&&sel.options.length&&focusDeviceId){
-      var kindLabel=capsProfile==='hbridge'?'Motor':'Relay';
-      sel.options[0].textContent=kindLabel+' · '+focusDeviceId+' ('+deviceConnectionLabel(s)+')';
+      sel.options[0].textContent=focusDeviceOptionLabel(focusDeviceId,capsProfile);
     }
     if($('scene-on')){
       updateSceneControlFromStatus(s);
@@ -1789,12 +1852,12 @@ $('tab-auto').querySelectorAll('#relay-auto-panel input,#relay-auto-panel select
   el.addEventListener('change',onAutoFieldChange);
   if(el.type==='number'||el.type==='range')el.addEventListener('input',onAutoFieldChange);
 });
-applyRules();applyBurstRules();
+applyRules();applyBurstRules();refreshRelayModeSummary();
 $('motor-auto-panel').querySelectorAll('input,select').forEach(function(el){
   el.addEventListener('change',onMotorAutoFieldChange);
   if(el.type==='number'||el.type==='range')el.addEventListener('input',onMotorAutoFieldChange);
 });
-applyMotorRules();applyMotorBurstRules();
+applyMotorRules();applyMotorBurstRules();refreshMotorModeSummary();
 refreshAutoPowerLabels();
 function activateTab(tab){
   if(tab==='hist')tab='manual';
@@ -1908,7 +1971,14 @@ $('btn-auto-start').onclick=async function(){
     poll();
   }catch(e){setStatus(e.message);}
 };
+$('auto-controls-panel').querySelectorAll('select').forEach(function(el){
+  el.addEventListener('change',function(){
+    if(el.id==='ma-mode'){applyMotorRules();applyMotorBurstRules();onMotorAutoFieldChange();}
+    else{applyRules();applyBurstRules();onAutoFieldChange();}
+  });
+});
 $('btn-auto-stop').onclick=async function(){try{await cmd('automatic-stop','{}');setStatus('Stop requested');poll();}catch(e){setStatus(e.message);}};
+$('btn-auto-abort').onclick=async function(){try{await cmd('abort','{}');setStatus('Abort');poll();}catch(e){setStatus(e.message);}};
 $('btn-auto-update').onclick=function(){
   if(updateTimer)clearTimeout(updateTimer);
   updateTimer=setTimeout(async function(){
