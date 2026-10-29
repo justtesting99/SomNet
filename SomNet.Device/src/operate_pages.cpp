@@ -31,6 +31,7 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <div id="status-pill" class="status-pill tone-checking"><div class="status-pill-inner"><span class="dot"></span><span class="summary">Checking…</span></div></div>
 <nav class="shell-nav">
 <a class="nav-link" href="/">Status</a>
+<a class="nav-link" href="/config">Configure</a>
 <button type="button" class="btn-ghost sm" id="btn-hist-open">History</button>
 <button type="button" class="btn-ghost sm hidden" id="btn-lock">Lock</button>
 </nav></div></header>
@@ -38,7 +39,9 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <div class="dashboard-grid">
 <div class="dashboard-controls">
 <div class="ui-panel"><div class="ui-panel-hd">
-<label class="focus-label">Focus device<select id="focus-device" class="focus-select"><option value="">Loading…</option></select></label>
+<div style="flex:1;min-width:0"><h2 id="device-panel-title">Relay · …</h2>
+<p class="note" id="device-panel-sub" style="margin:0;font-size:.75rem">Loading device…</p></div>
+<label class="focus-label" style="max-width:14rem">Focus device<select id="focus-device" class="focus-select"><option value="">Loading…</option></select></label>
 </div><div class="ui-panel-bd">
 <div class="device-toolbar">
 <span class="note" style="margin:0;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#64748b">Mode</span>
@@ -49,8 +52,8 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <div id="tab-manual">
 <div id="relay-manual-panel" class="profile-relay control-grid cols-2 layout-split">
 <div class="layout-col ui-panel"><div class="ui-panel-hd"><h2>Power settings</h2></div><div class="ui-panel-bd">
-<div class="row"><label>Min stroke ms<input id="m-min" type="number" min="1" max="30000" value="25"></label>
-<label>Max stroke ms<input id="m-max" type="number" min="1" max="30000" value="400"></label></div>
+<div class="row"><label>Minimum stroke (ms)<input id="m-min" type="number" min="1" max="30000" value="25"></label>
+<label>Maximum stroke (ms)<input id="m-max" type="number" min="1" max="30000" value="400"></label></div>
 <label>Power %<input id="m-power" type="range" min="0" max="100" value="50"></label>
 <p class="note">Stroke ~ <span id="m-stroke-ms">212</span> ms</p>
 </div></div>
@@ -60,8 +63,8 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <button class="btn-danger lg" id="btn-abort">Abort</button>
 </div>
 <div class="subpanel" style="margin-top:1rem">
-<div class="row"><label>Burst count<input id="b-count" type="number" min="1" max="100" value="5"></label>
-<label>Delay sec<input id="b-delay" type="number" min="0" max="300" value="5"></label></div>
+<div class="row"><label>Burst strokes<input id="b-count" type="number" min="1" max="100" value="5"></label>
+<label>Burst delay (sec)<input id="b-delay" type="number" min="0" max="300" value="5"></label></div>
 <button class="btn-primary lg" id="btn-burst">Burst</button>
 </div>
 </div></div>
@@ -83,26 +86,35 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 </div>
 </div>
 <div id="tab-auto" class="hidden">
-<div id="relay-auto-panel" class="profile-relay layout-split">
+<div id="relay-auto-panel" class="profile-relay">
+<div class="control-grid cols-2 layout-split">
 <div class="layout-col">
-<label>Mode<select id="a-mode">
-<option value="periodic">periodic</option><option value="randomPowerOnly">randomPowerOnly</option>
-<option value="randomTimingOnly">randomTimingOnly</option><option value="randomPowerAndTiming" selected>randomPowerAndTiming</option>
-<option value="powerWave">powerWave</option><option value="powerAndTimingWave">powerAndTimingWave</option>
-<option value="buildUp">buildUp</option></select></label>
-<div class="row"><label>Min ms<input id="a-minms" type="number" value="25"></label><label>Max ms<input id="a-maxms" type="number" value="400"></label></div>
-<div class="row"><label>Min power<input id="a-minp" type="number" min="0" max="100" value="0"></label><label>Max power<input id="a-maxp" type="number" min="0" max="100" value="100"></label></div>
-<div class="row"><label>Gap min s<input id="a-gmin" type="number" min="1" value="5"></label><label>Gap max s<input id="a-gmax" type="number" min="1" value="20"></label></div>
-<label>Delay before start (s)<input id="a-delay" type="number" min="0" value="0"></label>
-<div class="row"><label>End mode<select id="a-endmode"><option value="noAutoEnd">noAutoEnd</option><option value="minutes">minutes</option><option value="strokes">strokes</option></select></label>
+<div class="ui-panel"><div class="ui-panel-hd"><h2>Program</h2></div><div class="ui-panel-bd">
+<label>Automatic mode<select id="a-mode">
+<option value="periodic">Periodic</option><option value="randomPowerOnly">Random Power Only</option>
+<option value="randomTimingOnly">Random Timing Only</option><option value="randomPowerAndTiming" selected>Random Power and Timing</option>
+<option value="powerWave">Power Wave</option><option value="powerAndTimingWave">Power and Timing Wave</option>
+<option value="buildUp">Build-Up</option></select></label>
+</div></div>
+<div class="ui-panel"><div class="ui-panel-hd"><h2>Power settings</h2></div><div class="ui-panel-bd">
+<div class="row"><label>Minimum stroke (ms)<input id="a-minms" type="number" value="25"></label><label>Maximum stroke (ms)<input id="a-maxms" type="number" value="400"></label></div>
+<div class="row"><label>Minimum power %<input id="a-minp" type="number" min="0" max="100" value="0"></label>
+<label>Maximum power %<input id="a-maxp" type="number" min="0" max="100" value="100"></label></div>
+</div></div>
+<div class="ui-panel"><div class="ui-panel-hd"><h2>Timing settings</h2></div><div class="ui-panel-bd">
+<p class="note" style="margin-top:0">Time between strokes</p>
+<div class="row"><label>Minimum gap (sec)<input id="a-gmin" type="number" min="1" value="5"></label>
+<label>Maximum gap (sec)<input id="a-gmax" type="number" min="1" value="20"></label></div>
+<label>Delay before start (sec)<input id="a-delay" type="number" min="0" value="0"></label>
+<div class="row"><label>End session<select id="a-endmode"><option value="noAutoEnd">No AutoEnd</option><option value="minutes">Minutes</option><option value="strokes">Strokes</option></select></label>
 <label>End value<input id="a-endval" type="number" min="1" value="100"></label></div>
+</div></div>
 </div>
 <div class="layout-col">
-<div class="subpanel" id="burst-panel">
-<h2>Burst settings</h2>
-<p class="note">When Bursts on is checked, scheduled burst clusters run on top of the automatic program. Burst stroke power 0–100 is relative to main power min/max.</p>
+<div class="ui-panel" id="burst-panel"><div class="ui-panel-hd"><h2>Burst settings</h2></div><div class="ui-panel-bd">
+<p class="note" style="margin-top:0">Burst stroke power 0–100 is relative to main power min/max.</p>
 <div class="row"><label class="chk"><input id="a-bursts" type="checkbox"> Bursts on</label>
-<label>Burst % (0–100)<input id="a-bpct" type="number" min="0" max="100" value="10"></label></div>
+<label>Burst chance %<input id="a-bpct" type="number" min="0" max="100" value="10"></label></div>
 <label>Burst style<select id="a-bstyle">
 <option value="fixedPowerDelay">Fixed Power/Delay</option>
 <option value="randomPowerOnly">Random Power Only</option>
@@ -111,44 +123,51 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <div class="row"><label>Burst power min %<input id="a-bpow-min" type="number" min="0" max="100" value="0"></label>
 <label>Burst power max %<input id="a-bpow-max" type="number" min="0" max="100" value="100"></label></div>
 <p class="hint" id="a-bpow-hint"></p>
-<div class="row"><label>Burst delay min (s)<input id="a-bdel-min" type="number" min="0" max="300" value="1"></label>
-<label>Burst delay max (s)<input id="a-bdel-max" type="number" min="0" max="300" value="5"></label></div>
+<div class="row"><label>Burst delay min (sec)<input id="a-bdel-min" type="number" min="0" max="300" value="1"></label>
+<label>Burst delay max (sec)<input id="a-bdel-max" type="number" min="0" max="300" value="5"></label></div>
 <p class="hint" id="a-bdel-hint"></p>
 <div class="row"><label>Strokes per burst min<input id="a-bstr-min" type="number" min="1" max="100" value="5"></label>
 <label>Strokes per burst max<input id="a-bstr-max" type="number" min="1" max="100" value="10"></label></div>
+</div></div>
 </div>
 </div>
 </div>
-<div id="motor-auto-panel" class="profile-motor hidden layout-split">
+<div id="motor-auto-panel" class="profile-motor hidden">
+<div class="control-grid cols-2 layout-split">
 <div class="layout-col">
-<label>Mode<select id="ma-mode">
+<div class="ui-panel"><div class="ui-panel-hd"><h2>Program</h2></div><div class="ui-panel-bd">
+<label>Automatic mode<select id="ma-mode">
 <option value="periodic">Set Speed</option><option value="randomSpeed">Random Speed</option>
 <option value="randomSpeedAndTiming" selected>Random Speed and Timing</option>
 <option value="powerWave">Speed Wave</option><option value="buildUp">Build-Up</option></select></label>
+</div></div>
+<div class="ui-panel"><div class="ui-panel-hd"><h2>Speed settings</h2></div><div class="ui-panel-bd">
 <div class="row"><label>Min duty %<input id="ma-dmin" type="number" min="0" max="100" value="20"></label>
 <label>Max duty %<input id="ma-dmax" type="number" min="0" max="100" value="80"></label></div>
 <div class="row"><label>Min speed %<input id="ma-smin" type="number" min="0" max="100" value="0"></label>
 <label>Max speed %<input id="ma-smax" type="number" min="0" max="100" value="100"></label></div>
-<div class="row"><label>Segment min s<input id="ma-segmin" type="number" min="1" value="5"></label>
-<label>Segment max s<input id="ma-segmax" type="number" min="1" value="20"></label></div>
-<label>Delay before start (s)<input id="ma-delay" type="number" min="0" value="0"></label>
+</div></div>
+<div class="ui-panel"><div class="ui-panel-hd"><h2>Timing settings</h2></div><div class="ui-panel-bd">
+<div class="row"><label>Segment min (sec)<input id="ma-segmin" type="number" min="1" value="5"></label>
+<label>Segment max (sec)<input id="ma-segmax" type="number" min="1" value="20"></label></div>
+<label>Delay before start (sec)<input id="ma-delay" type="number" min="0" value="0"></label>
 <label>Ramp ms<input id="ma-ramp" type="number" min="0" max="30000" value="500"></label>
-<div class="row"><label>End mode<select id="ma-endmode"><option value="noAutoEnd">noAutoEnd</option><option value="minutes" selected>minutes</option></select></label>
+<div class="row"><label>End session<select id="ma-endmode"><option value="noAutoEnd">No AutoEnd</option><option value="minutes" selected>Minutes</option></select></label>
 <label>End value<input id="ma-endval" type="number" min="1" value="30"></label></div>
 <div class="subpanel">
-<h2>Segment target ramp (start payload)</h2>
+<h2>Segment target ramp</h2>
 <div class="row"><label>Ramp mode<select id="ma-ramp-mode">
 <option value="segmentDuration" selected>Full segment</option><option value="instant">Instant step</option>
 <option value="fixedMs">Fixed ms</option></select></label>
 <label>Ramp ms (fixed)<input id="ma-ramp-ms" type="number" min="0" max="30000" value="500"></label></div>
 </div>
+</div></div>
 </div>
 <div class="layout-col">
-<div class="subpanel" id="ma-burst-panel">
-<h2>Burst settings</h2>
-<p class="note">Burst speed 0–100 is relative to duty min/max. Set Speed (periodic) uses session-spread placements only.</p>
+<div class="ui-panel" id="ma-burst-panel"><div class="ui-panel-hd"><h2>Burst settings</h2></div><div class="ui-panel-bd">
+<p class="note" style="margin-top:0">Burst speed 0–100 is relative to duty min/max.</p>
 <div class="row"><label class="chk"><input id="ma-bursts" type="checkbox"> Bursts on</label>
-<label>Burst %<input id="ma-bpct" type="number" min="0" max="100" value="10"></label></div>
+<label>Burst chance %<input id="ma-bpct" type="number" min="0" max="100" value="10"></label></div>
 <label>Placement<select id="ma-bplacement">
 <option value="mainPlusSessionSpread" selected>Main + spread across session</option>
 <option value="insteadOfSessionSpread">Burst instead of main — spread</option>
@@ -164,19 +183,21 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <div class="row"><label>Burst speed min %<input id="ma-bpow-min" type="number" min="0" max="100" value="0"></label>
 <label>Burst speed max %<input id="ma-bpow-max" type="number" min="0" max="100" value="100"></label></div>
 <p class="hint" id="ma-bpow-hint"></p>
-<div class="row"><label>Burst delay min (s)<input id="ma-bdel-min" type="number" min="0" max="300" value="1"></label>
-<label>Burst delay max (s)<input id="ma-bdel-max" type="number" min="0" max="300" value="5"></label></div>
+<div class="row"><label>Burst delay min (sec)<input id="ma-bdel-min" type="number" min="0" max="300" value="1"></label>
+<label>Burst delay max (sec)<input id="ma-bdel-max" type="number" min="0" max="300" value="5"></label></div>
 <p class="hint" id="ma-bdel-hint"></p>
 <div class="row"><label>Strokes per burst min<input id="ma-bstr-min" type="number" min="1" max="100" value="5"></label>
 <label>Strokes per burst max<input id="ma-bstr-max" type="number" min="1" max="100" value="10"></label></div>
+</div></div>
 </div>
 </div>
 </div>
+<div class="ui-panel"><div class="ui-panel-hd"><h2>Session control</h2></div><div class="ui-panel-bd">
 <div class="panel-actions">
-<button class="btn-primary" id="btn-auto-start">Start automatic</button>
-<button class="btn-secondary" id="btn-auto-stop">Stop</button>
+<button class="btn-primary lg" id="btn-auto-start">Start automatic</button>
+<button class="btn-secondary lg" id="btn-auto-stop">Stop</button>
 <button class="btn-secondary" id="btn-auto-update">Apply update</button>
-</div>
+</div></div></div>
 </div>
 </div></div></div>
 <aside class="dashboard-aside">
@@ -226,6 +247,8 @@ function applyProfileUi(){
   $('motor-manual-panel').classList.toggle('hidden',!motor);
   $('relay-auto-panel').classList.toggle('hidden',motor);
   $('motor-auto-panel').classList.toggle('hidden',!motor);
+  refreshDevicePanelHeader(null);
+  scheduleGraphUpdate();
 }
 async function loadCapsProfile(){
   try{
@@ -233,7 +256,7 @@ async function loadCapsProfile(){
     capsProfile=(c&&c.actuatorKind)||'relay';
     if($('act-kind')&&c.actuatorKind)$('act-kind').value=c.actuatorKind;
     applyProfileUi();
-    refreshFocusDevice();
+    refreshFocusDevice(null);
     scheduleGraphUpdate();
   }catch(e){applyProfileUi();}
 }
@@ -261,21 +284,41 @@ function showMain(on){
   $('arm-hint').classList.toggle('hidden',!token);
   if(on)scheduleGraphUpdate();
 }
-async function refreshFocusDevice(){
+function deviceConnectionLabel(s){
+  if(!token)return 'locked';
+  if(s&&(s.busy||s.automaticActive))return 'busy';
+  if(s&&s.wifiConnected===false)return 'offline';
+  return 'online';
+}
+function refreshDevicePanelHeader(status){
+  var title=$('device-panel-title');
+  var sub=$('device-panel-sub');
+  if(!title)return;
+  var kind=capsProfile==='hbridge'?'Motor':'Relay';
+  var id=focusDeviceId||'…';
+  var conn=status?deviceConnectionLabel(status):'…';
+  title.textContent=kind+' · '+id;
+  if(sub)sub.textContent='('+conn+') — local device';
+}
+async function refreshFocusDevice(liveStatus){
   var sel=$('focus-device');
   if(!sel)return;
   try{
-    var st=await fetch('/api/status').then(function(r){return r.json();});
+    var st=liveStatus;
+    if(!st)st=await fetch('/api/status').then(function(r){return r.json();});
     focusDeviceId=st.deviceId||'local';
     var kindLabel=capsProfile==='hbridge'?'Motor':'Relay';
+    var conn=deviceConnectionLabel(st);
     sel.innerHTML='';
     var opt=document.createElement('option');
     opt.value=focusDeviceId;
-    opt.textContent=kindLabel+' · '+focusDeviceId+' (local)';
+    opt.textContent=kindLabel+' · '+focusDeviceId+' ('+conn+')';
     opt.selected=true;
     sel.appendChild(opt);
+    refreshDevicePanelHeader(st);
   }catch(e){
     sel.innerHTML='<option value="">This device</option>';
+    refreshDevicePanelHeader(null);
   }
 }
 function rules(mode){
@@ -878,6 +921,12 @@ async function poll(){
     else if(s.unlocked){tone='warning';summary='Press device button (D33)';}
     else{tone='error';summary='Unavailable';}
     setStatusPill(tone,summary);
+    refreshDevicePanelHeader(s);
+    var sel=$('focus-device');
+    if(sel&&sel.options.length&&focusDeviceId){
+      var kindLabel=capsProfile==='hbridge'?'Motor':'Relay';
+      sel.options[0].textContent=kindLabel+' · '+focusDeviceId+' ('+deviceConnectionLabel(s)+')';
+    }
     if($('scene-on')){
       $('scene-on').checked=!!s.sceneActive;
       syncSceneToggleUi(!!s.sceneActive);
