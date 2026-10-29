@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SomNet.Shared.Enums;
 using SomNet.Shared.Models;
 
 namespace SomNet.API.Services;
@@ -19,6 +20,15 @@ internal static class HardwareCommandPayloadValidator
         "buildUp",
     };
 
+    private static readonly HashSet<string> MotorAutomaticRunModes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "periodic",
+        "randomSpeed",
+        "randomSpeedAndTiming",
+        "powerWave",
+        "buildUp",
+    };
+
     private static readonly HashSet<string> WaveAutomaticModes = new(StringComparer.OrdinalIgnoreCase)
     {
         "powerWave",
@@ -31,6 +41,19 @@ internal static class HardwareCommandPayloadValidator
         "minutes",
         "strokes",
         "noAutoEnd",
+    };
+
+    private static readonly HashSet<string> BurstPlacements = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "sessionSpread",
+        "afterMainStroke",
+        "chanceAfterMainStroke",
+        "mainPlusSessionSpread",
+        "mainPlusAfterMainStroke",
+        "mainPlusChanceAfterMainStroke",
+        "insteadOfSessionSpread",
+        "insteadOfAfterMainStroke",
+        "insteadOfChanceAfterMainStroke",
     };
 
     private static readonly HashSet<string> BurstStyles = new(StringComparer.OrdinalIgnoreCase)
@@ -47,9 +70,15 @@ internal static class HardwareCommandPayloadValidator
         string commandKey,
         string payloadJson,
         int maxStrokeMs,
+        ActuatorKind actuatorKind,
         out string errorMessage)
     {
         errorMessage = string.Empty;
+
+        if (actuatorKind == ActuatorKind.Hbridge)
+        {
+            return TryValidateForMotorProfile(commandKey, payloadJson, out errorMessage);
+        }
 
         if (string.Equals(commandKey, "stroke", StringComparison.OrdinalIgnoreCase))
         {
@@ -72,7 +101,223 @@ internal static class HardwareCommandPayloadValidator
             return TryValidateSessionAccessoryPayload(payloadJson, out errorMessage);
         }
 
+        if (string.Equals(commandKey, HardwareCommandKeys.SceneSession, StringComparison.OrdinalIgnoreCase))
+        {
+            return TryValidateSessionAccessoryPayload(payloadJson, out errorMessage);
+        }
+
         return true;
+    }
+
+    private static bool TryValidateForMotorProfile(
+        string commandKey,
+        string payloadJson,
+        out string errorMessage)
+    {
+        errorMessage = string.Empty;
+
+        if (string.Equals(commandKey, HardwareCommandKeys.MotorRun, StringComparison.OrdinalIgnoreCase))
+        {
+            return TryValidateMotorRunPayload(payloadJson, out errorMessage);
+        }
+
+        if (string.Equals(commandKey, HardwareCommandKeys.MotorStop, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.Equals(commandKey, HardwareCommandKeys.AutomaticStart, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(commandKey, HardwareCommandKeys.AutomaticStop, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(commandKey, HardwareCommandKeys.AutomaticUpdate, StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(commandKey, HardwareCommandKeys.AutomaticStop, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return TryValidateMotorAutomaticStartPayload(payloadJson, out errorMessage);
+        }
+
+        if (string.Equals(commandKey, "stroke", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(commandKey, "burst", StringComparison.OrdinalIgnoreCase))
+        {
+            errorMessage = "Relay stroke/burst commands are not valid for a motor device.";
+            return false;
+        }
+
+        if (string.Equals(commandKey, HardwareCommandKeys.SceneSession, StringComparison.OrdinalIgnoreCase))
+        {
+            return TryValidateSessionAccessoryPayload(payloadJson, out errorMessage);
+        }
+
+        return true;
+    }
+
+    private static bool TryValidateMotorRunPayload(string payloadJson, out string errorMessage)
+    {
+        errorMessage = string.Empty;
+
+        try
+        {
+            using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
+            var root = document.RootElement;
+
+            if (!root.TryGetProperty("dutyPercent", out var dutyElement))
+            {
+                errorMessage = "motor-run payload requires dutyPercent.";
+                return false;
+            }
+
+            var duty = dutyElement.GetInt32();
+            if (duty < 0 || duty > 100)
+            {
+                errorMessage = "dutyPercent must be between 0 and 100.";
+                return false;
+            }
+
+            if (root.TryGetProperty("durationMs", out var durationElement))
+            {
+                if (durationElement.ValueKind != JsonValueKind.Number || !durationElement.TryGetInt32(out var durationMs))
+                {
+                    errorMessage = "durationMs must be a positive integer.";
+                    return false;
+                }
+
+                if (durationMs < 1 || durationMs > 3_600_000)
+                {
+                    errorMessage = "durationMs must be between 1 and 3600000.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            errorMessage = "motor-run payloadJson is not valid JSON.";
+            return false;
+        }
+    }
+
+    private static bool TryValidateMotorAutomaticStartPayload(string payloadJson, out string errorMessage)
+    {
+        errorMessage = string.Empty;
+
+        try
+        {
+            using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
+            var root = document.RootElement;
+
+            if (!root.TryGetProperty("automaticMode", out var modeElement) ||
+                modeElement.ValueKind != JsonValueKind.String)
+            {
+                errorMessage = "Motor automatic-start payload requires automaticMode.";
+                return false;
+            }
+
+            var automaticMode = modeElement.GetString();
+            if (string.IsNullOrWhiteSpace(automaticMode) || !MotorAutomaticRunModes.Contains(automaticMode))
+            {
+                errorMessage = "automaticMode is not a supported motor automatic program.";
+                return false;
+            }
+
+            foreach (var propertyName in new[]
+                     {
+                         "minimumDutyPercent", "maximumDutyPercent", "minimumSpeedPercent", "maximumSpeedPercent",
+                         "segmentMinSeconds", "segmentMaxSeconds",
+                         "delayBeforeStartSeconds", "endSessionValue", "rampMs",
+                     })
+            {
+                if (root.TryGetProperty(propertyName, out var valueElement) && valueElement.GetInt64() < 0)
+                {
+                    errorMessage = $"{propertyName} must be zero or greater.";
+                    return false;
+                }
+            }
+
+            if (root.TryGetProperty("segmentTargetRampMs", out var segmentRampElement) &&
+                segmentRampElement.TryGetInt32(out var segmentRampMs) &&
+                segmentRampMs < -1)
+            {
+                errorMessage = "segmentTargetRampMs must be -1 or greater.";
+                return false;
+            }
+
+            if (!TryValidateIntMinMax(
+                    root,
+                    "minimumDutyPercent",
+                    "maximumDutyPercent",
+                    0,
+                    100,
+                    out errorMessage))
+            {
+                return false;
+            }
+
+            if (!TryValidateIntMinMax(
+                    root,
+                    "minimumSpeedPercent",
+                    "maximumSpeedPercent",
+                    0,
+                    100,
+                    out errorMessage))
+            {
+                return false;
+            }
+
+            if (!TryValidateIntMinMax(
+                    root,
+                    "segmentMinSeconds",
+                    "segmentMaxSeconds",
+                    1,
+                    3600,
+                    out errorMessage))
+            {
+                return false;
+            }
+
+            string? endSessionMode = null;
+            if (root.TryGetProperty("endSessionMode", out var endSessionModeElement) &&
+                endSessionModeElement.ValueKind == JsonValueKind.String)
+            {
+                endSessionMode = endSessionModeElement.GetString();
+                if (!string.Equals(endSessionMode, "minutes", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(endSessionMode, "noAutoEnd", StringComparison.OrdinalIgnoreCase))
+                {
+                    errorMessage = "Motor endSessionMode must be minutes or noAutoEnd.";
+                    return false;
+                }
+            }
+
+            if (string.Equals(endSessionMode, "minutes", StringComparison.OrdinalIgnoreCase))
+            {
+                var endSessionValue = root.TryGetProperty("endSessionValue", out var endSessionValueElement)
+                    ? endSessionValueElement.GetInt32()
+                    : 0;
+                if (endSessionValue <= 0)
+                {
+                    errorMessage = "Motor minutes end session requires endSessionValue greater than zero.";
+                    return false;
+                }
+            }
+
+            if (root.TryGetProperty("burstsOn", out var burstsOnElement) &&
+                burstsOnElement.ValueKind == JsonValueKind.True)
+            {
+                if (!TryValidateAutomaticBurstSettings(root, out errorMessage))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch (JsonException)
+        {
+            errorMessage = "Motor automatic-start payloadJson is not valid JSON.";
+            return false;
+        }
     }
 
     private static bool TryValidateSessionAccessoryPayload(string payloadJson, out string errorMessage)
@@ -330,6 +575,18 @@ internal static class HardwareCommandPayloadValidator
         {
             errorMessage = "burstPercent must be between 0 and 100.";
             return false;
+        }
+
+        if (root.TryGetProperty("burstPlacement", out var placementElement) &&
+            placementElement.ValueKind == JsonValueKind.String)
+        {
+            var burstPlacement = placementElement.GetString();
+            if (string.IsNullOrWhiteSpace(burstPlacement) || !BurstPlacements.Contains(burstPlacement))
+            {
+                errorMessage =
+                    "burstPlacement must be a supported sessionSpread / afterMainStroke / chanceAfterMainStroke value (mainPlus or insteadOf variants).";
+                return false;
+            }
         }
 
         if (root.TryGetProperty("burstStyle", out var styleElement) &&

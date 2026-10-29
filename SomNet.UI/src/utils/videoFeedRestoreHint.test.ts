@@ -8,6 +8,7 @@ import {
 
 describe('videoFeedRestoreHint', () => {
   const store = new Map<string, string>();
+  const deviceId = 'dev-abc';
 
   beforeEach(() => {
     store.clear();
@@ -23,7 +24,7 @@ describe('videoFeedRestoreHint', () => {
   });
 
   afterEach(() => {
-    clearVideoFeedRestoreHint();
+    clearVideoFeedRestoreHint(deviceId);
     vi.unstubAllGlobals();
   });
 
@@ -31,13 +32,15 @@ describe('videoFeedRestoreHint', () => {
     writeVideoFeedRestoreHint({
       sessionId: 'sess-001',
       subTarget: 'SubA',
+      deviceId,
       mode: 'manual',
       preview: true,
     });
 
-    expect(readVideoFeedRestoreHint()).toEqual({
+    expect(readVideoFeedRestoreHint(deviceId)).toEqual({
       sessionId: 'sess-001',
       subTarget: 'SubA',
+      deviceId,
       mode: 'manual',
       preview: true,
     });
@@ -47,24 +50,26 @@ describe('videoFeedRestoreHint', () => {
     const hint = {
       sessionId: 'sess-002',
       subTarget: 'SubB' as const,
+      deviceId,
       mode: 'manual' as const,
       preview: false,
     };
 
-    expect(matchesVideoFeedRestoreHint(hint, 'sess-002', 'SubB', 'manual')).toBe(true);
-    expect(matchesVideoFeedRestoreHint(hint, 'sess-003', 'SubB', 'manual')).toBe(false);
+    expect(matchesVideoFeedRestoreHint(hint, 'sess-002', 'SubB', deviceId, 'manual')).toBe(true);
+    expect(matchesVideoFeedRestoreHint(hint, 'sess-003', 'SubB', deviceId, 'manual')).toBe(false);
   });
 
   it('clears stored hints', () => {
     writeVideoFeedRestoreHint({
       sessionId: 'sess-003',
       subTarget: 'SubA',
+      deviceId,
       mode: 'automatic',
       preview: false,
     });
 
-    clearVideoFeedRestoreHint();
+    clearVideoFeedRestoreHint(deviceId);
 
-    expect(readVideoFeedRestoreHint()).toBeNull();
+    expect(readVideoFeedRestoreHint(deviceId)).toBeNull();
   });
 });

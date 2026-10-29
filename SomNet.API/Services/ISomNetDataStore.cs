@@ -6,7 +6,10 @@ namespace SomNet.API.Services;
 
 public interface ISomNetDataStore
 {
-    IReadOnlyList<SessionHistoryEntryDto> GetSessionsForDom(string domTarget, string? subTarget = null);
+    IReadOnlyList<SessionHistoryEntryDto> GetSessionsForDom(
+        string domTarget,
+        string? subTarget = null,
+        string? deviceId = null);
 
     IReadOnlyList<HistoryTimelineItemDto> GetTimeline(HistoryQueryDto query);
 
@@ -18,7 +21,7 @@ public interface ISomNetDataStore
 
     NotificationHistoryEntryDto AddNotification(SendSessionNotificationRequestDto request);
 
-    SessionHistoryEntryDto? GetActiveSession(string domTarget, string subTarget);
+    SessionHistoryEntryDto? GetActiveSession(string domTarget, string subTarget, string? deviceId = null);
 
     SessionHistoryEntryDto GetSession(string domTarget, string sessionId);
 
@@ -31,10 +34,14 @@ public interface ISomNetDataStore
     /// <summary>Removes a session row that is still at the initial in-progress placeholder (P16 accessory off with no activity).</summary>
     void DeleteInProgressSession(string domTarget, string sessionId);
 
+    /// <summary>Sub-scoped app/video settings (legacy DomSubSettings row).</summary>
     PairingSettingsDto GetPairingSettings(string domTarget, string subTarget);
+
+    PairingSettingsDto GetPairingSettings(string domTarget, string subTarget, string deviceId);
 
     PairingSettingsDto SavePairingSettings(
         string domTarget,
         string subTarget,
+        string deviceId,
         PairingSettingsDto settings);
 }

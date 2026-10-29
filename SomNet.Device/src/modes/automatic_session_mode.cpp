@@ -107,16 +107,22 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
     sessionStartMs_ = 0;
     delayStartMs_ = millis();
     nextGapDeadlineMs_ = 0;
+    segmentIndex_ = 0;
     active_ = true;
 
     Serial.print(F("[AUTO] start mode="));
     Serial.print(automaticMode_);
     Serial.print(F(" delaySec="));
     Serial.print(config.delayBeforeStartSeconds);
+    Serial.print(F(" burstsOn="));
+    Serial.print(burstsOn_ ? F("true") : F("false"));
     Serial.println(F(" (stroke-first)"));
 
     if (burstsOn_) {
         if (burstPlan_.active) {
+            if (burstPlan_.burstInsteadOfMain) {
+                Serial.println(F("[AUTO] burst timing=insteadOfMain"));
+            }
             switch (burstPlan_.kind) {
                 case BurstScheduleKind::StrokeMilestones:
                     Serial.print(F("[AUTO] burst plan strokes events="));
@@ -127,8 +133,12 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
                     Serial.println(burstPlan_.burstEventCount);
                     break;
                 case BurstScheduleKind::CadenceStride:
-                    Serial.print(F("[AUTO] burst plan noAutoEnd stride="));
+                    Serial.print(F("[AUTO] burst plan cadence stride="));
                     Serial.println(burstPlan_.cadenceStride);
+                    break;
+                case BurstScheduleKind::ChancePerMainStroke:
+                    Serial.print(F("[AUTO] burst plan chanceAfterMainStroke percent="));
+                    Serial.println(config.burstPercent);
                     break;
                 default:
                     Serial.println(F("[AUTO] burst plan active"));
@@ -141,6 +151,10 @@ bool AutomaticSessionMode::beginSession(const char* payloadJson) {
 
     if (config.delayBeforeStartSeconds > 0) {
         state_ = State::StartDelay;
+        emitRelaySegment(
+            "gap",
+            0,
+            static_cast<unsigned long>(config.delayBeforeStartSeconds) * 1000UL);
     } else {
         sessionStartMs_ = millis();
         if (!startNextPulse()) {
@@ -160,6 +174,59 @@ void AutomaticSessionMode::setSessionNotifier(
     AutomaticCompleteCallback onNotify) {
     sessionNotifyContext_ = callbackContext;
     sessionNotify_ = onNotify;
+}
+
+void AutomaticSessionMode::setSegmentNotifier(
+    void* callbackContext,
+    RelayAutomaticSegmentCallback onNotify) {
+    segmentNotifyContext_ = callbackContext;
+    segmentNotify_ = onNotify;
+}
+
+unsigned long AutomaticSessionMode::programElapsedMs() const {
+    if (sessionStartMs_ > 0UL) {
+        return millis() - sessionStartMs_;
+    }
+    if (delayStartMs_ > 0UL && active_) {
+        return millis() - delayStartMs_;
+    }
+    return 0UL;
+}
+
+void AutomaticSessionMode::emitRelaySegment(
+    const char* phase,
+    int powerPercent,
+    unsigned long durationMs) {
+    if (segmentNotify_ == nullptr || segmentNotifyContext_ == nullptr || !active_) {
+        return;
+    }
+    if (phase == nullptr || phase[0] == '\0' || durationMs == 0UL) {
+        return;
+    }
+
+    if (powerPercent < 0) {
+        powerPercent = 0;
+    }
+    if (powerPercent > 100) {
+        powerPercent = 100;
+    }
+
+    const unsigned long elapsedMs = programElapsedMs();
+
+    char segmentJson[320];
+    snprintf(
+        segmentJson,
+        sizeof(segmentJson),
+        "{\"commandKey\":\"relay-automatic-segment\",\"actuatorKind\":\"relay\","
+        "\"segmentIndex\":%d,\"phase\":\"%s\",\"powerPercent\":%d,"
+        "\"durationMs\":%lu,\"programElapsedMs\":%lu}",
+        segmentIndex_,
+        phase,
+        powerPercent,
+        durationMs,
+        elapsedMs);
+    segmentNotify_(segmentNotifyContext_, segmentJson);
+    segmentIndex_++;
 }
 
 bool AutomaticSessionMode::requestStop(
@@ -410,6 +477,18 @@ void AutomaticSessionMode::poll() {
         applyPendingUpdate();
     }
 
+    if (burstsOn_) {
+        AutomaticConfig burstConfig{};
+        if (parseAutomaticConfig(configJson_, &burstConfig) &&
+            shouldTriggerBurstBeforeMainStroke(
+                burstPlan_, burstConfig, strokesCompleted_)) {
+            if (!beginBurstEvent()) {
+                finishSession(false, "automatic burst failed to start", "error", true);
+            }
+            return;
+        }
+    }
+
     if (!startNextPulse()) {
         finishSession(false, "automatic session failed — relay busy", "error", true);
     }
@@ -446,6 +525,8 @@ bool AutomaticSessionMode::startNextPulse() {
     Serial.print(strokeMs_);
     Serial.print(F(" gapSec="));
     Serial.println(gapSec_);
+
+    emitRelaySegment("stroke", powerPercent_, static_cast<unsigned long>(strokeMs_));
 
     if (!relay_->requestPulse(
             static_cast<unsigned long>(strokeMs_),
@@ -517,6 +598,8 @@ bool AutomaticSessionMode::startNextBurstPulse() {
     Serial.print(F("% strokeMs="));
     Serial.println(strokeMs_);
 
+    emitRelaySegment("stroke", powerPercent_, static_cast<unsigned long>(strokeMs_));
+
     if (!relay_->requestPulse(
             static_cast<unsigned long>(strokeMs_),
             this,
@@ -548,6 +631,10 @@ void AutomaticSessionMode::finishBurstEvent() {
 
     state_ = State::WaitingGap;
     nextGapDeadlineMs_ = millis() + static_cast<unsigned long>(postBurstGapSec_) * 1000UL;
+    emitRelaySegment(
+        "gap",
+        0,
+        static_cast<unsigned long>(postBurstGapSec_) * 1000UL);
 }
 
 void AutomaticSessionMode::onRelayPulseComplete(void* context, unsigned long /*actualMs*/) {
@@ -568,12 +655,16 @@ void AutomaticSessionMode::onRelayPulseComplete(void* context, unsigned long /*a
         mode->applyPendingUpdate();
     }
 
-    if (mode->burstsOn_ &&
-        shouldTriggerBurstAfterMainStroke(mode->burstPlan_, mode->strokesCompleted_)) {
-        if (!mode->beginBurstEvent()) {
-            mode->finishSession(false, "automatic burst failed to start", "error", true);
+    if (mode->burstsOn_) {
+        AutomaticConfig burstConfig{};
+        if (parseAutomaticConfig(mode->configJson_, &burstConfig) &&
+            shouldTriggerBurstAfterMainStroke(
+                mode->burstPlan_, burstConfig, mode->strokesCompleted_)) {
+            if (!mode->beginBurstEvent()) {
+                mode->finishSession(false, "automatic burst failed to start", "error", true);
+            }
+            return;
         }
-        return;
     }
 
     if (mode->stopRequested_) {
@@ -588,6 +679,10 @@ void AutomaticSessionMode::onRelayPulseComplete(void* context, unsigned long /*a
 
     mode->state_ = State::WaitingGap;
     mode->nextGapDeadlineMs_ = millis() + static_cast<unsigned long>(mode->gapSec_) * 1000UL;
+    mode->emitRelaySegment(
+        "gap",
+        0,
+        static_cast<unsigned long>(mode->gapSec_) * 1000UL);
 }
 
 void AutomaticSessionMode::onBurstPulseComplete(void* context, unsigned long /*actualMs*/) {
@@ -638,6 +733,7 @@ void AutomaticSessionMode::onBurstPulseComplete(void* context, unsigned long /*a
 
     mode->state_ = State::BurstGap;
     mode->burstGapStartMs_ = millis();
+    mode->emitRelaySegment("gap", 0, mode->burstDelayMs_);
 }
 
 bool AutomaticSessionMode::shouldEndSession() const {

@@ -1,6 +1,6 @@
 # Frontend Architecture
 
-SomNet.UI is a React 18 single-page application built with TypeScript, Vite, and Tailwind CSS. There is no client-side router — the app uses conditional rendering based on authentication and selected operation mode.
+SomNet.UI is a React 18 single-page application built with TypeScript, Vite, and Tailwind CSS. There is no client-side router — after login the dashboard renders directly (V2: no global manual/automatic mode picker).
 
 ## Build and Hosting
 
@@ -17,11 +17,10 @@ SomNet.UI is a React 18 single-page application built with TypeScript, Vite, and
 ```
 main.tsx
   └── AuthProvider
-        └── ModeProvider
-              └── App
+        └── App
 ```
 
-Before authentication, only `LoginForm` renders. After login, the full provider tree mounts.
+Before authentication, only `LoginForm` renders. After login, the full provider tree mounts. Per-device operation mode (`manual` \| `automatic`) lives in `DeviceOperationModeProvider`, not a top-level route.
 
 ## Provider Tree (Authenticated)
 
@@ -29,23 +28,26 @@ See `App.tsx` for the authoritative nesting. Simplified:
 
 ```
 SubTargetProvider
-  SessionProvider
-    DomSessionsProvider
-      HardwareProvider
-        OptionsProvider
-          TabSyncProvider
-            NotifyProvider
-              SiteUserReadyProvider
-                HardwareCommandProvider
-                  SystemStatusProvider
-                    SessionAccessoryProvider
-                      AutomaticSessionHubListener   ← auto session end + ButtonEventReceived
-                      SessionRehydrator
-                      HistoryProvider
-                        AppShell → ModeSelector | DashboardWithVideo
-                          VideoDisplayProvider
-                            SiteUserReadyBanner + DashboardLayout
-                              ManualControls | AutomaticControls
+  SubDeviceProvider                    ← device roster + header Focus deviceId
+    SessionProvider
+      DomSessionsProvider
+        HardwareProvider
+          OptionsProvider                ← per-device pairing settings GET/PUT (?deviceId=)
+            DevicePairingSettingsProvider
+              DeviceOperationModeProvider  ← manual | automatic per deviceId
+                TabSyncProvider
+                  NotifyProvider
+                    SiteUserReadyProvider
+                      HardwareCommandProvider
+                        SystemStatusProvider
+                          AutomaticSessionHubListener   ← session complete, segment acks, ButtonEventReceived
+                          SessionRehydrator
+                          DeviceSceneAccessoryBootstrap
+                          HistoryProvider
+                            AppShell → DashboardWithVideo
+                              VideoDisplayProvider
+                                DashboardLayout
+                                  DeviceOperationsPanel   ← per Focus device: scene, motor/relay controls
 ```
 
 ### Provider Responsibilities
@@ -53,14 +55,15 @@ SubTargetProvider
 | Provider | File | Key Behavior |
 |----------|------|--------------|
 | **AuthProvider** | `context/AuthProvider.tsx` | Login, register, logout; persists session in `localStorage` key `somnet-auth`; attaches Bearer token to all API calls; 401 → logout |
-| **ModeProvider** | `context/ModeProvider.tsx` | `manual` \| `automatic` \| `null`; persists last mode in `localStorage` (`somnet.operationMode`) |
+| **SubDeviceProvider** | `context/SubDeviceProvider.tsx` | Paired `deviceId` list for Sub; header **Focus** selection |
+| **DeviceOperationModeProvider** | `context/DeviceOperationModeProvider.tsx` | `manual` \| `automatic` per `deviceId` (relay + motor) |
+| **DevicePairingSettingsProvider** | `context/DevicePairingSettingsProvider.tsx` | Scopes `OptionsProvider` loads to `DeviceOperationScope` |
 | **SubTargetProvider** | `context/SubTargetProvider.tsx` | Current sub name; opens `SubSelectionDialog` |
 | **SessionProvider** | `context/SessionProvider.tsx` | Creates/updates/ends sessions via API; maintains manual event log for summaries |
 | **DomSessionsProvider** | `context/DomSessionsProvider.tsx` | Dom sessions dialog open state |
-| **OptionsProvider** | `context/OptionsProvider.tsx` | Loads/saves `PairingSettingsDto` via `/api/settings`; **persists only after explicit user edit** (`userEditedRef`); 400 ms debounce; `running` never persisted |
-| **SessionRehydrator** | `components/hardware/SessionRehydrator.tsx` | On load (when Session in Progress hint set): `GET /api/sessions/active`, automatic device probe, restore `activeSession` + local `running` |
-| **SessionAccessoryProvider** | `context/SessionAccessoryProvider.tsx` | **Session in Progress** switch state, `session-accessory` command, session start/end on OFF↔ON, tab-sync `session-accessory` |
-| **AutomaticSessionHubListener** | `components/hardware/AutomaticSessionHubListener.tsx` | Finalizes automatic sessions on hub `automatic-session-complete`; handles `ButtonEventReceived` → `SiteUserReadyProvider` |
+| **OptionsProvider** | `context/OptionsProvider.tsx` | Loads/saves `PairingSettingsDto` via `/api/settings?deviceId=`; **`motorAutomatic` / `motorManual` / relay `automatic`** planes; **persists only after explicit user edit**; `setDeviceAutomaticRunning(subTarget, deviceId, kind, running)` map — never persisted to server |
+| **SessionRehydrator** | `components/hardware/SessionRehydrator.tsx` | On load: per-device scene hints; `GET /api/sessions/active`, automatic probe, restore session + running for matching `deviceId` |
+| **AutomaticSessionHubListener** | `components/hardware/AutomaticSessionHubListener.tsx` | `automatic-session-complete` per `deviceId`; **`motor-automatic-segment`** → pattern graph store; `ButtonEventReceived` → ready banner |
 | **SiteUserReadyProvider** | `context/SiteUserReadyProvider.tsx` | Sub double-click ack (P16-D1/D10), ready banner dismiss; pairs with `useSiteUserReadyStartFeed` for auto **Start feed** |
 | **TabSyncProvider** | `context/TabSyncProvider.tsx` | Cross-tab session/sub/`session-accessory`/command sync via `BroadcastChannel` |
 | **HardwareProvider** | `context/HardwareProvider.tsx` | Hardware dialog open state |
@@ -77,9 +80,9 @@ There is no URL-based routing. Navigation is state-driven:
 | State | View |
 |-------|------|
 | `!isAuthenticated` | `LoginForm` |
-| `isAuthenticated && mode === null` | `ModeSelector` |
-| `mode === 'manual'` | `DashboardLayout` + `ManualControls` |
-| `mode === 'automatic'` | `DashboardLayout` + `AutomaticControls` |
+| `isAuthenticated` | `AppShell` + `DashboardLayout` — controls = `DeviceOperationsPanel` for header **Focus** `deviceId` |
+
+Operator norms (scene vs accessory, per-device routing): [34 — V2 rules](./34-Operator-Session-And-Accessory-V2-Rules.md).
 
 ### AppShell Header
 
@@ -127,12 +130,23 @@ The sticky header (`components/layout/AppShell.tsx`) contains:
 
 **Commands:** Wrapped in `CommandButton` with keys `stroke`, `burst`, `abort` (gated when switch off).
 
-### Automatic Mode (`AutomaticControls.tsx`)
+### Device operations (`DeviceOperationsPanel.tsx`)
+
+For the **Focus** device on the current Sub:
+
+- **Connection** — online/offline from polled status (`resolveDeviceConnectionLabel`), not registration cache alone.
+- **Mode toggle** — per-device manual vs automatic (`DeviceModeToggle`).
+- **Scene + Accessory** — `DeviceSubSessionControls` (V2; motion not gated on accessory).
+- **Motion** — `DeviceOperationScope` supplies `deviceId` + `actuatorKind` to child controls:
+  - Relay: `ManualControls` \| `AutomaticControls`
+  - Motor: `MotorManualControls` \| `MotorAutomaticControls`
+
+### Relay automatic (`AutomaticControls.tsx`)
 
 **Panels:**
 - **Power Settings** — Min/max power % sliders, min/max stroke ms
 - **Timing Settings** — Stroke gaps, delay before start, end session rules
-- **Burst Settings** — Bursts On, percent, style, burst power/delay/stroke ranges (Phase 10)
+- **Burst Settings** — Bursts On, **burst placement** (six options: main+ vs instead-of × spread / even / chance — [36](./36-Burst-Placement-Modes-Design.md)), percent (label depends on placement), style, burst power/delay/stroke ranges (Phase 10). Helpers: `burstPlacement.ts`, `relayBurstPlan.ts`, `relayPowerSchedule.ts`.
 - **Controls** — Program selector, Start, Stop, Abort
 
 **Field minimums (UI):** Main-program gap **`strokeMinSeconds`** / **`strokeMaxSeconds`** — min **1** sec each (`automaticFieldRules.ts`). Burst **`burstDelayMin`** and **`burstStrokePowerMin`** — min **1** (`burstFieldRules.ts`). Max fields may use **0** where product rules allow (burst delay max; burst power max on relative 0–100 scale). Normalized on load/save.
@@ -147,6 +161,40 @@ The sticky header (`components/layout/AppShell.tsx`) contains:
 **Commands:** Keys `automatic-start`, `automatic-stop`, `automatic-update` (when live overrides enabled), `abort` (during automatic session), plus UI `session-accessory` for the header switch.
 
 **Hub:** `AutomaticSessionHubListener` syncs end-rule, abort, and cooperative stop without blocking the UI on long bursts.
+
+### Motor manual (`MotorManualControls.tsx`)
+
+- Duty % slider (min/max from `motorManual` settings).
+- **Run** / **Stop** → `motor-run` / `motor-stop` (requires scene session + readiness rules).
+- Settings plane: `PairingSettingsDto.motorManual` (per `deviceId`).
+
+### Motor automatic (`MotorAutomaticControls.tsx`)
+
+**Programs (continuous speed — not relay stroke/gap):**
+
+| UI label | `automaticMode` |
+|----------|-----------------|
+| Set Speed | `periodic` |
+| Random Speed | `randomSpeed` |
+| Random Speed and Timing | `randomSpeedAndTiming` |
+| Speed Wave | `powerWave` |
+| Build-Up | `buildUp` |
+
+**Panels:** speed/duty min/max, segment timing, ramp ms, delay before start, end session (`minutes` \| `noAutoEnd` — stroke count coerced away in start payload). Burst block mirrors relay (including **burst placement**); device execution [31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27) — firmware **`0.16.4-motor-burst-duty`**. Set Speed coerces session-spread + minutes when bursts on (**M1d-U2**). Burst min/max UI sync (`burstFieldRules.ts`); effective speed hint (`motorBurstEffectiveSpeed.ts`).
+
+**Controls:** Start (ensures scene session via `ensureAutomaticSessionForDeviceStart`), Stop, **Abort always visible** (disabled when idle). Start payload: `buildMotorAutomaticStartPayload` → `automatic-start` with `actuatorKind: hbridge`.
+
+**Running / hub:** Same cooperative stop + `automatic-session-complete` path as relay; `running` keyed per `(subTarget, deviceId, motor)`. Live overrides: debounced `automatic-update` when enabled in Options.
+
+**Field rules:** `motorAutomaticFieldRules.ts`, mode copy in `motorAutomaticModeInfo.ts`.
+
+**Graph:** **Start** → `beginMotorAutomaticGraphRecording` (fresh segments + settings fingerprint). **Stop / session complete** → segments **kept** for “recorded last run” until settings change or next Start. Hub segment #0 → `resetMotorAutomaticSegmentEvents` only. See § Motor pattern graph.
+
+### Relay automatic — pattern graph
+
+Same video column **Feeds \| Graph** when Focus device is **relay**. Plots **commanded power %** (stroke on / gap off). Preview: `relayPowerSchedule.ts` (incl. burst preview); live/recorded: hub `relay-automatic-segment` → `relayAutomaticSegmentStore.ts` + `relayAutomaticGraphFingerprint.ts` → `RelayPatternGraphPanel`. **Start** → `beginRelayAutomaticGraphRecording`; same keep/clear rules as motor (`DevicePairingSettingsProvider`, `OptionsProvider`, panel fingerprint `useEffect`).
+
+Design reference: [31 §13](./31-Motor-Actuator-Device-Design.md#13-as-built--hub-path-motor-programs-ui-telemetry).
 
 ## UI Component Library
 
@@ -272,6 +320,21 @@ Page load (authenticated; last mode may restore from localStorage)
 - **SessionSnapshotGallery** / **AuthenticatedSnapshotImage** — action stills grouped by `actionIndex`; captions from API `actionSummary` (`captionForSnapshotGroup`, `modeForSnapshotGroup` in `utils/snapshotActionCaption.ts`); JWT blob fetch via `apiFetchBlob` + object URL
 - **SnapshotLightbox** — full-screen still viewer (double-click in gallery; Close / Esc)
 - **SiteUserReadyBanner** — banner when device double-click reports site user ready ([23](./23-Device-Button-Clicks-Checklist.md))
+- **Motor pattern graph** (`MotorPatternGraphPanel`, video column **Feeds | Graph**) — **SomNet.API + operator UI only** today. See below.
+
+### Motor pattern graph (scope)
+
+| Phase | Behavior |
+|-------|----------|
+| **Idle / before Start** | Planned **commanded speed %** from current motor automatic settings (for random modes, a stable **example** path — device choices are unknown until run). Bursts included in preview when `burstsOn` (`motorSpeedSchedule.ts` + shared `relayBurstPlan`). |
+| **Running (API path)** | Live curve from hub acks `correlationId: motor-automatic-segment` (ramps incl. burst micro-cycles). Dedupe by `programElapsedMs`. **Now** marker on live curve. |
+| **After Stop (same settings)** | **Recorded** last run remains on graph until a graph-affecting setting changes or operator **Start** again (`motorAutomaticGraphRecordingActive` + fingerprint). |
+| **Standalone / Mode A** ([26](./26-ESP32-Local-Offline-Mode-Design.md)) | **Not a product goal** for the ESP `/operate` panel unless standalone later exposes the same telemetry to a browser (e.g. local WebSocket or polled status). Firmware may still emit segment JSON for API use when SignalR is connected. |
+| **Relay** | Same **Feeds \| Graph** tab when Focus device is `relay` — **commanded power %**; preview + live/recorded via `relayAutomaticSegmentStore` (same recording lifecycle as motor). |
+
+**Why API-centric:** Random (and timing-random) programs are decided on the device at segment boundaries. A truthful running graph **must** consume device-reported targets, not UI guesses. Preview remains useful for reasoning about settings; live graph is an **operator session tool** alongside video/history, not firmware-local UI.
+
+**Code:** `utils/motorSpeedSchedule.ts`, `utils/motorAutomaticGraphFingerprint.ts`, `utils/motorAutomaticSegmentStore.ts`, `utils/relayAutomaticGraphFingerprint.ts`, `utils/relayAutomaticSegmentStore.ts`, firmware `emitSegmentRamp` in `motor_automatic_session_mode.cpp`.
 
 **Live video feeds (Options → General):** `appOptions.mobileVideoExpandDefault` — `"both"` \| `"monitor1"` (front) \| `"monitor2"` (rear). Implemented in `utils/liveVideoFeedPreference.ts` + `useSessionVideoSources` — disabled cameras do not mount iframes or connect to go2rtc (bandwidth/CPU savings on mobile/tunnel). **`actionSnapshotFeeds`** is separate (stills only). On mobile, `appOptions.autoExpandVideoOnMobile` opens the selected feed full screen after commands. Rebuild **`SomNet.UI/dist`** after UI changes when using integrated API hosting.
 
@@ -292,12 +355,13 @@ Page load (authenticated; last mode may restore from localStorage)
 | Data | Storage |
 |------|---------|
 | Auth token + user | `localStorage` (`somnet-auth`) |
-| Last operation mode | `localStorage` (`somnet.operationMode`) — manual or automatic |
+| Per-device operation mode | `DeviceOperationModeProvider` (+ persistence hook per `deviceId`) |
+| Video aside tab (Feeds \| Graph) | `localStorage` (`somnet-video-aside-tab`) — motor graph tab when Focus device is `hbridge` |
 | Settings | Server (`DomSubSettings` table); loaded on mount; saved only after user edit |
 | Active session (after refresh) | Restored from server via `GET /api/sessions/active` (automatic: + device probe; manual: parse PATCH summary) |
 | Session history | Server (`Sessions` table) |
 | Selected sub | `localStorage` (`somnet.selectedSub`) + cross-tab broadcast |
-| `settings.automatic.running` | Local React state only — never persisted to server |
+| Automatic `running` (relay + motor) | Per-device map in `OptionsProvider` — never persisted to server |
 
 ## Multi-Tab Sync
 
@@ -323,5 +387,5 @@ Manual stroke in second tab
 
 ## Future Enhancements
 
-- **Session timeline / graph** — visual plan or replay of an automatic session (main strokes, burst clusters, gaps, power envelope). Placement TBD: Automatic page (pre-start preview or live), session history detail, or both. See [Phase 10 checklist §8](./09-ESP32-Phase-10-Checklist.md#8-relationship-to-other-future-work).
+- **Relay session timeline / graph** — motor **commanded speed %** graph shipped (video column, hub segment acks). Relay automatic timeline graphs still deferred. See [Phase 10 checklist §8](./09-ESP32-Phase-10-Checklist.md#8-relationship-to-other-future-work).
 - **Video / edge settings — site installer vs remote operator** — SomNet web users (Dom/operators) are **not** the people who wire cameras at the tool site. **Target:** extend **ESP32 local setup UI** (`/config` or status flow) and/or **edge gateway local UI** so the **on-site installer** enters edge URL, camera layout, RTSP paths/credentials; device or edge **posts to API → database** (scoped to Sub/pairing). Remote SomNet UI **reads** stored settings (Phase 3+ tokens/URLs) — no manual `VITE_VIDEO_*` or `go2rtc.yaml` for operators. Edge agent (Phase 5+) pulls from API and applies go2rtc config. Video still runs on Pi/PC edge, not ESP32; ESP32 is the likely **installer config entry point** alongside Wi‑Fi/server pairing. Phase 2–3 bench: env + yaml only. See [13 §13](./13-Video-And-Camera-Architecture.md#13-somnet-touchpoints) · [14 plan — Future enhancements](./14-Video-Implementation-Plan.md#future-enhancements-todo) · [Hardware User Guide — Video](./Hardware-User-Guide.md).

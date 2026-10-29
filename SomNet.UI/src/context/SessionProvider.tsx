@@ -17,7 +17,9 @@ import {
 } from '@/api/sessions';
 import { useAuth } from '@/context/AuthProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 import type { SubTargetName } from '@/config/sessionUsers';
+import { deviceIdFromSessionKey, sessionDeviceKey } from '@/utils/sessionDeviceKey';
 import type { OperationMode } from '@/types/modes';
 import {
   buildAutomaticSessionSummary,
@@ -31,14 +33,15 @@ import { parseManualInProgressSummary } from '@/utils/manualSessionRehydrate';
 import { isRehydratableManualSession } from '@/utils/sessionProgress';
 import { markManualVideoCommandComplete } from '@/utils/manualVideoCommandNotify';
 import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
-interface ActiveSessionState {
+export interface ActiveSessionState {
   id: string;
   startedAt: string;
   mode: OperationMode;
   subTarget: SubTargetName;
+  deviceId: string;
   events: ManualActionEvent[];
   abortCount: number;
-  /** True after Automatic Start succeeds for this accessory session (P16). */
+  /** True after Automatic Start succeeds for this scene session. */
   automaticDeviceStarted: boolean;
 }
 
@@ -48,38 +51,46 @@ export interface EndSessionForAccessoryOptions {
 }
 
 interface SessionContextValue {
-  activeSession: ActiveSessionState | null;
+  sessionsByKey: Record<string, ActiveSessionState>;
   /** Incremented when a manual stroke/burst/abort completes or manual session rehydrates (video idle timer). */
   manualVideoActivitySeq: number;
   /** Incremented on manual session rehydrate (refresh / tab sync); survives hook remount. */
   manualVideoRehydrateSeq: number;
-  beginAutomaticSession: () => Promise<void>;
-  recordManualStroke: (powerPercent: number, actualStrokeMs?: number) => Promise<void>;
-  recordManualAbort: () => Promise<void>;
-  recordManualBurst: (
+  endAutomaticSessionForDevice: (
+    subTarget: SubTargetName,
+    deviceId: string,
+    reason: string,
+    deviceResult?: AutomaticResultJson | null,
+  ) => Promise<void>;
+  endManualSessionForDevice: (deviceId: string, reason: ManualSessionEndReason) => Promise<void>;
+  /** End every in-progress server session row on the current Sub (tab/sub change). */
+  endAllInProgressSessionsForSub: (reason: ManualSessionEndReason | string) => Promise<void>;
+  rehydrateSession: (entry: SessionHistoryEntry) => void;
+  syncSessionFromRemote: (entry: SessionHistoryEntry | null, deviceIdForClear?: string) => void;
+  /** Returns the action index to use for the next manual stroke/burst snapshot. */
+  prepareManualSessionForDevice: (deviceId: string) => Promise<number>;
+  prepareAutomaticSessionForDevice: (deviceId: string) => Promise<void>;
+  recordManualStrokeForDevice: (
+    deviceId: string,
+    powerPercent: number,
+    actualStrokeMs?: number,
+  ) => Promise<void>;
+  recordManualBurstForDevice: (
+    deviceId: string,
     powerPercent: number,
     burstStrokes: number,
     burstDelaySeconds: number,
     strokesCompleted?: number,
   ) => Promise<void>;
-  endManualSession: (reason: ManualSessionEndReason) => Promise<void>;
-  endAutomaticSession: (
-    reason: string,
-    deviceResult?: AutomaticResultJson | null,
+  recordManualAbortForDevice: (deviceId: string) => Promise<void>;
+  startSessionForDevice: (deviceId: string, mode: OperationMode) => Promise<void>;
+  endSessionForAccessoryForDevice: (
+    deviceId: string,
+    options: EndSessionForAccessoryOptions,
   ) => Promise<void>;
-  endActiveSessionIfNeeded: (reason: ManualSessionEndReason | string) => Promise<void>;
-  rehydrateSession: (entry: SessionHistoryEntry) => void;
-  syncSessionFromRemote: (entry: SessionHistoryEntry | null) => void;
-  /** Ensures an in-progress manual session exists (for video preview before first stroke). */
-  /** Returns the action index to use for the next manual stroke/burst snapshot. */
-  prepareManualSession: () => Promise<number>;
-  /** Ensures an in-progress automatic session record exists (for video preview before Start). */
-  prepareAutomaticSession: () => Promise<void>;
-  /** P16 — new server row on Session in Progress OFF→ON. */
-  startSessionForAccessory: (mode: OperationMode) => Promise<void>;
-  endSessionForAccessory: (options: EndSessionForAccessoryOptions) => Promise<void>;
-  syncActiveSessionMode: (mode: OperationMode) => Promise<void>;
-  markAutomaticDeviceStarted: () => void;
+  syncActiveSessionModeForDevice: (deviceId: string, mode: OperationMode) => Promise<void>;
+  markAutomaticDeviceStartedForDevice: (deviceId: string) => void;
+  isAutomaticSessionActiveForDevice: (subTarget: SubTargetName, deviceId: string) => boolean;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -87,13 +98,31 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { selectedSub } = useSubTarget();
-  const [activeSession, setActiveSession] = useState<ActiveSessionState | null>(null);
+  const { selectedDeviceId } = useSubDevice();
+  const [sessionsByKey, setSessionsByKey] = useState<Record<string, ActiveSessionState>>({});
   const [manualVideoActivitySeq, setManualVideoActivitySeq] = useState(0);
   const [manualVideoRehydrateSeq, setManualVideoRehydrateSeq] = useState(0);
-  const activeSessionRef = useRef<ActiveSessionState | null>(null);
-  const startingRef = useRef(false);
+  const sessionsByKeyRef = useRef(sessionsByKey);
+  const startingRef = useRef<Record<string, boolean>>({});
 
-  activeSessionRef.current = activeSession;
+  sessionsByKeyRef.current = sessionsByKey;
+
+  const setSessionForDevice = useCallback(
+    (subTarget: SubTargetName, deviceId: string, session: ActiveSessionState | null) => {
+      const key = sessionDeviceKey(subTarget, deviceId);
+      setSessionsByKey((prev) => {
+        if (!session) {
+          if (!(key in prev)) {
+            return prev;
+          }
+          const { [key]: _removed, ...rest } = prev;
+          return rest;
+        }
+        return { ...prev, [key]: session };
+      });
+    },
+    [],
+  );
 
   const bumpManualVideoActivity = useCallback(() => {
     setManualVideoActivitySeq((seq) => seq + 1);
@@ -133,100 +162,138 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       startedAt: entry.startedAt,
       mode: entry.mode,
       subTarget: entry.subTarget,
+      deviceId: entry.deviceId ?? selectedDeviceId ?? '',
       events: manualProgress?.events ?? [],
       abortCount: manualProgress?.abortCount ?? 0,
       automaticDeviceStarted: false,
     };
-  }, []);
+  }, [selectedDeviceId]);
 
-  const startSessionForAccessory = useCallback(
-    async (mode: OperationMode) => {
-      if (startingRef.current || !domTarget) {
+  const startSessionForDevice = useCallback(
+    async (deviceId: string, mode: OperationMode) => {
+      if (!domTarget) {
+        throw new Error('Not signed in.');
+      }
+
+      if (!deviceId) {
+        throw new Error('Select a device before starting a scene session.');
+      }
+
+      const key = sessionDeviceKey(selectedSub, deviceId);
+      const existing = sessionsByKeyRef.current[key];
+      if (existing) {
+        if (existing.mode !== mode) {
+          await patchSessionModeApi(existing.id, mode);
+          const nextSession: ActiveSessionState = { ...existing, mode };
+          setSessionForDevice(selectedSub, deviceId, nextSession);
+        }
         return;
       }
 
-      startingRef.current = true;
+      if (startingRef.current[key]) {
+        throw new Error('Session start already in progress.');
+      }
+
+      startingRef.current[key] = true;
 
       try {
-        const entry = await startSessionApi(selectedSub, mode);
+        const entry = await startSessionApi(selectedSub, deviceId, mode);
         const nextSession: ActiveSessionState = {
           id: entry.id,
           startedAt: entry.startedAt,
           mode,
           subTarget: selectedSub,
+          deviceId,
           events: [],
           abortCount: 0,
           automaticDeviceStarted: false,
         };
-        activeSessionRef.current = nextSession;
-        setActiveSession(nextSession);
+        setSessionForDevice(selectedSub, deviceId, nextSession);
       } finally {
-        startingRef.current = false;
+        startingRef.current[key] = false;
       }
     },
-    [domTarget, selectedSub],
+    [domTarget, selectedSub, setSessionForDevice],
   );
 
-  const markAutomaticDeviceStarted = useCallback(() => {
-    const current = activeSessionRef.current;
-    if (!current || current.automaticDeviceStarted) {
-      return;
-    }
+  const isAutomaticSessionActiveForDevice = useCallback(
+    (subTarget: SubTargetName, deviceId: string) => {
+      const session = sessionsByKeyRef.current[sessionDeviceKey(subTarget, deviceId)];
+      return session?.mode === 'automatic';
+    },
+    [],
+  );
 
-    const nextSession: ActiveSessionState = { ...current, automaticDeviceStarted: true };
-    activeSessionRef.current = nextSession;
-    setActiveSession(nextSession);
-  }, []);
+  const sessionForDevice = useCallback(
+    (deviceId: string) =>
+      sessionsByKeyRef.current[sessionDeviceKey(selectedSub, deviceId)] ?? null,
+    [selectedSub],
+  );
 
-  const syncActiveSessionMode = useCallback(
-    async (mode: OperationMode) => {
-      const current = activeSessionRef.current;
+  const syncActiveSessionModeForDevice = useCallback(
+    async (deviceId: string, mode: OperationMode) => {
+      const current = sessionForDevice(deviceId);
       if (!current || current.mode === mode) {
         return;
       }
 
       await patchSessionModeApi(current.id, mode);
       const nextSession: ActiveSessionState = { ...current, mode };
-      activeSessionRef.current = nextSession;
-      setActiveSession(nextSession);
+      setSessionForDevice(current.subTarget, current.deviceId, nextSession);
     },
-    [],
+    [sessionForDevice, setSessionForDevice],
   );
 
-  const prepareManualSession = useCallback(async (): Promise<number> => {
-    const current = activeSessionRef.current;
-    if (!current || current.mode !== 'manual') {
-      throw new Error('Session in Progress must be on before manual actions.');
-    }
+  const markAutomaticDeviceStartedForDevice = useCallback(
+    (deviceId: string) => {
+      const current = sessionForDevice(deviceId);
+      if (!current || current.automaticDeviceStarted) {
+        return;
+      }
 
-    return current.events.length;
-  }, []);
+      const nextSession: ActiveSessionState = { ...current, automaticDeviceStarted: true };
+      setSessionForDevice(current.subTarget, current.deviceId, nextSession);
+    },
+    [sessionForDevice, setSessionForDevice],
+  );
 
-  const finalizeSession = useCallback(async (summary: string) => {
-    const current = activeSessionRef.current;
-    if (!current) {
-      return;
-    }
+  const prepareManualSessionForDevice = useCallback(
+    async (deviceId: string): Promise<number> => {
+      const current = sessionForDevice(deviceId);
+      if (!current || current.mode !== 'manual') {
+        throw new Error('Scene session must be on before manual actions on this device.');
+      }
 
-    try {
-      await endSessionApi(current.id, summary);
-      activeSessionRef.current = null;
-      setActiveSession(null);
-    } catch {
-      // Keep activeSession so Stop/retry or rehydration can finish the server record.
-    }
-  }, []);
+      return current.events.length;
+    },
+    [sessionForDevice],
+  );
 
-  const beginAutomaticSession = useCallback(async () => {
-    const current = activeSessionRef.current;
-    if (!current || current.mode !== 'automatic') {
-      return;
-    }
-  }, []);
+  const prepareAutomaticSessionForDevice = useCallback(
+    async (deviceId: string) => {
+      const current = sessionForDevice(deviceId);
+      if (!current || current.mode !== 'automatic') {
+        return;
+      }
+    },
+    [sessionForDevice],
+  );
 
-  const recordManualStroke = useCallback(
-    async (powerPercent: number, actualStrokeMs?: number) => {
-      const current = activeSessionRef.current;
+  const finalizeSessionFor = useCallback(
+    async (session: ActiveSessionState, summary: string) => {
+      try {
+        await endSessionApi(session.id, summary);
+        setSessionForDevice(session.subTarget, session.deviceId, null);
+      } catch {
+        // Keep session row so Stop/retry or rehydration can finish the server record.
+      }
+    },
+    [setSessionForDevice],
+  );
+
+  const recordManualStrokeForDevice = useCallback(
+    async (deviceId: string, powerPercent: number, actualStrokeMs?: number) => {
+      const current = sessionForDevice(deviceId);
       if (!current || current.mode !== 'manual') {
         return;
       }
@@ -235,40 +302,58 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         ...current,
         events: [...current.events, { type: 'stroke', powerPercent, actualStrokeMs }],
       };
-      activeSessionRef.current = nextSession;
-      setActiveSession(nextSession);
-      bumpManualVideoActivity();
-      markManualVideoCommandComplete();
+      setSessionForDevice(current.subTarget, current.deviceId, nextSession);
+      if (deviceId === selectedDeviceId) {
+        bumpManualVideoActivity();
+        markManualVideoCommandComplete();
+      }
       await persistManualProgress(nextSession);
     },
-    [bumpManualVideoActivity, persistManualProgress],
+    [
+      bumpManualVideoActivity,
+      persistManualProgress,
+      selectedDeviceId,
+      sessionForDevice,
+      setSessionForDevice,
+    ],
   );
 
-  const recordManualAbort = useCallback(async () => {
-    const current = activeSessionRef.current;
-    if (!current || current.mode !== 'manual') {
-      return;
-    }
+  const recordManualAbortForDevice = useCallback(
+    async (deviceId: string) => {
+      const current = sessionForDevice(deviceId);
+      if (!current || current.mode !== 'manual') {
+        return;
+      }
 
-    const nextSession: ActiveSessionState = {
-      ...current,
-      abortCount: current.abortCount + 1,
-    };
-    activeSessionRef.current = nextSession;
-    setActiveSession(nextSession);
-    bumpManualVideoActivity();
-    markManualVideoCommandComplete();
-    await persistManualProgress(nextSession);
-  }, [bumpManualVideoActivity, persistManualProgress]);
+      const nextSession: ActiveSessionState = {
+        ...current,
+        abortCount: current.abortCount + 1,
+      };
+      setSessionForDevice(current.subTarget, current.deviceId, nextSession);
+      if (deviceId === selectedDeviceId) {
+        bumpManualVideoActivity();
+        markManualVideoCommandComplete();
+      }
+      await persistManualProgress(nextSession);
+    },
+    [
+      bumpManualVideoActivity,
+      persistManualProgress,
+      selectedDeviceId,
+      sessionForDevice,
+      setSessionForDevice,
+    ],
+  );
 
-  const recordManualBurst = useCallback(
+  const recordManualBurstForDevice = useCallback(
     async (
+      deviceId: string,
       powerPercent: number,
       burstStrokes: number,
       burstDelaySeconds: number,
       strokesCompleted?: number,
     ) => {
-      const current = activeSessionRef.current;
+      const current = sessionForDevice(deviceId);
       if (!current || current.mode !== 'manual') {
         return;
       }
@@ -279,36 +364,53 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         ...current,
         events: [
           ...current.events,
-          { type: 'burst', powerPercent, burstStrokes: completedStrokes, burstDelaySeconds },
+          {
+            type: 'burst',
+            powerPercent,
+            burstStrokes: completedStrokes,
+            burstDelaySeconds,
+          },
         ],
       };
-      activeSessionRef.current = nextSession;
-      setActiveSession(nextSession);
-      bumpManualVideoActivity();
-      markManualVideoCommandComplete();
+      setSessionForDevice(current.subTarget, current.deviceId, nextSession);
+      if (deviceId === selectedDeviceId) {
+        bumpManualVideoActivity();
+        markManualVideoCommandComplete();
+      }
       await persistManualProgress(nextSession);
     },
-    [bumpManualVideoActivity, persistManualProgress],
+    [
+      bumpManualVideoActivity,
+      persistManualProgress,
+      selectedDeviceId,
+      sessionForDevice,
+      setSessionForDevice,
+    ],
   );
 
-  const endManualSession = useCallback(
-    async (reason: ManualSessionEndReason) => {
-      const current = activeSessionRef.current;
+  const endManualSessionForDevice = useCallback(
+    async (deviceId: string, reason: ManualSessionEndReason) => {
+      const current = sessionForDevice(deviceId);
       if (!current || current.mode !== 'manual') {
         return;
       }
 
       const abortCount = reason === 'abort' ? current.abortCount + 1 : current.abortCount;
       const summary = buildManualSummary(current, abortCount, false);
-
-      await finalizeSession(summary);
+      await finalizeSessionFor(current, summary);
     },
-    [buildManualSummary, finalizeSession],
+    [buildManualSummary, finalizeSessionFor, sessionForDevice],
   );
 
-  const endAutomaticSession = useCallback(
-    async (reason: string, deviceResult?: AutomaticResultJson | null) => {
-      const current = activeSessionRef.current;
+  const endAutomaticSessionForDevice = useCallback(
+    async (
+      subTarget: SubTargetName,
+      deviceId: string,
+      reason: string,
+      deviceResult?: AutomaticResultJson | null,
+    ) => {
+      const key = sessionDeviceKey(subTarget, deviceId);
+      const current = sessionsByKeyRef.current[key];
       if (!current || current.mode !== 'automatic') {
         return;
       }
@@ -318,122 +420,183 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const summary = hasManualActivity
         ? `${buildManualSummary(current, current.abortCount, false).replace(/\.$/, '')}; ${automaticSummary}`
         : automaticSummary;
-      await finalizeSession(summary);
+      await finalizeSessionFor(current, summary);
     },
-    [buildManualSummary, finalizeSession],
+    [buildManualSummary, finalizeSessionFor],
   );
 
   const rehydrateSession = useCallback(
     (entry: SessionHistoryEntry) => {
-      if (activeSessionRef.current || startingRef.current) {
+      const deviceId = entry.deviceId ?? selectedDeviceId;
+      if (!deviceId) {
+        return;
+      }
+
+      const key = sessionDeviceKey(entry.subTarget, deviceId);
+      if (sessionsByKeyRef.current[key] || startingRef.current[key]) {
         return;
       }
 
       const nextSession = buildSessionFromEntry(entry);
-      activeSessionRef.current = nextSession;
-      setActiveSession(nextSession);
+      setSessionForDevice(entry.subTarget, deviceId, nextSession);
       if (isRehydratableManualSession(entry)) {
         bumpManualVideoActivity();
         bumpManualVideoRehydrate();
       }
     },
-    [buildSessionFromEntry, bumpManualVideoActivity, bumpManualVideoRehydrate],
+    [
+      buildSessionFromEntry,
+      bumpManualVideoActivity,
+      bumpManualVideoRehydrate,
+      selectedDeviceId,
+      setSessionForDevice,
+    ],
   );
 
   const syncSessionFromRemote = useCallback(
-    (entry: SessionHistoryEntry | null) => {
+    (entry: SessionHistoryEntry | null, deviceIdForClear?: string) => {
       if (entry === null) {
-        activeSessionRef.current = null;
-        setActiveSession(null);
+        const deviceId = deviceIdForClear ?? selectedDeviceId;
+        if (deviceId) {
+          setSessionForDevice(selectedSub, deviceId, null);
+        }
+        return;
+      }
+
+      const deviceId = entry.deviceId ?? selectedDeviceId;
+      if (!deviceId) {
         return;
       }
 
       const nextSession = buildSessionFromEntry(entry);
-      if (activeSessionRef.current?.id === entry.id) {
-        activeSessionRef.current = nextSession;
-        setActiveSession(nextSession);
+      const key = sessionDeviceKey(entry.subTarget, deviceId);
+      const existing = sessionsByKeyRef.current[key];
+
+      if (existing?.id === entry.id) {
+        setSessionForDevice(entry.subTarget, deviceId, nextSession);
         return;
       }
 
-      if (
-        entry !== null &&
-        isRehydratableManualSession(entry) &&
-        !activeSessionRef.current
-      ) {
+      if (isRehydratableManualSession(entry) && !existing) {
         bumpManualVideoRehydrate();
       }
 
-      activeSessionRef.current = nextSession;
-      setActiveSession(nextSession);
+      setSessionForDevice(entry.subTarget, deviceId, nextSession);
     },
-    [buildSessionFromEntry, bumpManualVideoRehydrate],
+    [buildSessionFromEntry, bumpManualVideoRehydrate, selectedDeviceId, selectedSub, setSessionForDevice],
   );
+
+  const sessionsBroadcastRef = useRef<Record<string, ActiveSessionState>>({});
 
   useEffect(() => {
     if (!shouldBroadcastLocalChange()) {
       return;
     }
 
-    postTabSync({
-      type: 'session',
-      tabId: getTabId(),
-      session: activeSession
-        ? {
-            id: activeSession.id,
-            startedAt: activeSession.startedAt,
-            mode: activeSession.mode,
-            subTarget: activeSession.subTarget,
-          }
-        : null,
-    });
-  }, [activeSession]);
+    const previous = sessionsBroadcastRef.current;
+    const keys = new Set([...Object.keys(previous), ...Object.keys(sessionsByKey)]);
 
-  const endActiveSessionIfNeeded = useCallback(
+    for (const key of keys) {
+      const nextSession = sessionsByKey[key];
+      const prevSession = previous[key];
+      if (
+        nextSession?.id === prevSession?.id &&
+        nextSession?.mode === prevSession?.mode &&
+        nextSession?.startedAt === prevSession?.startedAt
+      ) {
+        continue;
+      }
+
+      const deviceId =
+        nextSession?.deviceId ??
+        prevSession?.deviceId ??
+        deviceIdFromSessionKey(selectedSub, key);
+      if (!deviceId) {
+        continue;
+      }
+
+      postTabSync({
+        type: 'device-session',
+        tabId: getTabId(),
+        subTarget: selectedSub,
+        deviceId,
+        session: nextSession
+          ? {
+              id: nextSession.id,
+              startedAt: nextSession.startedAt,
+              mode: nextSession.mode,
+              subTarget: nextSession.subTarget,
+              deviceId: nextSession.deviceId,
+            }
+          : null,
+      });
+    }
+
+    sessionsBroadcastRef.current = { ...sessionsByKey };
+  }, [selectedSub, sessionsByKey]);
+
+  const endAllInProgressSessionsForSub = useCallback(
     async (reason: ManualSessionEndReason | string) => {
-      const current = activeSessionRef.current;
+      const sessions = Object.values(sessionsByKeyRef.current);
+      for (const session of sessions) {
+        if (session.subTarget !== selectedSub) {
+          continue;
+        }
+
+        if (session.mode === 'manual') {
+          const summary = buildManualSummary(session, session.abortCount, false);
+          await finalizeSessionFor(session, summary);
+          continue;
+        }
+
+        const automaticReason =
+          typeof reason === 'string' && reason.length > 0 ? reason : 'stopped manually';
+        const automaticSummary = buildAutomaticSessionSummary(null, automaticReason);
+        const hasManualActivity = session.events.length > 0 || session.abortCount > 0;
+        const summary = hasManualActivity
+          ? `${buildManualSummary(session, session.abortCount, false).replace(/\.$/, '')}; ${automaticSummary}`
+          : automaticSummary;
+        await finalizeSessionFor(session, summary);
+      }
+    },
+    [buildManualSummary, finalizeSessionFor, selectedSub],
+  );
+
+  const discardSessionForDevice = useCallback(
+    async (deviceId: string) => {
+      const current = sessionsByKeyRef.current[sessionDeviceKey(selectedSub, deviceId)];
       if (!current) {
         return;
       }
 
-      if (current.mode === 'manual') {
-        const manualReason =
-          reason === 'abort' ||
-          reason === 'mode-switch' ||
-          reason === 'sign-out' ||
-          reason === 'sub-change' ||
-          reason === 'session-accessory-off'
-            ? reason
-            : 'mode-switch';
-        await endManualSession(manualReason);
-        return;
+      try {
+        await discardInProgressSessionApi(current.id);
+        setSessionForDevice(current.subTarget, current.deviceId, null);
+      } catch {
+        if (current.mode === 'manual') {
+          await endManualSessionForDevice(deviceId, 'session-accessory-off');
+        } else {
+          await endAutomaticSessionForDevice(
+            selectedSub,
+            deviceId,
+            'session-accessory-off',
+            null,
+          );
+        }
       }
-
-      const automaticReason =
-        typeof reason === 'string' && reason.length > 0 ? reason : 'stopped manually';
-      await endAutomaticSession(automaticReason);
     },
-    [endAutomaticSession, endManualSession],
+    [
+      endAutomaticSessionForDevice,
+      endManualSessionForDevice,
+      finalizeSessionFor,
+      selectedSub,
+      setSessionForDevice,
+    ],
   );
 
-  const discardActiveSession = useCallback(async () => {
-    const current = activeSessionRef.current;
-    if (!current) {
-      return;
-    }
-
-    try {
-      await discardInProgressSessionApi(current.id);
-      activeSessionRef.current = null;
-      setActiveSession(null);
-    } catch {
-      // Row may have progressed — fall back to a normal end below.
-      await endActiveSessionIfNeeded('session-accessory-off');
-    }
-  }, [endActiveSessionIfNeeded]);
-
-  const endSessionForAccessory = useCallback(
-    async (options: EndSessionForAccessoryOptions) => {
-      const current = activeSessionRef.current;
+  const endSessionForAccessoryForDevice = useCallback(
+    async (deviceId: string, options: EndSessionForAccessoryOptions) => {
+      const current = sessionsByKeyRef.current[sessionDeviceKey(selectedSub, deviceId)];
       if (!current) {
         return;
       }
@@ -443,59 +606,72 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const discardAutomatic = current.mode === 'automatic' && !options.automaticDeviceStarted;
 
       if (discardManual || discardAutomatic) {
-        await discardActiveSession();
+        await discardSessionForDevice(deviceId);
         return;
       }
 
       if (current.mode === 'automatic') {
-        await endAutomaticSession('session-accessory-off', options.automaticDeviceResult ?? null);
+        await endAutomaticSessionForDevice(
+          selectedSub,
+          deviceId,
+          'session-accessory-off',
+          options.automaticDeviceResult ?? null,
+        );
         return;
       }
 
-      await endActiveSessionIfNeeded('session-accessory-off');
+      const summary = buildManualSummary(current, current.abortCount, false);
+      await finalizeSessionFor(current, summary);
     },
-    [discardActiveSession, endActiveSessionIfNeeded, endAutomaticSession],
+    [
+      buildManualSummary,
+      discardSessionForDevice,
+      endAutomaticSessionForDevice,
+      finalizeSessionFor,
+      selectedSub,
+    ],
   );
 
   const value = useMemo(
     () => ({
-      activeSession,
+      sessionsByKey,
       manualVideoActivitySeq,
       manualVideoRehydrateSeq,
-      beginAutomaticSession,
-      recordManualStroke,
-      recordManualAbort,
-      recordManualBurst,
-      endManualSession,
-      endAutomaticSession,
-      endActiveSessionIfNeeded,
+      recordManualStrokeForDevice,
+      recordManualAbortForDevice,
+      recordManualBurstForDevice,
+      endManualSessionForDevice,
+      endAutomaticSessionForDevice,
+      endAllInProgressSessionsForSub,
       rehydrateSession,
       syncSessionFromRemote,
-      prepareManualSession,
-      prepareAutomaticSession: beginAutomaticSession,
-      startSessionForAccessory,
-      endSessionForAccessory,
-      syncActiveSessionMode,
-      markAutomaticDeviceStarted,
+      prepareManualSessionForDevice,
+      prepareAutomaticSessionForDevice,
+      startSessionForDevice,
+      endSessionForAccessoryForDevice,
+      syncActiveSessionModeForDevice,
+      markAutomaticDeviceStartedForDevice,
+      isAutomaticSessionActiveForDevice,
     }),
     [
-      activeSession,
+      sessionsByKey,
       manualVideoActivitySeq,
       manualVideoRehydrateSeq,
-      beginAutomaticSession,
-      endActiveSessionIfNeeded,
-      endAutomaticSession,
-      endManualSession,
-      endSessionForAccessory,
-      prepareManualSession,
+      endAllInProgressSessionsForSub,
+      endAutomaticSessionForDevice,
+      endManualSessionForDevice,
+      endSessionForAccessoryForDevice,
+      prepareAutomaticSessionForDevice,
+      prepareManualSessionForDevice,
       rehydrateSession,
       syncSessionFromRemote,
-      syncActiveSessionMode,
-      startSessionForAccessory,
-      markAutomaticDeviceStarted,
-      recordManualBurst,
-      recordManualStroke,
-      recordManualAbort,
+      syncActiveSessionModeForDevice,
+      startSessionForDevice,
+      markAutomaticDeviceStartedForDevice,
+      isAutomaticSessionActiveForDevice,
+      recordManualBurstForDevice,
+      recordManualStrokeForDevice,
+      recordManualAbortForDevice,
     ],
   );
 

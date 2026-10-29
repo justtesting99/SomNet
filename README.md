@@ -53,7 +53,7 @@ Full documentation lives in the [`Documents/`](Documents/) folder. See [Document
 
 ## ESP32 firmware (quick pointer)
 
-Firmware lives in [`SomNet.Device/`](SomNet.Device/). Current release track: **`0.15.0-session-accessory`** — Phases 0–12 + device button clicks + **`session-accessory`** on GPIO32 (gates stroke/burst/automatic-start). See [P16 checklist](Documents/25-Session-Accessory-In-Progress-Checklist.md).
+Firmware lives in [`SomNet.Device/`](SomNet.Device/). Current release track: **`0.16.4-motor-burst-duty`** (`platformio.ini`) — unified binary: relay **burst placement** ([doc 36](Documents/36-Burst-Placement-Modes-Design.md)), **motor automatic** programs + bursts ([doc 31 §5.2.1](Documents/31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27), [32 M1d](Documents/32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e)), P16 **`0.15.0-session-accessory`**. Operator pattern graph: [03 Frontend — Motor pattern graph](Documents/03-Frontend-Architecture.md#motor-pattern-graph-scope).
 
 ```bash
 cd SomNet.Device
@@ -78,7 +78,9 @@ Copy `secrets.ini.example` → `secrets.ini` with your Wi‑Fi and PC **LAN IP**
 | React UI (auth, modes, settings, history) | Complete |
 | Dom/Sub management | Complete |
 | SignalR hub + device pairing (API) | Complete |
-| ESP32 firmware (pairing, stroke/burst/automatic, session accessory) | **Phases 0–12 + P16 signed off** — firmware **`0.15.0-session-accessory`** |
+| ESP32 firmware (pairing, stroke/burst/automatic, session accessory, burst placement, motor automatic) | **Phases 0–12 + P16 + motor M1d signed off** — firmware **`0.16.4-motor-burst-duty`** ([32](Documents/32-Motor-Actuator-Implementation-Plan-And-Checklist.md)) |
+| Motor hub path (automatic modes, bursts, pattern graph) | **M1 + M1b + M1c + M1d signed off** **2026-10-28** — [31 §13](Documents/31-Motor-Actuator-Device-Design.md#13-as-built--hub-path-motor-programs-ui-telemetry) |
+| SomEsp / LAN **`/operate`** + local API (motor + relay) | **M2 signed off** **2026-10-28** — [32 Phase M2](Documents/32-Motor-Actuator-Implementation-Plan-And-Checklist.md#phase-m2-sign-off) · [27 SomEsp](Documents/27-SomEsp-Standalone-Device-Plan.md) |
 | Session in Progress (UI + GPIO32 lock) | **Signed off** — [P16 checklist](Documents/25-Session-Accessory-In-Progress-Checklist.md) |
 | UI device pairing | **Hardware** toolbar dialog (Phase 8) |
 | UI → hardware command dispatch | **Complete** — REST + operator hub listener (Phases 8–11) |

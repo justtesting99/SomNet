@@ -4,9 +4,11 @@
 
 **Status:** **Signed off** (bench S1–S8, 2026-09-20) — firmware **`0.15.0-session-accessory`**. **Pi / video edge** may resume ([Phase 7](./20-Video-Phase-7-Pi-Production-Checklist.md)).
 
+> **V1 historical.** Operator session and accessory behavior for **new work** is defined in **[34 — Operator session & accessory V2 rules](./34-Operator-Session-And-Accessory-V2-Rules.md)**. Do not extend this checklist’s gating model (motion blocked on accessory, single “Session in Progress” coupling) when implementing X-6 / multi-device features.
 
 
-**Goal:** Dom **Session in Progress** slide switch drives server session lifecycle and ESP32 **`session-accessory`** GPIO (GPIO32). Sub **double-click** (`ReportButtonEvent`) plus device **Ready** form a **series gate** before the switch can turn on. **Start / Stroke / Burst** are blocked until the switch is **ON**. The switch stays **disabled** while manual or automatic work is in flight until idle or **Abort**.
+
+**Goal (V1 at sign-off):** Dom **Session in Progress** slide switch drives server session lifecycle and ESP32 **`session-accessory`** GPIO (GPIO32). Sub **double-click** (`ReportButtonEvent`) plus device **Ready** form a **series gate** before the switch can turn on. **Start / Stroke / Burst** are blocked until the switch is **ON**. The switch stays **disabled** while manual or automatic work is in flight until idle or **Abort**.
 
 
 

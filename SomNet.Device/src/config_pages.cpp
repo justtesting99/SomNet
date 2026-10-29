@@ -1,5 +1,6 @@
 #include "config_pages.h"
 
+#include "actuator_kind.h"
 #include "config.h"
 #include "device_identity.h"
 #include "nvs_store.h"
@@ -37,6 +38,15 @@ button,.btn{display:inline-block;padding:.55rem 1rem;border-radius:.5rem;border:
 .alert-success{padding:.75rem 1rem;background:rgba(79,70,229,.15);border:1px solid #4f46e5;border-radius:.5rem;color:#e0e7ff;margin:.75rem 0}
 .danger-zone{margin-top:1.5rem;padding-top:1rem;border-top:1px solid #334155}
 .danger-zone .note{margin-bottom:.5rem}
+.switch-row{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin:.5rem 0}
+.switch{position:relative;display:inline-block;width:3rem;height:1.65rem;flex:0 0 auto}
+.switch input{opacity:0;width:0;height:0}
+.switch .slider{position:absolute;cursor:pointer;inset:0;background:#334155;border-radius:999px;transition:background .2s}
+.switch .slider:before{position:absolute;content:\"\";height:1.25rem;width:1.25rem;left:.2rem;bottom:.2rem;background:#e2e8f0;border-radius:50%;transition:transform .2s}
+.switch input:checked+.slider{background:#4f46e5}
+.switch input:checked+.slider:before{transform:translateX(1.35rem)}
+.switch input:disabled+.slider{opacity:.5;cursor:not-allowed}
+#hub-mode-status{font-size:.875rem;color:#a5b4fc;min-height:1.25rem}
 </style>
 )raw";
 
@@ -170,8 +180,53 @@ void renderStatus(
     htmlEscape(installer, escInstaller, sizeof(escInstaller));
     htmlEscape(effectiveServerUrl != nullptr ? effectiveServerUrl : "", escServer, sizeof(escServer));
 
-    appendHtmlHead(out, outLen, &offset, "SomNet Device");
-    append(out, outLen, &offset, "<h1>SomNet Device</h1>");
+    appendHtmlHead(out, outLen, &offset, kSomNetStandaloneBuild ? "SomEsp Device" : "SomNet Device");
+    append(out, outLen, &offset, kSomNetStandaloneBuild ? "<h1>SomEsp Device</h1>" : "<h1>SomNet Device</h1>");
+
+    const bool somespHasServer = kSomNetStandaloneBuild && escServer[0] != '\0';
+    const bool somespPaired = kSomNetStandaloneBuild && nvs.isPaired();
+    const bool hubRuntimeEnabled = nvs.isHubRuntimeEnabled();
+    const bool hasServerUrl = escServer[0] != '\0';
+    const bool devicePaired = nvs.isPaired();
+    const bool showHubModeToggle =
+        kSomNetLocalOperateEnabled && !provisioningMode && hasServerUrl && devicePaired;
+
+    if (kSomNetLocalOperateEnabled && !provisioningMode) {
+        append(out, outLen, &offset,
+            "<div class=\"panel note\"><strong>Local control.</strong> "
+            "<a class=\"btn btn-primary\" href=\"/operate\">Control panel</a> "
+            "(PIN unlock + arm).");
+        if (kSomNetStandaloneBuild) {
+            append(out, outLen, &offset, " Works with or without the SomNet hub.");
+        } else {
+            append(out, outLen, &offset, " LAN mirror of hub commands when the hub is offline or for bench tests.");
+        }
+        append(out, outLen, &offset, "</div>");
+        if (showHubModeToggle) {
+            append(out, outLen, &offset,
+                "<div class=\"panel\" id=\"hub-mode-panel\"><p><strong>Remote hub</strong></p>"
+                "<p class=\"note\">Switch off for LAN-only <code>/operate</code>. Switch on for SomNet UI / cloud commands "
+                "(pairing stays in NVS).</p>"
+                "<div class=\"switch-row\"><span>Connect SomNet hub</span>"
+                "<label class=\"switch\"><input type=\"checkbox\" id=\"hub-remote\"><span class=\"slider\"></span></label>"
+                "</div><p id=\"hub-mode-status\" class=\"note\"></p></div>");
+        } else if (kSomNetStandaloneBuild && !somespHasServer) {
+            append(out, outLen, &offset,
+                "<div class=\"panel\"><p><strong>SomNet server (one-time)</strong></p>"
+                "<p class=\"note\">Save your API base URL (LAN IP, not <code>localhost</code>), enable the hub, "
+                "then pair this Device ID in SomNet. After pairing you can use the switch above without rebooting.</p>"
+                "<form method=POST action=\"/config/connect-somnet\">"
+                "<label>SomNet server URL<input required type=url name=server_url "
+                "placeholder=\"http://192.168.x.x:5031\" maxlength=128></label>"
+                "<p class=\"actions\"><button class=\"btn btn-primary\" type=submit>Save server &amp; connect hub</button></p>"
+                "</form></div>");
+        } else if (kSomNetStandaloneBuild && !somespPaired) {
+            append(out, outLen, &offset,
+                "<div class=\"panel note\"><strong>Pair in SomNet</strong> — hub should connect automatically. "
+                "Paste the Device ID below in Dom &rarr; Sub &rarr; Options &rarr; Hardware device. "
+                "When paired, the remote/local switch appears here.</div>");
+        }
+    }
 
     if (provisioningMode) {
         append(out, outLen, &offset,
@@ -180,9 +235,18 @@ void renderStatus(
             "<strong>somnetsetup</strong>, then open <a href=\"/config\">Configure</a>.</div>");
     }
 
-    append(out, outLen, &offset, "<div class=\"panel\"><p><strong>Device ID</strong> (pair in SomNet)</p><div class=\"device-id\">");
+    append(out, outLen, &offset, "<div class=\"panel\"><p><strong>Device ID</strong>");
+    if (!kSomNetStandaloneBuild || somespHasServer) {
+        append(out, outLen, &offset, " (pair in SomNet)");
+    }
+    append(out, outLen, &offset, "</p><div class=\"device-id\">");
     append(out, outLen, &offset, escId);
-    append(out, outLen, &offset, "</div><p class=\"note\">Dom account &rarr; select Sub &rarr; Options &rarr; Hardware device &rarr; paste this ID.</p></div>");
+    append(out, outLen, &offset, "</div>");
+    if (!kSomNetStandaloneBuild || somespHasServer) {
+        append(out, outLen, &offset,
+            "<p class=\"note\">Dom account &rarr; select Sub &rarr; Options &rarr; Hardware device &rarr; paste this ID.</p>");
+    }
+    append(out, outLen, &offset, "</div>");
 
     if (escFriendly[0] != '\0' || escInstaller[0] != '\0') {
         append(out, outLen, &offset, "<div class=\"panel\">");
@@ -202,16 +266,28 @@ void renderStatus(
     append(out, outLen, &offset, "<div class=\"panel\">");
     append(out, outLen, &offset, "<p class=\"row\"><strong>MAC:</strong> ");
     append(out, outLen, &offset, escMac);
-    append(out, outLen, &offset, "</p><p class=\"row\"><strong>Pairing:</strong> ");
-    append(out, outLen, &offset, nvs.isPaired() ? "paired" : "not paired");
+    if (!kSomNetStandaloneBuild || somespHasServer) {
+        append(out, outLen, &offset, "</p><p class=\"row\"><strong>Pairing:</strong> ");
+        append(out, outLen, &offset, nvs.isPaired() ? "paired" : "not paired");
+    }
     append(out, outLen, &offset, "</p><p class=\"row\"><strong>Wi-Fi:</strong> ");
     append(out, outLen, &offset, wifi.isConnected() ? (wifi.isSoftAp() ? "setup AP" : "connected") : "disconnected");
     append(out, outLen, &offset, "</p><p class=\"row\"><strong>IP:</strong> ");
     append(out, outLen, &offset, wifi.localIp());
-    append(out, outLen, &offset, "</p><p class=\"row\"><strong>Server:</strong> ");
-    append(out, outLen, &offset, escServer[0] != '\0' ? escServer : "(not configured)");
-    append(out, outLen, &offset, "</p><p class=\"row\"><strong>Hub:</strong> ");
-    if (provisioningMode) {
+    if (!kSomNetStandaloneBuild || somespHasServer) {
+        append(out, outLen, &offset, "</p><p class=\"row\"><strong>Server:</strong> ");
+        append(out, outLen, &offset, escServer[0] != '\0' ? escServer : "(not configured)");
+    }
+    append(out, outLen, &offset, "</p><p class=\"row\"><strong>Actuator:</strong> ");
+    append(out, outLen, &offset, actuatorKindToJson(nvs.getActuatorKind()));
+    append(out, outLen, &offset, " (relay stroke/burst or motor PWM — change in ");
+    append(out, outLen, &offset, kSomNetLocalOperateEnabled ? "<a href=\"/operate\">Control panel</a> or " : "");
+    append(out, outLen, &offset, "<a href=\"/config\">Configure</a>)</p><p class=\"row\"><strong>Hub:</strong> ");
+    if (kSomNetStandaloneBuild && !somespHasServer) {
+        append(out, outLen, &offset, "not configured");
+    } else if (!hubRuntimeEnabled && kSomNetLocalOperateEnabled) {
+        append(out, outLen, &offset, "paused (local only)");
+    } else if (provisioningMode) {
         append(out, outLen, &offset, "off (provisioning)");
     } else if (hubConnected) {
         append(out, outLen, &offset, "connected (");
@@ -222,7 +298,27 @@ void renderStatus(
     }
     append(out, outLen, &offset, "</p></div>");
 
-    append(out, outLen, &offset, "<p class=\"actions\"><a class=\"btn btn-primary\" href=\"/config\">Configure</a></p>");
+    append(out, outLen, &offset, "<p class=\"actions\">");
+    if (kSomNetLocalOperateEnabled && !provisioningMode) {
+        append(out, outLen, &offset, "<a class=\"btn btn-primary\" href=\"/operate\">Control panel</a> ");
+    }
+    append(out, outLen, &offset, "<a class=\"btn btn-secondary\" href=\"/config\">Configure</a></p>");
+    if (showHubModeToggle) {
+        append(out, outLen, &offset,
+            "<script>(function(){var sw=document.getElementById('hub-remote');var st=document.getElementById('hub-mode-status');"
+            "if(!sw||!st)return;var busy=false;"
+            "function label(d){if(!d.hubEnabled)return 'Hub paused — use /operate on this Wi-Fi.';"
+            "if(d.hubConnected)return 'Hub connected ('+(d.hubState||'')+').';"
+            "return 'Hub connecting… '+(d.hubState||'');}"
+            "function apply(d){sw.checked=!!d.hubEnabled;sw.disabled=busy||!d.canToggle;st.textContent=label(d);}"
+            "function refresh(){fetch('/api/hub/mode').then(function(r){return r.json();}).then(apply).catch(function(){});}"
+            "sw.addEventListener('change',function(){if(busy)return;busy=true;sw.disabled=true;"
+            "fetch('/api/hub/mode',{method:'POST',headers:{'Content-Type':'application/json'},"
+            "body:JSON.stringify({enabled:sw.checked})}).then(function(r){return r.json().then(function(j){return {ok:r.ok,j:j};});})"
+            ".then(function(x){if(!x.ok){sw.checked=!sw.checked;st.textContent=x.j&&x.j.error?'Failed: '+x.j.error:'Toggle failed';}"
+            "else{apply(x.j);}busy=false;refresh();}).catch(function(){sw.checked=!sw.checked;busy=false;refresh();});});"
+            "refresh();setInterval(refresh,4000);})();</script>");
+    }
     appendHtmlFoot(out, outLen, &offset);
 }
 
@@ -267,9 +363,13 @@ void renderConfigForm(
     htmlEscape(wifiPass, escPass, sizeof(escPass));
     htmlEscape(server, escServer, sizeof(escServer));
 
-    appendHtmlHead(out, outLen, &offset, "Configure SomNet Device");
+    appendHtmlHead(out, outLen, &offset, kSomNetStandaloneBuild ? "Configure SomEsp Device" : "Configure SomNet Device");
     append(out, outLen, &offset, "<h1>Configure</h1>");
-    if (provisioningMode || !nvs.isFullyProvisioned()) {
+    if (kSomNetStandaloneBuild) {
+        append(out, outLen, &offset,
+            "<p class=\"note\">Enter home Wi-Fi only. No SomNet server URL is used in standalone mode. "
+            "<strong>Wi-Fi SSID and password are required.</strong></p>");
+    } else if (provisioningMode || !nvs.isFullyProvisioned()) {
         append(out, outLen, &offset, "<p class=\"note\">Enter Wi-Fi and SomNet API base URL (no /hubs/hardware suffix). <strong>All fields below are required</strong>, including Wi-Fi password.</p>");
     }
 
@@ -284,14 +384,38 @@ void renderConfigForm(
     append(out, outLen, &offset, escSsid);
     append(out, outLen, &offset, "\"></label><label>Wi-Fi password<input required type=password name=wifi_pass maxlength=64 value=\"");
     append(out, outLen, &offset, escPass);
-    append(out, outLen, &offset, "\"></label><label>SomNet server URL<input required type=url name=server_url placeholder=\"http://192.168.x.x:5031\" maxlength=128 value=\"");
-    append(out, outLen, &offset, escServer);
-    append(out, outLen, &offset, "\"></label><p class=\"note\">Example: http://192.168.1.100:5031</p>");
+    append(out, outLen, &offset, "\"></label>");
+    append(out, outLen, &offset, "<label>Actuator profile<select name=actuator_kind>");
+    if (nvs.getActuatorKind() == DeviceActuatorKind_HBridge) {
+        append(out, outLen, &offset, "<option value=\"relay\">Relay — stroke / burst</option>");
+        append(out, outLen, &offset, "<option value=\"hbridge\" selected>Motor — H-bridge PWM</option>");
+    } else {
+        append(out, outLen, &offset, "<option value=\"relay\" selected>Relay — stroke / burst</option>");
+        append(out, outLen, &offset, "<option value=\"hbridge\">Motor — H-bridge PWM</option>");
+    }
+    append(out, outLen, &offset,
+        "</select></label><p class=\"note\">Must match the hardware module on this ESP. Save reboots the device.</p>");
+    if (!kSomNetStandaloneBuild) {
+        append(out, outLen, &offset, "<label>SomNet server URL<input required type=url name=server_url placeholder=\"http://192.168.x.x:5031\" maxlength=128 value=\"");
+        append(out, outLen, &offset, escServer);
+        append(out, outLen, &offset, "\"></label><p class=\"note\">Example: http://192.168.1.100:5031</p>");
+    }
     append(out, outLen, &offset, "<p class=\"actions\"><button id=cfg-save class=\"btn btn-primary\" type=submit disabled>Save and reboot</button> <a class=\"btn btn-secondary\" href=\"/\">Cancel</a></p></form></div>");
-    append(out, outLen, &offset, "<script>(function(){var f=document.getElementById('cfg-form');if(!f)return;var b=document.getElementById('cfg-save');var req=['wifi_ssid','wifi_pass','server_url'];function ok(){for(var i=0;i<req.length;i++){var el=f.elements[req[i]];if(!el||!String(el.value||'').trim())return false;}return true;}function upd(){if(b)b.disabled=!ok();}f.addEventListener('input',upd);f.addEventListener('change',upd);upd();})();</script>");
+    if (kSomNetStandaloneBuild) {
+        append(out, outLen, &offset, "<script>(function(){var f=document.getElementById('cfg-form');if(!f)return;var b=document.getElementById('cfg-save');var req=['wifi_ssid','wifi_pass'];function ok(){for(var i=0;i<req.length;i++){var el=f.elements[req[i]];if(!el||!String(el.value||'').trim())return false;}return true;}function upd(){if(b)b.disabled=!ok();}f.addEventListener('input',upd);f.addEventListener('change',upd);upd();})();</script>");
+    } else {
+        append(out, outLen, &offset, "<script>(function(){var f=document.getElementById('cfg-form');if(!f)return;var b=document.getElementById('cfg-save');var req=['wifi_ssid','wifi_pass','server_url'];function ok(){for(var i=0;i<req.length;i++){var el=f.elements[req[i]];if(!el||!String(el.value||'').trim())return false;}return true;}function upd(){if(b)b.disabled=!ok();}f.addEventListener('input',upd);f.addEventListener('change',upd);upd();})();</script>");
+    }
 
     if (!provisioningMode) {
-        append(out, outLen, &offset, "<div class=\"panel danger-zone\"><p class=\"note\">Advanced: clears Wi-Fi and server settings, or all NVS including pairing.</p>");
+        append(out, outLen, &offset, "<div class=\"panel danger-zone\"><p class=\"note\">Advanced: clears Wi-Fi");
+        if (!kSomNetStandaloneBuild) {
+            append(out, outLen, &offset, " and server settings, or all NVS including pairing.");
+        } else {
+            append(out, outLen, &offset,
+                " settings, or factory reset (also clears operate PIN; default 1234 after reset).");
+        }
+        append(out, outLen, &offset, "</p>");
         append(out, outLen, &offset, "<form method=POST action=\"/config/reset-wifi\"><p class=\"actions\"><button class=\"btn btn-secondary\" type=submit>Reset Wi-Fi / server</button></p></form>");
         append(out, outLen, &offset, "<form method=POST action=\"/config/factory-reset\" onsubmit=\"return confirm('Clear all settings including pairing?')\"><p class=\"actions\"><button class=\"btn btn-danger\" type=submit>Factory reset</button></p></form></div>");
     }

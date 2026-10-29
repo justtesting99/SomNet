@@ -35,11 +35,17 @@ describe('tabSync', () => {
       parseTabSyncMessage({
         type: 'running',
         tabId: 'a',
+        subTarget: 'Slv66',
+        deviceId: 'esp32-ABCDEF123456',
+        kind: 'motor',
         running: true,
       }),
     ).toEqual({
       type: 'running',
       tabId: 'a',
+      subTarget: 'Slv66',
+      deviceId: 'esp32-ABCDEF123456',
+      kind: 'motor',
       running: true,
     });
   });

@@ -117,17 +117,35 @@ public sealed class HardwareHub : Hub
         var subTarget = Context.User?.FindFirstValue(DeviceClaimTypes.SubTarget);
         if (!string.IsNullOrWhiteSpace(domTarget))
         {
+            var operatorAck = acknowledgement;
+            if (string.IsNullOrWhiteSpace(operatorAck.DeviceId) &&
+                _connectionRegistry.TryGetPairedDeviceByConnectionId(
+                    Context.ConnectionId,
+                    out var pairedDeviceId,
+                    out _,
+                    out _))
+            {
+                operatorAck = new HardwareCommandAckDto
+                {
+                    CorrelationId = acknowledgement.CorrelationId,
+                    Success = acknowledgement.Success,
+                    Message = acknowledgement.Message,
+                    ResultJson = acknowledgement.ResultJson,
+                    DeviceId = pairedDeviceId,
+                };
+            }
+
             if (!string.IsNullOrWhiteSpace(subTarget))
             {
                 _videoActionSnapshotTrigger.TryCaptureAfterAutomaticSessionCompleteAsync(
                     domTarget.Trim(),
                     subTarget.Trim(),
-                    acknowledgement);
+                    operatorAck);
             }
 
             await Clients
                 .Group(HardwareHubGroups.Operator(domTarget.Trim()))
-                .SendAsync(HardwareHubMethods.CommandAcknowledged, acknowledgement);
+                .SendAsync(HardwareHubMethods.CommandAcknowledged, operatorAck);
         }
     }
 
@@ -260,18 +278,32 @@ public sealed class HardwareHub : Hub
 
 public static class HardwareHubExtensions
 {
-    public static Task SendPairDeviceAsync(
+    public static async Task SendPairDeviceAsync(
         this IHubContext<HardwareHub> hubContext,
+        IDeviceConnectionRegistry connectionRegistry,
         string deviceId,
         PairDeviceMessageDto message,
         CancellationToken cancellationToken = default)
     {
-        return Task.WhenAll(
+        var deliveries = new List<Task>();
+
+        deliveries.Add(
             hubContext.Clients
                 .Group(HardwareHubGroups.Unpaired(deviceId))
-                .SendAsync(HardwareHubMethods.PairDevice, message, cancellationToken),
-            hubContext.Clients
-                .Group(HardwareHubGroups.Paired(message.DomTarget, message.SubTarget))
                 .SendAsync(HardwareHubMethods.PairDevice, message, cancellationToken));
+
+        if (connectionRegistry.TryGetPairedConnectionId(
+                message.DomTarget,
+                message.SubTarget,
+                deviceId,
+                out var pairedConnectionId))
+        {
+            deliveries.Add(
+                hubContext.Clients
+                    .Client(pairedConnectionId)
+                    .SendAsync(HardwareHubMethods.PairDevice, message, cancellationToken));
+        }
+
+        await Task.WhenAll(deliveries);
     }
 }

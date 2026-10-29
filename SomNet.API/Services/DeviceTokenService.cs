@@ -10,6 +10,7 @@ using SomNet.API.Data;
 using SomNet.API.Data.Entities;
 using SomNet.API.Hubs;
 using SomNet.Shared.DTO.Devices;
+using SomNet.Shared.Enums;
 using SomNet.Shared.Models;
 
 namespace SomNet.API.Services;
@@ -20,21 +21,30 @@ public interface IDeviceTokenService
         string domTarget,
         string subTarget,
         string deviceId,
+        ActuatorKind actuatorKind,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<DeviceRegistrationDto>> ListRegistrationsAsync(
+        string domTarget,
+        string subTarget,
         CancellationToken cancellationToken = default);
 
     Task<DeviceStatusResponseDto> GetStatusAsync(
         string domTarget,
         string subTarget,
+        string deviceId,
         CancellationToken cancellationToken = default);
 
     Task<SubDeviceRegistration?> GetActiveRegistrationAsync(
         string domTarget,
         string subTarget,
+        string deviceId,
         CancellationToken cancellationToken = default);
 
     Task RevokeAsync(
         string domTarget,
         string subTarget,
+        string deviceId,
         CancellationToken cancellationToken = default);
 
     Task<bool> TryDeliverPendingPairingAsync(
@@ -75,6 +85,7 @@ public sealed class DeviceTokenService : IDeviceTokenService
         string domTarget,
         string subTarget,
         string deviceId,
+        ActuatorKind actuatorKind,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(domTarget))
@@ -99,15 +110,32 @@ public sealed class DeviceTokenService : IDeviceTokenService
         var jti = Guid.NewGuid().ToString("N");
         var accessToken = CreateDeviceToken(normalizedDeviceId, normalizedDom, normalizedSub, jti, expiresAt);
 
-        var existing = await _db.SubDeviceRegistrations
-            .SingleOrDefaultAsync(
+        var activeOnSub = await _db.SubDeviceRegistrations
+            .Where(
                 registration =>
                     registration.DomTarget == normalizedDom &&
-                    registration.SubName == normalizedSub,
-                cancellationToken);
+                    registration.SubName == normalizedSub &&
+                    !registration.IsRevoked &&
+                    registration.TokenExpiresAt > DateTimeOffset.UtcNow)
+            .ToListAsync(cancellationToken);
+
+        var existing = activeOnSub
+            .SingleOrDefault(registration => registration.DeviceId == normalizedDeviceId);
 
         if (existing is null)
         {
+            if (activeOnSub.Count >= SubDeviceRegistrationLimits.MaxDevicesPerSub)
+            {
+                throw new InvalidOperationException(
+                    $"This Sub already has the maximum of {SubDeviceRegistrationLimits.MaxDevicesPerSub} paired devices.");
+            }
+
+            if (actuatorKind == ActuatorKind.Relay &&
+                activeOnSub.Any(registration => registration.ActuatorKind == ActuatorKind.Relay))
+            {
+                throw new InvalidOperationException("This Sub already has a relay device paired.");
+            }
+
             existing = new SubDeviceRegistration
             {
                 DomTarget = normalizedDom,
@@ -118,17 +146,27 @@ public sealed class DeviceTokenService : IDeviceTokenService
                 PairedAt = DateTimeOffset.UtcNow,
                 TokenExpiresAt = expiresAt,
                 IsRevoked = false,
+                ActuatorKind = actuatorKind,
             };
             _db.SubDeviceRegistrations.Add(existing);
         }
         else
         {
-            existing.DeviceId = normalizedDeviceId;
+            if (actuatorKind == ActuatorKind.Relay &&
+                activeOnSub.Any(
+                    registration =>
+                        registration.ActuatorKind == ActuatorKind.Relay &&
+                        registration.DeviceId != normalizedDeviceId))
+            {
+                throw new InvalidOperationException("This Sub already has a relay device paired.");
+            }
+
             existing.AccessToken = accessToken;
             existing.TokenJti = jti;
             existing.PairedAt = DateTimeOffset.UtcNow;
             existing.TokenExpiresAt = expiresAt;
             existing.IsRevoked = false;
+            existing.ActuatorKind = actuatorKind;
         }
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -140,12 +178,13 @@ public sealed class DeviceTokenService : IDeviceTokenService
             SubTarget = normalizedSub,
             AccessToken = accessToken,
             ExpiresAt = expiresAt,
+            ActuatorKind = actuatorKind,
         };
 
         var delivered = _connectionRegistry.TryGetUnpairedConnectionId(normalizedDeviceId, out _) ||
-            _connectionRegistry.IsPairedDeviceConnected(normalizedDom, normalizedSub);
+            _connectionRegistry.IsPairedDeviceConnected(normalizedDom, normalizedSub, normalizedDeviceId);
 
-        await _hubContext.SendPairDeviceAsync(normalizedDeviceId, pairMessage, cancellationToken);
+        await _hubContext.SendPairDeviceAsync(_connectionRegistry, normalizedDeviceId, pairMessage, cancellationToken);
 
         return new PairDeviceResponseDto
         {
@@ -161,13 +200,54 @@ public sealed class DeviceTokenService : IDeviceTokenService
         };
     }
 
-    public async Task<DeviceStatusResponseDto> GetStatusAsync(
+    public async Task<IReadOnlyList<DeviceRegistrationDto>> ListRegistrationsAsync(
         string domTarget,
         string subTarget,
         CancellationToken cancellationToken = default)
     {
         var normalizedDom = domTarget.Trim();
         var normalizedSub = subTarget.Trim();
+        var now = DateTimeOffset.UtcNow;
+
+        var registrations = await _db.SubDeviceRegistrations
+            .AsNoTracking()
+            .Where(
+                registration =>
+                    registration.DomTarget == normalizedDom &&
+                    registration.SubName == normalizedSub &&
+                    !registration.IsRevoked &&
+                    registration.TokenExpiresAt > now)
+            .OrderBy(registration => registration.PairedAt)
+            .ToListAsync(cancellationToken);
+
+        return registrations
+            .Select(
+                registration => new DeviceRegistrationDto
+                {
+                    DeviceId = registration.DeviceId,
+                    DomTarget = registration.DomTarget,
+                    SubTarget = registration.SubName,
+                    IsConnected = _connectionRegistry.IsPairedDeviceConnected(
+                        normalizedDom,
+                        normalizedSub,
+                        registration.DeviceId),
+                    PairedAt = registration.PairedAt,
+                    LastConnectedAt = registration.LastConnectedAt,
+                    TokenExpiresAt = registration.TokenExpiresAt,
+                    ActuatorKind = registration.ActuatorKind,
+                })
+            .ToList();
+    }
+
+    public async Task<DeviceStatusResponseDto> GetStatusAsync(
+        string domTarget,
+        string subTarget,
+        string deviceId,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedDom = domTarget.Trim();
+        var normalizedSub = subTarget.Trim();
+        var normalizedDeviceId = deviceId.Trim();
 
         var registration = await _db.SubDeviceRegistrations
             .AsNoTracking()
@@ -175,6 +255,7 @@ public sealed class DeviceTokenService : IDeviceTokenService
                 registration =>
                     registration.DomTarget == normalizedDom &&
                     registration.SubName == normalizedSub &&
+                    registration.DeviceId == normalizedDeviceId &&
                     !registration.IsRevoked,
                 cancellationToken);
 
@@ -182,27 +263,34 @@ public sealed class DeviceTokenService : IDeviceTokenService
         {
             DomTarget = normalizedDom,
             SubTarget = normalizedSub,
+            DeviceId = normalizedDeviceId,
             IsPaired = registration is not null,
             IsConnected = registration is not null &&
-                _connectionRegistry.IsPairedDeviceConnected(normalizedDom, normalizedSub),
-            DeviceId = registration?.DeviceId ?? _connectionRegistry.GetConnectedDeviceId(normalizedDom, normalizedSub),
+                _connectionRegistry.IsPairedDeviceConnected(normalizedDom, normalizedSub, normalizedDeviceId),
             PairedAt = registration?.PairedAt,
             LastConnectedAt = registration?.LastConnectedAt,
             TokenExpiresAt = registration?.TokenExpiresAt,
+            ActuatorKind = registration?.ActuatorKind,
         };
     }
 
     public Task<SubDeviceRegistration?> GetActiveRegistrationAsync(
         string domTarget,
         string subTarget,
+        string deviceId,
         CancellationToken cancellationToken = default)
     {
+        var normalizedDom = domTarget.Trim();
+        var normalizedSub = subTarget.Trim();
+        var normalizedDeviceId = deviceId.Trim();
+
         return _db.SubDeviceRegistrations
             .AsNoTracking()
             .SingleOrDefaultAsync(
                 registration =>
-                    registration.DomTarget == domTarget.Trim() &&
-                    registration.SubName == subTarget.Trim() &&
+                    registration.DomTarget == normalizedDom &&
+                    registration.SubName == normalizedSub &&
+                    registration.DeviceId == normalizedDeviceId &&
                     !registration.IsRevoked &&
                     registration.TokenExpiresAt > DateTimeOffset.UtcNow,
                 cancellationToken);
@@ -211,13 +299,19 @@ public sealed class DeviceTokenService : IDeviceTokenService
     public async Task RevokeAsync(
         string domTarget,
         string subTarget,
+        string deviceId,
         CancellationToken cancellationToken = default)
     {
+        var normalizedDom = domTarget.Trim();
+        var normalizedSub = subTarget.Trim();
+        var normalizedDeviceId = deviceId.Trim();
+
         var registration = await _db.SubDeviceRegistrations
             .SingleOrDefaultAsync(
                 registration =>
-                    registration.DomTarget == domTarget.Trim() &&
-                    registration.SubName == subTarget.Trim(),
+                    registration.DomTarget == normalizedDom &&
+                    registration.SubName == normalizedSub &&
+                    registration.DeviceId == normalizedDeviceId,
                 cancellationToken);
 
         if (registration is null)
@@ -228,12 +322,14 @@ public sealed class DeviceTokenService : IDeviceTokenService
         registration.IsRevoked = true;
         await _db.SaveChangesAsync(cancellationToken);
 
-        var normalizedDom = domTarget.Trim();
-        var normalizedSub = subTarget.Trim();
-        if (_connectionRegistry.IsPairedDeviceConnected(normalizedDom, normalizedSub))
+        if (_connectionRegistry.TryGetPairedConnectionId(
+                normalizedDom,
+                normalizedSub,
+                normalizedDeviceId,
+                out var connectionId))
         {
             await _hubContext.Clients
-                .Group(HardwareHubGroups.Paired(normalizedDom, normalizedSub))
+                .Client(connectionId)
                 .SendAsync(HardwareHubMethods.RevokePairing, cancellationToken);
         }
     }
@@ -271,9 +367,10 @@ public sealed class DeviceTokenService : IDeviceTokenService
             SubTarget = registration.SubName,
             AccessToken = registration.AccessToken,
             ExpiresAt = registration.TokenExpiresAt,
+            ActuatorKind = registration.ActuatorKind,
         };
 
-        await _hubContext.SendPairDeviceAsync(normalizedDeviceId, pairMessage, cancellationToken);
+        await _hubContext.SendPairDeviceAsync(_connectionRegistry, normalizedDeviceId, pairMessage, cancellationToken);
         return true;
     }
 
@@ -331,7 +428,6 @@ public sealed class DeviceTokenService : IDeviceTokenService
         var days = _jwtSettings.DeviceExpireDays > 0 ? _jwtSettings.DeviceExpireDays : 365;
         var expiresAt = DateTimeOffset.UtcNow.AddDays(days);
 
-        // JWT exp must be strictly after nbf (second precision). Guard misconfiguration.
         var minimumExpiry = DateTimeOffset.UtcNow.AddMinutes(1);
         return expiresAt > minimumExpiry ? expiresAt : minimumExpiry;
     }

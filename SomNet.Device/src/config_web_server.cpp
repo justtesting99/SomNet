@@ -7,8 +7,17 @@
 #include "signalr_client.h"
 #include "wifi_manager.h"
 
+#if SOMNET_LOCAL_OPERATE_ENABLED
+#include "local_operate.h"
+#include "operate_pages.h"
+#endif
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#include "local_history_store.h"
+#endif
+
 #include <ESPAsyncWebServer.h>
 #include <Arduino.h>
+#include <ArduinoJson.h>
 
 static DeviceBootMode gHttpMode = DeviceBootMode::Running;
 static AsyncWebServer gHttpServer(CONFIG_HTTP_PORT);
@@ -20,6 +29,9 @@ NvsStore* gNvs = nullptr;
 DeviceIdentity* gIdentity = nullptr;
 WifiManager* gWifi = nullptr;
 SignalRClient* gSignalR = nullptr;
+#if SOMNET_LOCAL_OPERATE_ENABLED
+LocalOperate* gLocalOperate = nullptr;
+#endif
 
 void buildEffectiveServerUrl(char* out, size_t outLen) {
     out[0] = '\0';
@@ -111,6 +123,65 @@ bool isValidServerUrlHost(const char* host) {
     return true;
 }
 
+bool parseSomNetServerUrl(const String& serverUrlIn, char* serverBuf, size_t serverBufLen, bool& useTlsOut, String& errorOut) {
+    if (serverBuf == nullptr || serverBufLen == 0) {
+        errorOut = "Internal error";
+        return false;
+    }
+    serverBuf[0] = '\0';
+    useTlsOut = false;
+
+    String serverUrl = serverUrlIn;
+    serverUrl.trim();
+    if (serverUrl.length() == 0) {
+        errorOut = "Server URL is required";
+        return false;
+    }
+    if (containsHubSuffix(serverUrl.c_str())) {
+        errorOut = "Use API base URL only (no /hubs/hardware)";
+        return false;
+    }
+
+    strncpy(serverBuf, serverUrl.c_str(), serverBufLen - 1);
+    serverBuf[serverBufLen - 1] = '\0';
+    trimTrailingSlashes(serverBuf);
+
+    char serverHost[96];
+    if (!extractUrlHost(serverBuf, serverHost, sizeof(serverHost))) {
+        errorOut = "Server URL must include a host (e.g. http://192.168.1.100:5031)";
+        return false;
+    }
+    if (!isValidServerUrlHost(serverHost)) {
+        errorOut = "Server host looks like an incomplete IP — use four octets (e.g. 192.168.1.100)";
+        return false;
+    }
+
+    useTlsOut = strncmp(serverBuf, "https://", 8) == 0;
+    return true;
+}
+
+bool saveSomNetServerUrl(NvsStore* nvs, const String& serverUrlIn, String& errorOut) {
+    if (nvs == nullptr) {
+        errorOut = "NVS unavailable";
+        return false;
+    }
+
+    bool useTls = false;
+    char serverBuf[NvsStore::kMaxStringLen] = {};
+    if (!parseSomNetServerUrl(serverUrlIn, serverBuf, sizeof(serverBuf), useTls, errorOut)) {
+        return false;
+    }
+    if (!nvs->setServerUrl(serverBuf)) {
+        errorOut = "Failed to save server URL";
+        return false;
+    }
+    if (!nvs->setUseTls(useTls)) {
+        errorOut = "Failed to save TLS flag";
+        return false;
+    }
+    return true;
+}
+
 bool saveConfigFromRequest(AsyncWebServerRequest* request, String& errorOut) {
     if (gNvs == nullptr) {
         errorOut = "NVS unavailable";
@@ -152,31 +223,17 @@ bool saveConfigFromRequest(AsyncWebServerRequest* request, String& errorOut) {
         errorOut = "Wi-Fi password is required";
         return false;
     }
-    if (serverUrl.length() == 0) {
-        errorOut = "Server URL is required";
-        return false;
-    }
-    if (containsHubSuffix(serverUrl.c_str())) {
-        errorOut = "Use API base URL only (no /hubs/hardware)";
-        return false;
-    }
 
-    char serverBuf[NvsStore::kMaxStringLen];
-    strncpy(serverBuf, serverUrl.c_str(), sizeof(serverBuf) - 1);
-    serverBuf[sizeof(serverBuf) - 1] = '\0';
-    trimTrailingSlashes(serverBuf);
-
-    char serverHost[96];
-    if (!extractUrlHost(serverBuf, serverHost, sizeof(serverHost))) {
-        errorOut = "Server URL must include a host (e.g. http://192.168.1.100:5031)";
+    bool useTls = false;
+    char serverBuf[NvsStore::kMaxStringLen] = {};
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    serverBuf[0] = '\0';
+    useTls = false;
+#else
+    if (!parseSomNetServerUrl(serverUrl, serverBuf, sizeof(serverBuf), useTls, errorOut)) {
         return false;
     }
-    if (!isValidServerUrlHost(serverHost)) {
-        errorOut = "Server host looks like an incomplete IP — use four octets (e.g. 192.168.1.100)";
-        return false;
-    }
-
-    const bool useTls = strncmp(serverBuf, "https://", 8) == 0;
+#endif
 
     if (!gNvs->setWifiSsid(wifiSsid.c_str())) {
         errorOut = "Failed to save Wi-Fi SSID";
@@ -228,6 +285,17 @@ bool saveConfigFromRequest(AsyncWebServerRequest* request, String& errorOut) {
         return false;
     }
 
+    String actuatorKind = request->arg("actuator_kind");
+    actuatorKind.trim();
+    if (actuatorKind.length() > 0) {
+        if (!gNvs->setActuatorKindFromJson(actuatorKind.c_str())) {
+            errorOut = "actuator_kind must be relay or hbridge";
+            return false;
+        }
+        Serial.print(F("[HTTP] actuator_kind="));
+        Serial.println(actuatorKind);
+    }
+
     Serial.print(F("[HTTP] saved wifi ssid="));
     Serial.print(wifiSsid);
     Serial.print(F(" pass_len="));
@@ -264,7 +332,7 @@ void handleFavicon(AsyncWebServerRequest* request) {
 
 void handleStatus(AsyncWebServerRequest* request) {
     logHttpRequest(request, "/");
-    char html[5120];
+    char html[8192];
     char serverUrl[NvsStore::kMaxStringLen];
     buildEffectiveServerUrl(serverUrl, sizeof(serverUrl));
     ConfigPages::renderStatus(
@@ -319,6 +387,143 @@ void handleConfigPost(AsyncWebServerRequest* request) {
     sendHtml(request, html);
 }
 
+void applySomEspHubModeFromNvs() {
+    if (gNvs == nullptr || gSignalR == nullptr) {
+        return;
+    }
+    gSignalR->applySomEspHubEnabled(gNvs->isHubRuntimeEnabled());
+}
+
+void sendHubModeJson(AsyncWebServerRequest* request, int httpCode = 200) {
+    char serverUrl[NvsStore::kMaxStringLen];
+    buildEffectiveServerUrl(serverUrl, sizeof(serverUrl));
+    const bool paired = gNvs != nullptr && gNvs->isPaired();
+    const bool hasUrl = gNvs != nullptr && gNvs->hasHubServerUrl();
+    const bool hubEnabled = gNvs != nullptr && gNvs->isHubRuntimeEnabled();
+    const bool setupAp = gWifi != nullptr && gWifi->isSoftAp();
+    const bool canToggle = hasUrl && paired && !setupAp;
+    const bool hubConnected = gSignalR != nullptr && gSignalR->isHubConnected();
+    const char* hubState = gSignalR != nullptr ? gSignalR->hubStateLabel() : "offline";
+
+    char json[640];
+    snprintf(
+        json,
+        sizeof(json),
+        "{\"serverUrl\":\"%s\",\"paired\":%s,\"hubEnabled\":%s,\"canToggle\":%s,"
+        "\"hubConnected\":%s,\"hubState\":\"%s\"}",
+        serverUrl,
+        paired ? "true" : "false",
+        hubEnabled ? "true" : "false",
+        canToggle ? "true" : "false",
+        hubConnected ? "true" : "false",
+        hubState);
+    request->send(httpCode, "application/json", json);
+}
+
+void handleApiHubModeGet(AsyncWebServerRequest* request) {
+    logHttpRequest(request, "/api/hub/mode");
+    if (gWifi != nullptr && gWifi->isSoftAp()) {
+        request->send(403, "application/json", "{\"error\":\"setup_mode\"}");
+        return;
+    }
+    sendHubModeJson(request);
+}
+
+void handleApiHubModePostBody(AsyncWebServerRequest* request, const char* body, size_t len) {
+    if (gWifi != nullptr && gWifi->isSoftAp()) {
+        request->send(403, "application/json", "{\"error\":\"setup_mode\"}");
+        return;
+    }
+    if (gNvs == nullptr || gSignalR == nullptr) {
+        request->send(500, "application/json", "{\"error\":\"unavailable\"}");
+        return;
+    }
+
+    JsonDocument doc;
+    if (deserializeJson(doc, body, len)) {
+        request->send(400, "application/json", "{\"error\":\"invalid_json\"}");
+        return;
+    }
+
+    if (!doc["enabled"].is<bool>()) {
+        request->send(400, "application/json", "{\"error\":\"enabled_required\"}");
+        return;
+    }
+
+    const bool enabled = doc["enabled"].as<bool>();
+    if (enabled) {
+        if (!gNvs->hasHubServerUrl()) {
+            request->send(400, "application/json", "{\"error\":\"no_server_url\"}");
+            return;
+        }
+        if (!gNvs->isPaired()) {
+            request->send(400, "application/json", "{\"error\":\"not_paired\"}");
+            return;
+        }
+    }
+
+    if (!gNvs->setHubRuntimeEnabled(enabled)) {
+        request->send(500, "application/json", "{\"error\":\"nvs_failed\"}");
+        return;
+    }
+
+    gSignalR->applySomEspHubEnabled(enabled);
+    Serial.print(F("[HTTP] hub runtime "));
+    Serial.println(enabled ? F("enabled") : F("disabled (local)"));
+    sendHubModeJson(request);
+}
+
+void handleApiHubModePost(
+    AsyncWebServerRequest* request,
+    uint8_t* data,
+    size_t len,
+    size_t index,
+    size_t total) {
+    static String body;
+    if (index == 0) {
+        body = "";
+        if (total > 128) {
+            request->send(413, "application/json", "{\"error\":\"body_too_large\"}");
+            return;
+        }
+    }
+    for (size_t i = 0; i < len; ++i) {
+        body += static_cast<char>(data[i]);
+    }
+    if (index + len < total) {
+        return;
+    }
+    logHttpRequest(request, "/api/hub/mode");
+    handleApiHubModePostBody(request, body.c_str(), body.length());
+}
+
+void handleConnectSomNet(AsyncWebServerRequest* request) {
+    logHttpRequest(request, "/config/connect-somnet");
+    if (gWifi != nullptr && gWifi->isSoftAp()) {
+        request->send(403, "text/plain", "Finish Wi-Fi setup first");
+        return;
+    }
+    String error;
+    if (!saveSomNetServerUrl(gNvs, request->arg("server_url"), error)) {
+        request->send(400, "text/plain", error);
+        return;
+    }
+
+    if (gNvs != nullptr) {
+        gNvs->setHubRuntimeEnabled(true);
+    }
+    applySomEspHubModeFromNvs();
+
+    Serial.println(F("[HTTP] SomNet server_url saved — hub connecting (no reboot)"));
+
+    char html[2560];
+    ConfigPages::renderSavedPage(
+        html,
+        sizeof(html),
+        "SomNet server saved. Hub is connecting — return to Status to pair or use the remote/local switch.");
+    sendHtml(request, html);
+}
+
 void handleApiStatus(AsyncWebServerRequest* request) {
     logHttpRequest(request, "/api/status");
     char serverUrl[NvsStore::kMaxStringLen];
@@ -326,21 +531,57 @@ void handleApiStatus(AsyncWebServerRequest* request) {
     buildEffectiveServerUrl(serverUrl, sizeof(serverUrl));
     gNvs->getFriendlyName(friendly, sizeof(friendly));
 
-    char json[768];
-    snprintf(
-        json,
-        sizeof(json),
-        "{\"deviceId\":\"%s\",\"mac\":\"%s\",\"friendlyName\":\"%s\",\"paired\":%s,\"wifiConnected\":%s,\"ip\":\"%s\",\"serverUrl\":\"%s\",\"mode\":\"%s\",\"hubConnected\":%s,\"hubState\":\"%s\"}",
-        gIdentity->deviceId(),
-        gIdentity->macAddress(),
-        friendly,
-        gNvs->isPaired() ? "true" : "false",
-        gWifi->isConnected() ? "true" : "false",
-        gWifi->localIp(),
-        serverUrl,
-        gHttpMode == DeviceBootMode::Provisioning ? "provisioning" : "running",
-        gSignalR != nullptr && gSignalR->isHubConnected() ? "true" : "false",
-        gSignalR != nullptr ? gSignalR->hubStateLabel() : "offline");
+    char json[1024];
+    if (kSomNetStandaloneBuild) {
+        const bool hubEnabled = gNvs->isHubRuntimeEnabled();
+        if (gNvs->hasHubServerUrl()) {
+            snprintf(
+                json,
+                sizeof(json),
+                "{\"standalone\":true,\"hubNetwork\":%s,\"hubEnabled\":%s,\"deviceId\":\"%s\",\"mac\":\"%s\",\"friendlyName\":\"%s\",\"paired\":%s,\"wifiConnected\":%s,\"ip\":\"%s\",\"serverUrl\":\"%s\",\"mode\":\"%s\",\"hubConnected\":%s,\"hubState\":\"%s\"}",
+                hubEnabled ? "true" : "false",
+                hubEnabled ? "true" : "false",
+                gIdentity->deviceId(),
+                gIdentity->macAddress(),
+                friendly,
+                gNvs->isPaired() ? "true" : "false",
+                gWifi->isStaLinkReady() ? "true" : "false",
+                gWifi->localIp(),
+                serverUrl,
+                gHttpMode == DeviceBootMode::Provisioning ? "provisioning" : "running",
+                hubEnabled && gSignalR != nullptr && gSignalR->isHubConnected() ? "true" : "false",
+                hubEnabled && gSignalR != nullptr ? gSignalR->hubStateLabel() : "local");
+        } else {
+            snprintf(
+                json,
+                sizeof(json),
+                "{\"standalone\":true,\"hubNetwork\":false,\"hubEnabled\":false,\"deviceId\":\"%s\",\"mac\":\"%s\",\"friendlyName\":\"%s\",\"wifiConnected\":%s,\"ip\":\"%s\",\"mode\":\"%s\",\"hubConnected\":false,\"hubState\":\"disabled\"}",
+                gIdentity->deviceId(),
+                gIdentity->macAddress(),
+                friendly,
+                gWifi->isStaLinkReady() ? "true" : "false",
+                gWifi->localIp(),
+                gHttpMode == DeviceBootMode::Provisioning ? "provisioning" : "running");
+        }
+    } else {
+        const bool hubEnabled = gNvs->isHubRuntimeEnabled();
+        snprintf(
+            json,
+            sizeof(json),
+            "{\"standalone\":false,\"localOperate\":%s,\"hubEnabled\":%s,\"deviceId\":\"%s\",\"mac\":\"%s\",\"friendlyName\":\"%s\",\"paired\":%s,\"wifiConnected\":%s,\"ip\":\"%s\",\"serverUrl\":\"%s\",\"mode\":\"%s\",\"hubConnected\":%s,\"hubState\":\"%s\"}",
+            kSomNetLocalOperateEnabled ? "true" : "false",
+            hubEnabled ? "true" : "false",
+            gIdentity->deviceId(),
+            gIdentity->macAddress(),
+            friendly,
+            gNvs->isPaired() ? "true" : "false",
+            gWifi->isStaLinkReady() ? "true" : "false",
+            gWifi->localIp(),
+            serverUrl,
+            gHttpMode == DeviceBootMode::Provisioning ? "provisioning" : "running",
+            hubEnabled && gSignalR != nullptr && gSignalR->isHubConnected() ? "true" : "false",
+            hubEnabled && gSignalR != nullptr ? gSignalR->hubStateLabel() : "local");
+    }
     request->send(200, "application/json", json);
 }
 
@@ -360,6 +601,9 @@ void handleFactoryReset(AsyncWebServerRequest* request) {
     if (gNvs != nullptr) {
         gNvs->clearAll();
     }
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    localHistoryClearAll();
+#endif
     scheduleRestartAfterResponse(request);
     char html[2560];
     ConfigPages::renderSavedPage(html, sizeof(html), "Factory reset complete.");
@@ -391,9 +635,50 @@ void registerRoutes(AsyncWebServer& server) {
     server.on(AsyncURIMatcher::exact("/config"), HTTP_GET, handleConfigGet);
     server.on(AsyncURIMatcher::exact("/config"), HTTP_POST, handleConfigPost);
     server.on("/api/status", HTTP_GET, handleApiStatus);
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    server.on("/config/connect-somnet", HTTP_POST, handleConnectSomNet);
+#endif
+#if SOMNET_LOCAL_OPERATE_ENABLED
+    server.on("/api/hub/mode", HTTP_GET, handleApiHubModeGet);
+    server.on(
+        "/api/hub/mode",
+        HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handleApiHubModePost(request, data, len, index, total);
+        });
+    server.on("/operate", HTTP_GET, [](AsyncWebServerRequest* request) {
+        if (gWifi != nullptr && gWifi->isSoftAp()) {
+            request->redirect("/");
+            return;
+        }
+        OperatePages::handleOperateGet(request);
+    });
+    server.on("/operate/", HTTP_GET, [](AsyncWebServerRequest* request) {
+        request->redirect("/operate");
+    });
+    if (gLocalOperate != nullptr) {
+        registerLocalApiRoutes(server, gLocalOperate);
+    }
+#endif
     server.onNotFound([](AsyncWebServerRequest* request) {
         Serial.print(F("[HTTP] 404 "));
         Serial.println(request->url());
+        const char* url = request->url().c_str();
+        if (url != nullptr &&
+            (strcmp(url, "/operate") == 0 || strncmp(url, "/operate/", 9) == 0) &&
+            !kSomNetLocalOperateEnabled) {
+            request->send(
+                404,
+                "text/html",
+                "<!DOCTYPE html><html><body style=\"font-family:system-ui;background:#020617;"
+                "color:#cbd5e1;padding:1.5rem\"><h1>/operate not available</h1>"
+                "<p>This firmware was built without LAN local control "
+                "(<code>SOMNET_LOCAL_API</code> / <code>env:somesp</code>).</p>"
+                "<p><a href=\"/\" style=\"color:#818cf8\">Back to status</a></p></body></html>");
+            return;
+        }
         request->redirect("/");
     });
 }
@@ -439,7 +724,8 @@ bool ConfigWebServer::begin(
     NvsStore* nvsStore,
     DeviceIdentity* identity,
     WifiManager* wifi,
-    SignalRClient* signalRClient) {
+    SignalRClient* signalRClient,
+    LocalOperate* localOperate) {
     if (nvsStore == nullptr || identity == nullptr || wifi == nullptr) {
         return false;
     }
@@ -453,6 +739,9 @@ bool ConfigWebServer::begin(
     gIdentity = identity;
     gWifi = wifi;
     gSignalR = signalRClient;
+#if SOMNET_LOCAL_OPERATE_ENABLED
+    gLocalOperate = localOperate;
+#endif
     gHttpMode = mode;
     staIpSinceMs_ = 0;
     gActiveHttpServer = this;

@@ -1,12 +1,16 @@
 import {
   ACTION_SNAPSHOT_FEED_OPTIONS,
+  LIVE_VIDEO_FEEDS_OPTIONS,
   MOBILE_VIDEO_EXPAND_OPTIONS,
-  VIDEO_FEED_BANDWIDTH_OPTIONS,
+  MOTOR_SEGMENT_TARGET_RAMP_MODE_OPTIONS,
   type ActionSnapshotFeeds,
   type AppOptions,
+  type LiveVideoFeeds,
   type MobileVideoExpandDefault,
+  type MotorSegmentTargetRampMode,
   type VideoFeedBandwidth,
 } from '@/types/options';
+import { VIDEO_FEED_BANDWIDTH_OPTIONS } from '@/utils/videoFeedBandwidth';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Input } from '@/components/ui/Input';
 import { NumberField } from '@/components/ui/NumberField';
@@ -39,7 +43,56 @@ export function OptionsGeneralPanel({ pendingOptions, onUpdate }: OptionsGeneral
           the device after the current stroke. When disabled, settings lock until Stop or Abort.
         </p>
         <SelectField
+          label="Motor automatic — reach each target speed"
+          value={pendingOptions.motorSegmentTargetRampMode}
+          options={MOTOR_SEGMENT_TARGET_RAMP_MODE_OPTIONS}
+          onChange={(event) =>
+            onUpdate(
+              'motorSegmentTargetRampMode',
+              event.target.value as MotorSegmentTargetRampMode,
+            )
+          }
+        />
+        {pendingOptions.motorSegmentTargetRampMode === 'fixedMs' ? (
+          <NumberField
+            label="Quick ramp duration (ms)"
+            value={pendingOptions.motorSegmentTargetRampMs}
+            min={0}
+            max={30_000}
+            onChange={(event) =>
+              onUpdate('motorSegmentTargetRampMs', Number(event.target.value))
+            }
+          />
+        ) : null}
+        <p className="text-xs leading-relaxed text-slate-500">
+          Applies to Set Speed, Random Speed, and Random Speed and Timing, and to
+          burst micro-cycles inside automatic sessions. Speed Wave and Build-Up always ramp
+          over the full segment interval. When set to the default (full segment interval),
+          Stop and burst steps use the Ramp (ms) field on the motor automatic panel.
+          Instant or quick ramp holds each target for the segment interval (or burst micro-hold)
+          so graph points read as flat steps.
+        </p>
+        <SelectField
           label="Live video feeds"
+          value={pendingOptions.liveVideoFeeds}
+          options={LIVE_VIDEO_FEEDS_OPTIONS}
+          onChange={(event) =>
+            onUpdate('liveVideoFeeds', event.target.value as LiveVideoFeeds)
+          }
+        />
+        <p className="text-xs leading-relaxed text-slate-500">
+          Controls whether live front/rear monitors appear on the dashboard. Choose{' '}
+          <span className="text-slate-400">None</span> to hide all feeds and give the control panel
+          the full width.
+        </p>
+        <p className="text-xs leading-relaxed text-slate-500">
+          <span className="font-medium text-slate-400">Per device (planned):</span> camera areas and
+          feed URLs will be assignable separately for each paired device — for example a motor may
+          use one set of feeds, a relay another, or any combination may share the same cameras. This
+          operator-wide setting applies until per-device video is enabled.
+        </p>
+        <SelectField
+          label="Mobile full-screen feeds"
           value={pendingOptions.mobileVideoExpandDefault}
           options={MOBILE_VIDEO_EXPAND_OPTIONS}
           onChange={(event) =>
@@ -47,8 +100,8 @@ export function OptionsGeneralPanel({ pendingOptions, onUpdate }: OptionsGeneral
           }
         />
         <p className="text-xs leading-relaxed text-slate-500">
-          Only selected cameras load during a session (saves bandwidth and edge CPU on poor mobile
-          or tunnel links). Change to a single feed when one stream is enough.
+          When auto-expand is on, which monitors open full screen on mobile after a command. Only
+          applies when live feeds are not set to None.
         </p>
         <SelectField
           label="Video feed bandwidth"
@@ -68,8 +121,8 @@ export function OptionsGeneralPanel({ pendingOptions, onUpdate }: OptionsGeneral
           onChange={(event) => onUpdate('autoExpandVideoOnMobile', event.target.checked)}
         />
         <p className="text-xs leading-relaxed text-slate-500">
-          On mobile, opens the live feed selection above full screen after each command (when
-          enabled).
+          On mobile, opens the mobile full-screen feed selection after each command (when enabled
+          and live feeds are visible).
         </p>
         <NumberField
           label="System status reconnect interval (seconds)"

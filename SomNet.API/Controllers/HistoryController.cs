@@ -38,13 +38,14 @@ public class HistoryController : ControllerBase
     [HttpGet("sessions")]
     public ActionResult<IReadOnlyList<SessionHistoryEntryDto>> GetSessions(
         [FromQuery] string domTarget,
-        [FromQuery] string? subTarget = null)
+        [FromQuery] string? subTarget = null,
+        [FromQuery] string? deviceId = null)
     {
         if (string.IsNullOrWhiteSpace(domTarget))
         {
             return BadRequest("domTarget is required.");
         }
 
-        return Ok(_dataStore.GetSessionsForDom(domTarget, subTarget));
+        return Ok(_dataStore.GetSessionsForDom(domTarget, subTarget, deviceId));
     }
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "actuator_kind.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -23,6 +25,13 @@ public:
 
     // True when provisioned flag set and wifi_ssid + server_url stored
     bool isFullyProvisioned() const;
+
+    /** Non-empty NVS server_url (SomEsp optional SomNet hub). */
+    bool hasHubServerUrl() const;
+
+    /** SomEsp: when false, keep server_url/pairing but do not connect SignalR (local /operate). */
+    bool isHubRuntimeEnabled() const;
+    bool setHubRuntimeEnabled(bool value);
 
     // device_id
     bool getDeviceId(char* out, size_t outLen) const;
@@ -60,11 +69,31 @@ public:
 
     bool isPaired() const;
 
+    /** SomEsp local operate PIN (plaintext trial — see SOMESP-STANDALONE.md). */
+    bool hasOperatePin() const;
+    bool getOperatePin(char* out, size_t outLen) const;
+    bool setOperatePin(const char* value);
+
+    /** SomEsp operate UI defaults JSON (see /api/local/settings). */
+    bool hasLocalOperateSettings() const;
+    bool getLocalOperateSettings(char* out, size_t outLen) const;
+    bool setLocalOperateSettings(const char* json);
+
     bool savePairing(
         const char* accessToken,
         const char* domTarget,
         const char* subTarget,
         uint64_t expiresAtMs);
+
+    /** Output profile: relay (default) or hbridge motor. Key written on registration (M1). */
+    bool hasActuatorKindBound() const;
+    DeviceActuatorKind getActuatorKind() const;
+    bool setActuatorKind(DeviceActuatorKind kind);
+    bool setActuatorKindFromJson(const char* value);
+    /** Clears actuator profile binding (e.g. after RevokePairing for kind rebind). */
+    bool clearActuatorKindBinding();
+    /** PairDevice: bind when unset; when paired reject mismatch; when unpaired allow rebind. */
+    bool tryBindActuatorKindFromPairJson(const char* jsonKind);
 
 private:
     bool getString(const char* key, char* out, size_t outLen) const;

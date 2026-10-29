@@ -14,7 +14,9 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 **End-user / installer documentation:** [Hardware User Guide](./Hardware-User-Guide.md) — provisioning, Wi‑Fi recovery (10 s button hold), Device ID, relay operation.
 
-**Implementation progress (2026-09-20):** Phases **0–12 + device button clicks + Session in Progress (P16) signed off**. Current firmware **`0.15.0-session-accessory`** — manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On**; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; network hardening (Phase 12); GPIO **single/double click** + 10 s hold reset ([23](./23-Device-Button-Clicks-Checklist.md)); **`session-accessory`** on GPIO32 ([25](./25-Session-Accessory-In-Progress-Checklist.md)); **`resultJson`** end-to-end. SomNet UI: P16 slide switch + session rehydration [10](./10-UI-Session-Rehydration-Checklist.md) / [11](./11-UI-Manual-Session-Rehydration-Checklist.md) + multi-tab sync [12](./12-UI-Multi-Tab-Sync-Checklist.md) — all signed off. See §10.
+**Implementation progress (2026-09-20):** Phases **0–12 + device button clicks + Session in Progress (P16) signed off** at firmware **`0.15.0-session-accessory`**. **Follow-on (2026-10-27):** [Burst placement](./36-Burst-Placement-Modes-Design.md) — **`burstPlacement`** main+ / instead-of; relay **`0.15.2-burst-main-timing`**. **Motor automatic bursts (M1d):** **`0.16.4-motor-burst-duty`** — signed **2026-10-28** ([31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27)).
+
+**Capabilities (current build):** manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On** and placement modes; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; network hardening (Phase 12); GPIO **single/double click** + 10 s hold reset ([23](./23-Device-Button-Clicks-Checklist.md)); **`session-accessory`** on GPIO32 ([25](./25-Session-Accessory-In-Progress-Checklist.md)); **`resultJson`** end-to-end. SomNet UI: P16 slide switch + session rehydration [10](./10-UI-Session-Rehydration-Checklist.md) / [11](./11-UI-Manual-Session-Rehydration-Checklist.md) + multi-tab sync [12](./12-UI-Multi-Tab-Sync-Checklist.md). See §10.
 
 **Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 12 + button clicks signed off (2026-09-13).** SomNet API/UI integration complete for manual and automatic commands.
 
@@ -917,7 +919,7 @@ Wave/build-up modes require **End Session** minutes or strokes (`noAutoEnd` reje
 
 **Stroke-first (P9P2-D41):** first pulse fires immediately after start ack (or after **`delayBeforeStartSeconds`**). Inter-stroke gap applies **between** strokes only — same pattern as manual burst.
 
-**Live settings during playback:** **`automatic-update`** — **implemented** [Phase 11 checklist](./09-ESP32-Phase-11-Checklist.md) (firmware `0.12.2-phase11`). UI sends when **`allowAutomaticModeOverrides`** is enabled (Options → General); default is locked while running. **Burst-in-automatic (`burstsOn`)** — **implemented** [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md) (firmware `0.10.0-phase10`).
+**Live settings during playback:** **`automatic-update`** — **implemented** [Phase 11 checklist](./09-ESP32-Phase-11-Checklist.md) (firmware `0.12.2-phase11`). UI sends when **`allowAutomaticModeOverrides`** is enabled (Options → General); default is locked while running. **Burst-in-automatic (`burstsOn`)** — **implemented** [Phase 10 checklist](./09-ESP32-Phase-10-Checklist.md) (firmware `0.10.0-phase10`). **`burstPlacement`** (main+ vs instead-of) — [doc 36](./36-Burst-Placement-Modes-Design.md) (`0.15.2-burst-main-timing`).
 
 **Firmware structure:** One **`AutomaticSessionMode`** (sequencer FSM); per-program **`AutomaticProgramBase`** subclasses + factory — see [Part 2 checklist §8](./09-ESP32-Phase-9-Part2-Automatic-Checklist.md#8-architecture--planner--stroke-sequencer-automatic-timing).
 
@@ -935,7 +937,8 @@ Wave/build-up modes require **End Session** minutes or strokes (`noAutoEnd` reje
   "delayBeforeStartSeconds": 0,
   "endSessionMode": "strokes",
   "endSessionValue": 8,
-  "burstsOn": false
+  "burstsOn": false,
+  "burstPlacement": "mainPlusSessionSpread"
 }
 ```
 
@@ -944,6 +947,7 @@ Wave/build-up modes require **End Session** minutes or strokes (`noAutoEnd` reje
 | `automaticMode` | **Required** — one of seven enum strings above |
 | `strokeMinSeconds` / `strokeMaxSeconds` | Main-program gap (**seconds**). **SomNet UI:** min **≥ 1** each; device/API may accept **0** via direct payload until validation tightened |
 | `burstsOn` | Optional — default **`false`**. When **`true`**, burst sub-fields validated per [Phase 10 §4.1](./09-ESP32-Phase-10-Checklist.md); burst sub-FSM runs (Phase 10B+) |
+| `burstPlacement` | Optional when `burstsOn` — see [doc 36](./36-Burst-Placement-Modes-Design.md). Omitted → device **`sessionSpread`** (Phase 10). UI default **`mainPlusSessionSpread`**. |
 | Disabled UI mins | Send full snapshot; device ignores per §3 rules (uses max power/gap) |
 
 **Device behavior (`AutomaticSessionMode`):**
@@ -1686,7 +1690,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 - ~~**Device button single / double click**~~ — **signed off** 2026-09-13 (`0.14.0-button-clicks`). See [23 — Device button clicks checklist](./23-Device-Button-Clicks-Checklist.md).
 - ~~**Session accessory (`session-accessory`, GPIO32)**~~ — **signed off** 2026-09-20 ([P16 checklist](./25-Session-Accessory-In-Progress-Checklist.md); firmware **`0.15.0-session-accessory`**).
 - **Session timeline visualization** — graph or timeline of a planned or completed automatic session (main strokes, burst events, gaps, relative power). Placement TBD: Automatic mode page (pre-start preview or live), session history detail, or both.
-- **Site operating profiles** — [26](./26-ESP32-Local-Offline-Mode-Design.md): tiers 1–3; **family UI** favors **SomNet.UI on Pi/cloud** (tier 2) over embedded `/operate` (tier 3) due to **UI duplication** on firmware updates. Tier 1 only implemented today.
+- **Site operating profiles** — [26](./26-ESP32-Local-Offline-Mode-Design.md): tiers 1–3; **SomEsp fork trial** — [27 standalone device plan](./27-SomEsp-Standalone-Device-Plan.md) (ESP-only, no API/Pi). Tier 1 only implemented on main today.
 
 ---
 
@@ -1862,7 +1866,7 @@ Optional: ESP32 runs FreeRTOS under Arduino, but **default design stays one `loo
 
 **Implementation through Phase 12 + button clicks (2026-09-13):**
 
-- [x] Phases 0–12 + button clicks + P16 signed off — current firmware **`0.15.0-session-accessory`**
+- [x] Phases 0–12 + button clicks + P16 signed off — P16 tag **`0.15.0-session-accessory`**; current firmware **`0.16.4-motor-burst-duty`** (relay burst placement **`0.15.2-burst-main-timing`**; motor bursts **M1d signed 2026-10-28**)
 - [x] PlatformIO project `SomNet.Device/` with module tree per §12
 - [x] Pairing + manual **stroke**, **burst**, **abort** E2E from SomNet UI on hardware (`esp32-84CCA85C36B4` / Sub `Slv66`)
 - [x] Automatic **Start/Stop/Abort** E2E from SomNet UI; **Bursts On** during automatic; live **`automatic-update`**; auto-end / abort / cooperative stop via hub; session from device `resultJson`

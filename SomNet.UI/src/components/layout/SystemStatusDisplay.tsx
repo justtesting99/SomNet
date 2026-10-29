@@ -1,5 +1,8 @@
 import { useSystemStatus } from '@/context/SystemStatusProvider';
-import { getOverallTone } from '@/utils/systemStatus';
+import { useSiteUserReady } from '@/context/SiteUserReadyProvider';
+import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
+import { applyOperatorDeviceStatus, getOverallTone } from '@/utils/systemStatus';
 
 const toneStyles = {
   ready: {
@@ -25,9 +28,24 @@ const toneStyles = {
 } as const;
 
 export function SystemStatusDisplay() {
-  const { status } = useSystemStatus();
+  const { selectedSub } = useSubTarget();
+  const { getDeviceStatus } = useSystemStatus();
+  const { isDevicePresentAcknowledged } = useSiteUserReady();
+  const { selectedDeviceId, registrations } = useSubDevice();
+
+  const polled = selectedDeviceId
+    ? getDeviceStatus(selectedDeviceId)
+    : getDeviceStatus(registrations[0]?.deviceId ?? '');
+
+  const presentAcknowledged = isDevicePresentAcknowledged(selectedSub, selectedDeviceId);
+  const status = applyOperatorDeviceStatus(polled, {
+    hasSelectedDevice: Boolean(selectedDeviceId),
+    presentAcknowledged,
+  });
+
   const tone = getOverallTone(status);
   const styles = toneStyles[tone];
+  const showDeviceLabel = registrations.length > 1 && selectedDeviceId;
 
   return (
     <div
@@ -43,6 +61,9 @@ export function SystemStatusDisplay() {
           aria-hidden="true"
         />
         <p className="min-w-0 truncate text-sm">
+          {showDeviceLabel ? (
+            <span className="text-slate-500">{selectedDeviceId} · </span>
+          ) : null}
           <span className="text-slate-400">Status: </span>
           <span className={`font-medium ${styles.text}`}>{status.summary}</span>
         </p>

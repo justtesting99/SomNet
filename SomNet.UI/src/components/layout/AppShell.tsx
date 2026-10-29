@@ -1,6 +1,7 @@
-import { useRef, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useAuth } from '@/context/AuthProvider';
-import { useMode } from '@/context/ModeProvider';
+import { useSubTarget } from '@/context/SubTargetProvider';
+import { readDeviceSceneSessionActive } from '@/utils/sessionAccessoryStorage';
 import { Button } from '@/components/ui/Button';
 import { SystemStatusDisplay } from '@/components/layout/SystemStatusDisplay';
 import { SessionUsers } from '@/components/layout/SessionUsers';
@@ -14,12 +15,7 @@ import { useHistory } from '@/context/HistoryProvider';
 import { useOptions } from '@/context/OptionsProvider';
 import { useHardwareDialog } from '@/context/HardwareProvider';
 import { useNotify } from '@/context/NotifyProvider';
-import { useLiveSession } from '@/context/SessionProvider';
-import { useSubTarget } from '@/context/SubTargetProvider';
-import { stopAutomaticForModeSwitch } from '@/utils/stopAutomaticForModeSwitch';
-import { SessionInProgressSwitch } from '@/components/hardware/SessionInProgressSwitch';
-import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
-
+import { useSubDevice } from '@/context/SubDeviceProvider';
 interface AppShellProps {
   children: ReactNode;
   wide?: boolean;
@@ -27,66 +23,29 @@ interface AppShellProps {
 
 export function AppShell({ children, wide = false }: AppShellProps) {
   const { user, logout } = useAuth();
-  const { mode, setMode } = useMode();
   const { openDialog: openHistory } = useHistory();
   const { openDialog: openOptions } = useOptions();
   const { openDialog: openHardware } = useHardwareDialog();
   const { openDialog: openNotify } = useNotify();
-  const { activeSession, endActiveSessionIfNeeded, endAutomaticSession } = useLiveSession();
   const { selectedSub } = useSubTarget();
-  const { settings, setAutomaticRunningLocal } = useOptions();
-  const { sessionInProgress } = useSessionAccessory();
-  const activeSessionRef = useRef(activeSession);
-  const sessionInProgressRef = useRef(sessionInProgress);
+  const { registrations } = useSubDevice();
+  const domTarget = user?.displayName ?? user?.username ?? '';
 
-  activeSessionRef.current = activeSession;
-  sessionInProgressRef.current = sessionInProgress;
-
-  async function stopAutomaticDeviceOnly() {
-    if (activeSessionRef.current?.mode === 'automatic' || settings.automatic.running) {
-      await stopAutomaticForModeSwitch(selectedSub, settings.automatic, {
-        endAutomaticSession: async () => {
-          // Keep server session row while Session in Progress stays on (P16-D7).
-        },
-        setAutomaticRunningLocal,
-        isAutomaticSessionActive: () => activeSessionRef.current?.mode === 'automatic',
-      });
+  function anyDeviceSceneSessionActive(): boolean {
+    if (!domTarget) {
+      return false;
     }
 
-    setAutomaticRunningLocal(false);
-  }
-
-  async function leaveAutomaticSessionIfNeeded(reason: 'mode-switch' | 'sign-out') {
-    if (sessionInProgressRef.current) {
-      await stopAutomaticDeviceOnly();
-      return;
-    }
-
-    if (activeSessionRef.current?.mode === 'automatic' || settings.automatic.running) {
-      await stopAutomaticForModeSwitch(selectedSub, settings.automatic, {
-        endAutomaticSession: (endReason, deviceResult) =>
-          endAutomaticSession(endReason || reason, deviceResult),
-        setAutomaticRunningLocal,
-        isAutomaticSessionActive: () => activeSessionRef.current?.mode === 'automatic',
-      });
-    }
-
-    await endActiveSessionIfNeeded(reason);
-    setAutomaticRunningLocal(false);
-  }
-
-  async function handleSwitchMode() {
-    await leaveAutomaticSessionIfNeeded('mode-switch');
-    setMode(null);
+    return registrations.some((registration) =>
+      readDeviceSceneSessionActive(domTarget, selectedSub, registration.deviceId),
+    );
   }
 
   async function handleSignOut() {
-    if (sessionInProgressRef.current) {
+    if (anyDeviceSceneSessionActive()) {
       return;
     }
 
-    await leaveAutomaticSessionIfNeeded('sign-out');
-    setMode(null);
     logout();
   }
 
@@ -103,50 +62,19 @@ export function AppShell({ children, wide = false }: AppShellProps) {
         >
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0 space-y-2">
-              <SessionUsers
-                controllerName={user?.displayName ?? 'Unknown'}
-                modeLabel={
-                  mode ? `${mode === 'manual' ? 'Manual' : 'Automatic'} mode` : undefined
-                }
-              />
-              {mode ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  fullWidth
-                  className="lg:hidden"
-                  onClick={handleSwitchMode}
-                >
-                  Switch mode
-                </Button>
-              ) : null}
+              <SessionUsers controllerName={user?.displayName ?? 'Unknown'} />
             </div>
 
             <div className="flex min-w-0 items-center gap-2 lg:flex-1 lg:px-2">
               <Button variant="ghost" size="sm" className="shrink-0" onClick={openNotify}>
                 Notify
               </Button>
-              {mode ? (
-                <div className="shrink-0">
-                  <SessionInProgressSwitch />
-                </div>
-              ) : null}
               <div className="min-w-0 flex-1">
                 <SystemStatusDisplay />
               </div>
             </div>
 
             <div className="flex min-w-0 w-full flex-wrap items-center gap-2 lg:w-auto lg:shrink-0 lg:justify-end">
-              {mode ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="hidden shrink-0 lg:inline-flex"
-                  onClick={handleSwitchMode}
-                >
-                  Switch mode
-                </Button>
-              ) : null}
               <Button variant="ghost" size="sm" className="shrink-0" onClick={openHardware}>
                 Hardware
               </Button>
@@ -156,7 +84,7 @@ export function AppShell({ children, wide = false }: AppShellProps) {
               <Button variant="ghost" size="sm" className="shrink-0" onClick={openOptions}>
                 Options
               </Button>
-              <Button variant="secondary" size="sm" className="shrink-0" onClick={handleSignOut}>
+              <Button variant="secondary" size="sm" className="shrink-0" onClick={() => void handleSignOut()}>
                 Sign out
               </Button>
             </div>

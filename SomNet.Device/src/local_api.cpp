@@ -1,0 +1,858 @@
+#include "local_operate.h"
+
+#include "command_handler.h"
+#include "config.h"
+#include "device_identity.h"
+#include "execution_context.h"
+#include "local_command_status.h"
+#include "local_history_store.h"
+#include "actuator_kind.h"
+#include "nvs_store.h"
+#include "rgb_status_led.h"
+#include "wifi_manager.h"
+
+#include <ArduinoJson.h>
+#include <Arduino.h>
+#include <ESPAsyncWebServer.h>
+
+namespace {
+
+LocalOperate* gLocalOperate = nullptr;
+ExecutionContext* gExecutionContext = nullptr;
+WifiManager* gWifi = nullptr;
+CommandHandler* gCommandHandler = nullptr;
+DeviceIdentity* gIdentity = nullptr;
+
+// HTTP handlers run on async_tcp (small stack) — no large stack buffers.
+static char gHttpStatusJson[1536];
+static char gHttpHistoryIndexJson[4096];
+static char gHttpHistoryEventJson[1400];
+static char gHttpLocalSettingsJson[kMaxLocalOperateSettingsBytes];
+
+void logLocalRequest(AsyncWebServerRequest* request, const char* path) {
+    if (path != nullptr && strcmp(path, "/api/local/status") == 0) {
+        static unsigned long lastStatusLogMs = 0;
+        const unsigned long now = millis();
+        if (now - lastStatusLogMs < 5000UL) {
+            return;
+        }
+        lastStatusLogMs = now;
+    }
+
+    Serial.print(F("[HTTP] "));
+    Serial.print(request->methodToString());
+    Serial.print(' ');
+    Serial.print(path);
+    if (request->client() != nullptr) {
+        Serial.print(F(" from "));
+        Serial.print(request->client()->remoteIP());
+    }
+    Serial.println();
+}
+
+void sendJson(AsyncWebServerRequest* request, int code, const char* json) {
+    request->send(code, "application/json", json);
+}
+
+void sendJsonError(AsyncWebServerRequest* request, int code, const char* error) {
+    char body[96];
+    snprintf(body, sizeof(body), "{\"error\":\"%s\"}", error);
+    sendJson(request, code, body);
+}
+
+bool rejectLocalApiInSetupMode(AsyncWebServerRequest* request) {
+    if (gWifi != nullptr && gWifi->isSoftAp()) {
+        sendJsonError(request, 403, "setup_mode");
+        return true;
+    }
+    return false;
+}
+
+bool requireUnlocked(AsyncWebServerRequest* request) {
+    if (gLocalOperate == nullptr || !gLocalOperate->authorizeRequest(request)) {
+        sendJsonError(request, 401, "unauthorized");
+        return false;
+    }
+    return true;
+}
+
+struct JsonPostContext {
+    const char* path;
+    void (*onComplete)(AsyncWebServerRequest* request, const char* body, size_t len);
+};
+
+void handleJsonPost(
+    AsyncWebServerRequest* request,
+    uint8_t* data,
+    size_t len,
+    size_t index,
+    size_t total,
+    JsonPostContext* ctx,
+    size_t maxBody) {
+    if (ctx == nullptr) {
+        return;
+    }
+
+    static String body;
+    if (maxBody == 0) {
+        maxBody = 512;
+    }
+    if (index == 0) {
+        body = "";
+        if (total > maxBody) {
+            sendJsonError(request, 413, "body_too_large");
+            return;
+        }
+    }
+
+    for (size_t i = 0; i < len; ++i) {
+        body += static_cast<char>(data[i]);
+    }
+
+    if (index + len < total) {
+        return;
+    }
+
+    ctx->onComplete(request, body.c_str(), body.length());
+}
+
+void handleLocalUnlockBody(AsyncWebServerRequest* request, const char* body, size_t len) {
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+
+    JsonDocument doc;
+    const DeserializationError err = deserializeJson(doc, body, len);
+    if (err) {
+        sendJsonError(request, 400, "invalid_json");
+        return;
+    }
+
+    const char* pin = doc["pin"] | "";
+    if (pin[0] == '\0') {
+        sendJsonError(request, 400, "pin_required");
+        return;
+    }
+
+    const char* newPin = doc["newPin"] | "";
+    if (newPin[0] != '\0' && strlen(newPin) > kLocalOperatePinMaxLen) {
+        sendJsonError(request, 400, "newPin_too_long");
+        return;
+    }
+
+    if (doc["actuatorKind"].is<const char*>()) {
+        NvsStore* nvs = nvsStoreInstance();
+        const char* kindJson = doc["actuatorKind"];
+        DeviceActuatorKind incoming = DeviceActuatorKind_Relay;
+        if (kindJson == nullptr || !actuatorKindFromJson(kindJson, &incoming)) {
+            sendJsonError(request, 400, "invalid_actuatorKind");
+            return;
+        }
+        if (nvs != nullptr && nvs->isOpen()) {
+            if (nvs->hasActuatorKindBound()) {
+                if (nvs->getActuatorKind() != incoming) {
+                    sendJsonError(request, 409, "actuatorKind_mismatch");
+                    return;
+                }
+            } else if (!nvs->setActuatorKind(incoming)) {
+                sendJsonError(request, 500, "nvs_failed");
+                return;
+            }
+        }
+    }
+
+    char token[kLocalOperateTokenHexLen + 1];
+    uint64_t expiresAtMs = 0;
+    if (!gLocalOperate->unlockWithPin(pin, newPin, token, sizeof(token), &expiresAtMs)) {
+        sendJsonError(request, 401, "invalid_pin");
+        return;
+    }
+
+    char response[160];
+    snprintf(
+        response,
+        sizeof(response),
+        "{\"token\":\"%s\",\"expiresAtMs\":%llu,\"unlocked\":true}",
+        token,
+        static_cast<unsigned long long>(expiresAtMs));
+    sendJson(request, 200, response);
+}
+
+void handleLocalUnlock(
+    AsyncWebServerRequest* request,
+    uint8_t* data,
+    size_t len,
+    size_t index,
+    size_t total) {
+    logLocalRequest(request, "/api/local/unlock");
+    static JsonPostContext ctx = {"/api/local/unlock", handleLocalUnlockBody};
+    handleJsonPost(request, data, len, index, total, &ctx, 512);
+}
+
+void handleLocalLock(AsyncWebServerRequest* request) {
+    logLocalRequest(request, "/api/local/lock");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+    gLocalOperate->lock();
+    sendJson(request, 200, "{\"locked\":true}");
+}
+
+void handleLocalArm(AsyncWebServerRequest* request) {
+    logLocalRequest(request, "/api/local/arm");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+    sendJsonError(request, 409, "press_device_button");
+}
+
+void handleLocalSceneBody(AsyncWebServerRequest* request, const char* body, size_t len) {
+    if (!requireUnlocked(request)) {
+        return;
+    }
+
+    JsonDocument doc;
+    if (deserializeJson(doc, body, len) || !doc["active"].is<bool>()) {
+        sendJsonError(request, 400, "active_required");
+        return;
+    }
+
+    const bool active = doc["active"].as<bool>();
+    if (!gLocalOperate->setSceneActive(active)) {
+        sendJsonError(request, 409, active ? "sub_not_ready" : "scene_off_failed");
+        return;
+    }
+
+    char response[96];
+    snprintf(
+        response,
+        sizeof(response),
+        "{\"sceneActive\":%s,\"armed\":%s}",
+        active ? "true" : "false",
+        active ? "true" : "false");
+    sendJson(request, 200, response);
+}
+
+void handleLocalScene(
+    AsyncWebServerRequest* request,
+    uint8_t* data,
+    size_t len,
+    size_t index,
+    size_t total) {
+    logLocalRequest(request, "/api/local/scene");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    static JsonPostContext ctx = {"/api/local/scene", handleLocalSceneBody};
+    handleJsonPost(request, data, len, index, total, &ctx, 128);
+}
+
+void handleLocalDisarm(AsyncWebServerRequest* request) {
+    logLocalRequest(request, "/api/local/disarm");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+    gLocalOperate->disarm();
+    sendJson(request, 200, "{\"sceneActive\":false,\"armed\":false}");
+}
+
+void handleLocalStatus(AsyncWebServerRequest* request) {
+    logLocalRequest(request, "/api/local/status");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    const bool unlocked = gLocalOperate != nullptr && gLocalOperate->isUnlocked();
+    const bool subReady = gLocalOperate != nullptr && gLocalOperate->isSubReady();
+    const bool sceneActive = gLocalOperate != nullptr && gLocalOperate->isSceneActive();
+    const bool armed = sceneActive;
+    const bool busy =
+        gCommandHandler != nullptr ? gCommandHandler->isMotionBusy()
+                                 : (gExecutionContext != nullptr && gExecutionContext->isActive());
+    const bool automaticActive =
+        gCommandHandler != nullptr ? gCommandHandler->isAutomaticProgramActive()
+                                   : (gExecutionContext != nullptr &&
+                                      gExecutionContext->isAutomaticSessionActive());
+    const bool wifiConnected = gWifi != nullptr && gWifi->isStaLinkReady();
+
+    NvsStore* nvsStatus = nvsStoreInstance();
+    const DeviceActuatorKind actuatorKind =
+        nvsStatus != nullptr ? nvsStatus->getActuatorKind() : DeviceActuatorKind_Relay;
+
+    char correlationId[64];
+    bool cmdComplete = false;
+    bool cmdSuccess = false;
+    char cmdMessage[96];
+    char resultJson[768];
+    localCommandStatusGet(
+        correlationId,
+        sizeof(correlationId),
+        &cmdComplete,
+        &cmdSuccess,
+        cmdMessage,
+        sizeof(cmdMessage),
+        resultJson,
+        sizeof(resultJson));
+
+    JsonDocument doc;
+    doc["unlocked"] = unlocked;
+    doc["subReady"] = subReady;
+    doc["sceneActive"] = sceneActive;
+    doc["armed"] = armed;
+    doc["busy"] = busy;
+    doc["automaticActive"] = automaticActive;
+    doc["actuatorKind"] = actuatorKindToJson(actuatorKind);
+    doc["wifiConnected"] = wifiConnected;
+    doc["expiresAtMs"] = unlocked ? gLocalOperate->sessionExpiresAtMs() : 0ULL;
+    doc["commandComplete"] = cmdComplete;
+    doc["commandSuccess"] = cmdSuccess;
+    if (correlationId[0] != '\0') {
+        doc["lastCorrelationId"] = correlationId;
+    }
+    if (cmdMessage[0] != '\0') {
+        doc["commandMessage"] = cmdMessage;
+    }
+    if (resultJson[0] != '\0') {
+        doc["resultJson"] = resultJson;
+    }
+
+    RgbStatusInputs rgbIn;
+    rgbIn.credentialResetFlash = false;
+    rgbIn.provisioningSoftAp = gWifi != nullptr && gWifi->isSoftAp();
+    rgbIn.wifiStaUp = wifiConnected;
+    rgbIn.subReady = subReady;
+    rgbIn.sessionActive = sceneActive;
+    rgbIn.operatorAuthOk = unlocked;
+    rgbIn.motionActive = busy || automaticActive;
+    doc["rgbState"] = rgbOperatorStateName(resolveRgbOperatorState(rgbIn));
+
+    const size_t n = serializeJson(doc, gHttpStatusJson, sizeof(gHttpStatusJson));
+    if (n == 0 || n >= sizeof(gHttpStatusJson)) {
+        sendJsonError(request, 500, "status_overflow");
+        return;
+    }
+    sendJson(request, 200, gHttpStatusJson);
+}
+
+void handleLocalCaps(AsyncWebServerRequest* request) {
+    logLocalRequest(request, "/api/local/caps");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    NvsStore* nvs = nvsStoreInstance();
+    const DeviceActuatorKind kind =
+        nvs != nullptr ? nvs->getActuatorKind() : DeviceActuatorKind_Relay;
+
+    char json[220];
+    if (kind == DeviceActuatorKind_HBridge) {
+        snprintf(
+            json,
+            sizeof(json),
+            "{\"actuatorKind\":\"hbridge\",\"minDutyPercent\":0,\"maxDutyPercent\":100}");
+    } else {
+        snprintf(
+            json,
+            sizeof(json),
+            "{\"actuatorKind\":\"relay\",\"maxStrokeMs\":%lu,\"maxBurstStrokes\":%d,"
+            "\"maxBurstDelayMs\":%lu}",
+            static_cast<unsigned long>(kMaxStrokeMs),
+            kMaxBurstStrokes,
+            static_cast<unsigned long>(kMaxBurstDelayMs));
+    }
+    sendJson(request, 200, json);
+}
+
+bool dispatchLocalCommand(
+    AsyncWebServerRequest* request,
+    const char* commandKey,
+    const char* payloadJson) {
+    if (gCommandHandler == nullptr || gIdentity == nullptr) {
+        sendJsonError(request, 503, "command_handler_unavailable");
+        return false;
+    }
+    if (commandKey == nullptr || commandKey[0] == '\0') {
+        sendJsonError(request, 400, "commandKey_required");
+        return false;
+    }
+
+    ExecuteCommandPayload payload{};
+    snprintf(payload.correlationId, sizeof(payload.correlationId), "local-%08lx", static_cast<unsigned long>(millis()));
+    strncpy(payload.commandKey, commandKey, sizeof(payload.commandKey) - 1);
+    strncpy(payload.deviceId, gIdentity->deviceId(), sizeof(payload.deviceId) - 1);
+    strncpy(payload.payloadJson, payloadJson != nullptr ? payloadJson : "{}", sizeof(payload.payloadJson) - 1);
+    payload.fromLocal = true;
+
+    localCommandStatusBegin(payload.correlationId);
+    gCommandHandler->enqueueExecuteCommand(payload);
+    // Run CommandHandler::poll() only from main loop — avoid stack overflow on async_tcp.
+
+    char response[128];
+    snprintf(
+        response,
+        sizeof(response),
+        "{\"accepted\":true,\"correlationId\":\"%s\"}",
+        payload.correlationId);
+    sendJson(request, 200, response);
+    return true;
+}
+
+void handleLocalCommandsBody(AsyncWebServerRequest* request, const char* body, size_t len) {
+    JsonDocument doc;
+    const DeserializationError err = deserializeJson(doc, body, len);
+    if (err) {
+        sendJsonError(request, 400, "invalid_json");
+        return;
+    }
+
+    const char* commandKey = doc["commandKey"] | "";
+    if (commandKey[0] == '\0') {
+        sendJsonError(request, 400, "commandKey_required");
+        return;
+    }
+
+    char payloadBuf[sizeof(ExecuteCommandPayload::payloadJson)];
+    payloadBuf[0] = '\0';
+
+    if (doc["payloadJson"].is<const char*>()) {
+        strncpy(payloadBuf, doc["payloadJson"].as<const char*>(), sizeof(payloadBuf) - 1);
+    } else if (doc["payloadJson"].is<JsonObject>() || doc["payloadJson"].is<JsonArray>()) {
+        serializeJson(doc["payloadJson"], payloadBuf, sizeof(payloadBuf));
+    } else {
+        strncpy(payloadBuf, "{}", sizeof(payloadBuf) - 1);
+    }
+
+    dispatchLocalCommand(request, commandKey, payloadBuf);
+}
+
+void handleLocalCommandsPost(
+    AsyncWebServerRequest* request,
+    uint8_t* data,
+    size_t len,
+    size_t index,
+    size_t total) {
+    logLocalRequest(request, "/api/local/commands");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (gLocalOperate == nullptr || !gLocalOperate->authorizeRequest(request)) {
+        sendJsonError(request, 401, "unauthorized");
+        return;
+    }
+    if (!gLocalOperate->isSceneActive()) {
+        sendJsonError(request, 403, "scene_inactive");
+        return;
+    }
+
+    static String body;
+    if (index == 0) {
+        body = "";
+        if (total > 2048) {
+            sendJsonError(request, 413, "body_too_large");
+            return;
+        }
+    }
+    for (size_t i = 0; i < len; ++i) {
+        body += static_cast<char>(data[i]);
+    }
+    if (index + len < total) {
+        return;
+    }
+
+    handleLocalCommandsBody(request, body.c_str(), body.length());
+}
+
+void handleLocalHistoryList(AsyncWebServerRequest* request) {
+    logLocalRequest(request, "/api/local/history");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+
+    if (!localHistoryWriteIndexJson(gHttpHistoryIndexJson, sizeof(gHttpHistoryIndexJson))) {
+        sendJsonError(request, 503, "history_unavailable");
+        return;
+    }
+    sendJson(request, 200, gHttpHistoryIndexJson);
+}
+
+void handleLocalHistoryDetail(AsyncWebServerRequest* request) {
+    logLocalRequest(request, "/api/local/history/detail");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+
+    String url = request->url();
+    String id;
+    if (request->hasParam("id")) {
+        id = request->getParam("id")->value();
+    } else if (url.startsWith("/api/local/history/")) {
+        id = url.substring(strlen("/api/local/history/"));
+    } else {
+        sendJsonError(request, 400, "id_required");
+        return;
+    }
+
+    if (!localHistoryReadEventById(id.c_str(), gHttpHistoryEventJson, sizeof(gHttpHistoryEventJson))) {
+        sendJsonError(request, 404, "not_found");
+        return;
+    }
+    sendJson(request, 200, gHttpHistoryEventJson);
+}
+
+void handleLocalHistoryDelete(AsyncWebServerRequest* request) {
+    logLocalRequest(request, "/api/local/history");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+    localHistoryClearAll();
+    sendJson(request, 200, "{\"cleared\":true}");
+}
+
+bool validateLocalOperateSettingsJson(
+    const char* body,
+    size_t len,
+    NvsStore* nvs,
+    char* errorOut,
+    size_t errorOutLen) {
+    if (errorOut != nullptr && errorOutLen > 0) {
+        errorOut[0] = '\0';
+    }
+    if (body == nullptr || len == 0 || len >= kMaxLocalOperateSettingsBytes) {
+        if (errorOut != nullptr && errorOutLen > 0) {
+            strncpy(errorOut, "invalid_settings", errorOutLen - 1);
+            errorOut[errorOutLen - 1] = '\0';
+        }
+        return false;
+    }
+
+    JsonDocument doc;
+    const DeserializationError err = deserializeJson(doc, body, len);
+    if (err || !doc.is<JsonObject>()) {
+        if (errorOut != nullptr && errorOutLen > 0) {
+            strncpy(errorOut, "invalid_json", errorOutLen - 1);
+            errorOut[errorOutLen - 1] = '\0';
+        }
+        return false;
+    }
+
+    const bool hasManual = doc["manual"].is<JsonObject>();
+    const bool hasAutomatic = doc["automatic"].is<JsonObject>();
+    const bool hasMotorManual = doc["motorManual"].is<JsonObject>();
+    const bool hasMotorAutomatic = doc["motorAutomatic"].is<JsonObject>();
+    const bool hasTab = doc["activeTab"].is<const char*>();
+    const bool hasAppOptions = doc["appOptions"].is<JsonObject>();
+    if (!hasManual && !hasAutomatic && !hasMotorManual && !hasMotorAutomatic && !hasTab &&
+        !hasAppOptions) {
+        if (errorOut != nullptr && errorOutLen > 0) {
+            strncpy(errorOut, "settings_empty", errorOutLen - 1);
+            errorOut[errorOutLen - 1] = '\0';
+        }
+        return false;
+    }
+
+    if (hasTab) {
+        const char* tab = doc["activeTab"];
+        if (tab == nullptr || strlen(tab) > 16) {
+            if (errorOut != nullptr && errorOutLen > 0) {
+                strncpy(errorOut, "invalid_activeTab", errorOutLen - 1);
+                errorOut[errorOutLen - 1] = '\0';
+            }
+            return false;
+        }
+    }
+
+    if (hasAppOptions) {
+        JsonObject ao = doc["appOptions"].as<JsonObject>();
+        for (JsonPair kv : ao) {
+            const char* key = kv.key().c_str();
+            if (strcmp(key, "motorSegmentTargetRampMode") == 0) {
+                if (!kv.value().is<const char*>()) {
+                    if (errorOut != nullptr && errorOutLen > 0) {
+                        strncpy(errorOut, "invalid_appOptions", errorOutLen - 1);
+                    }
+                    return false;
+                }
+                continue;
+            }
+            if (strcmp(key, "motorSegmentTargetRampMs") == 0) {
+                if (!kv.value().is<int>() && !kv.value().is<long>()) {
+                    if (errorOut != nullptr && errorOutLen > 0) {
+                        strncpy(errorOut, "invalid_appOptions", errorOutLen - 1);
+                    }
+                    return false;
+                }
+                continue;
+            }
+            if (errorOut != nullptr && errorOutLen > 0) {
+                strncpy(errorOut, "invalid_appOptions", errorOutLen - 1);
+            }
+            return false;
+        }
+    }
+
+    if (nvs != nullptr && nvs->isOpen()) {
+        const DeviceActuatorKind kind = nvs->getActuatorKind();
+        if (kind == DeviceActuatorKind_Relay && (hasMotorManual || hasMotorAutomatic || hasAppOptions)) {
+            if (errorOut != nullptr && errorOutLen > 0) {
+                strncpy(errorOut, "motor_settings_on_relay_profile", errorOutLen - 1);
+                errorOut[errorOutLen - 1] = '\0';
+            }
+            return false;
+        }
+        if (kind == DeviceActuatorKind_HBridge && (hasManual || hasAutomatic)) {
+            if (errorOut != nullptr && errorOutLen > 0) {
+                strncpy(errorOut, "relay_settings_on_motor_profile", errorOutLen - 1);
+                errorOut[errorOutLen - 1] = '\0';
+            }
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void handleLocalSettingsGet(AsyncWebServerRequest* request) {
+    logLocalRequest(request, "/api/local/settings");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+
+    NvsStore* nvs = nvsStoreInstance();
+    if (nvs == nullptr || !nvs->isOpen()) {
+        sendJsonError(request, 503, "nvs_unavailable");
+        return;
+    }
+
+    if (!nvs->getLocalOperateSettings(gHttpLocalSettingsJson, sizeof(gHttpLocalSettingsJson))) {
+        sendJson(request, 200, "{\"stored\":false}");
+        return;
+    }
+
+    sendJson(request, 200, gHttpLocalSettingsJson);
+}
+
+void handleLocalSettingsPutBody(AsyncWebServerRequest* request, const char* body, size_t len) {
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+
+    char settingsError[48];
+    NvsStore* nvsValidate = nvsStoreInstance();
+    if (!validateLocalOperateSettingsJson(body, len, nvsValidate, settingsError, sizeof(settingsError))) {
+        sendJsonError(
+            request,
+            400,
+            settingsError[0] != '\0' ? settingsError : "invalid_settings");
+        return;
+    }
+
+    NvsStore* nvs = nvsStoreInstance();
+    if (nvs == nullptr || !nvs->isOpen()) {
+        sendJsonError(request, 503, "nvs_unavailable");
+        return;
+    }
+
+    if (!nvs->setLocalOperateSettings(body)) {
+        sendJsonError(request, 500, "settings_save_failed");
+        return;
+    }
+
+    sendJson(request, 200, "{\"saved\":true}");
+}
+
+void handleLocalSettingsPut(
+    AsyncWebServerRequest* request,
+    uint8_t* data,
+    size_t len,
+    size_t index,
+    size_t total) {
+    static JsonPostContext ctx = {"/api/local/settings", handleLocalSettingsPutBody};
+    handleJsonPost(request, data, len, index, total, &ctx, kMaxLocalOperateSettingsBytes);
+}
+
+void scheduleLocalApiRestart(AsyncWebServerRequest* request) {
+    request->onDisconnect([]() {
+        Serial.println(F("[HTTP] actuator profile saved — rebooting"));
+        delay(100);
+        ESP.restart();
+    });
+}
+
+void handleLocalActuatorKindPutBody(AsyncWebServerRequest* request, const char* body, size_t len) {
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    if (!requireUnlocked(request)) {
+        return;
+    }
+    if (gLocalOperate != nullptr && gLocalOperate->isSceneActive()) {
+        gLocalOperate->disarm();
+    }
+
+    const bool busy =
+        gCommandHandler != nullptr ? gCommandHandler->isMotionBusy()
+                                   : (gExecutionContext != nullptr && gExecutionContext->isActive());
+    const bool automaticActive =
+        gCommandHandler != nullptr ? gCommandHandler->isAutomaticProgramActive()
+                                   : (gExecutionContext != nullptr &&
+                                      gExecutionContext->isAutomaticSessionActive());
+    if (busy || automaticActive) {
+        sendJsonError(request, 409, "motion_busy");
+        return;
+    }
+
+    JsonDocument doc;
+    if (deserializeJson(doc, body, len) || !doc["actuatorKind"].is<const char*>()) {
+        sendJsonError(request, 400, "actuatorKind_required");
+        return;
+    }
+
+    const char* kindJson = doc["actuatorKind"];
+    DeviceActuatorKind kind = DeviceActuatorKind_Relay;
+    if (!actuatorKindFromJson(kindJson, &kind)) {
+        sendJsonError(request, 400, "invalid_actuatorKind");
+        return;
+    }
+
+    NvsStore* nvs = nvsStoreInstance();
+    if (nvs == nullptr || !nvs->isOpen()) {
+        sendJsonError(request, 503, "nvs_unavailable");
+        return;
+    }
+
+    if (nvs->getActuatorKind() == kind) {
+        char response[96];
+        snprintf(
+            response,
+            sizeof(response),
+            "{\"saved\":true,\"reboot\":false,\"actuatorKind\":\"%s\"}",
+            actuatorKindToJson(kind));
+        sendJson(request, 200, response);
+        return;
+    }
+
+    if (!nvs->setActuatorKind(kind)) {
+        sendJsonError(request, 500, "nvs_failed");
+        return;
+    }
+
+    Serial.print(F("[HTTP] actuatorKind="));
+    Serial.println(actuatorKindToJson(kind));
+
+    char response[96];
+    snprintf(
+        response,
+        sizeof(response),
+        "{\"saved\":true,\"reboot\":true,\"actuatorKind\":\"%s\"}",
+        actuatorKindToJson(kind));
+    scheduleLocalApiRestart(request);
+    sendJson(request, 200, response);
+}
+
+void handleLocalActuatorKindPut(
+    AsyncWebServerRequest* request,
+    uint8_t* data,
+    size_t len,
+    size_t index,
+    size_t total) {
+    logLocalRequest(request, "/api/local/actuator-kind");
+    static JsonPostContext ctx = {"/api/local/actuator-kind", handleLocalActuatorKindPutBody};
+    handleJsonPost(request, data, len, index, total, &ctx, 128);
+}
+
+} // namespace
+
+void registerLocalApiRoutes(AsyncWebServer& server, LocalOperate* localOperate) {
+    gLocalOperate = localOperate;
+
+    server.on(
+        "/api/local/unlock",
+        HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handleLocalUnlock(request, data, len, index, total);
+        });
+
+    server.on("/api/local/lock", HTTP_POST, [](AsyncWebServerRequest* request) { handleLocalLock(request); });
+    server.on("/api/local/arm", HTTP_POST, [](AsyncWebServerRequest* request) { handleLocalArm(request); });
+    server.on("/api/local/disarm", HTTP_POST, [](AsyncWebServerRequest* request) { handleLocalDisarm(request); });
+    server.on(
+        "/api/local/scene",
+        HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handleLocalScene(request, data, len, index, total);
+        });
+    server.on("/api/local/status", HTTP_GET, [](AsyncWebServerRequest* request) { handleLocalStatus(request); });
+    server.on("/api/local/caps", HTTP_GET, [](AsyncWebServerRequest* request) { handleLocalCaps(request); });
+    server.on("/api/local/history", HTTP_GET, [](AsyncWebServerRequest* request) {
+        if (request->hasParam("id")) {
+            handleLocalHistoryDetail(request);
+            return;
+        }
+        handleLocalHistoryList(request);
+    });
+    server.on("/api/local/history", HTTP_DELETE, [](AsyncWebServerRequest* request) { handleLocalHistoryDelete(request); });
+    server.on(
+        "/api/local/commands",
+        HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handleLocalCommandsPost(request, data, len, index, total);
+        });
+    server.on("/api/local/settings", HTTP_GET, [](AsyncWebServerRequest* request) { handleLocalSettingsGet(request); });
+    server.on(
+        "/api/local/settings",
+        HTTP_PUT,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handleLocalSettingsPut(request, data, len, index, total);
+        });
+    server.on(
+        "/api/local/actuator-kind",
+        HTTP_PUT,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handleLocalActuatorKindPut(request, data, len, index, total);
+        });
+}
+
+void localApiSetExecutionContext(ExecutionContext* ctx) {
+    gExecutionContext = ctx;
+}
+
+void localApiSetWifiManager(WifiManager* wifi) {
+    gWifi = wifi;
+}
+
+void localApiSetCommandHandler(CommandHandler* handler, DeviceIdentity* identity) {
+    gCommandHandler = handler;
+    gIdentity = identity;
+}

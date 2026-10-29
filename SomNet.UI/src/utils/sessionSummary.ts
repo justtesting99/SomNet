@@ -166,6 +166,8 @@ function formatAutomaticEndReason(endReason?: string, interrupted?: boolean): st
 
 export interface AutomaticSessionSummaryInput {
   automaticMode?: string;
+  actuatorKind?: string;
+  segmentsCompleted?: number;
   strokesCompleted?: number;
   burstsOn?: boolean;
   mainStrokesCompleted?: number;
@@ -188,12 +190,15 @@ export function buildAutomaticSessionSummary(
   const modeLabel = formatAutomaticModeLabel(deviceResult.automaticMode);
   const mainStrokes =
     deviceResult.mainStrokesCompleted ?? deviceResult.strokesCompleted;
+  const segments = deviceResult.segmentsCompleted;
   const durationLabel = formatAutomaticDuration(deviceResult.durationMs);
   const endLabel = formatAutomaticEndReason(deviceResult.endReason, deviceResult.interrupted);
 
   const detailParts: string[] = [];
 
-  if (mainStrokes !== undefined && mainStrokes >= 0) {
+  if (segments !== undefined && segments >= 0) {
+    detailParts.push(`${segments} motor segment${segments === 1 ? '' : 's'}`);
+  } else if (mainStrokes !== undefined && mainStrokes >= 0) {
     detailParts.push(`${mainStrokes} main stroke${mainStrokes === 1 ? '' : 's'}`);
   }
 

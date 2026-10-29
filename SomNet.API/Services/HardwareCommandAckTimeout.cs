@@ -5,6 +5,7 @@ namespace SomNet.API.Services;
 internal static class HardwareCommandAckTimeout
 {
     private static readonly TimeSpan StrokeAbortTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan MotorImmediateTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan AutomaticStartTimeout = TimeSpan.FromSeconds(5);
     // Immediate ack when stop/update is accepted; stop summary arrives via hub (P10-D3).
     private static readonly TimeSpan AutomaticStopTimeout = TimeSpan.FromSeconds(5);
@@ -34,7 +35,41 @@ internal static class HardwareCommandAckTimeout
             return AutomaticUpdateTimeout;
         }
 
+        if (string.Equals(commandKey, "motor-stop", StringComparison.OrdinalIgnoreCase))
+        {
+            return MotorImmediateTimeout;
+        }
+
+        if (string.Equals(commandKey, "motor-run", StringComparison.OrdinalIgnoreCase))
+        {
+            return ResolveMotorRun(payloadJson);
+        }
+
         return StrokeAbortTimeout;
+    }
+
+    private static TimeSpan ResolveMotorRun(string payloadJson)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
+            var root = document.RootElement;
+
+            if (!root.TryGetProperty("durationMs", out var durationElement) ||
+                durationElement.ValueKind != JsonValueKind.Number ||
+                !durationElement.TryGetInt64(out var durationMs) ||
+                durationMs < 1)
+            {
+                return MotorImmediateTimeout;
+            }
+
+            var timeout = TimeSpan.FromMilliseconds(durationMs) + BurstMargin;
+            return timeout > BurstMaxTimeout ? BurstMaxTimeout : timeout;
+        }
+        catch (JsonException)
+        {
+            return MotorImmediateTimeout;
+        }
     }
 
     private static TimeSpan ResolveBurst(string payloadJson)

@@ -48,20 +48,77 @@ function normalizeMinMax(
   return { min: normalizedMin, max: normalizedMax };
 }
 
+type BurstPowerFields = Pick<
+  AutomaticControlState,
+  'burstStyle' | 'burstStrokePowerMin' | 'burstStrokePowerMax'
+>;
+
+/** When min is unused (fixed power), show Max in the disabled Min field. */
+export function burstStrokePowerMinForDisplay(state: BurstPowerFields): number {
+  if (getBurstFieldRules(state.burstStyle).disableBurstStrokePowerMin) {
+    return state.burstStrokePowerMax;
+  }
+  return state.burstStrokePowerMin;
+}
+
+export function burstStrokePowerNeedsMinSync(state: BurstPowerFields): boolean {
+  const rules = getBurstFieldRules(state.burstStyle);
+  return rules.disableBurstStrokePowerMin && state.burstStrokePowerMin !== state.burstStrokePowerMax;
+}
+
+type BurstDelayFields = Pick<AutomaticControlState, 'burstStyle' | 'burstDelayMin' | 'burstDelayMax'>;
+
+export function burstDelayMinForDisplay(state: BurstDelayFields): number {
+  if (getBurstFieldRules(state.burstStyle).disableBurstDelayMin) {
+    return state.burstDelayMax;
+  }
+  return state.burstDelayMin;
+}
+
+export function burstDelayNeedsMinSync(state: BurstDelayFields): boolean {
+  const rules = getBurstFieldRules(state.burstStyle);
+  return rules.disableBurstDelayMin && state.burstDelayMin !== state.burstDelayMax;
+}
+
 /** Clamp burst ranges to API/device caps; ensure min ≤ max (Part 2 / P10-D9). */
 export function normalizeAutomaticBurstFields(
   state: AutomaticControlState,
 ): AutomaticControlState {
-  let burstStrokePowerMin = clampInt(state.burstStrokePowerMin, MIN_BURST_STROKE_POWER, 100);
-  let burstStrokePowerMax = clampInt(state.burstStrokePowerMax, 0, 100);
-  if (burstStrokePowerMin > burstStrokePowerMax) {
-    burstStrokePowerMax = burstStrokePowerMin;
+  const burstRules = getBurstFieldRules(state.burstStyle);
+
+  let burstStrokePowerMin: number;
+  let burstStrokePowerMax: number;
+
+  if (burstRules.disableBurstStrokePowerMin) {
+    burstStrokePowerMax = clampInt(state.burstStrokePowerMax, 0, 100);
+    // Device uses max only — do not let a stale min block lowering max (fixed / random-delay styles).
+    burstStrokePowerMin = burstStrokePowerMax;
+  } else {
+    const power = normalizeMinMax(
+      state.burstStrokePowerMin,
+      state.burstStrokePowerMax,
+      MIN_BURST_STROKE_POWER,
+      100,
+    );
+    burstStrokePowerMin = power.min;
+    burstStrokePowerMax = power.max;
   }
 
-  let burstDelayMin = clampInt(state.burstDelayMin, MIN_BURST_DELAY_SEC, MAX_BURST_DELAY_SEC);
-  let burstDelayMax = clampInt(state.burstDelayMax, 0, MAX_BURST_DELAY_SEC);
-  if (burstDelayMin > burstDelayMax) {
-    burstDelayMax = burstDelayMin;
+  let burstDelayMin: number;
+  let burstDelayMax: number;
+
+  if (burstRules.disableBurstDelayMin) {
+    burstDelayMax = clampInt(state.burstDelayMax, 0, MAX_BURST_DELAY_SEC);
+    burstDelayMin = burstDelayMax;
+  } else {
+    const delay = normalizeMinMax(
+      state.burstDelayMin,
+      state.burstDelayMax,
+      MIN_BURST_DELAY_SEC,
+      MAX_BURST_DELAY_SEC,
+    );
+    burstDelayMin = delay.min;
+    burstDelayMax = delay.max;
   }
 
   const strokes = normalizeMinMax(

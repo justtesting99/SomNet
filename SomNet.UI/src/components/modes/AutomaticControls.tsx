@@ -6,12 +6,15 @@ import {
   type AutomaticRunMode,
   type EndSessionMode,
 } from '@/types/modes';
-import { useLiveSession } from '@/context/SessionProvider';
 import { useOptions } from '@/context/OptionsProvider';
+import { useAuth } from '@/context/AuthProvider';
+import { useControlPanelSettings } from '@/hooks/useControlPanelSettings';
+import { useOperationSession } from '@/hooks/useOperationSession';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useOperationDeviceId } from '@/context/DeviceOperationScope';
+import { useDeviceSceneSessionActive } from '@/hooks/useDeviceSceneSessionActive';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
-import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
 import { Panel } from '@/components/ui/Panel';
 import { CommandButton } from '@/components/ui/CommandButton';
 import { StrokePowerSlider } from '@/components/modes/StrokePowerSlider';
@@ -33,6 +36,10 @@ import {
   MAX_BURST_STROKES,
   MIN_BURST_DELAY_SEC,
   MIN_BURST_STROKE_POWER,
+  burstStrokePowerMinForDisplay,
+  burstStrokePowerNeedsMinSync,
+  burstDelayMinForDisplay,
+  burstDelayNeedsMinSync,
 } from '@/utils/burstFieldRules';
 import {
   clampMaximumStrokeMs,
@@ -43,11 +50,26 @@ import { useHardwareCommand } from '@/context/HardwareCommandProvider';
 import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCommand';
 import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
 import { buildAutomaticStartPayload } from '@/utils/automaticStartPayload';
+import {
+  BURST_PLACEMENT_OPTIONS,
+  burstMainTiming,
+  burstPercentFieldLabel,
+  burstPlacementSchedule,
+  resolveBurstPlacement,
+} from '@/utils/burstPlacement';
+import {
+  burstPreviewLikelyMatchesMainPower,
+  describeRelayBurstScheduleHint,
+} from '@/utils/relayBurstPlan';
+import { relayAutomaticGraphSettingsFingerprint } from '@/utils/relayAutomaticGraphFingerprint';
+import { beginRelayAutomaticGraphRecording } from '@/utils/relayAutomaticSegmentStore';
+import { pushDeviceSceneSessionIfWanted } from '@/utils/pushDeviceSceneSessionIfWanted';
 import { parseAutomaticResultJson } from '@/utils/automaticResultJson';
 import { waitForAutomaticHubFinalize, computeAutomaticStopGraceMs } from '@/utils/automaticSessionFinalize';
 import { isDeviceAutomaticIdleMessage } from '@/utils/automaticSessionReconcile';
 import { writeAutomaticDeviceRunningHint } from '@/utils/automaticDeviceRunningHint';
 import { ApiError } from '@/api/client';
+import { isHardwareCommandReady } from '@/utils/commandReadiness';
 
 const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
   { value: 'minutes', label: 'Minutes' },
@@ -58,21 +80,32 @@ const END_SESSION_OPTIONS: { value: EndSessionMode; label: string }[] = [
 export function AutomaticControls() {
   const {
     settings,
-    options,
     updateAutomatic,
     setAutomaticRunningLocal,
     isLoading,
     settingsLoaded,
     strokeLimits,
-  } = useOptions();
+  } = useControlPanelSettings();
+  const { options } = useOptions();
+  const { user } = useAuth();
+  const domTarget = user?.displayName ?? user?.username ?? '';
   const state = settings.automatic;
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { selectedSub } = useSubTarget();
+  const commandDeviceId = useOperationDeviceId();
+  const sceneSessionActive = useDeviceSceneSessionActive(commandDeviceId);
   const { expandOnAction } = useVideoDisplay();
-  const { endAutomaticSession, activeSession, markAutomaticDeviceStarted } = useLiveSession();
+  const {
+    endAutomaticSession,
+    activeSession,
+    markAutomaticDeviceStarted,
+    ensureAutomaticSessionForDeviceStart,
+  } = useOperationSession();
   const { isCommandPending } = useHardwareCommand();
-  const { status: systemStatus } = useSystemStatus();
-  const { sessionInProgress } = useSessionAccessory();
+  const { getDeviceStatus } = useSystemStatus();
+  const systemStatus = getDeviceStatus(commandDeviceId);
+  const accessoryError = '';
+  const sceneSessionError = '';
   const [commandError, setCommandError] = useState('');
   const [cooperativeStopInProgress, setCooperativeStopInProgress] = useState(false);
   const runningRef = useRef(state.running);
@@ -97,24 +130,50 @@ export function AutomaticControls() {
 
   const automaticSessionActive = activeSession?.mode === 'automatic';
   /** Device session running — not merely a server row (e.g. video preview creates session only). */
-  const sessionRunning = state.running;
+  const sessionRunning = settingsLoaded && state.running;
   const allowLiveOverrides = options.allowAutomaticModeOverrides;
   const liveOverridesActive = sessionRunning && allowLiveOverrides;
   const configLocked = sessionRunning && !allowLiveOverrides;
   /** Master gate for burst sub-controls — Bursts On must be checked (Phase 10). */
   const burstSettingsDisabled = configLocked || !state.burstsOn;
+  const burstPlacement = resolveBurstPlacement(state);
+  const burstScheduleHint = describeRelayBurstScheduleHint(state);
+  const burstPowerMatchesMain = burstPreviewLikelyMatchesMainPower(state);
+  const burstChanceMode = burstPlacementSchedule(burstPlacement) === 'chanceAfterMainStroke';
+  const burstInsteadOfMain = burstMainTiming(burstPlacement) === 'insteadOf';
   const delayStartLocked = sessionRunning;
-  const hardwareReady = systemStatus.isReady && sessionInProgress;
+  const hardwareReady = isHardwareCommandReady(systemStatus) && sceneSessionActive;
   const lastPushedUpdateRef = useRef<string | null>(null);
   const updateDebounceRef = useRef<number | null>(null);
-  const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart);
-  const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop);
-  const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
-  const hardwareDisabledReason = !sessionInProgress
-    ? 'Turn Session in Progress on before Start.'
+  const startPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStart, commandDeviceId);
+  const stopPending = isCommandPending(HARDWARE_COMMAND_KEYS.automaticStop, commandDeviceId);
+  const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort, commandDeviceId);
+  const canAbort =
+    sessionRunning || automaticSessionActive || startPending || cooperativeStopInProgress;
+  const hardwareDisabledReason = !sceneSessionActive
+    ? 'Turn Scene session on before Start (history / video).'
     : hardwareReady
       ? undefined
       : systemStatus.detail || systemStatus.summary;
+
+  useEffect(() => {
+    if (!settingsLoaded) {
+      return;
+    }
+    if (!burstStrokePowerNeedsMinSync(state) && !burstDelayNeedsMinSync(state)) {
+      return;
+    }
+    updateAutomatic(state);
+  }, [
+    settingsLoaded,
+    state.burstStyle,
+    state.burstStrokePowerMin,
+    state.burstStrokePowerMax,
+    state.burstDelayMin,
+    state.burstDelayMax,
+    updateAutomatic,
+    state,
+  ]);
 
   useEffect(() => {
     if (!automaticSessionActive && !state.running) {
@@ -164,6 +223,7 @@ export function AutomaticControls() {
         try {
           await sendHardwareCommand(
             selectedSub,
+            commandDeviceId,
             HARDWARE_COMMAND_KEYS.automaticUpdate,
             payload,
           );
@@ -180,20 +240,28 @@ export function AutomaticControls() {
         window.clearTimeout(updateDebounceRef.current);
       }
     };
-  }, [isLoading, settingsLoaded, liveOverridesActive, selectedSub, state]);
+  }, [commandDeviceId, isLoading, settingsLoaded, liveOverridesActive, selectedSub, state]);
 
   useEffect(() => {
-    if (isLoading || !settingsLoaded || automaticSessionActive || startPending) {
+    if (isLoading || !settingsLoaded || startPending) {
       return;
     }
 
-    if (state.running) {
-      setAutomaticRunningLocal(false);
+    if (!state.running) {
+      return;
     }
+
+    if (automaticSessionActive) {
+      return;
+    }
+
+    setAutomaticRunningLocal(false);
   }, [
+    activeSession?.deviceId,
+    automaticSessionActive,
+    commandDeviceId,
     isLoading,
     settingsLoaded,
-    automaticSessionActive,
     startPending,
     state.running,
     setAutomaticRunningLocal,
@@ -268,20 +336,31 @@ export function AutomaticControls() {
 
   async function handleStart() {
     setCommandError('');
-    expandOnAction();
+    expandOnAction(commandDeviceId);
+    beginRelayAutomaticGraphRecording(
+      commandDeviceId,
+      relayAutomaticGraphSettingsFingerprint(state),
+    );
 
     const payloadJson = buildAutomaticStartPayload(state);
 
     try {
+      await pushDeviceSceneSessionIfWanted(domTarget, selectedSub, commandDeviceId);
       await sendHardwareCommand(
         selectedSub,
+        commandDeviceId,
         HARDWARE_COMMAND_KEYS.automaticStart,
         payloadJson,
       );
+      await ensureAutomaticSessionForDeviceStart();
       markAutomaticDeviceStarted();
       const sessionId = activeSessionRef.current?.id;
       if (sessionId) {
-        writeAutomaticDeviceRunningHint({ sessionId, subTarget: selectedSub });
+        writeAutomaticDeviceRunningHint({
+          sessionId,
+          subTarget: selectedSub,
+          deviceId: commandDeviceId,
+        });
       }
       lastPushedUpdateRef.current = payloadJson;
       update('running', true);
@@ -297,6 +376,7 @@ export function AutomaticControls() {
     try {
       const response = await sendHardwareCommandRaw(
         selectedSub,
+        commandDeviceId,
         HARDWARE_COMMAND_KEYS.automaticStop,
         '{}',
       );
@@ -357,7 +437,7 @@ export function AutomaticControls() {
     const wasRunning = automaticSessionActive || state.running;
 
     try {
-      const response = await sendHardwareCommandRaw(selectedSub, 'abort', '{}');
+      const response = await sendHardwareCommandRaw(selectedSub, commandDeviceId, 'abort', '{}');
 
       if (!response.delivered) {
         setCommandError(response.message ?? 'Abort could not be delivered.');
@@ -602,6 +682,16 @@ export function AutomaticControls() {
               automatic program. Burst stroke power 0–100 is relative to main Power Settings
               min/max.
             </p>
+            {burstScheduleHint ? (
+              <p className="text-xs leading-relaxed text-slate-600">{burstScheduleHint}</p>
+            ) : null}
+            {burstPowerMatchesMain ? (
+              <p className="text-xs leading-relaxed text-amber-600/90">
+                Burst stroke power max is near 100 on the relative scale, so clusters may sound
+                like main strokes — lower max (e.g. 30–50) for lighter bursts. Each cluster is
+                still several rapid strokes with short gaps.
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-4">
               <Checkbox
                 label="Bursts On"
@@ -610,7 +700,7 @@ export function AutomaticControls() {
                 onChange={(event) => update('burstsOn', event.target.checked)}
               />
               <NumberField
-                label="Percent (0 to 100)"
+                label={burstPercentFieldLabel(burstPlacement)}
                 inline
                 value={state.burstPercent}
                 min={0}
@@ -619,6 +709,32 @@ export function AutomaticControls() {
                 onChange={(event) => update('burstPercent', Number(event.target.value))}
               />
             </div>
+
+            <SelectField
+              label="Burst placement"
+              value={state.burstPlacement}
+              disabled={burstSettingsDisabled}
+              options={BURST_PLACEMENT_OPTIONS}
+              onChange={(event) =>
+                update(
+                  'burstPlacement',
+                  event.target.value as AutomaticControlState['burstPlacement'],
+                )
+              }
+            />
+
+            {burstInsteadOfMain && state.burstsOn ? (
+              <p className="text-xs leading-relaxed text-slate-500">
+                Instead-of-main: the burst cluster replaces that scheduled main stroke (helps air
+                tools return before the next pulse).
+              </p>
+            ) : null}
+
+            {burstChanceMode && state.burstsOn ? (
+              <p className="text-xs leading-relaxed text-amber-600/90">
+                Burst count varies each session. Use a lower percent if clusters feel too frequent.
+              </p>
+            ) : null}
 
             <SelectField
               label="Burst Style"
@@ -632,16 +748,21 @@ export function AutomaticControls() {
 
             <MinMaxRow
               label="Burst Stroke Power in Percent (0 to 100)"
-              min={state.burstStrokePowerMin}
+              min={burstStrokePowerMinForDisplay(state)}
               max={state.burstStrokePowerMax}
               minLimit={0}
               minValueMin={MIN_BURST_STROKE_POWER}
+              maxValueMin={
+                burstFieldRules.disableBurstStrokePowerMin
+                  ? 0
+                  : state.burstStrokePowerMin
+              }
               maxLimit={100}
               disabled={burstSettingsDisabled}
               minDisabled={burstFieldRules.disableBurstStrokePowerMin}
               hint={
                 burstFieldRules.disableBurstStrokePowerMin
-                  ? 'Min not used — device uses maximum power.'
+                  ? 'Min mirrors Max for this style — only Max is sent to the device.'
                   : undefined
               }
               onMinChange={(value) => update('burstStrokePowerMin', value)}
@@ -650,7 +771,7 @@ export function AutomaticControls() {
 
             <MinMaxRow
               label="Delay Between Burst Strokes in Seconds"
-              min={state.burstDelayMin}
+              min={burstDelayMinForDisplay(state)}
               max={state.burstDelayMax}
               minLimit={0}
               minValueMin={MIN_BURST_DELAY_SEC}
@@ -659,7 +780,7 @@ export function AutomaticControls() {
               minDisabled={burstFieldRules.disableBurstDelayMin}
               hint={
                 burstFieldRules.disableBurstDelayMin
-                  ? 'Min not used — device uses maximum delay.'
+                  ? 'Min mirrors Max for this style — only Max is sent to the device.'
                   : undefined
               }
               onMinChange={(value) => update('burstDelayMin', value)}
@@ -680,7 +801,12 @@ export function AutomaticControls() {
         </Panel>
 
         <Panel title="Controls">
-          <div className="flex h-full flex-col justify-center gap-3">
+          <div className="flex flex-col gap-3">
+            {accessoryError || sceneSessionError ? (
+              <p className="text-sm text-red-400" role="alert">
+                {accessoryError || sceneSessionError}
+              </p>
+            ) : null}
             {!hardwareReady && !commandError && !startPending && !stopPending && !abortPending ? (
               <p className="text-sm text-amber-400/90" role="status">
                 {hardwareDisabledReason}
@@ -732,20 +858,22 @@ export function AutomaticControls() {
             >
               Stop
             </CommandButton>
-            {sessionRunning ? (
-              <CommandButton
-                commandKey={HARDWARE_COMMAND_KEYS.manualAbort}
-                size="lg"
-                fullWidth
-                variant="secondary"
-                disabled={!hardwareReady || startPending || abortPending}
-                title={hardwareDisabledReason}
-                onCommand={handleAbort}
-                className="py-4 text-base"
-              >
-                Abort
-              </CommandButton>
-            ) : null}
+            <CommandButton
+              commandKey={HARDWARE_COMMAND_KEYS.manualAbort}
+              size="lg"
+              fullWidth
+              variant="secondary"
+              disabled={!hardwareReady || startPending || abortPending || !canAbort}
+              title={
+                canAbort
+                  ? hardwareDisabledReason
+                  : 'Available while a session is starting or running.'
+              }
+              onCommand={handleAbort}
+              className="py-4 text-base"
+            >
+              Abort
+            </CommandButton>
           </div>
         </Panel>
       </div>

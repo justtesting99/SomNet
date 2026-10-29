@@ -115,19 +115,23 @@ After an authenticated Dom calls `POST /api/devices/pair`, the server pushes:
       "domTarget": "demo",
       "subTarget": "Slv66",
       "accessToken": "<device-jwt>",
-      "expiresAt": "2027-09-05T02:38:57.6124499+00:00"
+      "expiresAt": "2027-09-05T02:38:57.6124499+00:00",
+      "actuatorKind": "relay"
     }
   ]
 }
 ```
+
+Motor module example: `"actuatorKind": "hbridge"`.
 
 Plus **`0x1E`**.
 
 Field names match `PairDeviceMessageDto` (camelCase). Firmware must:
 
 1. Verify `deviceId` matches local identity.
-2. Persist `accessToken` and `expiresAt` to NVS.
-3. Disconnect and reconnect in **paired** mode (§5).
+2. **`actuatorKind`** (`relay` \| `hbridge`): if NVS has no bound kind, write it; if bound, **reject** pairing on mismatch (see [31 — Motor actuator design](../../Documents/31-Motor-Actuator-Device-Design.md) §6.2).
+3. Persist `accessToken` and `expiresAt` to NVS.
+4. Disconnect and reconnect in **paired** mode (§5).
 
 ### 4.3 Pair REST API (operator — not on ESP32)
 
@@ -138,8 +142,10 @@ POST /api/devices/pair?subTarget=Slv66
 Authorization: Bearer {operator-jwt}
 Content-Type: application/json
 
-{ "deviceId": "esp32-A4C1389F2B01" }
+{ "deviceId": "esp32-A4C1389F2B01", "actuatorKind": "relay" }
 ```
+
+`actuatorKind` is optional on the REST body for older clients (defaults to `relay`).
 
 Example response (tokens redacted in docs):
 
@@ -236,8 +242,8 @@ Plus **`0x1E`**.
 
 1. `deviceId` matches local device.
 2. `accessToken` matches NVS-stored token (string compare).
-3. `commandKey` is supported (`stroke`, `burst`, `abort`, `automatic-start`, `automatic-stop`).
-4. Parse `payloadJson` — see §6.3–§6.5.
+3. `commandKey` is supported for the NVS-bound **`actuatorKind`** (relay: `stroke`, `burst`, …; motor: `motor-run`, `motor-stop`, …). Cross-kind commands are rejected.
+4. Parse `payloadJson` — see §6.3–§6.5 (relay) and §6.9 (motor).
 
 ### 6.3 stroke payload (initial scope)
 
@@ -272,6 +278,127 @@ Plus **`0x1E`**.
 | `powerPercent` | int | Recommended | 0–100 |
 
 Device runs the full sequence locally; one completing ack with `resultJson` when done or aborted.
+
+### 6.9 Motor manual commands (`actuatorKind: hbridge`)
+
+**commandKey** `motor-run` — start or update PWM while armed:
+
+```json
+{ "dutyPercent": 45 }
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `dutyPercent` | int | **Yes** | 0–100; PWM on primary H-bridge path (see `boardDefs.h`) |
+
+**commandKey** `motor-stop` — cooperative stop (payload `{}` or omitted). PWM off, enables inactive (MA-D15).
+
+**Caps** (`GET /api/local/caps` when motor-bound):
+
+```json
+{ "actuatorKind": "hbridge", "minDutyPercent": 0, "maxDutyPercent": 100 }
+```
+
+Relay caps keep `actuatorKind: relay` with stroke limits.
+
+**Motor `automatic-start` / `automatic-update`:**
+
+Same JSON shape for **`automatic-start`** and **`automatic-update`** while a motor automatic session is active (update queues replan after the current ramp).
+
+```json
+{
+  "actuatorKind": "hbridge",
+  "automaticMode": "randomSpeedAndTiming",
+  "minimumDutyPercent": 20,
+  "maximumDutyPercent": 80,
+  "minimumSpeedPercent": 10,
+  "maximumSpeedPercent": 90,
+  "segmentMinSeconds": 5,
+  "segmentMaxSeconds": 20,
+  "delayBeforeStartSeconds": 0,
+  "rampMs": 500,
+  "endSessionMode": "minutes",
+  "endSessionValue": 30
+}
+```
+
+| Field | Notes |
+|-------|--------|
+| `automaticMode` | **`periodic`**, **`randomSpeed`**, **`randomSpeedAndTiming`**, **`powerWave`**, **`buildUp`**. Aliases accepted on device: `randomPowerOnly` → `randomSpeed`, `randomPowerAndTiming` → `randomSpeedAndTiming`. |
+| `minimumDutyPercent` / `maximumDutyPercent` | PWM duty ceiling for the H-bridge path (0–100). |
+| `minimumSpeedPercent` / `maximumSpeedPercent` | Program speed envelope (0–100); ramps target speed, mapped to duty in firmware. |
+| `segmentMinSeconds` / `segmentMaxSeconds` | Seconds until next segment target (mode-specific use — see [31 §13](../../Documents/31-Motor-Actuator-Device-Design.md)). |
+| `rampMs` | Linear ramp duration between segment speed targets (MA-D14). |
+
+`endSessionMode`: **`minutes`** or **`noAutoEnd`** only (no stroke/count end modes — MA-D20).
+
+**Motor segment telemetry (unsolicited hub ack):** While a motor automatic session runs, firmware may emit **`AckCommand`** with `correlationId` **`motor-automatic-segment`** (Shared: `HardwareCommandKeys.MotorAutomaticSegmentCorrelationId`). Payload excerpt:
+
+```json
+{
+  "commandKey": "motor-automatic-segment",
+  "actuatorKind": "hbridge",
+  "segmentIndex": 3,
+  "fromSpeedPercent": 40,
+  "toSpeedPercent": 72,
+  "durationMs": 500,
+  "programElapsedMs": 18500
+}
+```
+
+SomNet.API forwards to operators as `CommandAcknowledged`; SomNet.UI builds the live motor pattern graph from these events.
+
+### 6.11 Local LAN API (`POST /api/local/commands`) — M2-P0
+
+When firmware is built with **`SOMNET_LOCAL_API=1`** (`env:dev` default) or **`env:somesp`**, the device exposes HTTP on STA:
+
+| Step | Endpoint | Notes |
+|------|----------|--------|
+| Unlock | `POST /api/local/unlock` | PIN → Bearer token (RAM); optional **`actuatorKind`** on first bind |
+| Arm | `POST /api/local/arm` | GPIO accessory enable (SE-D5) |
+| Command | `POST /api/local/commands` | Same **`commandKey`** + **`payloadJson`** as hub **`ExecuteCommand`** (§6.2–§6.9) |
+| Poll | `GET /api/local/status` | `busy`, `automaticActive`, `resultJson`, **`actuatorKind`** |
+| Settings | `GET/PUT /api/local/settings` | Relay **`manual`/`automatic`** or motor **`motorManual`/`motorAutomatic`/`appOptions`** |
+| Caps | `GET /api/local/caps` | Relay stroke limits or motor duty bounds |
+
+**Parity rule:** The **`payloadJson`** string for `stroke`, `burst`, relay/motor **`automatic-start`**, **`automatic-update`**, **`motor-run`**, etc. is **identical** to what SomNet.API sends on the hub path — only transport and auth differ (Bearer + arm vs SignalR + device JWT). See [SOMESP-STANDALONE.md](./SOMESP-STANDALONE.md) **M2-E runbook** for curl recipes.
+
+**Exceptions (intentional):** No Dom/Sub routing on device; no live segment graph on `/operate`; history on **`env:somesp`** LittleFS only.
+
+**Relay segment telemetry (unsolicited hub ack):** While a **relay** automatic session runs, firmware may emit **`AckCommand`** with `correlationId` **`relay-automatic-segment`** (Shared: `HardwareCommandKeys.RelayAutomaticSegmentCorrelationId`). Each event is one **stroke** (relay on at `powerPercent` for `durationMs`) or **gap** (off for `durationMs`):
+
+```json
+{
+  "commandKey": "relay-automatic-segment",
+  "actuatorKind": "relay",
+  "segmentIndex": 4,
+  "phase": "stroke",
+  "powerPercent": 65,
+  "durationMs": 120,
+  "programElapsedMs": 8200
+}
+```
+
+`phase`: **`stroke`** or **`gap`**. SomNet.UI plots **commanded power %** over time (step waveform, not motor ramps).
+
+**Motor session complete `resultJson` (excerpt):**
+
+```json
+{
+  "commandKey": "automatic-stop",
+  "actuatorKind": "hbridge",
+  "automaticMode": "periodic",
+  "dutyPercent": 80,
+  "segmentsCompleted": 12,
+  "durationMs": 125000,
+  "endSessionMode": 1,
+  "endSessionValue": 30,
+  "interrupted": false,
+  "endReason": "manualStop"
+}
+```
+
+See [31 — Motor actuator design](../../Documents/31-Motor-Actuator-Device-Design.md).
 
 ### 6.5 automatic-start payload (Phase 9 Part 2)
 
@@ -574,6 +701,7 @@ If ack arrives within the per-command timeout:
 
 | Date | Change |
 |------|--------|
+| 2026-10-28 | **§6.11** — Local LAN API (`/api/local/*`) parity with hub ExecuteCommand (**M2-P0**) |
 | 2026-09-05 | Phase 0 capture complete; `sub_target` JWT claim documented |
 | 2026-09-07 | P10-D3 — immediate `automatic-stop` accept; hub summary on cooperative stop; Abort during stop-wait |
 | 2026-09-07 | Phase 9 Part 2 — `automatic-start`/`automatic-stop` payload + stop `resultJson`; burst payload; per-command ack timeouts |

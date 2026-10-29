@@ -7,7 +7,18 @@ $login = Invoke-RestMethod -Uri "$base/api/auth/login" -Method POST -ContentType
 $token = $login.token.accessToken
 $headers = @{ Authorization = "Bearer $token" }
 
-$get1 = Invoke-RestMethod -Uri "$base/api/settings?subTarget=Slv66" -Headers $headers
+$deviceId = $env:SOMNET_DEVICE_ID
+if (-not $deviceId) {
+  $regs = Invoke-RestMethod -Uri "$base/api/devices/registrations?subTarget=Slv66" -Headers $headers
+  if (-not $regs -or $regs.Count -lt 1) {
+    Write-Error 'No paired device on Slv66; set SOMNET_DEVICE_ID or pair hardware first.'
+  }
+  $deviceId = $regs[0].deviceId
+}
+Write-Host "deviceId=$deviceId"
+
+$qs = "subTarget=Slv66&deviceId=$([uri]::EscapeDataString($deviceId))"
+$get1 = Invoke-RestMethod -Uri "$base/api/settings?$qs" -Headers $headers
 Write-Host "GET before: automaticMode=$($get1.automatic.automaticMode)"
 
 $automatic = [ordered]@{
@@ -39,10 +50,10 @@ $payload = @{
   automatic = $automatic
 } | ConvertTo-Json -Depth 12
 
-$put = Invoke-RestMethod -Uri "$base/api/settings?subTarget=Slv66" -Method PUT -Headers $headers -ContentType 'application/json' -Body $payload
+$put = Invoke-RestMethod -Uri "$base/api/settings?$qs" -Method PUT -Headers $headers -ContentType 'application/json' -Body $payload
 Write-Host "PUT response: automaticMode=$($put.automatic.automaticMode) minimumPower=$($put.automatic.minimumPower) endSessionValue=$($put.automatic.endSessionValue)"
 
-$get2 = Invoke-RestMethod -Uri "$base/api/settings?subTarget=Slv66" -Headers $headers
+$get2 = Invoke-RestMethod -Uri "$base/api/settings?$qs" -Headers $headers
 Write-Host "GET after: automaticMode=$($get2.automatic.automaticMode) minimumPower=$($get2.automatic.minimumPower) endSessionValue=$($get2.automatic.endSessionValue)"
 
 $ok = ($get2.automatic.automaticMode -eq 'powerWave') -and ($get2.automatic.minimumPower -eq 15) -and ($get2.automatic.endSessionValue -eq 42)
@@ -65,5 +76,5 @@ $restorePayload = @{
   manual = $get1.manual
   automatic = $automatic
 } | ConvertTo-Json -Depth 12
-Invoke-RestMethod -Uri "$base/api/settings?subTarget=Slv66" -Method PUT -Headers $headers -ContentType 'application/json' -Body $restorePayload | Out-Null
+Invoke-RestMethod -Uri "$base/api/settings?$qs" -Method PUT -Headers $headers -ContentType 'application/json' -Body $restorePayload | Out-Null
 Write-Host "Restored automaticMode=$($get1.automatic.automaticMode)"

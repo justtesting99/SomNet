@@ -27,7 +27,9 @@ public class SessionsController : ControllerBase
     }
 
     [HttpGet("active")]
-    public ActionResult<SessionHistoryEntryDto> GetActive([FromQuery] string subTarget)
+    public ActionResult<SessionHistoryEntryDto> GetActive(
+        [FromQuery] string subTarget,
+        [FromQuery] string? deviceId = null)
     {
         var domTarget = GetDomTarget();
 
@@ -43,7 +45,7 @@ public class SessionsController : ControllerBase
 
         try
         {
-            var session = _dataStore.GetActiveSession(domTarget, subTarget);
+            var session = _dataStore.GetActiveSession(domTarget, subTarget, deviceId);
             return session is null ? NotFound() : Ok(session);
         }
         catch (ArgumentException ex)

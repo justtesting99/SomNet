@@ -53,7 +53,7 @@ export async function waitForAutomaticHubFinalize(
 }
 
 export async function applyAutomaticDeviceComplete(
-  automatic: AutomaticControlState,
+  _automatic: AutomaticControlState,
   parsed: AutomaticResultJson,
   clearAutomaticRunning: () => void,
   endAutomaticSession: (
@@ -61,8 +61,9 @@ export async function applyAutomaticDeviceComplete(
     deviceResult?: AutomaticResultJson | null,
   ) => Promise<void>,
   sessionActive = false,
+  deviceSessionRunning = false,
 ): Promise<void> {
-  if (!automatic.running && !sessionActive) {
+  if (!deviceSessionRunning && !sessionActive) {
     return;
   }
 

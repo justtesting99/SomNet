@@ -15,6 +15,8 @@ public sealed class SessionHistoryEntryDto
 
     public required string SubTarget { get; init; }
 
+    public string? DeviceId { get; init; }
+
     public OperationMode Mode { get; init; }
 
     public required string Summary { get; init; }

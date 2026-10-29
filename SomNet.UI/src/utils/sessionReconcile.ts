@@ -16,6 +16,7 @@ import type { OperationMode } from '@/types/modes';
 export interface ReconcileActiveSessionOptions {
   mode: OperationMode;
   selectedSub: SubTargetName;
+  deviceId?: string;
   automaticSettings: AutomaticControlState;
   rehydrateSession: (entry: SessionHistoryEntry) => void;
   setAutomaticRunningLocal: (running: boolean) => void;
@@ -27,7 +28,11 @@ export interface ReconcileActiveSessionOptions {
 export async function reconcileActiveSessionForMode(
   options: ReconcileActiveSessionOptions,
 ): Promise<void> {
-  const entry = await fetchActiveSession(options.selectedSub);
+  if (!options.deviceId) {
+    return;
+  }
+
+  const entry = await fetchActiveSession(options.selectedSub, options.deviceId);
   if (!entry) {
     return;
   }
@@ -45,9 +50,10 @@ export async function reconcileActiveSessionForMode(
     return;
   }
 
-  if (options.probeDevice !== false) {
+  if (options.probeDevice !== false && options.deviceId) {
     const deviceActive = await probeDeviceAutomaticSessionActive(
       options.selectedSub,
+      options.deviceId,
       options.automaticSettings,
     );
 
@@ -61,7 +67,7 @@ export async function reconcileActiveSessionForMode(
 
   if (
     !options.automaticSettings.running &&
-    shouldRestoreAutomaticDeviceRunning(entry.id, options.selectedSub)
+    shouldRestoreAutomaticDeviceRunning(entry.id, options.selectedSub, options.deviceId)
   ) {
     options.setAutomaticRunningLocal(true);
   }

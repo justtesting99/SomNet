@@ -2,15 +2,26 @@ import type { VideoExpandMode } from '@/types/videoDisplay';
 
 export type MobileVideoExpandDefault = Exclude<VideoExpandMode, 'none'>;
 
+/** Dashboard live feeds visibility (front / rear / both / none). */
+export type LiveVideoFeeds = VideoExpandMode;
+
 export type ActionSnapshotFeeds = 'both' | 'rear';
 
 export type VideoFeedBandwidth = 'high' | 'medium' | 'low';
+
+/** How motor automatic reaches each new segment target (Options → General). */
+export type MotorSegmentTargetRampMode = 'segmentDuration' | 'instant' | 'fixedMs';
 
 export interface AppOptions {
   enableSoundAlerts: boolean;
   confirmBeforeCommands: boolean;
   allowAutomaticModeOverrides: boolean;
+  motorSegmentTargetRampMode: MotorSegmentTargetRampMode;
+  /** Used when motorSegmentTargetRampMode is fixedMs (ms). */
+  motorSegmentTargetRampMs: number;
   autoExpandVideoOnMobile: boolean;
+  /** Which live feeds appear on the dashboard (none hides the video column). */
+  liveVideoFeeds: LiveVideoFeeds;
   mobileVideoExpandDefault: MobileVideoExpandDefault;
   showSessionTimestamps: boolean;
   /** When true, show session id under the header Session in Progress control (debugging). */
@@ -22,6 +33,16 @@ export interface AppOptions {
   actionSnapshotFeeds: ActionSnapshotFeeds;
   videoFeedBandwidth: VideoFeedBandwidth;
 }
+
+export const LIVE_VIDEO_FEEDS_OPTIONS: {
+  value: LiveVideoFeeds;
+  label: string;
+}[] = [
+  { value: 'none', label: 'None (hide all live feeds)' },
+  { value: 'both', label: 'Both (front + rear)' },
+  { value: 'monitor1', label: 'Front only' },
+  { value: 'monitor2', label: 'Rear only' },
+];
 
 export const MOBILE_VIDEO_EXPAND_OPTIONS: {
   value: MobileVideoExpandDefault;
@@ -40,6 +61,24 @@ export const ACTION_SNAPSHOT_FEED_OPTIONS: {
   { value: 'rear', label: 'Rear only' },
 ];
 
+export const MOTOR_SEGMENT_TARGET_RAMP_MODE_OPTIONS: {
+  value: MotorSegmentTargetRampMode;
+  label: string;
+}[] = [
+  {
+    value: 'segmentDuration',
+    label: 'Ramp over full segment interval (default)',
+  },
+  {
+    value: 'instant',
+    label: 'Instant step to each target speed',
+  },
+  {
+    value: 'fixedMs',
+    label: 'Quick ramp, then hold (fixed ms)',
+  },
+];
+
 export { VIDEO_FEED_BANDWIDTH_OPTIONS } from '@/utils/videoFeedBandwidth';
 
 export const DEFAULT_NOTIFICATIONS_APP_OPTIONS: Pick<
@@ -54,7 +93,10 @@ export const DEFAULT_GENERAL_APP_OPTIONS: Pick<
   AppOptions,
   | 'confirmBeforeCommands'
   | 'allowAutomaticModeOverrides'
+  | 'motorSegmentTargetRampMode'
+  | 'motorSegmentTargetRampMs'
   | 'autoExpandVideoOnMobile'
+  | 'liveVideoFeeds'
   | 'mobileVideoExpandDefault'
   | 'reconnectIntervalSeconds'
   | 'videoFeedTimeoutSeconds'
@@ -65,7 +107,10 @@ export const DEFAULT_GENERAL_APP_OPTIONS: Pick<
 > = {
   confirmBeforeCommands: false,
   allowAutomaticModeOverrides: false,
+  motorSegmentTargetRampMode: 'segmentDuration',
+  motorSegmentTargetRampMs: 200,
   autoExpandVideoOnMobile: true,
+  liveVideoFeeds: 'both',
   mobileVideoExpandDefault: 'both',
   reconnectIntervalSeconds: 10,
   videoFeedTimeoutSeconds: 30,

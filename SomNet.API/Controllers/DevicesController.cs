@@ -29,8 +29,8 @@ public class DevicesController : ControllerBase
         _videoActionSnapshotTrigger = videoActionSnapshotTrigger;
     }
 
-    [HttpGet("status")]
-    public async Task<ActionResult<DeviceStatusResponseDto>> GetStatus(
+    [HttpGet("registrations")]
+    public async Task<ActionResult<IReadOnlyList<DeviceRegistrationDto>>> ListRegistrations(
         [FromQuery] string subTarget,
         CancellationToken cancellationToken)
     {
@@ -45,7 +45,32 @@ public class DevicesController : ControllerBase
             return BadRequest("subTarget is required.");
         }
 
-        return Ok(await _deviceTokenService.GetStatusAsync(domTarget, subTarget, cancellationToken));
+        return Ok(await _deviceTokenService.ListRegistrationsAsync(domTarget, subTarget, cancellationToken));
+    }
+
+    [HttpGet("status")]
+    public async Task<ActionResult<DeviceStatusResponseDto>> GetStatus(
+        [FromQuery] string subTarget,
+        [FromQuery] string deviceId,
+        CancellationToken cancellationToken)
+    {
+        var domTarget = GetDomTarget();
+        if (domTarget is null)
+        {
+            return Unauthorized();
+        }
+
+        if (string.IsNullOrWhiteSpace(subTarget))
+        {
+            return BadRequest("subTarget is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            return BadRequest("deviceId is required.");
+        }
+
+        return Ok(await _deviceTokenService.GetStatusAsync(domTarget, subTarget, deviceId, cancellationToken));
     }
 
     [HttpGet("unpaired")]
@@ -82,9 +107,14 @@ public class DevicesController : ControllerBase
                 domTarget,
                 subTarget,
                 request.DeviceId,
+                request.ActuatorKind,
                 cancellationToken));
         }
         catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (InvalidOperationException ex)
         {
             return BadRequest(ex.Message);
         }
@@ -93,6 +123,7 @@ public class DevicesController : ControllerBase
     [HttpDelete("pair")]
     public async Task<IActionResult> RevokePairing(
         [FromQuery] string subTarget,
+        [FromQuery] string deviceId,
         CancellationToken cancellationToken)
     {
         var domTarget = GetDomTarget();
@@ -106,7 +137,12 @@ public class DevicesController : ControllerBase
             return BadRequest("subTarget is required.");
         }
 
-        await _deviceTokenService.RevokeAsync(domTarget, subTarget, cancellationToken);
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            return BadRequest("deviceId is required.");
+        }
+
+        await _deviceTokenService.RevokeAsync(domTarget, subTarget, deviceId, cancellationToken);
         return NoContent();
     }
 
@@ -131,6 +167,11 @@ public class DevicesController : ControllerBase
             return BadRequest("subTarget is required.");
         }
 
+        if (string.IsNullOrWhiteSpace(request.DeviceId))
+        {
+            return BadRequest("deviceId is required.");
+        }
+
         if (string.IsNullOrWhiteSpace(request.CommandKey))
         {
             return BadRequest("commandKey is required.");
@@ -139,6 +180,7 @@ public class DevicesController : ControllerBase
         var response = await _commandDispatcher.SendCommandAsync(
             domTarget,
             request.SubTarget,
+            request.DeviceId,
             request.CommandKey,
             request.PayloadJson,
             cancellationToken);

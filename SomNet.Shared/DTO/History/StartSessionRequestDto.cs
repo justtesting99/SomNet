@@ -6,5 +6,7 @@ public sealed class StartSessionRequestDto
 {
     public required string SubTarget { get; init; }
 
+    public required string DeviceId { get; init; }
+
     public OperationMode Mode { get; init; }
 }

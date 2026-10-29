@@ -5,6 +5,9 @@ export interface AutomaticResultJson {
   strokeMs?: number;
   gapSec?: number;
   strokesCompleted?: number;
+  segmentsCompleted?: number;
+  actuatorKind?: string;
+  dutyPercent?: number;
   burstsOn?: boolean;
   mainStrokesCompleted?: number;
   burstEventsCompleted?: number;

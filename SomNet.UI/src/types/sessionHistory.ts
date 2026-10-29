@@ -6,6 +6,7 @@ export interface SessionHistoryEntry {
   lastActivityAt?: string;
   domTarget: string;
   subTarget: SubTargetName;
+  deviceId?: string | null;
   mode: 'manual' | 'automatic';
   summary: string;
 }

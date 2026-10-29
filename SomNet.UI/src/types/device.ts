@@ -1,12 +1,26 @@
+export type ActuatorKind = 'relay' | 'hbridge';
+
+export interface DeviceRegistration {
+  deviceId: string;
+  domTarget: string;
+  subTarget: string;
+  isConnected: boolean;
+  pairedAt: string;
+  lastConnectedAt?: string | null;
+  tokenExpiresAt: string;
+  actuatorKind: ActuatorKind;
+}
+
 export interface DeviceStatusResponse {
   domTarget: string;
   subTarget: string;
+  deviceId: string;
   isPaired: boolean;
   isConnected: boolean;
-  deviceId?: string | null;
   pairedAt?: string | null;
   lastConnectedAt?: string | null;
   tokenExpiresAt?: string | null;
+  actuatorKind?: ActuatorKind | null;
 }
 
 export interface PairDeviceResponse {

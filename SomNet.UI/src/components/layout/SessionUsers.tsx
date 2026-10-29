@@ -1,14 +1,15 @@
 import { CONTROLLER_ROLE, SUB_ROLE } from '@/config/sessionUsers';
 import { useDomSessions } from '@/context/DomSessionsProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 
 interface SessionUsersProps {
   controllerName: string;
-  modeLabel?: string;
 }
 
-export function SessionUsers({ controllerName, modeLabel }: SessionUsersProps) {
+export function SessionUsers({ controllerName }: SessionUsersProps) {
   const { selectedSub, openDialog: openSubDialog } = useSubTarget();
+  const { registrations, selectedDeviceId, setSelectedDeviceId } = useSubDevice();
   const { openDialog: openDomSessions } = useDomSessions();
 
   return (
@@ -44,12 +45,25 @@ export function SessionUsers({ controllerName, modeLabel }: SessionUsersProps) {
             {selectedSub}
           </span>
         </button>
-        {modeLabel ? (
+        {registrations.length > 1 ? (
           <>
-            <span className="hidden text-slate-600 md:inline" aria-hidden="true">
+            <span className="hidden text-slate-600 sm:inline" aria-hidden="true">
               |
             </span>
-            <p className="text-slate-500">{modeLabel}</p>
+            <label className="inline-flex items-center gap-1 text-sm text-slate-300">
+              <span className="font-medium text-slate-400">Focus:</span>
+              <select
+                className="rounded-md border border-slate-700 bg-slate-950 px-2 py-0.5 text-sm text-white"
+                value={selectedDeviceId ?? ''}
+                onChange={(event) => setSelectedDeviceId(event.target.value || null)}
+              >
+                {registrations.map((registration) => (
+                  <option key={registration.deviceId} value={registration.deviceId}>
+                    {registration.deviceId} ({registration.actuatorKind})
+                  </option>
+                ))}
+              </select>
+            </label>
           </>
         ) : null}
       </div>

@@ -30,6 +30,7 @@ For **full sites**, **Pi + ESP32** is the **ideal** path (tier 1 or 2). For **si
 | Cloud session history (reference) | [07 — Session & History](./07-Session-And-History.md) |
 | P16 cloud gating (contrast) | [25 — Session accessory](./25-Session-Accessory-In-Progress-Checklist.md) |
 | Flash partitions (Mode A) | [SomNet.Device/docs/PARTITIONS.md](../SomNet.Device/docs/PARTITIONS.md) |
+| **SomEsp trial implementation** | [27 — SomEsp standalone device plan](./27-SomEsp-Standalone-Device-Plan.md) |
 
 ---
 
@@ -757,3 +758,4 @@ Reuse **S12 relay jitter** from [Phase 12](./09-ESP32-Phase-12-Network-Hardening
 | 2026-09-24 | Renamed doc title to **Site operating profiles**; tier summary validated with stakeholders |
 | 2026-09-30 | **Mode A prominent** — standalone single-user (browser on phone/tablet/PC); Pi+ESP32 remains ideal for full site; §0.5 personas; priority + LO-D13/D14 |
 | 2026-09-30 | **§0.7** — product family UI goal; duplication/drift cost of embedded `/operate` vs single `SomNet.UI` on Pi/cloud; LO-D15 |
+| 2026-10-05 | Link **[27 — SomEsp standalone plan](./27-SomEsp-Standalone-Device-Plan.md)** — fork trial, device-only, unconnected |

@@ -11,6 +11,7 @@ import {
 import { fetchPairingSettings, fetchStrokeLimits, savePairingSettings } from '@/api/settings';
 import { useAuth } from '@/context/AuthProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 import { DEFAULT_STROKE_MS_LIMITS } from '@/config/strokeLimits';
 import type { AppOptions } from '@/types/options';
 import type { AutomaticControlState, ManualControlState } from '@/types/modes';
@@ -18,8 +19,31 @@ import { DEFAULT_PAIRING_SETTINGS, type PairingSettings } from '@/types/pairingS
 import type { StrokeMsLimits } from '@/utils/strokeMsLimits';
 import { normalizeStrokeMsPair } from '@/utils/strokeMsLimits';
 import { normalizeAutomaticControlState } from '@/utils/automaticFieldRules';
+import { normalizeMotorAutomaticControlState } from '@/utils/motorAutomaticFieldRules';
+import { motorAutomaticGraphSettingsFingerprint } from '@/utils/motorAutomaticGraphFingerprint';
+import { relayAutomaticGraphSettingsFingerprint } from '@/utils/relayAutomaticGraphFingerprint';
+import { clearMotorAutomaticGraphRecording } from '@/utils/motorAutomaticSegmentStore';
+import { clearRelayAutomaticGraphRecording } from '@/utils/relayAutomaticSegmentStore';
+import { dispatchDeviceAutomaticRunningSync } from '@/utils/deviceAutomaticRunningSync';
+import type { MotorAutomaticControlState, MotorManualControlState } from '@/types/motorModes';
+import { normalizeMotorManualControlState } from '@/utils/motorManualFieldRules';
 import { clearAutomaticDeviceRunningHint } from '@/utils/automaticDeviceRunningHint';
-import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
+import {
+  clearMotorPatternRunAnchor,
+  writeMotorPatternRunAnchor,
+} from '@/utils/motorPatternRunAnchor';
+import {
+  readDeviceAutomaticRunningLocal,
+  writeDeviceAutomaticRunningLocal,
+} from '@/utils/deviceAutomaticRunningLocal';
+import { cacheDeviceSettings, readCachedDeviceSettings } from '@/utils/deviceSettingsCache';
+import {
+  automaticRunningKindForActuator,
+  getTabId,
+  postTabSync,
+  shouldBroadcastLocalChange,
+  type AutomaticRunningKind,
+} from '@/utils/tabSync';
 
 interface OptionsContextValue {
   settings: PairingSettings;
@@ -31,8 +55,17 @@ interface OptionsContextValue {
   setOptions: (options: AppOptions) => Promise<void>;
   updateManual: (manual: ManualControlState) => void;
   updateAutomatic: (automatic: AutomaticControlState) => void;
+  updateMotorAutomatic: (motorAutomatic: MotorAutomaticControlState) => void;
+  updateMotorManual: (motorManual: MotorManualControlState) => void;
   /** Set running flag locally without persisting (session rehydration). */
   setAutomaticRunningLocal: (running: boolean) => void;
+  setMotorAutomaticRunningLocal: (running: boolean) => void;
+  /** Update running for any device (hub / cross-device); syncs UI only when selected. */
+  setDeviceAutomaticRunning: (
+    deviceId: string,
+    kind: AutomaticRunningKind,
+    running: boolean,
+  ) => void;
   isDialogOpen: boolean;
   openDialog: () => void;
   closeDialog: () => void;
@@ -45,6 +78,15 @@ const SAVE_DEBOUNCE_MS = 400;
 export function OptionsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { selectedSub } = useSubTarget();
+  const {
+    selectedDeviceId,
+    selectedActuatorKind,
+    registrations,
+    isLoading: devicesLoading,
+  } = useSubDevice();
+  const selectedSubRef = useRef(selectedSub);
+  selectedSubRef.current = selectedSub;
+  const persistDeviceIdRef = useRef<string | null>(null);
   const domTarget = user?.displayName ?? user?.username ?? '';
   const [settings, setSettings] = useState<PairingSettings>(DEFAULT_PAIRING_SETTINGS);
   const [strokeLimits, setStrokeLimits] = useState<StrokeMsLimits>(DEFAULT_STROKE_MS_LIMITS);
@@ -59,17 +101,41 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
   settingsRef.current = settings;
 
+  const actuatorKindForDevice = useCallback(
+    (deviceId: string): AutomaticRunningKind => {
+      const registration = registrations.find((row) => row.deviceId === deviceId);
+      return automaticRunningKindForActuator(registration?.actuatorKind ?? null);
+    },
+    [registrations],
+  );
+
+  const rememberRunningForDevice = useCallback(
+    (deviceId: string | null) => {
+      if (!deviceId) {
+        return;
+      }
+
+      const kind = actuatorKindForDevice(deviceId);
+      const running =
+        kind === 'motor'
+          ? settingsRef.current.motorAutomatic.running
+          : settingsRef.current.automatic.running;
+      writeDeviceAutomaticRunningLocal(selectedSubRef.current, deviceId, kind, running);
+    },
+    [actuatorKindForDevice],
+  );
+
   useEffect(() => {
     settingsLoadedRef.current = settingsLoaded;
   }, [settingsLoaded]);
 
   const persistSettings = useCallback(
-    async (nextSettings: PairingSettings, generation: number) => {
+    async (deviceId: string, nextSettings: PairingSettings, generation: number) => {
       if (!domTarget) {
         return nextSettings;
       }
 
-      const savedSettings = await savePairingSettings(selectedSub, nextSettings);
+      const savedSettings = await savePairingSettings(selectedSub, deviceId, nextSettings);
       if (generation !== persistGenerationRef.current) {
         return savedSettings;
       }
@@ -77,6 +143,31 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       return savedSettings;
     },
     [domTarget, selectedSub],
+  );
+
+  const flushPendingSaveForDevice = useCallback(
+    (deviceId: string | null) => {
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+
+      if (
+        !deviceId ||
+        !domTarget ||
+        !settingsLoadedRef.current ||
+        !userEditedRef.current
+      ) {
+        return;
+      }
+
+      const generation = persistGenerationRef.current;
+      const snapshot = settingsRef.current;
+      void persistSettings(deviceId, snapshot, generation).catch(() => {
+        // Keep local state; the next change or dialog save can retry.
+      });
+    },
+    [domTarget, persistSettings],
   );
 
   const queuePersist = useCallback(
@@ -91,9 +182,14 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
 
       const generation = persistGenerationRef.current;
 
+      const deviceId = persistDeviceIdRef.current;
+      if (!deviceId) {
+        return;
+      }
+
       saveTimerRef.current = window.setTimeout(() => {
         saveTimerRef.current = null;
-        void persistSettings(nextSettings, generation).catch(() => {
+        void persistSettings(deviceId, nextSettings, generation).catch(() => {
           // Keep local state; the next change or dialog save can retry.
         });
       }, SAVE_DEBOUNCE_MS);
@@ -102,29 +198,72 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    return () => {
+      flushPendingSaveForDevice(persistDeviceIdRef.current);
+    };
+  }, [flushPendingSaveForDevice]);
+
+  useEffect(() => {
     if (!domTarget) {
       persistGenerationRef.current += 1;
       userEditedRef.current = false;
+      persistDeviceIdRef.current = null;
       setSettings(DEFAULT_PAIRING_SETTINGS);
       setSettingsLoaded(false);
       setIsLoading(false);
       return;
     }
 
-    let cancelled = false;
+    if (devicesLoading) {
+      return;
+    }
 
+    if (!selectedDeviceId) {
+      persistGenerationRef.current += 1;
+      userEditedRef.current = false;
+      persistDeviceIdRef.current = null;
+      setSettingsLoaded(false);
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const deviceIdForLoad = selectedDeviceId;
+    const previousDeviceId = persistDeviceIdRef.current;
+
+    if (previousDeviceId && previousDeviceId !== deviceIdForLoad) {
+      rememberRunningForDevice(previousDeviceId);
+      cacheDeviceSettings(selectedSub, previousDeviceId, settingsRef.current);
+    }
+
+    flushPendingSaveForDevice(previousDeviceId);
     persistGenerationRef.current += 1;
     userEditedRef.current = false;
+    persistDeviceIdRef.current = deviceIdForLoad;
 
     if (saveTimerRef.current !== null) {
       window.clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
 
-    setIsLoading(true);
-    setSettingsLoaded(false);
+    const cachedSettings = readCachedDeviceSettings(selectedSub, deviceIdForLoad);
+    if (cachedSettings) {
+      setSettings(cachedSettings);
+      setSettingsLoaded(true);
+    } else {
+      setSettingsLoaded(false);
+    }
 
-    Promise.all([fetchPairingSettings(selectedSub), fetchStrokeLimits()])
+    setIsLoading(true);
+
+    const kindForLoad = actuatorKindForDevice(deviceIdForLoad);
+    const restoredRunning = readDeviceAutomaticRunningLocal(
+      selectedSub,
+      deviceIdForLoad,
+      kindForLoad,
+    );
+
+    Promise.all([fetchPairingSettings(selectedSub, deviceIdForLoad), fetchStrokeLimits()])
       .then(([loadedSettings, loadedStrokeLimits]) => {
         if (!cancelled) {
           setStrokeLimits(loadedStrokeLimits);
@@ -147,7 +286,15 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
             automatic: normalizeAutomaticControlState({
               ...loadedSettings.automatic,
               ...automaticStroke,
+              running: kindForLoad === 'relay' ? restoredRunning : false,
             }),
+            motorAutomatic: normalizeMotorAutomaticControlState({
+              ...loadedSettings.motorAutomatic,
+              running: kindForLoad === 'motor' ? restoredRunning : false,
+            }),
+            motorManual: normalizeMotorManualControlState(
+              loadedSettings.motorManual ?? DEFAULT_PAIRING_SETTINGS.motorManual,
+            ),
           });
           setSettingsLoaded(true);
         }
@@ -167,7 +314,15 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [domTarget, selectedSub]);
+  }, [
+    actuatorKindForDevice,
+    domTarget,
+    rememberRunningForDevice,
+    selectedSub,
+    selectedDeviceId,
+    devicesLoading,
+    flushPendingSaveForDevice,
+  ]);
 
   useEffect(
     () => () => {
@@ -177,18 +332,6 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
-
-  useEffect(() => {
-    if (!shouldBroadcastLocalChange()) {
-      return;
-    }
-
-    postTabSync({
-      type: 'running',
-      tabId: getTabId(),
-      running: settings.automatic.running,
-    });
-  }, [settings.automatic.running]);
 
   const applySettings = useCallback(
     (nextSettings: PairingSettings, persistImmediately = false, skipPersist = false) => {
@@ -204,8 +347,13 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
           saveTimerRef.current = null;
         }
 
+        const deviceId = persistDeviceIdRef.current;
+        if (!deviceId) {
+          return;
+        }
+
         const generation = persistGenerationRef.current;
-        void persistSettings(nextSettings, generation).then((savedSettings) => {
+        void persistSettings(deviceId, nextSettings, generation).then((savedSettings) => {
           if (generation === persistGenerationRef.current) {
             setSettings(savedSettings);
           }
@@ -252,26 +400,94 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
   const updateAutomatic = useCallback(
     (automatic: AutomaticControlState) => {
       userEditedRef.current = true;
+      const deviceId = persistDeviceIdRef.current;
+      const current = settingsRef.current;
       const normalizedStroke = normalizeStrokeMsPair(
         automatic.minimumStrokeMs,
         automatic.maximumStrokeMs,
         strokeLimits,
       );
+      const nextAutomatic = normalizeAutomaticControlState({
+        ...automatic,
+        ...normalizedStroke,
+      });
+      const prevFp = relayAutomaticGraphSettingsFingerprint(current.automatic);
+      const nextFp = relayAutomaticGraphSettingsFingerprint(nextAutomatic);
+      if (deviceId && prevFp !== nextFp) {
+        clearRelayAutomaticGraphRecording(deviceId);
+      }
       applySettings({
-        ...settingsRef.current,
-        automatic: normalizeAutomaticControlState({
-          ...automatic,
-          ...normalizedStroke,
-        }),
+        ...current,
+        automatic: nextAutomatic,
       });
     },
     [applySettings, strokeLimits],
   );
 
-  const setAutomaticRunningLocal = useCallback(
-    (running: boolean) => {
+  const setDeviceAutomaticRunning = useCallback(
+    (deviceId: string, kind: AutomaticRunningKind, running: boolean) => {
+      if (!deviceId) {
+        return;
+      }
+
       if (!running) {
-        clearAutomaticDeviceRunningHint();
+        clearAutomaticDeviceRunningHint(selectedSubRef.current, deviceId);
+      }
+
+      if (kind === 'motor' || kind === 'relay') {
+        if (running) {
+          writeMotorPatternRunAnchor(selectedSubRef.current, deviceId);
+        } else {
+          clearMotorPatternRunAnchor(selectedSubRef.current, deviceId);
+        }
+      }
+
+      writeDeviceAutomaticRunningLocal(selectedSubRef.current, deviceId, kind, running);
+
+      dispatchDeviceAutomaticRunningSync({
+        subTarget: selectedSubRef.current,
+        deviceId,
+        kind,
+        running,
+      });
+
+      if (shouldBroadcastLocalChange()) {
+        postTabSync({
+          type: 'running',
+          tabId: getTabId(),
+          subTarget: selectedSubRef.current,
+          deviceId,
+          kind,
+          running,
+        });
+      }
+
+      if (persistDeviceIdRef.current !== deviceId) {
+        return;
+      }
+
+      const selectedKind = automaticRunningKindForActuator(selectedActuatorKind);
+      if (selectedKind !== kind) {
+        return;
+      }
+
+      if (kind === 'motor') {
+        if (settingsRef.current.motorAutomatic.running === running) {
+          return;
+        }
+
+        applySettings(
+          {
+            ...settingsRef.current,
+            motorAutomatic: {
+              ...settingsRef.current.motorAutomatic,
+              running,
+            },
+          },
+          false,
+          true,
+        );
+        return;
       }
 
       if (settingsRef.current.automatic.running === running) {
@@ -290,7 +506,64 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
         true,
       );
     },
+    [applySettings, selectedActuatorKind],
+  );
+
+  const setAutomaticRunningLocal = useCallback(
+    (running: boolean) => {
+      const deviceId = persistDeviceIdRef.current;
+      if (!deviceId) {
+        return;
+      }
+
+      setDeviceAutomaticRunning(deviceId, 'relay', running);
+    },
+    [setDeviceAutomaticRunning],
+  );
+
+  const updateMotorAutomatic = useCallback(
+    (motorAutomatic: MotorAutomaticControlState) => {
+      userEditedRef.current = true;
+      const deviceId = persistDeviceIdRef.current;
+      const current = settingsRef.current;
+      const nextMotor = normalizeMotorAutomaticControlState(motorAutomatic);
+      const prevFp = motorAutomaticGraphSettingsFingerprint(
+        current.motorAutomatic,
+        current.appOptions,
+      );
+      const nextFp = motorAutomaticGraphSettingsFingerprint(nextMotor, current.appOptions);
+      if (deviceId && prevFp !== nextFp) {
+        clearMotorAutomaticGraphRecording(deviceId);
+      }
+      applySettings({
+        ...current,
+        motorAutomatic: nextMotor,
+      });
+    },
     [applySettings],
+  );
+
+  const updateMotorManual = useCallback(
+    (motorManual: MotorManualControlState) => {
+      userEditedRef.current = true;
+      applySettings({
+        ...settingsRef.current,
+        motorManual: normalizeMotorManualControlState(motorManual),
+      });
+    },
+    [applySettings],
+  );
+
+  const setMotorAutomaticRunningLocal = useCallback(
+    (running: boolean) => {
+      const deviceId = persistDeviceIdRef.current;
+      if (!deviceId) {
+        return;
+      }
+
+      setDeviceAutomaticRunning(deviceId, 'motor', running);
+    },
+    [setDeviceAutomaticRunning],
   );
 
   const openDialog = useCallback(() => {
@@ -311,7 +584,11 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       setOptions,
       updateManual,
       updateAutomatic,
+      updateMotorAutomatic,
+      updateMotorManual,
       setAutomaticRunningLocal,
+      setMotorAutomaticRunningLocal,
+      setDeviceAutomaticRunning,
       isDialogOpen,
       openDialog,
       closeDialog,
@@ -324,7 +601,11 @@ export function OptionsProvider({ children }: { children: ReactNode }) {
       setOptions,
       updateManual,
       updateAutomatic,
+      updateMotorAutomatic,
+      updateMotorManual,
       setAutomaticRunningLocal,
+      setMotorAutomaticRunningLocal,
+      setDeviceAutomaticRunning,
       isDialogOpen,
       openDialog,
       closeDialog,

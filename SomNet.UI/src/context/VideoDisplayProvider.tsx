@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useOptions } from '@/context/OptionsProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 import type { VideoExpandMode } from '@/types/videoDisplay';
 import { isMobileViewport } from '@/hooks/useIsMobileViewport';
 import { isSafariBrowser } from '@/utils/safariVideo';
@@ -15,8 +16,8 @@ import { isSafariBrowser } from '@/utils/safariVideo';
 interface VideoDisplayContextValue {
   expandMode: VideoExpandMode;
   setExpandMode: (mode: VideoExpandMode) => void;
-  expandOnAction: () => void;
-  /** Open fullscreen feeds after Start feed on mobile/Safari (MSE play gesture). */
+  /** Expands video when the action came from the focus device (mobile auto-expand). */
+  expandOnAction: (sourceDeviceId: string) => void;
   expandForPlaybackStart: () => void;
   closeExpanded: () => void;
 }
@@ -26,17 +27,25 @@ const VideoDisplayContext = createContext<VideoDisplayContextValue | null>(null)
 export function VideoDisplayProvider({ children }: { children: ReactNode }) {
   const [expandMode, setExpandMode] = useState<VideoExpandMode>('none');
   const { options } = useOptions();
+  const { selectedDeviceId } = useSubDevice();
 
   const closeExpanded = useCallback(() => {
     setExpandMode('none');
   }, []);
 
-  const expandOnAction = useCallback(() => {
-    if (!isMobileViewport() || !options.autoExpandVideoOnMobile) {
-      return;
-    }
-    setExpandMode(options.mobileVideoExpandDefault);
-  }, [options.autoExpandVideoOnMobile, options.mobileVideoExpandDefault]);
+  const expandOnAction = useCallback(
+    (sourceDeviceId: string) => {
+      if (sourceDeviceId !== selectedDeviceId) {
+        return;
+      }
+
+      if (!isMobileViewport() || !options.autoExpandVideoOnMobile) {
+        return;
+      }
+      setExpandMode(options.mobileVideoExpandDefault);
+    },
+    [options.autoExpandVideoOnMobile, options.mobileVideoExpandDefault, selectedDeviceId],
+  );
 
   const expandForPlaybackStart = useCallback(() => {
     if (!isMobileViewport() && !isSafariBrowser()) {
@@ -44,6 +53,10 @@ export function VideoDisplayProvider({ children }: { children: ReactNode }) {
     }
     setExpandMode(options.mobileVideoExpandDefault);
   }, [options.mobileVideoExpandDefault]);
+
+  useEffect(() => {
+    setExpandMode('none');
+  }, [selectedDeviceId]);
 
   useEffect(() => {
     const preference = options.mobileVideoExpandDefault;

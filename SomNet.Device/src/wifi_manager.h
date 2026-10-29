@@ -19,6 +19,8 @@ public:
     bool isSoftAp() const { return softApMode_; }
     WifiConnectionState state() const { return state_; }
     bool isConnected() const { return state_ == WifiConnectionState::Connected; }
+    /** STA associated with a usable IPv4 address (solid red network phase). */
+    bool isStaLinkReady() const;
     const char* localIp() const;
     const char* configuredSsid() const;
     int rssi() const;
@@ -56,6 +58,7 @@ private:
     unsigned long retryDelayMs_ = WIFI_RETRY_BASE_MS;
     bool loggedConnected_ = false;
     bool loggedConfigUi_ = false;
+    bool loggedConnectingProgress_ = false;
     unsigned connectFailures_ = 0;
     bool sntpStarted_ = false;
     bool timeSynced_ = false;

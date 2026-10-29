@@ -7,10 +7,13 @@ enum class BurstScheduleKind {
     StrokeMilestones,
     WallClockDeadlines,
     CadenceStride,
+    ChancePerMainStroke,
 };
 
 struct AutomaticBurstPlan {
     bool active = false;
+    /** When true, burst runs in place of the scheduled main stroke (not after it). */
+    bool burstInsteadOfMain = false;
     BurstScheduleKind kind = BurstScheduleKind::None;
     int burstEventCount = 0;
     int nextMilestoneIndex = 0;
@@ -33,8 +36,17 @@ void buildAutomaticBurstPlanForReplan(
     unsigned long nowMs,
     AutomaticBurstPlan* outPlan);
 
-/** After a main stroke completes (stroke milestones or noAutoEnd stride). */
-bool shouldTriggerBurstAfterMainStroke(const AutomaticBurstPlan& plan, int mainStrokesCompleted);
+/** After a main stroke completes (milestones, stride, or chance roll). */
+bool shouldTriggerBurstAfterMainStroke(
+    const AutomaticBurstPlan& plan,
+    const AutomaticConfig& config,
+    int mainStrokesCompleted);
+
+/** Before the next main stroke (instead-of-main placements only). */
+bool shouldTriggerBurstBeforeMainStroke(
+    const AutomaticBurstPlan& plan,
+    const AutomaticConfig& config,
+    int mainStrokesCompleted);
 
 /** In WaitingGap between main strokes (minutes wall-clock deadlines — P10-D22). */
 bool shouldTriggerBurstInWaitingGap(

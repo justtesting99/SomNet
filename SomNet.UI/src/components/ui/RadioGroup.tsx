@@ -41,7 +41,7 @@ export function RadioGroup({ name, value, options, onChange, disabled = false }:
 
 interface SelectFieldProps extends InputHTMLAttributes<HTMLSelectElement> {
   label: string;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; disabled?: boolean }[];
 }
 
 export function SelectField({ label, options, id, className = '', ...props }: SelectFieldProps) {
@@ -64,7 +64,7 @@ export function SelectField({ label, options, id, className = '', ...props }: Se
         {...props}
       >
         {options.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option key={option.value} value={option.value} disabled={option.disabled === true}>
             {option.label}
           </option>
         ))}

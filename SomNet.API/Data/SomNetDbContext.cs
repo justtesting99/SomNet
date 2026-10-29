@@ -3,6 +3,19 @@ using SomNet.API.Data.Entities;
 
 namespace SomNet.API.Data;
 
+
+/// <summary>
+/// 
+/// 
+/// 
+/// Update-Database -context SomNetDbContext -Project SomNet.API
+/// 
+/// dotnet ef database update
+/// 
+/// 
+/// 
+/// 
+/// </summary>
 public sealed class SomNetDbContext : DbContext
 {
     public SomNetDbContext(DbContextOptions<SomNetDbContext> options)
@@ -15,6 +28,8 @@ public sealed class SomNetDbContext : DbContext
     public DbSet<NotificationHistoryEntry> Notifications => Set<NotificationHistoryEntry>();
 
     public DbSet<DomSubSettings> DomSubSettings => Set<DomSubSettings>();
+
+    public DbSet<DomSubDeviceSettings> DomSubDeviceSettings => Set<DomSubDeviceSettings>();
 
     public DbSet<DomSubAssignment> DomSubAssignments => Set<DomSubAssignment>();
 
@@ -35,8 +50,10 @@ public sealed class SomNetDbContext : DbContext
             entity.Property(session => session.Id).HasMaxLength(32);
             entity.Property(session => session.DomTarget).HasMaxLength(128);
             entity.Property(session => session.SubTarget).HasMaxLength(32);
+            entity.Property(session => session.DeviceId).HasMaxLength(64);
             entity.Property(session => session.Summary).HasMaxLength(2000);
             entity.HasIndex(session => new { session.DomTarget, session.SubTarget, session.StartedAt });
+            entity.HasIndex(session => new { session.DomTarget, session.SubTarget, session.DeviceId, session.StartedAt });
         });
 
         modelBuilder.Entity<NotificationHistoryEntry>(entity =>
@@ -56,6 +73,16 @@ public sealed class SomNetDbContext : DbContext
             entity.HasKey(settings => new { settings.DomTarget, settings.SubName });
             entity.Property(settings => settings.DomTarget).HasMaxLength(128);
             entity.Property(settings => settings.SubName).HasMaxLength(32);
+            entity.Property(settings => settings.SettingsJson).HasMaxLength(8000);
+        });
+
+        modelBuilder.Entity<DomSubDeviceSettings>(entity =>
+        {
+            entity.ToTable("DomSubDeviceSettings");
+            entity.HasKey(settings => new { settings.DomTarget, settings.SubName, settings.DeviceId });
+            entity.Property(settings => settings.DomTarget).HasMaxLength(128);
+            entity.Property(settings => settings.SubName).HasMaxLength(32);
+            entity.Property(settings => settings.DeviceId).HasMaxLength(64);
             entity.Property(settings => settings.SettingsJson).HasMaxLength(8000);
         });
 
@@ -87,12 +114,20 @@ public sealed class SomNetDbContext : DbContext
         modelBuilder.Entity<SubDeviceRegistration>(entity =>
         {
             entity.ToTable("SubDeviceRegistrations");
-            entity.HasKey(registration => new { registration.DomTarget, registration.SubName });
+            entity.HasKey(registration => new
+            {
+                registration.DomTarget,
+                registration.SubName,
+                registration.DeviceId,
+            });
             entity.Property(registration => registration.DomTarget).HasMaxLength(128);
             entity.Property(registration => registration.SubName).HasMaxLength(32);
             entity.Property(registration => registration.DeviceId).HasMaxLength(64);
             entity.Property(registration => registration.AccessToken).HasMaxLength(2048);
             entity.Property(registration => registration.TokenJti).HasMaxLength(64);
+            entity.Property(registration => registration.ActuatorKind)
+                .HasConversion<string>()
+                .HasMaxLength(16);
             entity.HasIndex(registration => registration.DeviceId);
         });
 

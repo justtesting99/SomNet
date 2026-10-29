@@ -38,10 +38,10 @@ describe('normalizeAutomaticBurstFields', () => {
     });
 
     expect(normalized.burstPercent).toBe(100);
-    expect(normalized.burstStrokePowerMin).toBe(80);
-    expect(normalized.burstStrokePowerMax).toBe(80);
-    expect(normalized.burstDelayMin).toBe(300);
-    expect(normalized.burstDelayMax).toBe(300);
+    expect(normalized.burstStrokePowerMin).toBe(40);
+    expect(normalized.burstStrokePowerMax).toBe(40);
+    expect(normalized.burstDelayMin).toBe(2);
+    expect(normalized.burstDelayMax).toBe(2);
     expect(normalized.burstStrokesMin).toBe(3);
     expect(normalized.burstStrokesMax).toBe(3);
   });
@@ -49,6 +49,7 @@ describe('normalizeAutomaticBurstFields', () => {
   it('clamps burst min power and min delay to at least 1', () => {
     const normalized = normalizeAutomaticBurstFields({
       ...defaultAutomaticState,
+      burstStyle: 'randomPowerAndDelay',
       burstStrokePowerMin: 0,
       burstStrokePowerMax: 50,
       burstDelayMin: 0,
@@ -57,5 +58,17 @@ describe('normalizeAutomaticBurstFields', () => {
 
     expect(normalized.burstStrokePowerMin).toBe(1);
     expect(normalized.burstDelayMin).toBe(1);
+  });
+
+  it('does not let stale burst min block lowering max when min is unused', () => {
+    const normalized = normalizeAutomaticBurstFields({
+      ...defaultAutomaticState,
+      burstStyle: 'fixedPowerDelay',
+      burstStrokePowerMin: 80,
+      burstStrokePowerMax: 25,
+    });
+
+    expect(normalized.burstStrokePowerMin).toBe(25);
+    expect(normalized.burstStrokePowerMax).toBe(25);
   });
 });

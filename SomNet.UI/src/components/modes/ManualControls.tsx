@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { type ManualControlState } from '@/types/modes';
-import { useOptions } from '@/context/OptionsProvider';
+import { useControlPanelSettings } from '@/hooks/useControlPanelSettings';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useOperationDeviceId } from '@/context/DeviceOperationScope';
+import { useDeviceSceneSessionActive } from '@/hooks/useDeviceSceneSessionActive';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
-import { useSessionAccessory } from '@/context/SessionAccessoryProvider';
+import { isHardwareCommandReady } from '@/utils/commandReadiness';
 import { Panel } from '@/components/ui/Panel';
 import { CommandButton } from '@/components/ui/CommandButton';
 import { NumberField } from '@/components/ui/NumberField';
 import { StrokeMsInput } from '@/components/modes/StrokeMsInput';
 import { StrokePowerSlider } from '@/components/modes/StrokePowerSlider';
-import { useLiveSession } from '@/context/SessionProvider';
+import { useOperationSession } from '@/hooks/useOperationSession';
 import { useHardwareCommand } from '@/context/HardwareCommandProvider';
 import { computeStrokeMs } from '@/utils/stroke';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
@@ -19,6 +21,8 @@ import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
 import { parseStrokeResultJson } from '@/utils/strokeResultJson';
 import { parseBurstResultJson } from '@/utils/burstResultJson';
 import { ApiError } from '@/api/client';
+import { useAuth } from '@/context/AuthProvider';
+import { pushDeviceSceneSessionIfWanted } from '@/utils/pushDeviceSceneSessionIfWanted';
 import {
   clampMaximumStrokeMs,
   clampMinimumStrokeMs,
@@ -34,16 +38,22 @@ function clampBurstValue(key: 'burstStrokes' | 'burstDelaySeconds', value: numbe
 }
 
 export function ManualControls() {
-  const { settings, updateManual, isLoading, strokeLimits } = useOptions();
+  const { settings, updateManual, isLoading, strokeLimits } = useControlPanelSettings();
+  const { user } = useAuth();
+  const domTarget = user?.displayName ?? user?.username ?? '';
   const state = settings.manual;
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { selectedSub } = useSubTarget();
+  const commandDeviceId = useOperationDeviceId();
+  const sceneSessionActive = useDeviceSceneSessionActive(commandDeviceId);
   const { expandOnAction } = useVideoDisplay();
   const { prepareManualSession, recordManualStroke, recordManualBurst, recordManualAbort } =
-    useLiveSession();
+    useOperationSession();
   const { isCommandPending } = useHardwareCommand();
-  const { status: systemStatus } = useSystemStatus();
-  const { sessionInProgress } = useSessionAccessory();
+  const { getDeviceStatus } = useSystemStatus();
+  const systemStatus = getDeviceStatus(commandDeviceId);
+  const accessoryError = '';
+  const sceneSessionError = '';
   const [commandError, setCommandError] = useState('');
 
   useEffect(() => {
@@ -61,12 +71,12 @@ export function ManualControls() {
     [state.powerPercent, state.minimumStrokeMs, state.maximumStrokeMs],
   );
 
-  const strokePending = isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke);
-  const burstPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualBurst);
-  const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort);
-  const hardwareReady = systemStatus.isReady && sessionInProgress;
-  const strokeDisabledReason = !sessionInProgress
-    ? 'Turn Session in Progress on before stroke or burst.'
+  const strokePending = isCommandPending(HARDWARE_COMMAND_KEYS.manualStroke, commandDeviceId);
+  const burstPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualBurst, commandDeviceId);
+  const abortPending = isCommandPending(HARDWARE_COMMAND_KEYS.manualAbort, commandDeviceId);
+  const hardwareReady = isHardwareCommandReady(systemStatus) && sceneSessionActive;
+  const strokeDisabledReason = !sceneSessionActive
+    ? 'Turn Scene session on before stroke or burst.'
     : hardwareReady
       ? undefined
       : systemStatus.detail || systemStatus.summary;
@@ -109,7 +119,7 @@ export function ManualControls() {
 
   async function handleStroke() {
     setCommandError('');
-    expandOnAction();
+    expandOnAction(commandDeviceId);
 
     const payloadJson = JSON.stringify({
       powerPercent: state.powerPercent,
@@ -118,8 +128,10 @@ export function ManualControls() {
 
     try {
       const snapshotActionIndex = await prepareManualSession();
+      await pushDeviceSceneSessionIfWanted(domTarget, selectedSub, commandDeviceId);
       const response = await sendHardwareCommand(
         selectedSub,
+        commandDeviceId,
         'stroke',
         payloadJson,
         snapshotActionIndex,
@@ -139,7 +151,7 @@ export function ManualControls() {
 
   async function handleBurst() {
     setCommandError('');
-    expandOnAction();
+    expandOnAction(commandDeviceId);
 
     const payloadJson = JSON.stringify({
       powerPercent: state.powerPercent,
@@ -150,8 +162,10 @@ export function ManualControls() {
 
     try {
       const snapshotActionIndex = await prepareManualSession();
+      await pushDeviceSceneSessionIfWanted(domTarget, selectedSub, commandDeviceId);
       const response = await sendHardwareCommand(
         selectedSub,
+        commandDeviceId,
         'burst',
         payloadJson,
         snapshotActionIndex,
@@ -186,7 +200,7 @@ export function ManualControls() {
     setCommandError('');
 
     try {
-      const response = await sendHardwareCommandRaw(selectedSub, 'abort', '{}');
+      const response = await sendHardwareCommandRaw(selectedSub, commandDeviceId, 'abort', '{}');
 
       if (!response.delivered) {
         setCommandError(response.message ?? 'Abort could not be delivered.');
@@ -267,6 +281,11 @@ export function ManualControls() {
         </Panel>
 
         <Panel title="Actions">
+          {accessoryError || sceneSessionError ? (
+            <p className="mb-3 text-sm text-red-400" role="alert">
+              {accessoryError || sceneSessionError}
+            </p>
+          ) : null}
           {!hardwareReady && !commandError && !strokePending && !burstPending ? (
             <p className="mb-3 text-sm text-amber-400/90" role="status">
               {strokeDisabledReason}

@@ -119,8 +119,8 @@ This matches the UI, which uses `user.displayName` as the controller name.
 
 | Method | Route | Query Parameters | Description |
 |--------|-------|------------------|-------------|
-| GET | `/api/history/timeline` | `domTarget`, `subTarget`, optional `fromDate`, `toDate` | Sessions + notifications for a pair |
-| GET | `/api/history/sessions` | `domTarget`, optional `subTarget` | Session list (Dom-wide or filtered) |
+| GET | `/api/history/timeline` | `domTarget`, `subTarget`, optional `deviceId`, `fromDate`, `toDate` | Sessions (+ optional **device** filter) and notifications for a pair |
+| GET | `/api/history/sessions` | `domTarget`, optional `subTarget`, optional `deviceId` | Session list (Dom-wide or filtered) |
 
 Timeline items are polymorphic JSON objects with a `type` field:
 
@@ -172,8 +172,8 @@ Per Dom+Sub pairing settings stored as JSON.
 
 | Method | Route | Query | Description |
 |--------|-------|-------|-------------|
-| GET | `/api/settings` | `subTarget` | Load `PairingSettingsDto` |
-| PUT | `/api/settings` | `subTarget` | Save `PairingSettingsDto` |
+| GET | `/api/settings` | `subTarget`, **`deviceId`** (required) | Load `PairingSettingsDto` for paired device; `appOptions` / `video` from Sub row |
+| PUT | `/api/settings` | `subTarget`, **`deviceId`** (required) | Save device control settings; updates Sub-level `appOptions` / `video` |
 
 ### PairingSettingsDto Structure
 

@@ -6,6 +6,12 @@ namespace SomNet.Shared.Models;
 public static class HardwareCommandKeys
 {
     public const string AutomaticSessionCompleteCorrelationId = "automatic-session-complete";
+
+    /// <summary>Device hub ack when a motor automatic speed ramp segment begins.</summary>
+    public const string MotorAutomaticSegmentCorrelationId = "motor-automatic-segment";
+
+    /// <summary>Device hub ack when a relay automatic stroke or gap interval begins.</summary>
+    public const string RelayAutomaticSegmentCorrelationId = "relay-automatic-segment";
     /// <summary>UI / tab-sync pending key.</summary>
     public const string ManualStroke = "manual:stroke";
 
@@ -28,6 +34,15 @@ public static class HardwareCommandKeys
 
     /// <summary>Device + API — session accessory / external lock (GPIO32).</summary>
     public const string SessionAccessory = "session-accessory";
+
+    /// <summary>Device + API — operator scene session (RGB green; not GPIO32).</summary>
+    public const string SceneSession = "scene-session";
+
+    /// <summary>Device + API — H-bridge PWM run (ExecuteCommand).</summary>
+    public const string MotorRun = "motor-run";
+
+    /// <summary>Device + API — H-bridge stop (ExecuteCommand).</summary>
+    public const string MotorStop = "motor-stop";
 
     public static bool IsManualSnapshotCommand(string commandKey) =>
         string.Equals(commandKey, ManualStroke, StringComparison.OrdinalIgnoreCase) ||

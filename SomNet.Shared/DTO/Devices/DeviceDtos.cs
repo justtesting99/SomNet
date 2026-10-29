@@ -1,3 +1,4 @@
+using SomNet.Shared.Enums;
 using SomNet.Shared.Models;
 
 namespace SomNet.Shared.DTO.Devices;
@@ -5,6 +6,9 @@ namespace SomNet.Shared.DTO.Devices;
 public sealed class PairDeviceRequestDto
 {
     public required string DeviceId { get; init; }
+
+    /// <summary>Relay or motor (H-bridge). Defaults to relay for older clients.</summary>
+    public ActuatorKind ActuatorKind { get; init; } = ActuatorKind.Relay;
 }
 
 public sealed class PairDeviceResponseDto
@@ -24,23 +28,44 @@ public sealed class PairDeviceResponseDto
     public string? Message { get; init; }
 }
 
+public sealed class DeviceRegistrationDto
+{
+    public required string DeviceId { get; init; }
+
+    public required string DomTarget { get; init; }
+
+    public required string SubTarget { get; init; }
+
+    public bool IsConnected { get; init; }
+
+    public DateTimeOffset PairedAt { get; init; }
+
+    public DateTimeOffset? LastConnectedAt { get; init; }
+
+    public DateTimeOffset TokenExpiresAt { get; init; }
+
+    public ActuatorKind ActuatorKind { get; init; } = ActuatorKind.Relay;
+}
+
 public sealed class DeviceStatusResponseDto
 {
     public required string DomTarget { get; init; }
 
     public required string SubTarget { get; init; }
 
+    public required string DeviceId { get; init; }
+
     public bool IsPaired { get; init; }
 
     public bool IsConnected { get; init; }
-
-    public string? DeviceId { get; init; }
 
     public DateTimeOffset? PairedAt { get; init; }
 
     public DateTimeOffset? LastConnectedAt { get; init; }
 
     public DateTimeOffset? TokenExpiresAt { get; init; }
+
+    public ActuatorKind? ActuatorKind { get; init; }
 }
 
 public sealed class PairDeviceMessageDto
@@ -54,6 +79,8 @@ public sealed class PairDeviceMessageDto
     public required string AccessToken { get; init; }
 
     public required DateTimeOffset ExpiresAt { get; init; }
+
+    public ActuatorKind ActuatorKind { get; init; } = ActuatorKind.Relay;
 }
 
 public sealed class HardwareCommandMessageDto
@@ -82,11 +109,16 @@ public sealed class HardwareCommandAckDto
     public string? Message { get; init; }
 
     public string? ResultJson { get; init; }
+
+    /// <summary>Paired device that sent the ack (set by API when forwarding to operators).</summary>
+    public string? DeviceId { get; init; }
 }
 
 public sealed class SendHardwareCommandRequestDto
 {
     public required string SubTarget { get; init; }
+
+    public required string DeviceId { get; init; }
 
     public required string CommandKey { get; init; }
 

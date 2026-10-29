@@ -9,57 +9,81 @@ import {
   type ReactNode,
 } from 'react';
 import type { HardwareCommandKey, HardwareCommandStatus } from '@/types/hardwareCommand';
+import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
+import { hardwareCommandLockKey } from '@/utils/hardwareCommandLock';
 import { getTabId, postTabSync, shouldBroadcastLocalChange } from '@/utils/tabSync';
 
 interface HardwareCommandContextValue {
-  getCommandStatus: (commandKey: HardwareCommandKey) => HardwareCommandStatus;
-  isCommandPending: (commandKey: HardwareCommandKey) => boolean;
+  getCommandStatus: (commandKey: HardwareCommandKey, deviceId?: string | null) => HardwareCommandStatus;
+  isCommandPending: (commandKey: HardwareCommandKey, deviceId?: string | null) => boolean;
   executeCommand: (
     commandKey: HardwareCommandKey,
     action: () => void | Promise<void>,
-  ) => Promise<void>;
+    deviceId?: string | null,
+  ) => Promise<boolean>;
 }
 
 const HardwareCommandContext = createContext<HardwareCommandContextValue | null>(null);
 
 export function HardwareCommandProvider({ children }: { children: ReactNode }) {
-  const pendingRef = useRef(new Set<HardwareCommandKey>());
-  const [pendingKeys, setPendingKeys] = useState<ReadonlySet<HardwareCommandKey>>(
-    () => new Set(),
-  );
+  const { selectedSub } = useSubTarget();
+  const { selectedDeviceId } = useSubDevice();
+  const pendingRef = useRef(new Set<string>());
+  const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(() => new Set());
 
   const syncPendingState = useCallback(() => {
     setPendingKeys(new Set(pendingRef.current));
   }, []);
 
+  const resolveDeviceId = useCallback(
+    (deviceId?: string | null) => deviceId ?? selectedDeviceId ?? '',
+    [selectedDeviceId],
+  );
+
   const executeCommand = useCallback(
-    async (commandKey: HardwareCommandKey, action: () => void | Promise<void>) => {
-      if (pendingRef.current.has(commandKey)) {
-        return;
+    async (
+      commandKey: HardwareCommandKey,
+      action: () => void | Promise<void>,
+      deviceId?: string | null,
+    ) => {
+      const resolvedDeviceId = resolveDeviceId(deviceId);
+      const lockKey = hardwareCommandLockKey(resolvedDeviceId, commandKey);
+      if (pendingRef.current.has(lockKey)) {
+        return false;
       }
 
-      pendingRef.current.add(commandKey);
+      pendingRef.current.add(lockKey);
       syncPendingState();
 
       try {
         await action();
+        return true;
       } finally {
-        pendingRef.current.delete(commandKey);
+        pendingRef.current.delete(lockKey);
         syncPendingState();
       }
     },
-    [syncPendingState],
+    [resolveDeviceId, syncPendingState],
+  );
+
+  useEffect(() => {
+    pendingRef.current.clear();
+    syncPendingState();
+  }, [selectedSub, syncPendingState]);
+
+  const isCommandPending = useCallback(
+    (commandKey: HardwareCommandKey, deviceId?: string | null) => {
+      const resolvedDeviceId = resolveDeviceId(deviceId);
+      return pendingKeys.has(hardwareCommandLockKey(resolvedDeviceId, commandKey));
+    },
+    [pendingKeys, resolveDeviceId],
   );
 
   const getCommandStatus = useCallback(
-    (commandKey: HardwareCommandKey): HardwareCommandStatus =>
-      pendingKeys.has(commandKey) ? 'pending' : 'idle',
-    [pendingKeys],
-  );
-
-  const isCommandPending = useCallback(
-    (commandKey: HardwareCommandKey) => pendingKeys.has(commandKey),
-    [pendingKeys],
+    (commandKey: HardwareCommandKey, deviceId?: string | null): HardwareCommandStatus =>
+      isCommandPending(commandKey, deviceId) ? 'pending' : 'idle',
+    [isCommandPending],
   );
 
   useEffect(() => {
@@ -70,7 +94,7 @@ export function HardwareCommandProvider({ children }: { children: ReactNode }) {
     postTabSync({
       type: 'command-lock',
       tabId: getTabId(),
-      keys: [...pendingKeys],
+      lockKeys: [...pendingKeys],
     });
   }, [pendingKeys]);
 

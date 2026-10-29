@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SomNet.Shared.History;
 
 namespace SomNet.API.Services;
 
@@ -7,17 +8,6 @@ namespace SomNet.API.Services;
 /// </summary>
 public static class SessionActionSnapshotSummaryBuilder
 {
-    private static readonly Dictionary<string, string> AutomaticModeLabels = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["periodic"] = "Periodic",
-        ["randomPowerOnly"] = "Random Power Only",
-        ["randomTimingOnly"] = "Random Timing Only",
-        ["randomPowerAndTiming"] = "Random Power and Timing",
-        ["powerWave"] = "Power Wave",
-        ["powerAndTimingWave"] = "Power and Timing Wave",
-        ["buildUp"] = "Build-Up",
-    };
-
     public static string? BuildForManualAck(string commandKey, string? payloadJson, string? resultJson)
     {
         if (!string.Equals(commandKey, "stroke", StringComparison.OrdinalIgnoreCase) &&
@@ -58,88 +48,8 @@ public static class SessionActionSnapshotSummaryBuilder
             : $"Manual burst at {burstPower}% ({burstStrokes} strokes)";
     }
 
-    public static string? BuildForAutomaticSessionComplete(string? resultJson, string? fallbackReason = null)
-    {
-        using var result = ParseObject(resultJson);
-        if (result is null)
-        {
-            var reason = string.IsNullOrWhiteSpace(fallbackReason) ? "ended" : fallbackReason.Trim();
-            return $"Automatic session ({reason})";
-        }
-
-        var modeKey = ReadString(result, "automaticMode");
-        var modeLabel = modeKey is not null && AutomaticModeLabels.TryGetValue(modeKey, out var label)
-            ? label
-            : (modeKey ?? "Automatic");
-
-        var mainStrokes = ReadInt(result, "mainStrokesCompleted") ?? ReadInt(result, "strokesCompleted");
-        var burstEvents = ReadInt(result, "burstEventsCompleted");
-        var burstsOn = ReadBool(result, "burstsOn");
-        var durationMs = ReadInt(result, "durationMs");
-        var endReason = ReadString(result, "endReason");
-        var interrupted = ReadBool(result, "interrupted") == true;
-
-        var detailParts = new List<string>();
-        if (mainStrokes is >= 0)
-        {
-            detailParts.Add($"{mainStrokes} main stroke{(mainStrokes == 1 ? "" : "s")}");
-        }
-
-        if (burstsOn == true && burstEvents is > 0)
-        {
-            detailParts.Add($"{burstEvents} burst event{(burstEvents == 1 ? "" : "s")}");
-        }
-
-        var countLabel = string.Join(", ", detailParts);
-        var durationLabel = FormatDuration(durationMs);
-        var endLabel = FormatAutomaticEndReason(endReason, interrupted);
-
-        var detail = countLabel.Length > 0
-            ? durationLabel is not null
-                ? $" — {countLabel} over {durationLabel}"
-                : $" — {countLabel}"
-            : durationLabel is not null
-                ? $" — over {durationLabel}"
-                : string.Empty;
-
-        return $"{modeLabel}{detail} ({endLabel})";
-    }
-
-    private static string FormatAutomaticEndReason(string? endReason, bool interrupted)
-    {
-        if (interrupted && string.Equals(endReason, "abort", StringComparison.OrdinalIgnoreCase))
-        {
-            return "aborted";
-        }
-
-        return endReason?.Trim().ToLowerInvariant() switch
-        {
-            "manualstop" => "stopped manually",
-            "endsession" => "end session rule",
-            "abort" => "aborted",
-            "error" => "device error",
-            "session-accessory-off" => "session released",
-            null or "" => "ended",
-            _ => endReason.Trim(),
-        };
-    }
-
-    private static string? FormatDuration(int? durationMs)
-    {
-        if (durationMs is null or < 0)
-        {
-            return null;
-        }
-
-        if (durationMs < 60_000)
-        {
-            var seconds = Math.Max(1, (int)Math.Round(durationMs.Value / 1000.0));
-            return $"{seconds} sec";
-        }
-
-        var minutes = Math.Max(1, (int)Math.Round(durationMs.Value / 60_000.0));
-        return $"{minutes} min";
-    }
+    public static string? BuildForAutomaticSessionComplete(string? resultJson, string? fallbackReason = null) =>
+        AutomaticSessionSummaryBuilder.BuildFromResultJson(resultJson, fallbackReason);
 
     private static JsonDocument? ParseObject(string? json)
     {

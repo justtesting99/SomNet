@@ -1,5 +1,6 @@
 #include "signalr_client.h"
 
+#include "actuator_kind.h"
 #include "command_handler.h"
 #include "device_identity.h"
 #include "nvs_store.h"
@@ -222,6 +223,12 @@ void buildEffectiveServerUrl(NvsStore& nvs, char* out, size_t outLen) {
 }
 
 bool hasHubServerConfig(NvsStore& nvs) {
+    if (!nvs.isHubRuntimeEnabled()) {
+        return false;
+    }
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    return nvs.hasHubServerUrl();
+#endif
     if (nvs.isFullyProvisioned()) {
         return true;
     }
@@ -877,8 +884,11 @@ void handleHubFrame(const char* frame) {
     const char* target = doc["target"] | "";
     if (strcmp(target, "RevokePairing") == 0) {
         Serial.println(F("[HUB] pairing revoked — clearing"));
-        if (gNvs != nullptr && gNvs->isPaired()) {
-            gNvs->clearPairing();
+        if (gNvs != nullptr) {
+            if (gNvs->isPaired()) {
+                gNvs->clearPairing();
+            }
+            gNvs->clearActuatorKindBinding();
             gUsePairedConnect = false;
         }
         gImmediateReconnect = true;
@@ -913,6 +923,15 @@ void handleHubFrame(const char* frame) {
 
         if (accessToken[0] == '\0' || gNvs == nullptr) {
             Serial.println(F("[HUB] PairDevice missing accessToken"));
+            return;
+        }
+
+        const char* actuatorKindJson = payload["actuatorKind"] | "relay";
+        if (!gNvs->tryBindActuatorKindFromPairJson(actuatorKindJson)) {
+            Serial.print(F("[HUB] PairDevice actuatorKind rejected (NVS="));
+            Serial.print(actuatorKindToJson(gNvs->getActuatorKind()));
+            Serial.print(F(" pair="));
+            Serial.println(actuatorKindJson);
             return;
         }
 
@@ -1098,24 +1117,18 @@ void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
 
 } // namespace
 
-bool SignalRClient::begin(NvsStore* nvsStore, DeviceIdentity* identity, WifiManager* wifi) {
-    if (nvsStore == nullptr || identity == nullptr || wifi == nullptr) {
+bool SignalRClient::ensureHubStackReady() {
+    if (hubStackReady_) {
+        return true;
+    }
+    if (nvs_ == nullptr || identity_ == nullptr || wifi_ == nullptr) {
         return false;
     }
 
-    nvs_ = nvsStore;
-    identity_ = identity;
-    wifi_ = wifi;
-    gNvs = nvsStore;
-    gIdentity = identity;
+    gNvs = nvs_;
+    gIdentity = identity_;
     gActiveClient = this;
     gUsePairedConnect = nvs_->isPaired();
-    initialized_ = true;
-    state_ = HubConnectionState::Offline;
-    nextAttemptMs_ = 0;
-    backoffMs_ = HUB_RETRY_BASE_MS;
-    handshakeComplete_ = false;
-    pendingConnect_ = false;
 
     const esp_reset_reason_t resetReason = esp_reset_reason();
     hubBootSettleMs_ = (resetReason == ESP_RST_POWERON || resetReason == ESP_RST_BROWNOUT)
@@ -1128,7 +1141,91 @@ bool SignalRClient::begin(NvsStore* nvsStore, DeviceIdentity* identity, WifiMana
     gWs.onEvent(onWebSocketEvent);
     disableLibraryWebSocketReconnect();
     gWs.enableHeartbeat(0, 0, 0);
+    hubStackReady_ = true;
+    return true;
+}
 
+void SignalRClient::forceHubOfflineWithoutAccessory() {
+    negotiateFsmActive_ = false;
+    tcpProbeFsmActive_ = false;
+    resetHubNetworkFsms();
+    pendingConnect_ = false;
+    gPendingConnectStartedMs = 0;
+    clearHandshakeState();
+    disableLibraryWebSocketReconnect();
+    gSuppressDisconnectNotify = true;
+    gWs.disconnect();
+    state_ = HubConnectionState::Offline;
+    serverUnavailable_ = false;
+    wifiLinkUpMs_ = 0;
+}
+
+void SignalRClient::applySomEspHubEnabled(bool enabled) {
+    if (!initialized_ || nvs_ == nullptr) {
+        return;
+    }
+
+    if (!enabled) {
+        forceHubOfflineWithoutAccessory();
+        Serial.println(F("[HUB] SomEsp local mode — hub suspended"));
+        return;
+    }
+
+    if (!nvs_->hasHubServerUrl()) {
+        Serial.println(F("[HUB] cannot enable — no server_url"));
+        return;
+    }
+
+    if (!ensureHubStackReady()) {
+        Serial.println(F("[HUB] cannot enable — stack init failed"));
+        return;
+    }
+
+    gUsePairedConnect = nvs_->isPaired();
+    forceHubOfflineWithoutAccessory();
+    nextAttemptMs_ = 0;
+    backoffMs_ = HUB_RETRY_BASE_MS;
+    Serial.println(F("[HUB] SomEsp remote mode — connecting hub"));
+}
+
+bool SignalRClient::begin(NvsStore* nvsStore, DeviceIdentity* identity, WifiManager* wifi) {
+    if (nvsStore == nullptr || identity == nullptr || wifi == nullptr) {
+        return false;
+    }
+
+    nvs_ = nvsStore;
+    identity_ = identity;
+    wifi_ = wifi;
+    initialized_ = true;
+    state_ = HubConnectionState::Offline;
+    nextAttemptMs_ = 0;
+    backoffMs_ = HUB_RETRY_BASE_MS;
+    handshakeComplete_ = false;
+    pendingConnect_ = false;
+
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    if (!nvsStore->hasHubServerUrl()) {
+        Serial.println(F("[HUB] standalone — no server_url (local /operate only)"));
+        return true;
+    }
+    if (!ensureHubStackReady()) {
+        return false;
+    }
+    if (!nvsStore->isHubRuntimeEnabled()) {
+        Serial.println(F("[HUB] standalone — hub suspended (local /operate)"));
+        return true;
+    }
+    Serial.println(F("[HUB] standalone — hub active"));
+    return true;
+#endif
+
+    if (!ensureHubStackReady()) {
+        return false;
+    }
+    if (!nvsStore->isHubRuntimeEnabled()) {
+        Serial.println(F("[HUB] hub suspended (local /operate)"));
+        return true;
+    }
     return true;
 }
 
@@ -1169,6 +1266,7 @@ void SignalRClient::markHandshakeComplete() {
     } else {
         state_ = HubConnectionState::Unpaired;
     }
+    flushPendingButtonEvent();
 }
 
 void SignalRClient::clearHandshakeState() {
@@ -1403,6 +1501,24 @@ void SignalRClient::poll() {
         return;
     }
 
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    if (!nvs_->hasHubServerUrl()) {
+        return;
+    }
+    if (!nvs_->isHubRuntimeEnabled()) {
+        if (hubStackReady_ && (state_ != HubConnectionState::Offline || gWs.isConnected())) {
+            forceHubOfflineWithoutAccessory();
+        }
+        if (hubStackReady_) {
+            gWs.loop();
+        }
+        return;
+    }
+    if (!hubStackReady_ && !ensureHubStackReady()) {
+        return;
+    }
+#endif
+
     if (wifi_->isSoftAp() || !wifi_->isConnected() || !hasHubServerConfig(*nvs_)) {
         wifiLinkUpMs_ = 0;
         negotiateFsmActive_ = false;
@@ -1462,6 +1578,7 @@ void SignalRClient::poll() {
         lastStallRecoveryMs_ = 0;
         state_ = (gUsePairedConnect && nvs_->isPaired()) ? HubConnectionState::Paired : HubConnectionState::Unpaired;
         pendingConnect_ = false;
+        flushPendingButtonEvent();
         return;
     }
 
@@ -1695,7 +1812,40 @@ bool SignalRClient::sendAckCommand(
     return true;
 }
 
-bool SignalRClient::sendReportButtonEvent(const char* clickType) {
+bool SignalRClient::queuePendingButtonClick(const char* clickType) {
+    if (clickType == nullptr || strcmp(clickType, "double") != 0) {
+        return false;
+    }
+
+    strncpy(pendingButtonClick_, clickType, sizeof(pendingButtonClick_) - 1);
+    pendingButtonClick_[sizeof(pendingButtonClick_) - 1] = '\0';
+    pendingButtonClickUntilMs_ = millis() + 60000UL;
+    return true;
+}
+
+void SignalRClient::clearPendingButtonClick() {
+    pendingButtonClick_[0] = '\0';
+    pendingButtonClickUntilMs_ = 0;
+}
+
+void SignalRClient::flushPendingButtonEvent() {
+    if (pendingButtonClick_[0] == '\0') {
+        return;
+    }
+
+    if (pendingButtonClickUntilMs_ != 0 && millis() > pendingButtonClickUntilMs_) {
+        Serial.println(F("[BTN] queued double-click expired (hub)"));
+        clearPendingButtonClick();
+        return;
+    }
+
+    if (sendReportButtonEvent(pendingButtonClick_, false)) {
+        Serial.println(F("[BTN] queued double-click sent"));
+        clearPendingButtonClick();
+    }
+}
+
+bool SignalRClient::sendReportButtonEvent(const char* clickType, bool allowQueue) {
     if (clickType == nullptr || clickType[0] == '\0') {
         return false;
     }
@@ -1707,6 +1857,10 @@ bool SignalRClient::sendReportButtonEvent(const char* clickType) {
     // leave state_ at Backoff while SNTP/boot settle even though the hub is live.
     handshakeComplete_ = gHandshakeComplete;
     if (!gWs.isConnected() || !handshakeComplete_) {
+        if (allowQueue && queuePendingButtonClick(clickType)) {
+            Serial.println(F("[HUB] ReportButtonEvent queued (hub not ready)"));
+            return true;
+        }
         Serial.println(F("[HUB] ReportButtonEvent skipped - hub not ready"));
         return false;
     }

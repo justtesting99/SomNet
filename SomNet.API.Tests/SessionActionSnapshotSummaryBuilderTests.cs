@@ -24,7 +24,7 @@ public class SessionActionSnapshotSummaryBuilderTests
               "commandKey": "automatic-stop",
               "automaticMode": "randomPowerAndTiming",
               "mainStrokesCompleted": 4,
-              "durationMs": 45000,
+              "durationMs": 60000,
               "endReason": "manualStop"
             }
             """);

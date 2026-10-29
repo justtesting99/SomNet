@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SubTargetName } from '@/config/sessionUsers';
 import { fetchSubs } from '@/api/subs';
 import {
-  fetchDeviceStatus,
+  fetchDeviceRegistrations,
   fetchUnpairedDevices,
   pairDevice,
   revokeDevicePairing,
@@ -10,7 +10,8 @@ import {
 import { ApiError } from '@/api/client';
 import { useSubTarget } from '@/context/SubTargetProvider';
 import { useSystemStatus } from '@/context/SystemStatusProvider';
-import type { DeviceStatusResponse, UnpairedDeviceResponse } from '@/types/device';
+import type { ActuatorKind, DeviceRegistration, UnpairedDeviceResponse } from '@/types/device';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { getDeviceTokenExpiryInfo } from '@/utils/deviceTokenExpiry';
@@ -20,32 +21,28 @@ type HardwareTab = 'all-subs' | 'online' | 'paste-id';
 
 interface SubHardwareRow {
   subTarget: SubTargetName;
-  status: DeviceStatusResponse | null;
+  registrations: DeviceRegistration[];
   loadError?: string;
 }
 
-function connectionLabel(status: DeviceStatusResponse | null): string {
-  if (!status) {
-    return 'Unknown';
+function connectionLabel(registration: DeviceRegistration | null): string {
+  if (!registration) {
+    return 'Not paired';
   }
 
-  if (status.isConnected && status.deviceId) {
+  if (registration.isConnected) {
     return 'Connected';
   }
 
-  if (status.isPaired && status.deviceId) {
-    return 'Paired (offline)';
-  }
-
-  return 'Not paired';
+  return 'Paired (offline)';
 }
 
-function expiryRowClass(status: DeviceStatusResponse | null): string {
-  if (!status?.isPaired || !status.tokenExpiresAt) {
+function expiryRowClass(registration: DeviceRegistration | null): string {
+  if (!registration?.tokenExpiresAt) {
     return '';
   }
 
-  const expiry = getDeviceTokenExpiryInfo(status.tokenExpiresAt);
+  const expiry = getDeviceTokenExpiryInfo(registration.tokenExpiresAt);
   if (!expiry) {
     return '';
   }
@@ -61,12 +58,12 @@ function expiryRowClass(status: DeviceStatusResponse | null): string {
   return '';
 }
 
-function expiryLabel(status: DeviceStatusResponse | null): string {
-  if (!status?.isPaired || !status.tokenExpiresAt) {
+function expiryLabel(registration: DeviceRegistration | null): string {
+  if (!registration?.tokenExpiresAt) {
     return '—';
   }
 
-  const expiry = getDeviceTokenExpiryInfo(status.tokenExpiresAt);
+  const expiry = getDeviceTokenExpiryInfo(registration.tokenExpiresAt);
   if (!expiry) {
     return '—';
   }
@@ -88,12 +85,14 @@ interface HardwarePanelProps {
 
 export function HardwarePanel({ active }: HardwarePanelProps) {
   const { selectedSub } = useSubTarget();
+  const { refresh: refreshSubDevices } = useSubDevice();
   const { refresh: refreshSystemStatus, status: systemStatus } = useSystemStatus();
   const [activeTab, setActiveTab] = useState<HardwareTab>('all-subs');
   const [rows, setRows] = useState<SubHardwareRow[]>([]);
   const [unpairedDevices, setUnpairedDevices] = useState<UnpairedDeviceResponse[]>([]);
   const [pairSubTarget, setPairSubTarget] = useState<SubTargetName>(selectedSub);
   const [deviceId, setDeviceId] = useState('');
+  const [pairActuatorKind, setPairActuatorKind] = useState<ActuatorKind>('relay');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -112,14 +111,14 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
       const statuses = await Promise.all(
         subs.map(async (subTarget) => {
           try {
-            const status = await fetchDeviceStatus(subTarget);
-            return { subTarget, status } satisfies SubHardwareRow;
+            const registrations = await fetchDeviceRegistrations(subTarget);
+            return { subTarget, registrations } satisfies SubHardwareRow;
           } catch (loadError) {
             const loadMessage =
               loadError instanceof ApiError && loadError.message
                 ? loadError.message
                 : 'Unable to load status.';
-            return { subTarget, status: null, loadError: loadMessage } satisfies SubHardwareRow;
+            return { subTarget, registrations: [], loadError: loadMessage } satisfies SubHardwareRow;
           }
         }),
       );
@@ -174,9 +173,48 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
   }, [active, systemStatus.lastChecked, loadAll]);
 
   const pairedOnlineRows = useMemo(
-    () => rows.filter((row) => row.status?.isConnected && row.status.deviceId),
+    () =>
+      rows.flatMap((row) =>
+        row.registrations
+          .filter((registration) => registration.isConnected)
+          .map((registration) => ({ subTarget: row.subTarget, registration })),
+      ),
     [rows],
   );
+
+  type HardwareTableRow = {
+    key: string;
+    subTarget: SubTargetName;
+    registration: DeviceRegistration | null;
+    loadError?: string;
+  };
+
+  const tableRows = useMemo((): HardwareTableRow[] => {
+    const flattened: HardwareTableRow[] = [];
+    for (const row of rows) {
+      if (row.loadError) {
+        flattened.push({
+          key: row.subTarget,
+          subTarget: row.subTarget,
+          registration: null,
+          loadError: row.loadError,
+        });
+        continue;
+      }
+      if (row.registrations.length === 0) {
+        flattened.push({ key: row.subTarget, subTarget: row.subTarget, registration: null });
+        continue;
+      }
+      for (const registration of row.registrations) {
+        flattened.push({
+          key: `${row.subTarget}:${registration.deviceId}`,
+          subTarget: row.subTarget,
+          registration,
+        });
+      }
+    }
+    return flattened;
+  }, [rows]);
 
   async function handlePair(subTarget: SubTargetName, targetDeviceId: string) {
     const trimmedId = targetDeviceId.trim();
@@ -190,7 +228,7 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
     setBusySub(subTarget);
 
     try {
-      const response = await pairDevice(subTarget, trimmedId);
+      const response = await pairDevice(subTarget, trimmedId, pairActuatorKind);
       setMessage(
         response.message ??
           (response.deliveredToDevice
@@ -198,6 +236,7 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
             : `Device paired for ${subTarget}; token saved for delivery on connect.`),
       );
       await loadAll();
+      await refreshSubDevices();
       await refreshSystemStatus();
     } catch (pairError) {
       const pairMessage =
@@ -210,8 +249,8 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
     }
   }
 
-  async function handleRevoke(subTarget: SubTargetName) {
-    if (!window.confirm(`Revoke hardware pairing for ${subTarget}?`)) {
+  async function handleRevoke(subTarget: SubTargetName, targetDeviceId: string) {
+    if (!window.confirm(`Revoke pairing for ${targetDeviceId} on ${subTarget}?`)) {
       return;
     }
 
@@ -220,9 +259,10 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
     setBusySub(subTarget);
 
     try {
-      await revokeDevicePairing(subTarget);
-      setMessage(`Pairing revoked for ${subTarget}.`);
+      await revokeDevicePairing(subTarget, targetDeviceId);
+      setMessage(`Pairing revoked for ${targetDeviceId} on ${subTarget}.`);
       await loadAll();
+      await refreshSubDevices();
       await refreshSystemStatus();
     } catch (revokeError) {
       const revokeMessage =
@@ -236,6 +276,21 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
   }
 
   const busy = isLoading || busySub !== null;
+
+  const actuatorKindSelect = (
+    <label className="text-xs text-slate-400">
+      Actuator
+      <select
+        className="ml-2 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-200"
+        value={pairActuatorKind}
+        disabled={busy}
+        onChange={(event) => setPairActuatorKind(event.target.value as ActuatorKind)}
+      >
+        <option value="relay">Relay</option>
+        <option value="hbridge">Motor (H-bridge)</option>
+      </select>
+    </label>
+  );
 
   return (
     <div className="space-y-4">
@@ -277,19 +332,22 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {tableRows.map((row) => (
                   <tr
-                    key={row.subTarget}
-                    className={`border-t border-slate-800 ${expiryRowClass(row.status)}`}
+                    key={row.key}
+                    className={`border-t border-slate-800 ${expiryRowClass(row.registration)}`}
                   >
                     <td className="px-2 py-3 font-medium text-slate-200">{row.subTarget}</td>
                     <td className="px-2 py-3 font-mono text-xs text-slate-300">
-                      {row.status?.deviceId ?? '—'}
+                      {row.registration?.deviceId ?? '—'}
+                      {row.registration ? (
+                        <span className="ml-2 text-slate-500">({row.registration.actuatorKind})</span>
+                      ) : null}
                     </td>
                     <td className="px-2 py-3 text-slate-300">
-                      {row.loadError ?? connectionLabel(row.status)}
+                      {row.loadError ?? connectionLabel(row.registration)}
                     </td>
-                    <td className="px-2 py-3 text-slate-300">{expiryLabel(row.status)}</td>
+                    <td className="px-2 py-3 text-slate-300">{expiryLabel(row.registration)}</td>
                     <td className="px-2 py-3">
                       <div className="flex flex-wrap gap-2">
                         <Button
@@ -298,16 +356,20 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
                           onClick={() => {
                             setActiveTab('paste-id');
                             setPairSubTarget(row.subTarget);
-                            setDeviceId(row.status?.deviceId ?? '');
+                            setDeviceId(row.registration?.deviceId ?? '');
                           }}
                         >
-                          Pair
+                          {row.registration ? 'Re-pair' : 'Pair'}
                         </Button>
                         <Button
                           size="sm"
                           variant="secondary"
-                          disabled={busy || !row.status?.isPaired}
-                          onClick={() => void handleRevoke(row.subTarget)}
+                          disabled={busy || !row.registration}
+                          onClick={() =>
+                            row.registration
+                              ? void handleRevoke(row.subTarget, row.registration.deviceId)
+                              : undefined
+                          }
                         >
                           Revoke
                         </Button>
@@ -346,7 +408,7 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
                       Unpaired · connected {formatSessionDateTimeDisplay(device.connectedAt)}
                     </p>
                   </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                     <label className="text-xs text-slate-400">
                       Pair to Sub
                       <select
@@ -362,6 +424,7 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
                         ))}
                       </select>
                     </label>
+                    {actuatorKindSelect}
                     <Button
                       size="sm"
                       disabled={busy}
@@ -386,8 +449,11 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
                   </p>
                   <ul className="mt-3 space-y-2">
                     {pairedOnlineRows.map((row) => (
-                      <li key={row.subTarget} className="text-sm text-slate-300">
-                        <span className="font-mono">{row.status?.deviceId}</span>
+                      <li
+                        key={`${row.subTarget}:${row.registration.deviceId}`}
+                        className="text-sm text-slate-300"
+                      >
+                        <span className="font-mono">{row.registration.deviceId}</span>
                         <span className="text-slate-500"> → {row.subTarget}</span>
                       </li>
                     ))}
@@ -432,6 +498,7 @@ export function HardwarePanel({ active }: HardwarePanelProps) {
             disabled={busy}
             onChange={(event) => setDeviceId(event.target.value)}
           />
+          <div>{actuatorKindSelect}</div>
           <Button disabled={busy} onClick={() => void handlePair(pairSubTarget, deviceId)}>
             {busySub === pairSubTarget ? 'Pairing…' : 'Pair device'}
           </Button>

@@ -14,12 +14,14 @@ export class HardwareCommandError extends Error {
 
 export async function sendHardwareCommand(
   subTarget: SubTargetName,
+  deviceId: string,
   commandKey: string,
   payloadJson: string,
   snapshotActionIndex?: number,
 ): Promise<SendHardwareCommandResponse> {
   const response = await sendHardwareCommandApi(
     subTarget,
+    deviceId,
     commandKey,
     payloadJson,
     snapshotActionIndex,
@@ -40,10 +42,12 @@ export async function sendHardwareCommand(
   }
 
   if (!response.success) {
-    throw new HardwareCommandError(
-      response.message ?? 'Device rejected the command.',
-      response,
-    );
+    const raw = response.message ?? 'Device rejected the command.';
+    const lower = raw.toLowerCase();
+    const message = lower.includes('accesstoken mismatch')
+      ? 'Device token is out of date. In Hardware, re-pair this device while the ESP is online (hub connected), then try again.'
+      : raw;
+    throw new HardwareCommandError(message, response);
   }
 
   return response;

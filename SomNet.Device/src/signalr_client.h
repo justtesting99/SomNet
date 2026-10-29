@@ -25,6 +25,10 @@ using ExecutionActiveProbe = bool (*)();
 class SignalRClient {
 public:
     bool begin(NvsStore* nvsStore, DeviceIdentity* identity, WifiManager* wifi);
+    /** SomEsp: WebSocket stack + globals (safe to call once after server_url saved at runtime). */
+    bool ensureHubStackReady();
+    /** SomEsp: connect or idle hub without touching session accessory (local arm). */
+    void applySomEspHubEnabled(bool enabled);
     void setExecutionActiveProbe(ExecutionActiveProbe probe);
     void poll();
 
@@ -36,7 +40,7 @@ public:
         bool success,
         const char* message,
         const char* resultJson = nullptr);
-    bool sendReportButtonEvent(const char* clickType);
+    bool sendReportButtonEvent(const char* clickType, bool allowQueue = true);
 
     void onTransportLost(bool immediateRetry = false);
     void markHandshakeComplete();
@@ -50,6 +54,7 @@ public:
 
 private:
     void enterServerUnavailable(int httpStatus);
+    void forceHubOfflineWithoutAccessory();
     void beginArpWarm(const IPAddress& target);
     bool pollArpWarm();
     NvsStore* nvs_ = nullptr;
@@ -59,6 +64,7 @@ private:
     unsigned long nextAttemptMs_ = 0;
     unsigned long backoffMs_ = HUB_RETRY_BASE_MS;
     bool initialized_ = false;
+    bool hubStackReady_ = false;
     bool handshakeComplete_ = false;
     bool pendingConnect_ = false;
     unsigned long wifiLinkUpMs_ = 0;
@@ -74,4 +80,9 @@ private:
     ExecutionActiveProbe executionActiveProbe_ = nullptr;
     bool negotiateFsmActive_ = false;
     bool tcpProbeFsmActive_ = false;
+    char pendingButtonClick_[8] = {};
+    unsigned long pendingButtonClickUntilMs_ = 0;
+    bool queuePendingButtonClick(const char* clickType);
+    void clearPendingButtonClick();
+    void flushPendingButtonEvent();
 };

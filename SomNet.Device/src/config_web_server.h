@@ -6,6 +6,7 @@ class DeviceIdentity;
 class NvsStore;
 class SignalRClient;
 class WifiManager;
+class LocalOperate;
 
 class ConfigWebServer {
 public:
@@ -14,7 +15,8 @@ public:
         NvsStore* nvsStore,
         DeviceIdentity* identity,
         WifiManager* wifi,
-        SignalRClient* signalRClient = nullptr);
+        SignalRClient* signalRClient = nullptr,
+        LocalOperate* localOperate = nullptr);
     void poll();
     void setBootMode(DeviceBootMode mode);
     /** Call when switching STA ↔ setup AP so HTTP can bind on the new interface. */

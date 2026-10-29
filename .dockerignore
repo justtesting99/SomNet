@@ -1,0 +1,14 @@
+**/.git
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/*.user
+**/*.suo
+**/node_modules
+SomNet.API.Tests
+SomNet.UI
+SomNet.Device
+Documents
+**/*.md
+!SomNet.Device.LocalGateway/README.md

@@ -57,9 +57,22 @@ Per Dom+Sub pairing configuration stored as JSON.
 |--------|------|-------|
 | DomTarget | string (PK part) | |
 | SubName | string (PK part) | Renamed from SubTarget in migration |
-| SettingsJson | string (max 8000) | Serialized `PairingSettingsDto` |
+| SettingsJson | string (max 8000) | Serialized `PairingSettingsDto` (Sub-level; **appOptions** + **video** authoritative here) |
 
 **Serializer:** `PairingSettingsSerializer.cs` handles legacy ms→percent migration on read.
+
+### DomSubDeviceSettings
+
+Per **paired `deviceId`** control profiles (`manual` / `automatic` / `motorAutomatic`). **App options** and **video** on GET/PUT are merged from `DomSubSettings`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| DomTarget | string (PK part) | |
+| SubName | string (PK part) | |
+| DeviceId | string (PK part) | `esp32-…` |
+| SettingsJson | string (max 8000) | Serialized `PairingSettingsDto` |
+
+**Migration:** `20261027143000_AddDomSubDeviceSettings` copies existing Sub JSON to each non-revoked registration.
 
 ### DomSubAssignments
 
@@ -112,6 +125,8 @@ Scheduled/upcoming session notifications.
 ### SubDeviceRegistrations
 
 Hardware device pairing for a Dom+Sub pair.
+
+> **Planned change (signed off 2026-10-26):** Today **one `deviceId` per Sub** (`DomTarget` + `SubName` PK). Target PK **`(DomTarget, SubName, DeviceId)`**; existing rows migrate **1:1**; up to **8** devices/Sub ([33 §7](./33-Multi-Device-Per-Sub-Spike.md), MA-D13 ceiling). Implement **X-6.1** in [32 §2.3](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md).
 
 | Column | Type | Notes |
 |--------|------|-------|

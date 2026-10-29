@@ -1,3 +1,5 @@
+using SomNet.Shared.Enums;
+
 namespace SomNet.API.Data.Entities;
 
 public sealed class SubDeviceRegistration
@@ -19,4 +21,6 @@ public sealed class SubDeviceRegistration
     public DateTimeOffset? LastConnectedAt { get; set; }
 
     public bool IsRevoked { get; set; }
+
+    public ActuatorKind ActuatorKind { get; set; } = ActuatorKind.Relay;
 }

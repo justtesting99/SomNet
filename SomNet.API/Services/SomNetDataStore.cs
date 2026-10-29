@@ -21,7 +21,10 @@ public sealed class SomNetDataStore : ISomNetDataStore
         _strokeMsLimits = strokeMsLimits.Value;
     }
 
-    public IReadOnlyList<SessionHistoryEntryDto> GetSessionsForDom(string domTarget, string? subTarget = null)
+    public IReadOnlyList<SessionHistoryEntryDto> GetSessionsForDom(
+        string domTarget,
+        string? subTarget = null,
+        string? deviceId = null)
     {
         IQueryable<SessionHistoryEntry> query = _db.Sessions
             .AsNoTracking()
@@ -31,6 +34,12 @@ public sealed class SomNetDataStore : ISomNetDataStore
         {
             var normalizedSub = SubTargetValidation.Normalize(subTarget);
             query = query.Where(session => session.SubTarget == normalizedSub);
+        }
+
+        if (!string.IsNullOrWhiteSpace(deviceId))
+        {
+            var normalizedDeviceId = deviceId.Trim();
+            query = query.Where(session => session.DeviceId == normalizedDeviceId);
         }
 
         return query
@@ -47,7 +56,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
             throw new ArgumentException("FromDate must be on or before ToDate.");
         }
 
-        var sessionEntries = GetSessionsForDom(query.DomTarget, query.SubTarget);
+        var sessionEntries = GetSessionsForDom(query.DomTarget, query.SubTarget, query.DeviceId);
         var lastSnapshotAt = GetLastSnapshotTimes(sessionEntries.Select(session => session.Id));
         var sessions = sessionEntries
             .Select(session => (HistoryTimelineItemDto)new SessionHistoryTimelineItemDto
@@ -183,6 +192,11 @@ public sealed class SomNetDataStore : ISomNetDataStore
             _db.DomSubSettings.Remove(settings);
         }
 
+        var deviceSettings = _db.DomSubDeviceSettings.Where(entry =>
+            entry.DomTarget == key &&
+            entry.SubName == normalizedSub);
+        _db.DomSubDeviceSettings.RemoveRange(deviceSettings);
+
         var alreadyExcluded = _db.DomSubExclusions.Any(entry =>
             entry.DomTarget == key &&
             entry.SubName == normalizedSub);
@@ -222,7 +236,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
         return ToDto(notification);
     }
 
-    public SessionHistoryEntryDto? GetActiveSession(string domTarget, string subTarget)
+    public SessionHistoryEntryDto? GetActiveSession(string domTarget, string subTarget, string? deviceId = null)
     {
         if (string.IsNullOrWhiteSpace(domTarget))
         {
@@ -230,14 +244,29 @@ public sealed class SomNetDataStore : ISomNetDataStore
         }
 
         var normalizedSub = SubTargetValidation.Normalize(subTarget);
-        var session = _db.Sessions
+        var normalizedDeviceId = string.IsNullOrWhiteSpace(deviceId) ? null : deviceId.Trim();
+
+        var candidates = _db.Sessions
             .AsNoTracking()
             .Where(entry =>
                 entry.DomTarget == domTarget.Trim() &&
                 entry.SubTarget == normalizedSub)
             .OrderByDescending(entry => entry.StartedAt)
             .AsEnumerable()
-            .FirstOrDefault(entry => SessionProgressHelper.IsInProgress(entry.Summary));
+            .Where(entry => SessionProgressHelper.IsInProgress(entry.Summary))
+            .ToList();
+
+        SessionHistoryEntry? session = null;
+        if (normalizedDeviceId is not null)
+        {
+            session = candidates.FirstOrDefault(entry =>
+                string.Equals(entry.DeviceId, normalizedDeviceId, StringComparison.OrdinalIgnoreCase));
+            session ??= candidates.FirstOrDefault(entry => string.IsNullOrWhiteSpace(entry.DeviceId));
+        }
+        else
+        {
+            session = candidates.FirstOrDefault();
+        }
 
         return session is null ? null : ToDto(session);
     }
@@ -275,12 +304,18 @@ public sealed class SomNetDataStore : ISomNetDataStore
             throw new ArgumentException("DomTarget is required.", nameof(domTarget));
         }
 
+        if (string.IsNullOrWhiteSpace(request.DeviceId))
+        {
+            throw new ArgumentException("DeviceId is required.", nameof(request));
+        }
+
         var session = new SessionHistoryEntry
         {
             Id = $"sess-{GetNextSessionSequence():D3}",
             StartedAt = DateTimeOffset.Now,
             DomTarget = domTarget.Trim(),
             SubTarget = SubTargetValidation.Normalize(request.SubTarget),
+            DeviceId = request.DeviceId.Trim(),
             Mode = request.Mode,
             Summary = "In progress",
         };
@@ -395,7 +430,79 @@ public sealed class SomNetDataStore : ISomNetDataStore
         _db.SaveChanges();
     }
 
-    public PairingSettingsDto GetPairingSettings(string domTarget, string subTarget)
+    public PairingSettingsDto GetPairingSettings(string domTarget, string subTarget) =>
+        GetSubLevelPairingSettings(domTarget, subTarget);
+
+    public PairingSettingsDto GetPairingSettings(string domTarget, string subTarget, string deviceId)
+    {
+        if (string.IsNullOrWhiteSpace(domTarget))
+        {
+            return PairingSettingsSerializer.Normalize(PairingSettingsDefaults.Value, _strokeMsLimits);
+        }
+
+        var key = domTarget.Trim();
+        var normalizedSub = SubTargetValidation.Normalize(subTarget);
+        var normalizedDeviceId = NormalizeDeviceId(deviceId);
+        EnsureDeviceRegistered(key, normalizedSub, normalizedDeviceId);
+
+        var subLevel = GetSubLevelPairingSettings(key, normalizedSub);
+        var deviceEntity = _db.DomSubDeviceSettings
+            .AsNoTracking()
+            .SingleOrDefault(entry =>
+                entry.DomTarget == key &&
+                entry.SubName == normalizedSub &&
+                entry.DeviceId == normalizedDeviceId);
+
+        var deviceLevel = deviceEntity is null
+            ? subLevel
+            : PairingSettingsSerializer.Deserialize(deviceEntity.SettingsJson, _strokeMsLimits);
+
+        return MergeSubLevelOntoDevice(deviceLevel, subLevel);
+    }
+
+    public PairingSettingsDto SavePairingSettings(
+        string domTarget,
+        string subTarget,
+        string deviceId,
+        PairingSettingsDto settings)
+    {
+        if (string.IsNullOrWhiteSpace(domTarget))
+        {
+            throw new ArgumentException("DomTarget is required.", nameof(domTarget));
+        }
+
+        var key = domTarget.Trim();
+        var normalizedSub = SubTargetValidation.Normalize(subTarget);
+        var normalizedDeviceId = NormalizeDeviceId(deviceId);
+        EnsureDeviceRegistered(key, normalizedSub, normalizedDeviceId);
+
+        var normalized = PairingSettingsSerializer.Normalize(settings, _strokeMsLimits);
+        SaveSubLevelPairingSettings(key, normalizedSub, normalized);
+
+        var deviceEntity = _db.DomSubDeviceSettings.SingleOrDefault(entry =>
+            entry.DomTarget == key &&
+            entry.SubName == normalizedSub &&
+            entry.DeviceId == normalizedDeviceId);
+
+        if (deviceEntity is null)
+        {
+            deviceEntity = new DomSubDeviceSettings
+            {
+                DomTarget = key,
+                SubName = normalizedSub,
+                DeviceId = normalizedDeviceId,
+                SettingsJson = string.Empty,
+            };
+            _db.DomSubDeviceSettings.Add(deviceEntity);
+        }
+
+        deviceEntity.SettingsJson = PairingSettingsSerializer.Serialize(normalized, _strokeMsLimits);
+        _db.SaveChanges();
+
+        return MergeSubLevelOntoDevice(normalized, normalized);
+    }
+
+    private PairingSettingsDto GetSubLevelPairingSettings(string domTarget, string subTarget)
     {
         if (string.IsNullOrWhiteSpace(domTarget))
         {
@@ -414,28 +521,17 @@ public sealed class SomNetDataStore : ISomNetDataStore
             : PairingSettingsSerializer.Deserialize(entity.SettingsJson, _strokeMsLimits);
     }
 
-    public PairingSettingsDto SavePairingSettings(
-        string domTarget,
-        string subTarget,
-        PairingSettingsDto settings)
+    private void SaveSubLevelPairingSettings(string domTarget, string normalizedSub, PairingSettingsDto normalized)
     {
-        if (string.IsNullOrWhiteSpace(domTarget))
-        {
-            throw new ArgumentException("DomTarget is required.", nameof(domTarget));
-        }
-
-        var normalizedSub = SubTargetValidation.Normalize(subTarget);
-        var normalized = PairingSettingsSerializer.Normalize(settings, _strokeMsLimits);
-        var key = domTarget.Trim();
         var entity = _db.DomSubSettings.SingleOrDefault(entry =>
-            entry.DomTarget == key &&
+            entry.DomTarget == domTarget &&
             entry.SubName == normalizedSub);
 
         if (entity is null)
         {
             entity = new DomSubSettings
             {
-                DomTarget = key,
+                DomTarget = domTarget,
                 SubName = normalizedSub,
                 SettingsJson = string.Empty,
             };
@@ -443,9 +539,43 @@ public sealed class SomNetDataStore : ISomNetDataStore
         }
 
         entity.SettingsJson = PairingSettingsSerializer.Serialize(normalized, _strokeMsLimits);
-        _db.SaveChanges();
+    }
 
-        return normalized;
+    private static PairingSettingsDto MergeSubLevelOntoDevice(PairingSettingsDto device, PairingSettingsDto subLevel)
+    {
+        return new PairingSettingsDto
+        {
+            AppOptions = subLevel.AppOptions,
+            Video = subLevel.Video,
+            Manual = device.Manual,
+            Automatic = device.Automatic,
+            MotorAutomatic = device.MotorAutomatic,
+            MotorManual = device.MotorManual,
+        };
+    }
+
+    private static string NormalizeDeviceId(string deviceId)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            throw new ArgumentException("DeviceId is required.", nameof(deviceId));
+        }
+
+        return deviceId.Trim();
+    }
+
+    private void EnsureDeviceRegistered(string domTarget, string normalizedSub, string deviceId)
+    {
+        var registered = _db.SubDeviceRegistrations.AsNoTracking().Any(entry =>
+            entry.DomTarget == domTarget &&
+            entry.SubName == normalizedSub &&
+            entry.DeviceId == deviceId &&
+            !entry.IsRevoked);
+
+        if (!registered)
+        {
+            throw new ArgumentException($"Device '{deviceId}' is not paired to Sub '{normalizedSub}'.");
+        }
     }
 
     private int GetNextNotificationSequence()
@@ -530,6 +660,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
             LastActivityAt = capturedAt,
             DomTarget = session.DomTarget,
             SubTarget = session.SubTarget,
+            DeviceId = session.DeviceId,
             Mode = session.Mode,
             Summary = session.Summary,
         };
@@ -541,6 +672,7 @@ public sealed class SomNetDataStore : ISomNetDataStore
         StartedAt = session.StartedAt,
         DomTarget = session.DomTarget,
         SubTarget = session.SubTarget,
+        DeviceId = session.DeviceId,
         Mode = session.Mode,
         Summary = session.Summary,
     };

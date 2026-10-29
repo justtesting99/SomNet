@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 export function SubSelectionDialog() {
   const { selectedSub, setSelectedSub, isDialogOpen, closeDialog } = useSubTarget();
   const { user } = useAuth();
-  const { endActiveSessionIfNeeded } = useLiveSession();
+  const { endAllInProgressSessionsForSub } = useLiveSession();
   const domName = user?.displayName ?? 'Unknown';
   const [pendingSub, setPendingSub] = useState<SubTargetName>(selectedSub);
   const [availableSubs, setAvailableSubs] = useState<SubTargetName[]>([]);
@@ -93,7 +93,7 @@ export function SubSelectionDialog() {
 
   async function applySubSelection(sub: SubTargetName) {
     if (sub !== selectedSub) {
-      await endActiveSessionIfNeeded('sub-change');
+      await endAllInProgressSessionsForSub('sub-change');
     }
 
     setSelectedSub(sub);
@@ -141,7 +141,7 @@ export function SubSelectionDialog() {
       if (subPendingRemoval === selectedSub && subs.length > 0) {
         const nextSub = subs[0];
         if (nextSub !== selectedSub) {
-          await endActiveSessionIfNeeded('sub-change');
+          await endAllInProgressSessionsForSub('sub-change');
           setSelectedSub(nextSub);
         }
       }

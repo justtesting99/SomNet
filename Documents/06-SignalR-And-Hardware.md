@@ -5,7 +5,7 @@ SomNet provides real-time communication between the API and ESP32 hardware devic
 | Layer | Status (2026-09-20) |
 |-------|------------------------|
 | **API + hub** | Complete — pairing, dispatch, ack registry, per-command ack timeouts, **`ReportButtonEvent`**, **`session-accessory`** validation |
-| **ESP32 firmware** | **Phases 0–12 + button clicks + P16 signed off** — firmware **`0.15.0-session-accessory`** |
+| **ESP32 firmware** | **Phases 0–12 + button clicks + P16 signed off** — current **`0.16.4-motor-burst-duty`** (relay burst placement **`0.15.2-burst-main-timing`** lineage on same binary; P16 **`0.15.0-session-accessory`**) |
 | **React UI** | **Complete** — Hardware dialog pairing; REST command dispatch; operator hub for automatic session end + **device button events**; **Session in Progress** slide switch ([P16](./25-Session-Accessory-In-Progress-Checklist.md)) |
 
 **Related docs:** [ESP32 Device Plan](./09-ESP32-Device-Plan.md) (source of truth) · [PROTOCOL.md](../SomNet.Device/docs/PROTOCOL.md) (wire capture) · [Hardware User Guide](./Hardware-User-Guide.md) · [SomNet.Device/README](../SomNet.Device/README.md)
@@ -67,7 +67,13 @@ Constants in `SomNet.Shared/Models/DeviceConstants.cs`:
 | `AckCommand` | `HardwareCommandAckDto` | Paired device | Confirm command execution |
 | `ReportButtonEvent` | `DeviceButtonEventDto` | Paired device | Report GPIO button click (single/double) |
 
-**DTO note:** `HardwareCommandAckDto` includes `correlationId`, `success`, `message`, and optional **`resultJson`** (string containing JSON). REST `POST /api/devices/commands` forwards `resultJson` to the UI; `CommandAcknowledged` hub events include it for operator UI sync (`correlationId=automatic-session-complete` for auto-end, abort, and cooperative manual stop).
+**DTO note:** `HardwareCommandAckDto` includes **`deviceId`** (X-6), `correlationId`, `success`, `message`, and optional **`resultJson`** (string containing JSON). REST `POST /api/devices/commands` forwards `resultJson` to the UI; `CommandAcknowledged` hub events include it for operator UI sync:
+
+| `correlationId` | Use |
+|-----------------|-----|
+| `automatic-session-complete` | Auto-end, abort, cooperative stop — finalize session/history |
+| `motor-automatic-segment` | Motor automatic ramp telemetry — live pattern graph ([31 §13](./31-Motor-Actuator-Device-Design.md#13-as-built--hub-path-motor-programs-ui-telemetry)); not a session terminator |
+| `relay-automatic-segment` | Relay automatic stroke/gap telemetry — live power graph ([03 § Motor pattern graph](./03-Frontend-Architecture.md#motor-pattern-graph-scope)); not a session terminator |
 
 ---
 
@@ -202,7 +208,9 @@ Example — device rejected missing `strokeMs`:
 
 ## Command Keys
 
-Aligned with UI constants (`types/hardwareCommand.ts`) and `HardwareCommandKeys` (Shared). **Firmware status** as of **`0.15.0-session-accessory`**:
+Aligned with UI constants (`types/hardwareCommand.ts`) and `HardwareCommandKeys` (Shared). **Firmware status** as of **`0.16.4-motor-burst-duty`**:
+
+**Automatic-start snapshot** (when `burstsOn: true`) includes **`burstPlacement`** — six operator values + three legacy aliases; validated in `HardwareCommandPayloadValidator`. See [36-Burst-Placement-Modes-Design.md](./36-Burst-Placement-Modes-Design.md).
 
 | Key | Trigger | Typical Payload | Firmware |
 |-----|---------|-----------------|----------|
@@ -265,6 +273,7 @@ Device JWT Sub claim is the device id; Sub **name** is claim `sub_target` (not `
 | 8 | UI command dispatch + Hardware pairing dialog |
 | 9 | Burst mode + automatic start/stop (seven programs) |
 | 10 | Burst-in-automatic (`burstsOn`) |
+| 36 follow-on | **`burstPlacement`** main+ / instead-of — **`0.15.2-burst-main-timing`** |
 | 11 | Live **`automatic-update`** mid-session replan |
 | 12 | Network hardening — **`0.13.0-network`** |
 | 23 / BTN | Device button single/double on D33 — **`0.14.0-button-clicks`** |

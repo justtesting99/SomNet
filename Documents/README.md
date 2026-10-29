@@ -11,12 +11,12 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Frontend Architecture](./03-Frontend-Architecture.md) | Developers | React provider tree, UI modes, dialogs, and client-side state |
 | [Database Schema](./04-Database-Schema.md) | Developers | Entities, relationships, migrations, and seed data |
 | [Authentication & Security](./05-Authentication-And-Security.md) | Developers | Operator JWT, device tokens, and authorization model |
-| [SignalR & Hardware](./06-SignalR-And-Hardware.md) | Developers | Hub protocol, pairing, command dispatch, button events, **`session-accessory`**, firmware/UI status (synced 2026-09-21) |
+| [SignalR & Hardware](./06-SignalR-And-Hardware.md) | Developers | Hub protocol, pairing, command dispatch, button events, **`session-accessory`**, firmware/UI status (synced 2026-10-28) |
 | [Session & History](./07-Session-And-History.md) | Developers | Live session lifecycle, summaries, and timeline aggregation |
 | [Development Guide](./08-Development-Guide.md) | Developers | Local setup, build pipeline, common tasks, **recurring doc maintenance** (keep canonical docs in sync with code) |
 | [User Guide](./User-Guide.md) | Operators | How to use the web application day to day |
 | [Hardware User Guide](./Hardware-User-Guide.md) | Installers / owners | ESP32 setup, Wi‑Fi provisioning, pairing, relay + GPIO32 session accessory (updated 2026-09-21) |
-| [ESP32 Device Plan](./09-ESP32-Device-Plan.md) | Developers | **Source of truth** — firmware plan (Phases 0–12 + button clicks + P16 signed off; firmware **`0.15.0-session-accessory`**) |
+| [ESP32 Device Plan](./09-ESP32-Device-Plan.md) | Developers | **Source of truth** — firmware plan (Phases 0–12 + button clicks + P16 signed off; current build **`0.16.4-motor-burst-duty`**) |
 | [ESP32 Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | Developers | Protocol capture — **Complete** (2026-09-05) |
 | [ESP32 Phase 1 Checklist](./09-ESP32-Phase-1-Checklist.md) | Developers | PlatformIO scaffold — **Complete** (2026-09-05) |
 | [ESP32 Phase 2 Checklist](./09-ESP32-Phase-2-Checklist.md) | Developers | NVS + MAC device identity — **Complete** (2026-09-05) |
@@ -53,3 +53,13 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Video Snapshot encryption (dev)](./24-Video-Snapshot-Encryption-Checklist.md) | Developers | AES-256-GCM on disk before Pi — **signed off** (2026-09-13) |
 | [Video Phase 8 — Azure cutover](./21-Video-Phase-8-Azure-Cutover-Checklist.md) | Developers | App Service + SQL + Blob — blocked |
 | [ESP32 Network Spec](./09-ESP32-Network-Spec.md) | Developers | **Wi‑Fi / HTTP / hub architecture** — signed off **`0.12.0-network`** (2026-09-09); S3–S6 verified |
+| [Site operating profiles (cloud / Pi / standalone)](./26-ESP32-Local-Offline-Mode-Design.md) | Developers | Tier 1–3 deployment models |
+| [SomEsp standalone device plan](./27-SomEsp-Standalone-Device-Plan.md) | Developers | **`env:somesp`** + **`env:dev`** LAN **`/operate`** — **M2 signed 2026-10-28** |
+| [Scheduled jobs — local device integration](./28-Scheduled-Jobs-Local-Device-Integration.md) | Developers | LAN-only .NET jobs → SomEsp `/api/local/*`, completion result for scheduler, history options |
+| [Device local gateway — implementation plan](./29-Device-Local-Gateway-Implementation-Plan.md) | Developers | **LocalClient** + **LocalGateway** (:5290) — hosted in **TheSystem**; phases, checklists, Docker deferred |
+| [Main app device gateway integration](./30-Main-App-Device-Gateway-Integration.md) | Developers | TheSystem / scheduler → `IDeviceGatewayClient`, config, persisted run fields; §5 device registry (DB) |
+| [Motor (H-bridge) actuator — design](./31-Motor-Actuator-Device-Design.md) | Developers | Platform board, payloads, MA-D* — **hub path M1–M1d signed off** (2026-10-28) |
+| [Motor actuator — implementation plan & checklists](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) | Developers | **M0–M2 signed off** (hub **2026-10-28**, SomEsp/LAN **M2 2026-10-28**); **M3+** gateway — [31 §13](./31-Motor-Actuator-Device-Design.md#13-as-built--hub-path-motor-programs-ui-telemetry) |
+| [Burst placement modes](./36-Burst-Placement-Modes-Design.md) | Developers / operators | **`burstPlacement`**: main+ vs instead-of × spread / even / chance — relay + motor on unified binary; motor **M1d signed 2026-10-28** |
+| [Operator session & accessory — V2 rules](./34-Operator-Session-And-Accessory-V2-Rules.md) | Developers / operators | **Canonical** Scene + Accessory + multi-device gating; supersedes P16 (V1) for new work |
+| [SomNet integration runbook](./SomNetIntegrationRunbook.md) | Developers / operators | Admin test bed, gateway payloads, TheSystem recipes |

@@ -13,6 +13,7 @@ public interface IHardwareCommandDispatcher
     Task<SendHardwareCommandResponseDto> SendCommandAsync(
         string domTarget,
         string subTarget,
+        string deviceId,
         string commandKey,
         string payloadJson,
         CancellationToken cancellationToken = default);
@@ -43,19 +44,38 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
     public async Task<SendHardwareCommandResponseDto> SendCommandAsync(
         string domTarget,
         string subTarget,
+        string deviceId,
         string commandKey,
         string payloadJson,
         CancellationToken cancellationToken = default)
     {
-        var registration = await _deviceTokenService.GetActiveRegistrationAsync(domTarget, subTarget, cancellationToken);
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            return new SendHardwareCommandResponseDto
+            {
+                CorrelationId = Guid.NewGuid().ToString("N"),
+                Delivered = false,
+                Acknowledged = false,
+                Success = false,
+                Message = "deviceId is required.",
+            };
+        }
+
+        var normalizedDeviceId = deviceId.Trim();
+        var registration = await _deviceTokenService.GetActiveRegistrationAsync(
+            domTarget,
+            subTarget,
+            normalizedDeviceId,
+            cancellationToken);
 
         if (registration is null)
         {
             _logger.LogWarning(
-                "Hardware command {CommandKey} rejected — no active registration for {DomTarget}/{SubTarget}.",
+                "Hardware command {CommandKey} rejected — no active registration for {DomTarget}/{SubTarget}/{DeviceId}.",
                 commandKey,
                 domTarget,
-                subTarget);
+                subTarget,
+                normalizedDeviceId);
 
             return new SendHardwareCommandResponseDto
             {
@@ -63,17 +83,22 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
                 Delivered = false,
                 Acknowledged = false,
                 Success = false,
-                Message = "No paired device token exists for this Sub target.",
+                Message = "No paired device token exists for this Sub target and deviceId.",
             };
         }
 
-        if (!_connectionRegistry.IsPairedDeviceConnected(domTarget, subTarget))
+        if (!_connectionRegistry.TryGetPairedConnectionId(
+                domTarget,
+                subTarget,
+                normalizedDeviceId,
+                out var connectionId))
         {
             _logger.LogWarning(
-                "Hardware command {CommandKey} rejected — paired device offline for {DomTarget}/{SubTarget}.",
+                "Hardware command {CommandKey} rejected — paired device offline for {DomTarget}/{SubTarget}/{DeviceId}.",
                 commandKey,
                 domTarget,
-                subTarget);
+                subTarget,
+                normalizedDeviceId);
 
             return new SendHardwareCommandResponseDto
             {
@@ -89,13 +114,15 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
                 commandKey,
                 payloadJson,
                 ResolveMaxStrokeMs(),
+                registration.ActuatorKind,
                 out var validationError))
         {
             _logger.LogWarning(
-                "Hardware command {CommandKey} rejected — invalid payload for {DomTarget}/{SubTarget}: {ValidationError}",
+                "Hardware command {CommandKey} rejected — invalid payload for {DomTarget}/{SubTarget}/{DeviceId}: {ValidationError}",
                 commandKey,
                 domTarget,
                 subTarget,
+                normalizedDeviceId,
                 validationError);
 
             return new SendHardwareCommandResponseDto
@@ -120,17 +147,15 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
             PayloadJson = string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson,
         };
 
-        var hubGroup = HardwareHubGroups.Paired(registration.DomTarget, registration.SubName);
-
         _logger.LogInformation(
-            "Sending hardware command {CommandKey} correlationId={CorrelationId} to group {HubGroup} deviceId={DeviceId}.",
+            "Sending hardware command {CommandKey} correlationId={CorrelationId} to deviceId={DeviceId} connection={ConnectionId}.",
             commandKey,
             correlationId,
-            hubGroup,
-            registration.DeviceId);
+            registration.DeviceId,
+            connectionId);
 
         await _hubContext.Clients
-            .Group(hubGroup)
+            .Client(connectionId)
             .SendAsync(HardwareHubMethods.ExecuteCommand, message, cancellationToken);
 
         var ackTimeout = HardwareCommandAckTimeout.Resolve(commandKey, payloadJson);
@@ -143,10 +168,10 @@ public sealed class HardwareCommandDispatcher : IHardwareCommandDispatcher
         if (acknowledgement is null)
         {
             _logger.LogWarning(
-                "Hardware command {CommandKey} correlationId={CorrelationId} timed out waiting for device ack (group {HubGroup}).",
+                "Hardware command {CommandKey} correlationId={CorrelationId} timed out waiting for device ack (deviceId={DeviceId}).",
                 commandKey,
                 correlationId,
-                hubGroup);
+                normalizedDeviceId);
 
             return new SendHardwareCommandResponseDto
             {

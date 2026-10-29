@@ -37,7 +37,9 @@ public class SettingsController : ControllerBase
     }
 
     [HttpGet]
-    public ActionResult<PairingSettingsDto> Get([FromQuery] string subTarget)
+    public ActionResult<PairingSettingsDto> Get(
+        [FromQuery] string subTarget,
+        [FromQuery] string deviceId)
     {
         var domTarget = GetDomTarget();
 
@@ -46,12 +48,25 @@ public class SettingsController : ControllerBase
             return Unauthorized();
         }
 
-        return Ok(_dataStore.GetPairingSettings(domTarget, subTarget));
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            return BadRequest("deviceId is required.");
+        }
+
+        try
+        {
+            return Ok(_dataStore.GetPairingSettings(domTarget, subTarget, deviceId));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     [HttpPut]
     public ActionResult<PairingSettingsDto> Save(
         [FromQuery] string subTarget,
+        [FromQuery] string deviceId,
         [FromBody] PairingSettingsDto settings)
     {
         var domTarget = GetDomTarget();
@@ -61,9 +76,14 @@ public class SettingsController : ControllerBase
             return Unauthorized();
         }
 
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            return BadRequest("deviceId is required.");
+        }
+
         try
         {
-            return Ok(_dataStore.SavePairingSettings(domTarget, subTarget, settings));
+            return Ok(_dataStore.SavePairingSettings(domTarget, subTarget, deviceId, settings));
         }
         catch (ArgumentException ex)
         {

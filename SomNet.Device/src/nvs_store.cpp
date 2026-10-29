@@ -1,5 +1,7 @@
 #include "nvs_store.h"
 
+#include "config.h"
+
 #include <Arduino.h>
 #include <Preferences.h>
 #include <string.h>
@@ -23,6 +25,10 @@ constexpr char kKeySubTarget[] = "sub_target";
 constexpr char kKeyPaired[] = "paired";
 constexpr char kKeyProvisioned[] = "provisioned";
 constexpr char kKeyCredReset[] = "cred_reset";
+constexpr char kKeyOperatePin[] = "operate_pin";
+constexpr char kKeyLocalOperateSet[] = "loc_oper_set";
+constexpr char kKeyHubRuntimeEn[] = "hub_run";
+constexpr char kKeyActuatorKind[] = "act_kind";
 
 Preferences preferences;
 NvsStore* gNvsStoreInstance = nullptr;
@@ -217,8 +223,44 @@ bool NvsStore::isFullyProvisioned() const {
     }
 
     char wifi[NvsStore::kMaxStringLen];
+    if (!getWifiSsid(wifi, sizeof(wifi)) || wifi[0] == '\0') {
+        return false;
+    }
+
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+    return true;
+#else
     char server[NvsStore::kMaxStringLen];
-    return getWifiSsid(wifi, sizeof(wifi)) && getServerUrl(server, sizeof(server));
+    return getServerUrl(server, sizeof(server)) && server[0] != '\0';
+#endif
+}
+
+bool NvsStore::hasHubServerUrl() const {
+    char server[NvsStore::kMaxStringLen];
+    return getServerUrl(server, sizeof(server)) && server[0] != '\0';
+}
+
+bool NvsStore::isHubRuntimeEnabled() const {
+    if (!open_) {
+        return false;
+    }
+    if (!preferences.isKey(kKeyHubRuntimeEn)) {
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+        // Saved server_url before hub_run existed: hub on until user toggles off for local /operate.
+        return hasHubServerUrl();
+#else
+        return true;
+#endif
+    }
+    return preferences.getBool(kKeyHubRuntimeEn, false);
+}
+
+bool NvsStore::setHubRuntimeEnabled(bool value) {
+    if (!open_) {
+        return false;
+    }
+    preferences.putBool(kKeyHubRuntimeEn, value);
+    return true;
 }
 
 bool NvsStore::getAccessToken(char* out, size_t outLen) const {
@@ -300,4 +342,114 @@ bool NvsStore::isPaired() const {
 
     char token[NvsStore::kMaxTokenLen];
     return getAccessToken(token, sizeof(token));
+}
+
+bool NvsStore::hasOperatePin() const {
+    if (!open_) {
+        return false;
+    }
+    return preferences.isKey(kKeyOperatePin);
+}
+
+bool NvsStore::getOperatePin(char* out, size_t outLen) const {
+    return getString(kKeyOperatePin, out, outLen);
+}
+
+bool NvsStore::setOperatePin(const char* value) {
+    return setString(kKeyOperatePin, value);
+}
+
+bool NvsStore::hasLocalOperateSettings() const {
+    if (!open_) {
+        return false;
+    }
+    return preferences.isKey(kKeyLocalOperateSet);
+}
+
+bool NvsStore::getLocalOperateSettings(char* out, size_t outLen) const {
+    if (out == nullptr || outLen == 0) {
+        return false;
+    }
+    out[0] = '\0';
+    if (!open_ || !preferences.isKey(kKeyLocalOperateSet)) {
+        return false;
+    }
+
+    const size_t len = preferences.getBytesLength(kKeyLocalOperateSet);
+    if (len == 0 || len >= outLen) {
+        return false;
+    }
+
+    const size_t read = preferences.getBytes(kKeyLocalOperateSet, out, len);
+    if (read != len) {
+        out[0] = '\0';
+        return false;
+    }
+    out[len] = '\0';
+    return true;
+}
+
+bool NvsStore::setLocalOperateSettings(const char* json) {
+    if (!open_ || json == nullptr) {
+        return false;
+    }
+
+    const size_t len = strlen(json);
+    if (len == 0 || len >= kMaxLocalOperateSettingsBytes) {
+        return false;
+    }
+
+    return preferences.putBytes(kKeyLocalOperateSet, json, len) > 0;
+}
+
+bool NvsStore::hasActuatorKindBound() const {
+    return open_ && preferences.isKey(kKeyActuatorKind);
+}
+
+DeviceActuatorKind NvsStore::getActuatorKind() const {
+    char buf[16] = {};
+    if (!getString(kKeyActuatorKind, buf, sizeof(buf))) {
+        return DeviceActuatorKind_Relay;
+    }
+
+    DeviceActuatorKind kind = DeviceActuatorKind_Relay;
+    if (!actuatorKindFromJson(buf, &kind)) {
+        return DeviceActuatorKind_Relay;
+    }
+    return kind;
+}
+
+bool NvsStore::setActuatorKind(DeviceActuatorKind kind) {
+    return setString(kKeyActuatorKind, actuatorKindToJson(kind));
+}
+
+bool NvsStore::setActuatorKindFromJson(const char* value) {
+    DeviceActuatorKind kind = DeviceActuatorKind_Relay;
+    if (!actuatorKindFromJson(value, &kind)) {
+        return false;
+    }
+    return setActuatorKind(kind);
+}
+
+bool NvsStore::clearActuatorKindBinding() {
+    if (!open_ || !preferences.isKey(kKeyActuatorKind)) {
+        return true;
+    }
+    return preferences.remove(kKeyActuatorKind);
+}
+
+bool NvsStore::tryBindActuatorKindFromPairJson(const char* jsonKind) {
+    DeviceActuatorKind incoming = DeviceActuatorKind_Relay;
+    if (!actuatorKindFromJson(jsonKind, &incoming)) {
+        return false;
+    }
+
+    if (hasActuatorKindBound()) {
+        if (!isPaired()) {
+            return setActuatorKind(incoming);
+        }
+        return getActuatorKind() == incoming;
+    }
+
+    return setActuatorKind(incoming);
 }

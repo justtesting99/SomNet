@@ -72,6 +72,30 @@ namespace SomNet.API.Data.Migrations
                     b.ToTable("DomSubSettings", (string)null);
                 });
 
+            modelBuilder.Entity("SomNet.API.Data.Entities.DomSubDeviceSettings", b =>
+                {
+                    b.Property<string>("DomTarget")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("SubName")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("DeviceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SettingsJson")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("DomTarget", "SubName", "DeviceId");
+
+                    b.ToTable("DomSubDeviceSettings", (string)null);
+                });
+
             modelBuilder.Entity("SomNet.API.Data.Entities.NotificationHistoryEntry", b =>
                 {
                     b.Property<string>("Id")
@@ -173,6 +197,10 @@ namespace SomNet.API.Data.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<string>("DeviceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<int>("Mode")
                         .HasColumnType("int");
 
@@ -193,6 +221,8 @@ namespace SomNet.API.Data.Migrations
 
                     b.HasIndex("DomTarget", "SubTarget", "StartedAt");
 
+                    b.HasIndex("DomTarget", "SubTarget", "DeviceId", "StartedAt");
+
                     b.ToTable("Sessions", (string)null);
                 });
 
@@ -206,15 +236,19 @@ namespace SomNet.API.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
+                    b.Property<string>("DeviceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("AccessToken")
                         .IsRequired()
                         .HasMaxLength(2048)
                         .HasColumnType("nvarchar(2048)");
 
-                    b.Property<string>("DeviceId")
+                    b.Property<string>("ActuatorKind")
                         .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
 
                     b.Property<bool>("IsRevoked")
                         .HasColumnType("bit");
@@ -233,7 +267,7 @@ namespace SomNet.API.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
-                    b.HasKey("DomTarget", "SubName");
+                    b.HasKey("DomTarget", "SubName", "DeviceId");
 
                     b.HasIndex("DeviceId");
 

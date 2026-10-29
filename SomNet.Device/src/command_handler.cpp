@@ -1,11 +1,25 @@
 #include "command_handler.h"
 
+#include "config.h"
+#include "actuator_kind.h"
 #include "device_identity.h"
 #include "execution_context.h"
 #include "modes/automatic/automatic_config.h"
+#include "motor_controller.h"
+#include "modes/automatic/automatic_config.h"
+#include "modes/motor/motor_automatic_config.h"
+#include "modes/motor/motor_automatic_session_mode.h"
 #include "nvs_store.h"
 #include "session_accessory_controller.h"
 #include "signalr_client.h"
+
+#if SOMNET_LOCAL_OPERATE_ENABLED
+#include "local_command_status.h"
+#include "local_operate.h"
+#endif
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+#include "local_history_store.h"
+#endif
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -14,6 +28,10 @@
 namespace {
 
 CommandHandler* gCommandHandlerInstance = nullptr;
+MotorAutomaticSessionMode gMotorAutomaticSession;
+#if SOMNET_LOCAL_OPERATE_ENABLED
+LocalOperate* gLocalOperateForCommands = nullptr;
+#endif
 
 bool secureStringEqual(const char* a, const char* b) {
     if (a == nullptr || b == nullptr) {
@@ -34,6 +52,22 @@ bool secureStringEqual(const char* a, const char* b) {
     return result == 0;
 }
 
+/** Relay stroke/burst only — automatic-start is routed per NVS kind below. */
+bool isRelayMotionCommandKey(const char* commandKey) {
+    if (commandKey == nullptr) {
+        return false;
+    }
+    return strcmp(commandKey, "stroke") == 0 || strcmp(commandKey, "burst") == 0;
+}
+
+/** Motor manual PWM only — automatic-start is routed per NVS kind below. */
+bool isMotorMotionCommandKey(const char* commandKey) {
+    if (commandKey == nullptr) {
+        return false;
+    }
+    return strcmp(commandKey, "motor-run") == 0 || strcmp(commandKey, "motor-stop") == 0;
+}
+
 } // namespace
 
 void commandHandlerOnExecuteCommand(const ExecuteCommandPayload& command) {
@@ -42,21 +76,34 @@ void commandHandlerOnExecuteCommand(const ExecuteCommandPayload& command) {
     }
 }
 
+#if SOMNET_LOCAL_OPERATE_ENABLED
+void commandHandlerSetLocalOperate(LocalOperate* localOperate) {
+    gLocalOperateForCommands = localOperate;
+}
+#endif
+
 void CommandHandler::begin(
     ExecutionContext* executionContext,
     NvsStore* nvsStore,
     DeviceIdentity* identity,
     SignalRClient* signalRClient,
-    SessionAccessoryController* sessionAccessory) {
+    SessionAccessoryController* sessionAccessory,
+    MotorController* motorController) {
     executionContext_ = executionContext;
     nvs_ = nvsStore;
     identity_ = identity;
     signalR_ = signalRClient;
     sessionAccessory_ = sessionAccessory;
+    motor_ = motorController;
+    motorAutomatic_ = &gMotorAutomaticSession;
+    if (motorAutomatic_ != nullptr && motor_ != nullptr) {
+        motorAutomatic_->setMotor(motor_);
+    }
     gCommandHandlerInstance = this;
     initialized_ = true;
     if (executionContext_ != nullptr) {
         executionContext_->setAutomaticSessionNotifier(this, &CommandHandler::onAutomaticComplete);
+        executionContext_->setAutomaticSegmentNotifier(this, &CommandHandler::onRelayAutomaticSegment);
     }
     Serial.println(F("[CMD] command_handler ready (Phase 6)"));
 }
@@ -77,6 +124,18 @@ void CommandHandler::enqueueExecuteCommand(const ExecuteCommandPayload& command)
 }
 
 void CommandHandler::poll() {
+    if (motor_ != nullptr && nvs_ != nullptr &&
+        nvs_->getActuatorKind() == DeviceActuatorKind_HBridge) {
+        motor_->beginIfNeeded();
+        motor_->poll();
+    }
+
+    pollMotorManualRun();
+
+    if (motorAutomatic_ != nullptr) {
+        motorAutomatic_->poll();
+    }
+
     if (!initialized_ || !pendingCommandReady_) {
         return;
     }
@@ -85,12 +144,43 @@ void CommandHandler::poll() {
     handleExecuteCommand(pendingCommand_);
 }
 
-bool CommandHandler::validateCommand(
+bool CommandHandler::validateLocalCommand(
     const ExecuteCommandPayload& command,
     char* rejectMessage,
     size_t rejectMessageLen) {
     if (rejectMessageLen > 0) {
         rejectMessage[0] = '\0';
+    }
+
+    if (!command.fromLocal) {
+        strncpy(rejectMessage, "not a local command", rejectMessageLen - 1);
+        return false;
+    }
+
+    if (identity_ == nullptr) {
+        strncpy(rejectMessage, "handler unavailable", rejectMessageLen - 1);
+        return false;
+    }
+
+    if (command.deviceId[0] == '\0' || strcmp(command.deviceId, identity_->deviceId()) != 0) {
+        strncpy(rejectMessage, "deviceId mismatch", rejectMessageLen - 1);
+        return false;
+    }
+
+    return true;
+}
+
+bool CommandHandler::validateHubCommand(
+    const ExecuteCommandPayload& command,
+    char* rejectMessage,
+    size_t rejectMessageLen) {
+    if (rejectMessageLen > 0) {
+        rejectMessage[0] = '\0';
+    }
+
+    if (command.fromLocal) {
+        strncpy(rejectMessage, "hub validation on local command", rejectMessageLen - 1);
+        return false;
     }
 
     if (nvs_ == nullptr || identity_ == nullptr || signalR_ == nullptr) {
@@ -153,6 +243,30 @@ void CommandHandler::sendAck(
         Serial.println(resultJson);
     }
 
+#if SOMNET_LOCAL_OPERATE_ENABLED
+    if (correlationId != nullptr &&
+        (strncmp(correlationId, "local-", 6) == 0 ||
+            strcmp(correlationId, "automatic-session-complete") == 0 ||
+            strcmp(correlationId, kMotorAutomaticSegmentCorrelationId) == 0 ||
+            strcmp(correlationId, kRelayAutomaticSegmentCorrelationId) == 0)) {
+        Serial.print(F("[CMD] local ack correlationId="));
+        Serial.print(correlationId != nullptr ? correlationId : "");
+        Serial.print(F(" success="));
+        Serial.println(success ? F("true") : F("false"));
+        localCommandStatusOnAck(correlationId, success, message, resultJson);
+#if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
+        if (resultJson != nullptr && resultJson[0] != '\0') {
+            localHistoryOnLocalAck(correlationId, success, message, resultJson);
+        }
+        return;
+#endif
+        // env:dev + hub: local /api/local poll still works; also forward to SignalR below.
+        if (strncmp(correlationId, "local-", 6) == 0) {
+            return;
+        }
+    }
+#endif
+
     if (signalR_ == nullptr || correlationId == nullptr || correlationId[0] == '\0') {
         Serial.println(F("[CMD] ack skipped — hub unavailable"));
         return;
@@ -170,6 +284,58 @@ void CommandHandler::sendAck(
             resultJson)) {
         Serial.println(F("[CMD] failed to send AckCommand"));
     }
+}
+
+void CommandHandler::pollMotorManualRun() {
+    if (!motorManualRunActive_ || motor_ == nullptr) {
+        return;
+    }
+
+    if (millis() < motorManualRunUntilMs_) {
+        return;
+    }
+
+    completeMotorManualRun(true, "motor run complete", false);
+}
+
+void CommandHandler::completeMotorManualRun(bool success, const char* message, bool interrupted) {
+    if (!motorManualRunActive_) {
+        return;
+    }
+
+    const unsigned long actualMs = millis() - motorManualRunStartMs_;
+    if (motor_ != nullptr) {
+        motor_->stop();
+    }
+
+    char resultJson[192];
+    if (interrupted) {
+        snprintf(
+            resultJson,
+            sizeof(resultJson),
+            "{\"commandKey\":\"motor-run\",\"dutyPercent\":%d,\"durationMs\":%lu,"
+            "\"actualDurationMs\":%lu,\"interrupted\":true}",
+            motorManualDuty_,
+            motorManualDurationMs_,
+            actualMs);
+    } else {
+        snprintf(
+            resultJson,
+            sizeof(resultJson),
+            "{\"commandKey\":\"motor-run\",\"dutyPercent\":%d,\"durationMs\":%lu,"
+            "\"actualDurationMs\":%lu}",
+            motorManualDuty_,
+            motorManualDurationMs_,
+            actualMs);
+    }
+
+    sendAck(motorManualCorrelationId_, success, message, resultJson);
+    motorManualRunActive_ = false;
+    motorManualCorrelationId_[0] = '\0';
+    motorManualDuty_ = 0;
+    motorManualDurationMs_ = 0;
+    motorManualRunStartMs_ = 0;
+    motorManualRunUntilMs_ = 0;
 }
 
 void CommandHandler::onStrokeComplete(
@@ -196,6 +362,30 @@ void CommandHandler::onAutomaticComplete(
     static_cast<CommandHandler*>(context)->sendAck(correlationId, success, message, resultJson);
 }
 
+void CommandHandler::onMotorAutomaticSegment(void* context, const char* resultJson) {
+    if (context == nullptr || resultJson == nullptr || resultJson[0] == '\0') {
+        return;
+    }
+
+    static_cast<CommandHandler*>(context)->sendAck(
+        kMotorAutomaticSegmentCorrelationId,
+        true,
+        "motor automatic segment",
+        resultJson);
+}
+
+void CommandHandler::onRelayAutomaticSegment(void* context, const char* resultJson) {
+    if (context == nullptr || resultJson == nullptr || resultJson[0] == '\0') {
+        return;
+    }
+
+    static_cast<CommandHandler*>(context)->sendAck(
+        kRelayAutomaticSegmentCorrelationId,
+        true,
+        "relay automatic segment",
+        resultJson);
+}
+
 void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) {
     if (!initialized_) {
         return;
@@ -207,16 +397,77 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
     Serial.println(command.commandKey);
 
     char rejectMessage[96];
-    if (!validateCommand(command, rejectMessage, sizeof(rejectMessage))) {
+    const bool valid = command.fromLocal
+        ? validateLocalCommand(command, rejectMessage, sizeof(rejectMessage))
+        : validateHubCommand(command, rejectMessage, sizeof(rejectMessage));
+    if (!valid) {
         Serial.print(F("[CMD] reject: "));
         Serial.println(rejectMessage);
         sendAck(command.correlationId, false, rejectMessage, nullptr);
         return;
     }
 
+#if SOMNET_LOCAL_OPERATE_ENABLED
+    if (!command.fromLocal && gLocalOperateForCommands != nullptr &&
+        !gLocalOperateForCommands->isSceneActive()) {
+        if (isAutomaticStartKey(command.commandKey) || isAutomaticUpdateKey(command.commandKey) ||
+            strcmp(command.commandKey, "stroke") == 0 || strcmp(command.commandKey, "burst") == 0 ||
+            strcmp(command.commandKey, "motor-run") == 0) {
+            sendAck(command.correlationId, false, "scene_inactive", nullptr);
+            return;
+        }
+    }
+#endif
+
     if (executionContext_ == nullptr) {
         sendAck(command.correlationId, false, "execution unavailable", nullptr);
         return;
+    }
+
+    const DeviceActuatorKind actuatorKind =
+        nvs_ != nullptr ? nvs_->getActuatorKind() : DeviceActuatorKind_Relay;
+
+    if (actuatorKind == DeviceActuatorKind_Relay && isMotorMotionCommandKey(command.commandKey)) {
+        sendAck(command.correlationId, false, "actuator kind mismatch", nullptr);
+        return;
+    }
+    if (actuatorKind == DeviceActuatorKind_HBridge && isRelayMotionCommandKey(command.commandKey)) {
+        sendAck(command.correlationId, false, "actuator kind mismatch", nullptr);
+        return;
+    }
+
+    if (actuatorKind == DeviceActuatorKind_HBridge && motor_ != nullptr) {
+        motor_->beginIfNeeded();
+    }
+
+    if (strcmp(command.commandKey, "scene-session") == 0) {
+#if SOMNET_LOCAL_OPERATE_ENABLED
+        if (gLocalOperateForCommands == nullptr) {
+            sendAck(command.correlationId, false, "scene unavailable", nullptr);
+            return;
+        }
+
+        JsonDocument doc;
+        const DeserializationError err = deserializeJson(
+            doc,
+            command.payloadJson[0] != '\0' ? command.payloadJson : "{}");
+        if (err || !doc["enabled"].is<bool>()) {
+            sendAck(command.correlationId, false, "invalid scene-session payload", nullptr);
+            return;
+        }
+
+        const bool enabled = doc["enabled"].as<bool>();
+        if (!gLocalOperateForCommands->setSceneActive(enabled)) {
+            sendAck(command.correlationId, false, enabled ? "sub_not_ready" : "scene_off_failed", nullptr);
+            return;
+        }
+
+        sendAck(command.correlationId, true, enabled ? "scene on" : "scene off", nullptr);
+        return;
+#else
+        sendAck(command.correlationId, false, "scene unavailable", nullptr);
+        return;
+#endif
     }
 
     if (strcmp(command.commandKey, "session-accessory") == 0) {
@@ -245,6 +496,21 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
     }
 
     if (strcmp(command.commandKey, "abort") == 0) {
+        if (motorAutomatic_ != nullptr && motorAutomatic_->isActive()) {
+            motorAutomatic_->abort();
+            sendAck(command.correlationId, true, "command aborted", nullptr);
+            return;
+        }
+        if (motorManualRunActive_) {
+            completeMotorManualRun(true, "command aborted", true);
+            sendAck(command.correlationId, true, "command aborted", nullptr);
+            return;
+        }
+        if (motor_ != nullptr && motor_->isActive()) {
+            motor_->stop();
+            sendAck(command.correlationId, true, "command aborted", nullptr);
+            return;
+        }
         if (!executionContext_->isActive()) {
             Serial.println(F("[CMD] reject: nothing to abort"));
             sendAck(command.correlationId, false, "nothing to abort", nullptr);
@@ -256,9 +522,89 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
         return;
     }
 
-    if (sessionAccessory_ == nullptr || !sessionAccessory_->isEnabled()) {
-        Serial.println(F("[CMD] reject: session accessory off"));
-        sendAck(command.correlationId, false, "session accessory off", nullptr);
+    if (strcmp(command.commandKey, "motor-stop") == 0) {
+        if (motor_ == nullptr) {
+            sendAck(command.correlationId, false, "motor unavailable", nullptr);
+            return;
+        }
+        motor_->stop();
+        sendAck(command.correlationId, true, "motor stopped", nullptr);
+        return;
+    }
+
+    if (isAutomaticStopKey(command.commandKey)) {
+        if (actuatorKind == DeviceActuatorKind_HBridge) {
+            if (motorAutomatic_ == nullptr ||
+                !motorAutomatic_->requestStop(
+                    command.correlationId,
+                    this,
+                    &CommandHandler::onAutomaticComplete)) {
+                sendAck(command.correlationId, false, "no automatic session running", nullptr);
+                return;
+            }
+            sendAck(command.correlationId, true, "automatic stop requested", nullptr);
+            return;
+        }
+
+        if (!executionContext_->stopAutomatic(
+                command.correlationId,
+                this,
+                &CommandHandler::onAutomaticComplete)) {
+            sendAck(command.correlationId, false, "no automatic session running", nullptr);
+            return;
+        }
+
+        sendAck(command.correlationId, true, "automatic stop requested", nullptr);
+        return;
+    }
+
+    if (strcmp(command.commandKey, "motor-run") == 0) {
+        if (motor_ == nullptr) {
+            sendAck(command.correlationId, false, "motor unavailable", nullptr);
+            return;
+        }
+        if (executionContext_->isActive() || motorManualRunActive_ || motor_->isActive() ||
+            (motorAutomatic_ != nullptr && motorAutomatic_->isActive())) {
+            sendAck(command.correlationId, false, "device busy", nullptr);
+            return;
+        }
+
+        JsonDocument doc;
+        const DeserializationError err = deserializeJson(
+            doc,
+            command.payloadJson[0] != '\0' ? command.payloadJson : "{}");
+        if (err || !doc["dutyPercent"].is<int>()) {
+            sendAck(command.correlationId, false, "invalid motor-run payload", nullptr);
+            return;
+        }
+
+        const int duty = doc["dutyPercent"].as<int>();
+        const unsigned long durationMs = doc["durationMs"] | 0UL;
+        if (durationMs > 0UL) {
+            if (!motor_->setDutyPercent(duty)) {
+                sendAck(command.correlationId, false, "motor run failed", nullptr);
+                return;
+            }
+
+            strncpy(
+                motorManualCorrelationId_,
+                command.correlationId,
+                sizeof(motorManualCorrelationId_) - 1);
+            motorManualCorrelationId_[sizeof(motorManualCorrelationId_) - 1] = '\0';
+            motorManualDuty_ = duty;
+            motorManualDurationMs_ = durationMs;
+            motorManualRunStartMs_ = millis();
+            motorManualRunUntilMs_ = motorManualRunStartMs_ + durationMs;
+            motorManualRunActive_ = true;
+            return;
+        }
+
+        if (!motor_->setDutyPercent(duty)) {
+            sendAck(command.correlationId, false, "motor run failed", nullptr);
+            return;
+        }
+
+        sendAck(command.correlationId, true, "motor running", nullptr);
         return;
     }
 
@@ -281,9 +627,26 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
     }
 
     if (isAutomaticStartKey(command.commandKey)) {
-        if (executionContext_->isActive()) {
+        if (executionContext_->isActive() ||
+            (motorAutomatic_ != nullptr && motorAutomatic_->isActive()) ||
+            (motor_ != nullptr && motor_->isActive())) {
             Serial.println(F("[CMD] reject: device busy"));
             sendAck(command.correlationId, false, "device busy", nullptr);
+            return;
+        }
+
+        if (actuatorKind == DeviceActuatorKind_HBridge) {
+            if (motorAutomatic_ == nullptr) {
+                sendAck(command.correlationId, false, "motor automatic unavailable", nullptr);
+                return;
+            }
+            motorAutomatic_->setSessionNotifier(this, &CommandHandler::onAutomaticComplete);
+            motorAutomatic_->setSegmentNotifier(this, &CommandHandler::onMotorAutomaticSegment);
+            if (!motorAutomatic_->beginSession(command.payloadJson)) {
+                sendAck(command.correlationId, false, "invalid automatic-start payload", nullptr);
+                return;
+            }
+            sendAck(command.correlationId, true, "automatic session started", nullptr);
             return;
         }
 
@@ -296,21 +659,22 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
         return;
     }
 
-    if (isAutomaticStopKey(command.commandKey)) {
-        if (!executionContext_->stopAutomatic(
-                command.correlationId,
-                this,
-                &CommandHandler::onAutomaticComplete)) {
-            sendAck(command.correlationId, false, "no automatic session running", nullptr);
+    if (isAutomaticUpdateKey(command.commandKey)) {
+        if (actuatorKind == DeviceActuatorKind_HBridge) {
+            if (motorAutomatic_ == nullptr || !motorAutomatic_->isActive()) {
+                sendAck(command.correlationId, false, "no automatic session running", nullptr);
+                return;
+            }
+
+            if (!motorAutomatic_->queueSessionUpdate(command.payloadJson)) {
+                sendAck(command.correlationId, false, "invalid automatic-update payload", nullptr);
+                return;
+            }
+
+            sendAck(command.correlationId, true, "automatic update queued", nullptr);
             return;
         }
 
-        // Immediate ack (P9-D2 pattern); session summary via hub when stop completes (P10-D3).
-        sendAck(command.correlationId, true, "automatic stop requested", nullptr);
-        return;
-    }
-
-    if (isAutomaticUpdateKey(command.commandKey)) {
         if (!executionContext_->isAutomaticSessionActive()) {
             sendAck(command.correlationId, false, "no automatic session running", nullptr);
             return;
@@ -345,4 +709,33 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
             &CommandHandler::onStrokeComplete)) {
         sendAck(command.correlationId, false, "invalid stroke payload", nullptr);
     }
+}
+
+bool CommandHandler::isMotionBusy() const {
+    if (pendingCommandReady_) {
+        return true;
+    }
+    if (executionContext_ != nullptr && executionContext_->isActive()) {
+        return true;
+    }
+    if (motorManualRunActive_) {
+        return true;
+    }
+    if (motor_ != nullptr && motor_->isActive()) {
+        return true;
+    }
+    if (motorAutomatic_ != nullptr && motorAutomatic_->isActive()) {
+        return true;
+    }
+    return false;
+}
+
+bool CommandHandler::isAutomaticProgramActive() const {
+    if (executionContext_ != nullptr && executionContext_->isAutomaticSessionActive()) {
+        return true;
+    }
+    if (motorAutomatic_ != nullptr && motorAutomatic_->isActive()) {
+        return true;
+    }
+    return false;
 }

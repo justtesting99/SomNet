@@ -12,26 +12,40 @@ import { initialSystemStatus } from '@/types/systemStatus';
 import { buildSystemStatus } from '@/utils/systemStatus';
 import { apiFetch } from '@/api/client';
 import { useSubTarget } from '@/context/SubTargetProvider';
+import { useSubDevice } from '@/context/SubDeviceProvider';
 
 const STATUS_ENDPOINT = '/api/system/status';
 const POLL_INTERVAL_MS = 10_000;
 
 interface SystemStatusContextValue {
+  /** Focus device status (header / video shell). */
   status: SystemStatusSnapshot;
+  getDeviceStatus: (deviceId: string) => SystemStatusSnapshot;
   refresh: () => Promise<void>;
 }
 
 const SystemStatusContext = createContext<SystemStatusContextValue | null>(null);
 
-async function fetchSystemStatus(subTarget: string): Promise<SystemStatusSnapshot> {
+/** Null when the status request failed — caller should keep the previous snapshot if any. */
+async function fetchSystemStatus(
+  subTarget: string,
+  deviceId: string | null,
+): Promise<SystemStatusSnapshot | null> {
   try {
-    const params = new URLSearchParams({ subTarget });
+    const params = new URLSearchParams();
+    if (subTarget) {
+      params.set('subTarget', subTarget);
+    }
+    if (deviceId) {
+      params.set('deviceId', deviceId);
+    }
+
     const payload = await apiFetch<SystemStatusResponse>(
       `${STATUS_ENDPOINT}?${params.toString()}`,
     );
     return buildSystemStatus(payload, true);
   } catch {
-    return buildSystemStatus(null, false);
+    return null;
   }
 }
 
@@ -43,26 +57,48 @@ export function SystemStatusProvider({
   enabled?: boolean;
 }) {
   const { selectedSub } = useSubTarget();
-  const [status, setStatus] = useState<SystemStatusSnapshot>(initialSystemStatus);
+  const { selectedDeviceId, registrations } = useSubDevice();
+  const [statusByDeviceId, setStatusByDeviceId] = useState<Record<string, SystemStatusSnapshot>>(
+    {},
+  );
 
   const refresh = useCallback(async () => {
     if (!enabled) {
       return;
     }
 
-    setStatus((current) => ({
-      ...current,
-      api: current.api === 'unknown' ? 'connecting' : current.api,
-      summary: current.lastChecked ? current.summary : 'Checking system status…',
-    }));
+    const deviceIds = registrations.map((row) => row.deviceId);
+    if (deviceIds.length === 0) {
+      setStatusByDeviceId({});
+      return;
+    }
 
-    const nextStatus = await fetchSystemStatus(selectedSub);
-    setStatus(nextStatus);
-  }, [enabled, selectedSub]);
+    const results = await Promise.all(
+      deviceIds.map(async (deviceId) => {
+        const snapshot = await fetchSystemStatus(selectedSub, deviceId);
+        return [deviceId, snapshot] as const;
+      }),
+    );
+
+    setStatusByDeviceId((prev) => {
+      const next: Record<string, SystemStatusSnapshot> = { ...prev };
+      for (const [deviceId, snapshot] of results) {
+        if (snapshot) {
+          next[deviceId] = snapshot;
+          continue;
+        }
+
+        if (!(deviceId in next)) {
+          next[deviceId] = buildSystemStatus(null, false);
+        }
+      }
+      return next;
+    });
+  }, [enabled, registrations, selectedSub]);
 
   useEffect(() => {
     if (!enabled) {
-      setStatus(initialSystemStatus);
+      setStatusByDeviceId({});
       return;
     }
 
@@ -75,12 +111,33 @@ export function SystemStatusProvider({
     return () => window.clearInterval(intervalId);
   }, [enabled, refresh]);
 
+  const getDeviceStatus = useCallback(
+    (deviceId: string): SystemStatusSnapshot => {
+      return statusByDeviceId[deviceId] ?? initialSystemStatus;
+    },
+    [statusByDeviceId],
+  );
+
+  const status = useMemo(() => {
+    if (selectedDeviceId && statusByDeviceId[selectedDeviceId]) {
+      return statusByDeviceId[selectedDeviceId];
+    }
+
+    const first = registrations[0]?.deviceId;
+    if (first && statusByDeviceId[first]) {
+      return statusByDeviceId[first];
+    }
+
+    return initialSystemStatus;
+  }, [registrations, selectedDeviceId, statusByDeviceId]);
+
   const value = useMemo(
     () => ({
       status,
+      getDeviceStatus,
       refresh,
     }),
-    [status, refresh],
+    [getDeviceStatus, refresh, status],
   );
 
   return (
