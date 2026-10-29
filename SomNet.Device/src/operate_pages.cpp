@@ -72,7 +72,7 @@ a{color:#818cf8}
 <label>New PIN (optional)<input id="pin-new" type="password" maxlength="16" placeholder="change on unlock"></label>
 <div class="gate-actions panel-actions">
 <button class="btn-primary" id="btn-unlock">Unlock</button>
-<p class="note hidden" id="arm-hint">Unlocked — sub presses D33 (LED flash blue → solid blue when ready).</p>
+<p class="note hidden" id="arm-hint">Unlocked — press D33 once (same as hub mode). Status shows <strong>ready</strong>, then enable Scene session below.</p>
 <button class="btn-secondary hidden" id="btn-lock">Lock</button>
 </div>
 </div>
@@ -726,7 +726,10 @@ async function poll(){
       if(s.commandMessage)parts.push(s.commandMessage);
     }
     setStatus(parts.join(' · ')||'Idle');
-    if($('scene-on')){$('scene-on').checked=!!s.sceneActive;$('scene-on').disabled=!s.subReady||!!(s.busy||s.automaticActive);}
+    if($('scene-on')){
+      $('scene-on').checked=!!s.sceneActive;
+      $('scene-on').disabled=!s.subReady||!!(s.busy||s.automaticActive);
+    }
     $('btn-auto-start').disabled=!!(s.busy||s.automaticActive);
     if(s.automaticActive&&!autoLiveActive){
       autoLiveActive=true;
@@ -735,7 +738,8 @@ async function poll(){
       autoLiveActive=false;
       lastPushedAuto=null;
     }
-    if(s.busy||s.automaticActive){if(!pollTimer)pollTimer=setInterval(poll,800);}
+    var needsFastPoll=!!(s.busy||s.automaticActive||(s.unlocked&&!s.subReady));
+    if(needsFastPoll){if(!pollTimer)pollTimer=setInterval(poll,800);}
     else if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
   }catch(e){setStatus(e.message);}
 }

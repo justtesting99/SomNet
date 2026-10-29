@@ -21,6 +21,8 @@ import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
 import { parseStrokeResultJson } from '@/utils/strokeResultJson';
 import { parseBurstResultJson } from '@/utils/burstResultJson';
 import { ApiError } from '@/api/client';
+import { useAuth } from '@/context/AuthProvider';
+import { pushDeviceSceneSessionIfWanted } from '@/utils/pushDeviceSceneSessionIfWanted';
 import {
   clampMaximumStrokeMs,
   clampMinimumStrokeMs,
@@ -37,6 +39,8 @@ function clampBurstValue(key: 'burstStrokes' | 'burstDelaySeconds', value: numbe
 
 export function ManualControls() {
   const { settings, updateManual, isLoading, strokeLimits } = useControlPanelSettings();
+  const { user } = useAuth();
+  const domTarget = user?.displayName ?? user?.username ?? '';
   const state = settings.manual;
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { selectedSub } = useSubTarget();
@@ -124,6 +128,7 @@ export function ManualControls() {
 
     try {
       const snapshotActionIndex = await prepareManualSession();
+      await pushDeviceSceneSessionIfWanted(domTarget, selectedSub, commandDeviceId);
       const response = await sendHardwareCommand(
         selectedSub,
         commandDeviceId,
@@ -157,6 +162,7 @@ export function ManualControls() {
 
     try {
       const snapshotActionIndex = await prepareManualSession();
+      await pushDeviceSceneSessionIfWanted(domTarget, selectedSub, commandDeviceId);
       const response = await sendHardwareCommand(
         selectedSub,
         commandDeviceId,

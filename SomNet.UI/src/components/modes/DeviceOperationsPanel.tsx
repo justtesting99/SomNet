@@ -9,6 +9,7 @@ import { MotorManualControls } from '@/components/modes/MotorManualControls';
 import { AutomaticControls } from '@/components/modes/AutomaticControls';
 import { MotorAutomaticControls } from '@/components/modes/MotorAutomaticControls';
 import { DeviceAccessoryResync } from '@/components/hardware/DeviceAccessoryResync';
+import { DeviceSceneSessionResync } from '@/components/hardware/DeviceSceneSessionResync';
 import { DeviceSubSessionControls } from '@/components/hardware/DeviceSubSessionControls';
 import { DeviceModeToggle } from '@/components/modes/DeviceModeToggle';
 import { DeviceTabSyncLockBanner } from '@/components/hardware/DeviceTabSyncLockBanner';
@@ -56,6 +57,7 @@ function DeviceOperationSection({ registration }: { registration: DeviceRegistra
       deviceId={registration.deviceId}
       actuatorKind={registration.actuatorKind}
     >
+      <DeviceSceneSessionResync deviceId={registration.deviceId} />
       <DeviceAccessoryResync
         deviceId={registration.deviceId}
         actuatorKind={registration.actuatorKind}

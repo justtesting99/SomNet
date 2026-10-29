@@ -9,6 +9,7 @@ import {
   type MotorAutomaticControlState,
 } from '@/types/motorModes';
 import { useOptions } from '@/context/OptionsProvider';
+import { useAuth } from '@/context/AuthProvider';
 import { useControlPanelSettings } from '@/hooks/useControlPanelSettings';
 import { useOperationSession } from '@/hooks/useOperationSession';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
@@ -55,6 +56,7 @@ import { applyMotorAutomaticModeChange } from '@/utils/motorAutomaticFieldRules'
 import { getMotorAutomaticModeInfo } from '@/utils/motorAutomaticModeInfo';
 import { motorAutomaticGraphSettingsFingerprint } from '@/utils/motorAutomaticGraphFingerprint';
 import { beginMotorAutomaticGraphRecording } from '@/utils/motorAutomaticSegmentStore';
+import { pushDeviceSceneSessionIfWanted } from '@/utils/pushDeviceSceneSessionIfWanted';
 import { describeMotorBurstEffectiveSpeed } from '@/utils/motorBurstEffectiveSpeed';
 import {
   burstMainTiming,
@@ -79,6 +81,8 @@ function clampDuty(value: number): number {
 
 export function MotorAutomaticControls() {
   const { options } = useOptions();
+  const { user } = useAuth();
+  const domTarget = user?.displayName ?? user?.username ?? '';
   const {
     settings,
     settingsLoaded,
@@ -373,6 +377,7 @@ export function MotorAutomaticControls() {
     expandOnAction(commandDeviceId);
     const payloadJson = buildMotorAutomaticStartPayload(state, options);
     try {
+      await pushDeviceSceneSessionIfWanted(domTarget, selectedSub, commandDeviceId);
       await sendHardwareCommand(
         selectedSub,
         commandDeviceId,

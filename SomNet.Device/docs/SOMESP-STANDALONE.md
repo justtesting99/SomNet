@@ -53,7 +53,7 @@ Serial banner includes **`Mode: STANDALONE`** and **`Control: http://<ip>/operat
 - Default PIN **`1234`**; change via unlock `newPin` or NVS key `operate_pin` (plaintext trial).
 - **Factory reset** (`/config` → factory reset) clears NVS including PIN (back to default **1234**).
 - Bearer token in RAM until lock, expiry, or Wi‑Fi loss.
-- **Sub ready:** **D33** single-click while unlocked (hub paused) or **double-click** when hub is connected. **`POST /api/local/arm`** returns **`409 press_device_button`**.
+- **Sub ready:** **D33** **single click** (short press). With hub paused, unlock **`/operate`** first. **`POST /api/local/arm`** returns **`409 press_device_button`**.
 - **Scene session:** **`POST /api/local/scene`** `{"active":true|false}` (Bearer; requires sub ready to turn on). Motion commands require **scene active**.
 
 ## RGB status (D23/D22/D1 — no serial required)
@@ -225,7 +225,7 @@ With NVS **`hbridge`**, POST **`stroke`** → firmware rejects (400-class ack / 
 | NVS “fully provisioned” | Wi‑Fi + `server_url` | Wi‑Fi only |
 | **`SOMNET_LOCAL_API`** | **`/operate` + `/api/local/*`** on STA (default **dev**) | Same + standalone provisioning |
 | SignalR | When configured | Optional hybrid; off for LAN-only |
-| Button D33 | Hub event when hub enabled | **Sub ready** (single-click local / double-click hub) |
+| Button D33 | Hub event when hub enabled | **Sub ready** (single click; double still works) |
 | Status RGB | Legacy GPIO2 | **Red** network · **Blue** sub · **Green** session/motion |
 | Session history (LittleFS) | Not mounted on **`dev`** partition | **`env:somesp`** — `/api/local/history` |
 

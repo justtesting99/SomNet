@@ -17,7 +17,8 @@ import { computeStrokeMs } from '@/utils/stroke';
 import { HARDWARE_COMMAND_KEYS } from '@/types/hardwareCommand';
 import { HardwareCommandError, sendHardwareCommand } from '@/services/hardwareCommand';
 import { sendHardwareCommand as sendHardwareCommandRaw } from '@/api/devices';
-import { ApiError } from '@/api/client';
+import { useAuth } from '@/context/AuthProvider';
+import { pushDeviceSceneSessionIfWanted } from '@/utils/pushDeviceSceneSessionIfWanted';
 
 const DUTY_MIN = 0;
 const DUTY_MAX = 100;
@@ -33,6 +34,8 @@ function clampDuty(value: number): number {
 
 export function MotorManualControls() {
   const { settings, updateMotorManual, isLoading } = useControlPanelSettings();
+  const { user } = useAuth();
+  const domTarget = user?.displayName ?? user?.username ?? '';
   const state = settings.motorManual;
   const { selectedSub } = useSubTarget();
   const commandDeviceId = useOperationDeviceId();
@@ -109,6 +112,7 @@ export function MotorManualControls() {
     const payloadJson = JSON.stringify({ dutyPercent });
 
     try {
+      await pushDeviceSceneSessionIfWanted(domTarget, selectedSub, commandDeviceId);
       await sendHardwareCommand(selectedSub, commandDeviceId, 'motor-run', payloadJson);
       activeRunRef.current = { dutyPercent, startedAtMs: Date.now() };
       setMotorRunning(true);

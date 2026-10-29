@@ -125,7 +125,8 @@ void onButtonClick(ButtonClickKind kind, void*) {
     }
 #if SOMNET_LOCAL_OPERATE_ENABLED
     if (kSomNetLocalOperateEnabled && !nvsStore.isHubRuntimeEnabled()) {
-        if (kind == ButtonClickKind::Single && localOperate.isUnlocked() && !localOperate.isSubReady()) {
+        if ((kind == ButtonClickKind::Single || kind == ButtonClickKind::Double) &&
+            localOperate.isUnlocked() && !localOperate.isSubReady()) {
             localOperate.acknowledgeSubReady();
         } else if (!localOperate.isUnlocked()) {
             Serial.println(F("[BTN] click ignored (locked — unlock via /operate)"));
@@ -140,7 +141,8 @@ void onButtonClick(ButtonClickKind kind, void*) {
 
     const char* clickType = kind == ButtonClickKind::Double ? "double" : "single";
 #if SOMNET_LOCAL_OPERATE_ENABLED
-    if (kind == ButtonClickKind::Double && !localOperate.isSubReady()) {
+    if ((kind == ButtonClickKind::Single || kind == ButtonClickKind::Double) &&
+        !localOperate.isSubReady()) {
         localOperate.acknowledgeSubReady();
     }
 #endif
@@ -328,6 +330,14 @@ void loop() {
     tryWifiRecovery();
     configWebServer.poll();
     signalRClient.poll();
+#if SOMNET_LOCAL_OPERATE_ENABLED
+    static bool hubWasConnected = false;
+    const bool hubConnected = signalRClient.isHubConnected();
+    if (hubConnected && !hubWasConnected && localOperate.isSubReady()) {
+        (void)signalRClient.sendReportButtonEvent("single");
+    }
+    hubWasConnected = hubConnected;
+#endif
     RgbStatusInputs rgbIn;
     rgbIn.credentialResetFlash = buttonInput.isAwaitingCredentialResetRelease();
     rgbIn.provisioningSoftAp = bootMode == DeviceBootMode::Provisioning || wifiManager.isSoftAp();

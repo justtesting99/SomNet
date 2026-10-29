@@ -65,7 +65,7 @@ export function buildSystemStatus(
   };
 }
 
-/** Merge API poll with per-device present ack (device button double-click). */
+/** Merge API poll with per-device present ack (device button single click). */
 export function applyOperatorDeviceStatus(
   polled: SystemStatusSnapshot,
   options: { hasSelectedDevice: boolean; presentAcknowledged: boolean },
@@ -100,7 +100,7 @@ export function applyOperatorDeviceStatus(
     return {
       ...polled,
       summary: 'Awaiting device button',
-      detail: 'Double-click the device button to confirm connection for this Sub.',
+      detail: 'Press the device button once to confirm connection for this Sub.',
       isReady: false,
     };
   }

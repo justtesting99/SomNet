@@ -58,7 +58,7 @@ function handleDeviceButtonEvent(
   selectDeviceId: (deviceId: string) => void,
   selectedSub: string,
 ) {
-  if (event.clickType === 'double') {
+  if (event.clickType === 'single' || event.clickType === 'double') {
     if (!subTargetsMatch(event.subTarget, selectedSub)) {
       alignSelectedSub(event.subTarget);
     }
@@ -66,10 +66,6 @@ function handleDeviceButtonEvent(
     notifySiteUserReady(event.subTarget, true, event.deviceId);
     markDevicePresentAck(event.subTarget, event.deviceId);
     return;
-  }
-
-  if (event.clickType === 'single' && import.meta.env.DEV) {
-    console.info('[SomNet] Device button single click', event);
   }
 }
 

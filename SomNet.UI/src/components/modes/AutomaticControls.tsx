@@ -7,6 +7,7 @@ import {
   type EndSessionMode,
 } from '@/types/modes';
 import { useOptions } from '@/context/OptionsProvider';
+import { useAuth } from '@/context/AuthProvider';
 import { useControlPanelSettings } from '@/hooks/useControlPanelSettings';
 import { useOperationSession } from '@/hooks/useOperationSession';
 import { useVideoDisplay } from '@/context/VideoDisplayProvider';
@@ -62,6 +63,7 @@ import {
 } from '@/utils/relayBurstPlan';
 import { relayAutomaticGraphSettingsFingerprint } from '@/utils/relayAutomaticGraphFingerprint';
 import { beginRelayAutomaticGraphRecording } from '@/utils/relayAutomaticSegmentStore';
+import { pushDeviceSceneSessionIfWanted } from '@/utils/pushDeviceSceneSessionIfWanted';
 import { parseAutomaticResultJson } from '@/utils/automaticResultJson';
 import { waitForAutomaticHubFinalize, computeAutomaticStopGraceMs } from '@/utils/automaticSessionFinalize';
 import { isDeviceAutomaticIdleMessage } from '@/utils/automaticSessionReconcile';
@@ -85,6 +87,8 @@ export function AutomaticControls() {
     strokeLimits,
   } = useControlPanelSettings();
   const { options } = useOptions();
+  const { user } = useAuth();
+  const domTarget = user?.displayName ?? user?.username ?? '';
   const state = settings.automatic;
   const { absoluteMinimum, absoluteMaximum } = resolveStrokeMsBounds(strokeLimits);
   const { selectedSub } = useSubTarget();
@@ -341,6 +345,7 @@ export function AutomaticControls() {
     const payloadJson = buildAutomaticStartPayload(state);
 
     try {
+      await pushDeviceSceneSessionIfWanted(domTarget, selectedSub, commandDeviceId);
       await sendHardwareCommand(
         selectedSub,
         commandDeviceId,

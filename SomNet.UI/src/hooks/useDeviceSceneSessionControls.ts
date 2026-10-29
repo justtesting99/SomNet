@@ -33,7 +33,7 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
   const domTarget = user?.displayName ?? user?.username ?? '';
   const registration = registrations.find((row) => row.deviceId === deviceId);
   const panelSettings = useDevicePairingSettings(deviceId, actuatorKind);
-  const { isDevicePresentAcknowledged, dismissReadyBannerForSub } = useSiteUserReady();
+  const { dismissReadyBannerForSub } = useSiteUserReady();
   const { executeCommand, isCommandPending } = useHardwareCommand();
   const {
     sessionsByKey,
@@ -84,7 +84,6 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
   );
 
   const deviceStatus = getDeviceStatus(deviceId);
-  const subPresentAcknowledged = isDevicePresentAcknowledged(selectedSub, deviceId);
   const hubReady = isHubLinkReady(deviceStatus);
   const deviceOnline = resolveDeviceConnectionOnline(registration, deviceStatus);
 
@@ -94,7 +93,7 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
   );
 
   const canEnableScene =
-    Boolean(deviceId) && hubReady && subPresentAcknowledged && !deviceRunning && !scenePending;
+    Boolean(deviceId) && hubReady && deviceOnline && !deviceRunning && !scenePending;
 
   const sceneSwitchDisabled =
     scenePending || (sceneSessionActive ? deviceRunning : !canEnableScene);
@@ -108,8 +107,8 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
       if (!hubReady) {
         return deviceStatus.detail || deviceStatus.summary;
       }
-      if (!subPresentAcknowledged) {
-        return 'Double-click this device button before starting a scene session.';
+      if (!deviceOnline) {
+        return 'Device is not connected.';
       }
       if (deviceRunning) {
         return 'Stop the automatic run on this device before starting a scene session.';
@@ -121,10 +120,10 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
     deviceRunning,
     deviceStatus.detail,
     deviceStatus.summary,
+    deviceOnline,
     hubReady,
     sceneError,
     sceneSessionActive,
-    subPresentAcknowledged,
   ]);
 
   const accessorySwitchDisabled =

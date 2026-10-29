@@ -407,6 +407,18 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
         return;
     }
 
+#if SOMNET_LOCAL_OPERATE_ENABLED
+    if (!command.fromLocal && gLocalOperateForCommands != nullptr &&
+        !gLocalOperateForCommands->isSceneActive()) {
+        if (isAutomaticStartKey(command.commandKey) || isAutomaticUpdateKey(command.commandKey) ||
+            strcmp(command.commandKey, "stroke") == 0 || strcmp(command.commandKey, "burst") == 0 ||
+            strcmp(command.commandKey, "motor-run") == 0) {
+            sendAck(command.correlationId, false, "scene_inactive", nullptr);
+            return;
+        }
+    }
+#endif
+
     if (executionContext_ == nullptr) {
         sendAck(command.correlationId, false, "execution unavailable", nullptr);
         return;

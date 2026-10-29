@@ -4,7 +4,7 @@ import { useSubTarget } from '@/context/SubTargetProvider';
 import { subTargetsMatch } from '@/utils/readyBannerStorage';
 import type { VideoPreviewControls } from '@/hooks/useSessionVideoSources';
 
-/** When the site user double-clicks the device button, auto-run Start feed when allowed. */
+/** When the site user presses the device button (single click), auto-run Start feed when allowed. */
 export function useSiteUserReadyStartFeed(videoPreview: VideoPreviewControls | undefined) {
   const { deviceButtonReadySignal } = useSiteUserReady();
   const { selectedSub } = useSubTarget();
