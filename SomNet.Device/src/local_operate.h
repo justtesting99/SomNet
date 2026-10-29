@@ -9,7 +9,7 @@ class AsyncWebServerRequest;
 class NvsStore;
 class SessionAccessoryController;
 
-/** SomEsp: PIN unlock, Bearer session, local arm/disarm (GPIO32). */
+/** SomEsp: PIN unlock, Bearer session, sub button ack, scene session, local API. */
 class LocalOperate {
 public:
     void begin(NvsStore* nvs, SessionAccessoryController* accessory);
@@ -24,11 +24,16 @@ public:
     void lock();
 
     bool isUnlocked() const;
+    bool isSubReady() const;
+    bool isSceneActive() const;
+    /** Legacy status field — same as isSceneActive(). */
     bool isArmed() const;
     uint64_t sessionExpiresAtMs() const;
 
-    bool arm();
-    bool disarm();
+    /** D33 (local single-click or hub double-click): sub ready — solid yellow. */
+    bool acknowledgeSubReady();
+    bool setSceneActive(bool active);
+    void disarm();
 
     /** True when Authorization: Bearer matches active session. */
     bool authorizeRequest(const AsyncWebServerRequest* request) const;
@@ -45,7 +50,8 @@ private:
     SessionAccessoryController* accessory_ = nullptr;
     char sessionToken_[kLocalOperateTokenHexLen + 1] = {};
     uint64_t sessionExpiresAtMs_ = 0;
-    bool armed_ = false;
+    bool subReady_ = false;
+    bool sceneActive_ = false;
 };
 
 class ExecutionContext;

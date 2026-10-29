@@ -545,7 +545,7 @@ void handleApiStatus(AsyncWebServerRequest* request) {
                 gIdentity->macAddress(),
                 friendly,
                 gNvs->isPaired() ? "true" : "false",
-                gWifi->isConnected() ? "true" : "false",
+                gWifi->isStaLinkReady() ? "true" : "false",
                 gWifi->localIp(),
                 serverUrl,
                 gHttpMode == DeviceBootMode::Provisioning ? "provisioning" : "running",
@@ -559,7 +559,7 @@ void handleApiStatus(AsyncWebServerRequest* request) {
                 gIdentity->deviceId(),
                 gIdentity->macAddress(),
                 friendly,
-                gWifi->isConnected() ? "true" : "false",
+                gWifi->isStaLinkReady() ? "true" : "false",
                 gWifi->localIp(),
                 gHttpMode == DeviceBootMode::Provisioning ? "provisioning" : "running");
         }
@@ -575,7 +575,7 @@ void handleApiStatus(AsyncWebServerRequest* request) {
             gIdentity->macAddress(),
             friendly,
             gNvs->isPaired() ? "true" : "false",
-            gWifi->isConnected() ? "true" : "false",
+            gWifi->isStaLinkReady() ? "true" : "false",
             gWifi->localIp(),
             serverUrl,
             gHttpMode == DeviceBootMode::Provisioning ? "provisioning" : "running",

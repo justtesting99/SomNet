@@ -8,6 +8,7 @@
 #include "local_history_store.h"
 #include "actuator_kind.h"
 #include "nvs_store.h"
+#include "rgb_status_led.h"
 #include "wifi_manager.h"
 
 #include <ArduinoJson.h>
@@ -208,11 +209,48 @@ void handleLocalArm(AsyncWebServerRequest* request) {
     if (!requireUnlocked(request)) {
         return;
     }
-    if (!gLocalOperate->arm()) {
-        sendJsonError(request, 409, "arm_failed");
+    sendJsonError(request, 409, "press_device_button");
+}
+
+void handleLocalSceneBody(AsyncWebServerRequest* request, const char* body, size_t len) {
+    if (!requireUnlocked(request)) {
         return;
     }
-    sendJson(request, 200, "{\"armed\":true}");
+
+    JsonDocument doc;
+    if (deserializeJson(doc, body, len) || !doc["active"].is<bool>()) {
+        sendJsonError(request, 400, "active_required");
+        return;
+    }
+
+    const bool active = doc["active"].as<bool>();
+    if (!gLocalOperate->setSceneActive(active)) {
+        sendJsonError(request, 409, active ? "sub_not_ready" : "scene_off_failed");
+        return;
+    }
+
+    char response[96];
+    snprintf(
+        response,
+        sizeof(response),
+        "{\"sceneActive\":%s,\"armed\":%s}",
+        active ? "true" : "false",
+        active ? "true" : "false");
+    sendJson(request, 200, response);
+}
+
+void handleLocalScene(
+    AsyncWebServerRequest* request,
+    uint8_t* data,
+    size_t len,
+    size_t index,
+    size_t total) {
+    logLocalRequest(request, "/api/local/scene");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    static JsonPostContext ctx = {"/api/local/scene", handleLocalSceneBody};
+    handleJsonPost(request, data, len, index, total, &ctx, 128);
 }
 
 void handleLocalDisarm(AsyncWebServerRequest* request) {
@@ -224,7 +262,7 @@ void handleLocalDisarm(AsyncWebServerRequest* request) {
         return;
     }
     gLocalOperate->disarm();
-    sendJson(request, 200, "{\"armed\":false}");
+    sendJson(request, 200, "{\"sceneActive\":false,\"armed\":false}");
 }
 
 void handleLocalStatus(AsyncWebServerRequest* request) {
@@ -233,7 +271,9 @@ void handleLocalStatus(AsyncWebServerRequest* request) {
         return;
     }
     const bool unlocked = gLocalOperate != nullptr && gLocalOperate->isUnlocked();
-    const bool armed = gLocalOperate != nullptr && gLocalOperate->isArmed();
+    const bool subReady = gLocalOperate != nullptr && gLocalOperate->isSubReady();
+    const bool sceneActive = gLocalOperate != nullptr && gLocalOperate->isSceneActive();
+    const bool armed = sceneActive;
     const bool busy =
         gCommandHandler != nullptr ? gCommandHandler->isMotionBusy()
                                  : (gExecutionContext != nullptr && gExecutionContext->isActive());
@@ -241,7 +281,7 @@ void handleLocalStatus(AsyncWebServerRequest* request) {
         gCommandHandler != nullptr ? gCommandHandler->isAutomaticProgramActive()
                                    : (gExecutionContext != nullptr &&
                                       gExecutionContext->isAutomaticSessionActive());
-    const bool wifiConnected = gWifi != nullptr && gWifi->isConnected() && !gWifi->isSoftAp();
+    const bool wifiConnected = gWifi != nullptr && gWifi->isStaLinkReady();
 
     NvsStore* nvsStatus = nvsStoreInstance();
     const DeviceActuatorKind actuatorKind =
@@ -264,6 +304,8 @@ void handleLocalStatus(AsyncWebServerRequest* request) {
 
     JsonDocument doc;
     doc["unlocked"] = unlocked;
+    doc["subReady"] = subReady;
+    doc["sceneActive"] = sceneActive;
     doc["armed"] = armed;
     doc["busy"] = busy;
     doc["automaticActive"] = automaticActive;
@@ -281,6 +323,16 @@ void handleLocalStatus(AsyncWebServerRequest* request) {
     if (resultJson[0] != '\0') {
         doc["resultJson"] = resultJson;
     }
+
+    RgbStatusInputs rgbIn;
+    rgbIn.credentialResetFlash = false;
+    rgbIn.provisioningSoftAp = gWifi != nullptr && gWifi->isSoftAp();
+    rgbIn.wifiStaUp = wifiConnected;
+    rgbIn.subReady = subReady;
+    rgbIn.sessionActive = sceneActive;
+    rgbIn.operatorAuthOk = unlocked;
+    rgbIn.motionActive = busy || automaticActive;
+    doc["rgbState"] = rgbOperatorStateName(resolveRgbOperatorState(rgbIn));
 
     const size_t n = serializeJson(doc, gHttpStatusJson, sizeof(gHttpStatusJson));
     if (n == 0 || n >= sizeof(gHttpStatusJson)) {
@@ -394,8 +446,8 @@ void handleLocalCommandsPost(
         sendJsonError(request, 401, "unauthorized");
         return;
     }
-    if (!gLocalOperate->isArmed()) {
-        sendJsonError(request, 403, "not_armed");
+    if (!gLocalOperate->isSceneActive()) {
+        sendJsonError(request, 403, "scene_inactive");
         return;
     }
 
@@ -655,7 +707,7 @@ void handleLocalActuatorKindPutBody(AsyncWebServerRequest* request, const char* 
     if (!requireUnlocked(request)) {
         return;
     }
-    if (gLocalOperate != nullptr && gLocalOperate->isArmed()) {
+    if (gLocalOperate != nullptr && gLocalOperate->isSceneActive()) {
         gLocalOperate->disarm();
     }
 
@@ -747,6 +799,14 @@ void registerLocalApiRoutes(AsyncWebServer& server, LocalOperate* localOperate) 
     server.on("/api/local/lock", HTTP_POST, [](AsyncWebServerRequest* request) { handleLocalLock(request); });
     server.on("/api/local/arm", HTTP_POST, [](AsyncWebServerRequest* request) { handleLocalArm(request); });
     server.on("/api/local/disarm", HTTP_POST, [](AsyncWebServerRequest* request) { handleLocalDisarm(request); });
+    server.on(
+        "/api/local/scene",
+        HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        nullptr,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handleLocalScene(request, data, len, index, total);
+        });
     server.on("/api/local/status", HTTP_GET, [](AsyncWebServerRequest* request) { handleLocalStatus(request); });
     server.on("/api/local/caps", HTTP_GET, [](AsyncWebServerRequest* request) { handleLocalCaps(request); });
     server.on("/api/local/history", HTTP_GET, [](AsyncWebServerRequest* request) {

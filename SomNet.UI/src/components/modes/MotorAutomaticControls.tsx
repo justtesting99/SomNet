@@ -241,18 +241,12 @@ export function MotorAutomaticControls() {
       return;
     }
 
-    // Scene stays on after automatic stop; history row is recreated on the next Start.
-    if (sceneSessionActive) {
-      return;
-    }
-
     setRunningLocal(false);
   }, [
     activeSession?.deviceId,
     automaticSessionActive,
     commandDeviceId,
     isLoading,
-    sceneSessionActive,
     settingsLoaded,
     startPending,
     state.running,

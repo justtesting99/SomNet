@@ -72,11 +72,12 @@ a{color:#818cf8}
 <label>New PIN (optional)<input id="pin-new" type="password" maxlength="16" placeholder="change on unlock"></label>
 <div class="gate-actions panel-actions">
 <button class="btn-primary" id="btn-unlock">Unlock</button>
-<button class="btn-secondary hidden" id="btn-arm">Arm session</button>
+<p class="note hidden" id="arm-hint">Unlocked — sub presses D33 (LED flash blue → solid blue when ready).</p>
 <button class="btn-secondary hidden" id="btn-lock">Lock</button>
 </div>
 </div>
 <div id="main" class="hidden">
+<p class="panel note" id="scene-panel"><label><input type="checkbox" id="scene-on"> Scene session (LED solid green)</label></p>
 <div class="tabs"><button type="button" class="tab active" data-tab="manual">Manual</button><button type="button" class="tab" data-tab="auto">Automatic</button><button type="button" class="tab" data-tab="hist">History</button></div>
 <div id="tab-manual" class="panel">
 <div id="relay-manual-panel" class="profile-relay layout-split">
@@ -257,7 +258,7 @@ function $(id){return document.getElementById(id);}
 function headers(){return token?{Authorization:'Bearer '+token,'Content-Type':'application/json'}:{'Content-Type':'application/json'};}
 function strokeMs(p,minMs,maxMs){minMs=+minMs;maxMs=+maxMs;var lo=Math.min(minMs,maxMs),hi=Math.max(minMs,maxMs);return Math.round(lo+(hi-lo)*(p/100));}
 function setStatus(t){$('status-line').textContent=t||'';}
-function showMain(on){$('main').classList.toggle('hidden',!on);$('btn-arm').classList.toggle('hidden',!token);$('btn-lock').classList.toggle('hidden',!token);}
+function showMain(on){$('main').classList.toggle('hidden',!on);$('btn-lock').classList.toggle('hidden',!token);$('arm-hint').classList.toggle('hidden',!token);}
 function rules(mode){
   var r={disMinP:false,disGmin:false,disNoEnd:false};
   if(mode==='periodic'||mode==='randomTimingOnly')r.disMinP=true;
@@ -714,14 +715,18 @@ async function poll(){
   try{
     var s=await api('/api/local/status');
     var parts=[];
+    if(s.sceneActive)parts.push('scene');
+    else if(s.subReady)parts.push('ready');
+    else if(s.unlocked)parts.push('awaiting device button');
+    if(s.rgbState)parts.push('led:'+s.rgbState);
     if(s.busy)parts.push('busy');
     if(s.automaticActive)parts.push('automatic');
-    if(s.armed)parts.push('armed');
     if(s.commandComplete){
       parts.push(s.commandSuccess?'ok':'fail');
       if(s.commandMessage)parts.push(s.commandMessage);
     }
     setStatus(parts.join(' · ')||'Idle');
+    if($('scene-on')){$('scene-on').checked=!!s.sceneActive;$('scene-on').disabled=!s.subReady||!!(s.busy||s.automaticActive);}
     $('btn-auto-start').disabled=!!(s.busy||s.automaticActive);
     if(s.automaticActive&&!autoLiveActive){
       autoLiveActive=true;
@@ -806,8 +811,13 @@ $('btn-unlock').onclick=async function(){
     await poll();
   }catch(e){setStatus('Unlock: '+e.message);}
 };
-$('btn-arm').onclick=async function(){try{await api('/api/local/arm',{method:'POST'});setStatus('Armed');await poll();}catch(e){setStatus(e.message);}};
 $('btn-lock').onclick=async function(){try{await api('/api/local/lock',{method:'POST'});token='';sessionStorage.removeItem(TOKEN_KEY);showMain(false);setStatus('Locked');}catch(e){setStatus(e.message);}};
+$('scene-on').onchange=async function(){
+  try{
+    await api('/api/local/scene',{method:'POST',body:JSON.stringify({active:$('scene-on').checked})});
+    await poll();
+  }catch(e){setStatus(e.message);$('scene-on').checked=!$('scene-on').checked;}
+};
 $('btn-stroke').onclick=async function(){
   if(isMotorProfile())return;
   saveManualSettings();

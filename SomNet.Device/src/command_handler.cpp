@@ -1,5 +1,6 @@
 #include "command_handler.h"
 
+#include "config.h"
 #include "actuator_kind.h"
 #include "device_identity.h"
 #include "execution_context.h"
@@ -14,6 +15,7 @@
 
 #if SOMNET_LOCAL_OPERATE_ENABLED
 #include "local_command_status.h"
+#include "local_operate.h"
 #endif
 #if defined(SOMNET_STANDALONE) && SOMNET_STANDALONE
 #include "local_history_store.h"
@@ -27,6 +29,9 @@ namespace {
 
 CommandHandler* gCommandHandlerInstance = nullptr;
 MotorAutomaticSessionMode gMotorAutomaticSession;
+#if SOMNET_LOCAL_OPERATE_ENABLED
+LocalOperate* gLocalOperateForCommands = nullptr;
+#endif
 
 bool secureStringEqual(const char* a, const char* b) {
     if (a == nullptr || b == nullptr) {
@@ -70,6 +75,12 @@ void commandHandlerOnExecuteCommand(const ExecuteCommandPayload& command) {
         gCommandHandlerInstance->enqueueExecuteCommand(command);
     }
 }
+
+#if SOMNET_LOCAL_OPERATE_ENABLED
+void commandHandlerSetLocalOperate(LocalOperate* localOperate) {
+    gLocalOperateForCommands = localOperate;
+}
+#endif
 
 void CommandHandler::begin(
     ExecutionContext* executionContext,
@@ -247,8 +258,12 @@ void CommandHandler::sendAck(
         if (resultJson != nullptr && resultJson[0] != '\0') {
             localHistoryOnLocalAck(correlationId, success, message, resultJson);
         }
-#endif
         return;
+#endif
+        // env:dev + hub: local /api/local poll still works; also forward to SignalR below.
+        if (strncmp(correlationId, "local-", 6) == 0) {
+            return;
+        }
     }
 #endif
 
@@ -411,6 +426,36 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
 
     if (actuatorKind == DeviceActuatorKind_HBridge && motor_ != nullptr) {
         motor_->beginIfNeeded();
+    }
+
+    if (strcmp(command.commandKey, "scene-session") == 0) {
+#if SOMNET_LOCAL_OPERATE_ENABLED
+        if (gLocalOperateForCommands == nullptr) {
+            sendAck(command.correlationId, false, "scene unavailable", nullptr);
+            return;
+        }
+
+        JsonDocument doc;
+        const DeserializationError err = deserializeJson(
+            doc,
+            command.payloadJson[0] != '\0' ? command.payloadJson : "{}");
+        if (err || !doc["enabled"].is<bool>()) {
+            sendAck(command.correlationId, false, "invalid scene-session payload", nullptr);
+            return;
+        }
+
+        const bool enabled = doc["enabled"].as<bool>();
+        if (!gLocalOperateForCommands->setSceneActive(enabled)) {
+            sendAck(command.correlationId, false, enabled ? "sub_not_ready" : "scene_off_failed", nullptr);
+            return;
+        }
+
+        sendAck(command.correlationId, true, enabled ? "scene on" : "scene off", nullptr);
+        return;
+#else
+        sendAck(command.correlationId, false, "scene unavailable", nullptr);
+        return;
+#endif
     }
 
     if (strcmp(command.commandKey, "session-accessory") == 0) {

@@ -172,6 +172,14 @@ void WifiManager::beginStation(const char* ssid, const char* password) {
     loggedConnected_ = false;
     connectFailures_ = 0;
     resetTimeSync();
+    Serial.println(F("[WIFI] STA ready — connect on next poll"));
+}
+
+bool WifiManager::isStaLinkReady() const {
+    if (softApMode_ || state_ != WifiConnectionState::Connected) {
+        return false;
+    }
+    return WiFi.localIP() != IPAddress(0, 0, 0, 0);
 }
 
 void WifiManager::beginSoftAp(const char* apSsid) {
@@ -406,6 +414,7 @@ void WifiManager::startConnect() {
     state_ = WifiConnectionState::Connecting;
     loggedConnected_ = false;
     loggedConfigUi_ = false;
+    loggedConnectingProgress_ = false;
 }
 
 const char* wifiStatusLabel(wl_status_t status) {
@@ -438,12 +447,20 @@ void WifiManager::handleDisconnected() {
 
 void WifiManager::handleConnecting() {
     const wl_status_t status = WiFi.status();
-    if (status == WL_CONNECTED) {
+    if (status == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0)) {
         state_ = WifiConnectionState::Connected;
         retryDelayMs_ = WIFI_RETRY_BASE_MS;
         connectFailures_ = 0;
         logConnectedOnce();
         return;
+    }
+
+    if (millis() - connectStartedMs_ >= 2000UL && !loggedConnectingProgress_) {
+        loggedConnectingProgress_ = true;
+        Serial.print(F("[WIFI] still connecting status="));
+        Serial.print(wifiStatusLabel(status));
+        Serial.print(F(" ip="));
+        Serial.println(WiFi.localIP());
     }
 
     if (millis() - connectStartedMs_ >= WIFI_CONNECT_TIMEOUT_MS) {

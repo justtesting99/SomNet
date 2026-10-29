@@ -101,6 +101,11 @@ internal static class HardwareCommandPayloadValidator
             return TryValidateSessionAccessoryPayload(payloadJson, out errorMessage);
         }
 
+        if (string.Equals(commandKey, HardwareCommandKeys.SceneSession, StringComparison.OrdinalIgnoreCase))
+        {
+            return TryValidateSessionAccessoryPayload(payloadJson, out errorMessage);
+        }
+
         return true;
     }
 
@@ -138,6 +143,11 @@ internal static class HardwareCommandPayloadValidator
         {
             errorMessage = "Relay stroke/burst commands are not valid for a motor device.";
             return false;
+        }
+
+        if (string.Equals(commandKey, HardwareCommandKeys.SceneSession, StringComparison.OrdinalIgnoreCase))
+        {
+            return TryValidateSessionAccessoryPayload(payloadJson, out errorMessage);
         }
 
         return true;

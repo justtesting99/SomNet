@@ -88,6 +88,8 @@ void LocalOperate::mintSession(char* tokenOut, size_t tokenOutLen, uint64_t* exp
 
     bytesToHex(raw, kTokenBytes, sessionToken_, sizeof(sessionToken_));
     sessionExpiresAtMs_ = static_cast<uint64_t>(millis()) + kLocalOperateTokenTtlMs;
+    subReady_ = false;
+    sceneActive_ = false;
 
     if (tokenOut != nullptr && tokenOutLen > 0) {
         strncpy(tokenOut, sessionToken_, tokenOutLen - 1);
@@ -101,7 +103,8 @@ void LocalOperate::mintSession(char* tokenOut, size_t tokenOutLen, uint64_t* exp
 void LocalOperate::clearSession() {
     sessionToken_[0] = '\0';
     sessionExpiresAtMs_ = 0;
-    armed_ = false;
+    subReady_ = false;
+    sceneActive_ = false;
     if (accessory_ != nullptr) {
         accessory_->setEnabled(false);
     }
@@ -147,37 +150,46 @@ bool LocalOperate::isUnlocked() const {
     return true;
 }
 
+bool LocalOperate::isSubReady() const {
+    return subReady_;
+}
+
+bool LocalOperate::isSceneActive() const {
+    return sceneActive_;
+}
+
 bool LocalOperate::isArmed() const {
-    return armed_ && isUnlocked();
+    return isSceneActive();
 }
 
 uint64_t LocalOperate::sessionExpiresAtMs() const {
     return isUnlocked() ? sessionExpiresAtMs_ : 0;
 }
 
-bool LocalOperate::arm() {
-    if (!isUnlocked()) {
-        return false;
+bool LocalOperate::acknowledgeSubReady() {
+    if (subReady_) {
+        return true;
     }
-    if (accessory_ == nullptr) {
-        return false;
-    }
-
-    if (!accessory_->setEnabled(true)) {
-        return false;
-    }
-    armed_ = true;
-    Serial.println(F("[LOCAL] armed"));
+    subReady_ = true;
+    Serial.println(F("[LOCAL] sub ready (device button)"));
     return true;
 }
 
-bool LocalOperate::disarm() {
-    armed_ = false;
-    if (accessory_ != nullptr) {
-        accessory_->setEnabled(false);
+bool LocalOperate::setSceneActive(bool active) {
+    if (active && !subReady_) {
+        return false;
     }
-    Serial.println(F("[LOCAL] disarmed"));
+    if (sceneActive_ == active) {
+        return true;
+    }
+    sceneActive_ = active;
+    Serial.print(F("[LOCAL] scene "));
+    Serial.println(active ? F("ON") : F("OFF"));
     return true;
+}
+
+void LocalOperate::disarm() {
+    setSceneActive(false);
 }
 
 bool LocalOperate::authorizeRequest(const AsyncWebServerRequest* request) const {
@@ -194,9 +206,9 @@ bool LocalOperate::authorizeRequest(const AsyncWebServerRequest* request) const 
 }
 
 void LocalOperate::onWifiDisconnected() {
-    if (!armed_ && sessionToken_[0] == '\0') {
+    if (!subReady_ && !sceneActive_ && sessionToken_[0] == '\0') {
         return;
     }
-    Serial.println(F("[LOCAL] Wi-Fi lost — lock + disarm"));
+    Serial.println(F("[LOCAL] Wi-Fi lost — lock + clear session"));
     clearSession();
 }

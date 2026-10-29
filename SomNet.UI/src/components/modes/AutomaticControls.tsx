@@ -251,18 +251,12 @@ export function AutomaticControls() {
       return;
     }
 
-    // Scene stays on after automatic stop; history row is recreated on the next Start.
-    if (sceneSessionActive) {
-      return;
-    }
-
     setAutomaticRunningLocal(false);
   }, [
     activeSession?.deviceId,
     automaticSessionActive,
     commandDeviceId,
     isLoading,
-    sceneSessionActive,
     settingsLoaded,
     startPending,
     state.running,

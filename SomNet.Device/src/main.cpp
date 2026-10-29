@@ -14,7 +14,7 @@
 #include "relay_controller.h"
 #include "session_accessory_controller.h"
 #include "signalr_client.h"
-#include "status_led.h"
+#include "rgb_status_led.h"
 #include "wifi_manager.h"
 
 #if SOMNET_LOCAL_OPERATE_ENABLED
@@ -37,7 +37,7 @@ CommandHandler commandHandler;
 ButtonInput buttonInput;
 SignalRClient signalRClient;
 ConfigWebServer configWebServer;
-StatusLed statusLed;
+RgbStatusLed rgbStatusLed;
 #if SOMNET_LOCAL_OPERATE_ENABLED
 LocalOperate localOperate;
 #endif
@@ -124,8 +124,12 @@ void onButtonClick(ButtonClickKind kind, void*) {
         return;
     }
 #if SOMNET_LOCAL_OPERATE_ENABLED
-    if (!nvsStore.isHubRuntimeEnabled()) {
-        Serial.println(F("[BTN] click ignored (hub paused — use /operate)"));
+    if (kSomNetLocalOperateEnabled && !nvsStore.isHubRuntimeEnabled()) {
+        if (kind == ButtonClickKind::Single && localOperate.isUnlocked() && !localOperate.isSubReady()) {
+            localOperate.acknowledgeSubReady();
+        } else if (!localOperate.isUnlocked()) {
+            Serial.println(F("[BTN] click ignored (locked — unlock via /operate)"));
+        }
         return;
     }
 #endif
@@ -135,6 +139,11 @@ void onButtonClick(ButtonClickKind kind, void*) {
     }
 
     const char* clickType = kind == ButtonClickKind::Double ? "double" : "single";
+#if SOMNET_LOCAL_OPERATE_ENABLED
+    if (kind == ButtonClickKind::Double && !localOperate.isSubReady()) {
+        localOperate.acknowledgeSubReady();
+    }
+#endif
     if (!signalRClient.sendReportButtonEvent(clickType)) {
         Serial.println(F("[BTN] click dropped (hub)"));
     }
@@ -268,11 +277,18 @@ void setup() {
         &signalRClient,
         &sessionAccessoryController,
         &motorController);
-    statusLed.begin();
 
+    Serial.println(F("[BOOT] starting network"));
+    Serial.flush();
     startNetwork();
+
+    rgbStatusLed.begin();
+    Serial.println(F("[BOOT] RGB init (B on D21 — not D1/UART TX)"));
+    Serial.flush();
+
 #if SOMNET_LOCAL_OPERATE_ENABLED
     localOperate.begin(&nvsStore, &sessionAccessoryController);
+    commandHandlerSetLocalOperate(&localOperate);
     localApiSetExecutionContext(&executionContext);
     localApiSetWifiManager(&wifiManager);
     localApiSetCommandHandler(&commandHandler, &deviceIdentity);
@@ -286,8 +302,12 @@ void setup() {
         &wifiManager,
         &signalRClient,
         &localOperate);
+    Serial.println(F("[BOOT] setup complete"));
+    Serial.flush();
 #else
     configWebServer.begin(bootMode, &nvsStore, &deviceIdentity, &wifiManager, &signalRClient);
+    Serial.println(F("[BOOT] setup complete"));
+    Serial.flush();
 #endif
 }
 
@@ -295,7 +315,7 @@ void loop() {
     wifiManager.poll();
     maybeBeginMotorHardwareAfterWifi();
 #if SOMNET_LOCAL_OPERATE_ENABLED
-    const bool wifiStaUp = wifiManager.isConnected() && !wifiManager.isSoftAp();
+    const bool wifiStaUp = wifiManager.isStaLinkReady();
     if (wasWifiConnectedForLocal && !wifiStaUp) {
         localOperate.onWifiDisconnected();
     }
@@ -308,13 +328,21 @@ void loop() {
     tryWifiRecovery();
     configWebServer.poll();
     signalRClient.poll();
-    if (buttonInput.isAwaitingCredentialResetRelease()) {
-        statusLed.pollCredentialResetFlash();
-    } else if (kSomNetLocalOperateEnabled && !nvsStore.isHubRuntimeEnabled()) {
-        statusLed.poll(wifiManager.isConnected() && !wifiManager.isSoftAp());
-    } else {
-        statusLed.poll(signalRClient.isHubConnected());
-    }
+    RgbStatusInputs rgbIn;
+    rgbIn.credentialResetFlash = buttonInput.isAwaitingCredentialResetRelease();
+    rgbIn.provisioningSoftAp = bootMode == DeviceBootMode::Provisioning || wifiManager.isSoftAp();
+    rgbIn.wifiStaUp = wifiManager.isStaLinkReady();
+#if SOMNET_LOCAL_OPERATE_ENABLED
+    rgbIn.subReady = localOperate.isSubReady();
+    rgbIn.sessionActive = localOperate.isSceneActive();
+    rgbIn.operatorAuthOk = localOperate.isUnlocked() || signalRClient.isHubConnected();
+#else
+    rgbIn.operatorAuthOk = signalRClient.isHubConnected();
+#endif
+    rgbIn.motionActive =
+        commandHandler.isMotionBusy() || commandHandler.isAutomaticProgramActive() ||
+        executionContext.isActive();
+    rgbStatusLed.poll(rgbIn);
     relayController.poll();
     motorController.poll();
     executionContext.poll();

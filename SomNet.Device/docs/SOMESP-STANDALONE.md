@@ -53,19 +53,37 @@ Serial banner includes **`Mode: STANDALONE`** and **`Control: http://<ip>/operat
 - Default PIN **`1234`**; change via unlock `newPin` or NVS key `operate_pin` (plaintext trial).
 - **Factory reset** (`/config` → factory reset) clears NVS including PIN (back to default **1234**).
 - Bearer token in RAM until lock, expiry, or Wi‑Fi loss.
+- **Sub ready:** **D33** single-click while unlocked (hub paused) or **double-click** when hub is connected. **`POST /api/local/arm`** returns **`409 press_device_button`**.
+- **Scene session:** **`POST /api/local/scene`** `{"active":true|false}` (Bearer; requires sub ready to turn on). Motion commands require **scene active**.
+
+## RGB status (D23/D22/D1 — no serial required)
+
+Three layers — **red = network**, **blue = sub acknowledgment** (bench RGB; was yellow R+G), **green = session / motion**:
+
+| Color | Visual | Meaning |
+|-------|--------|---------|
+| Red | Flash | No Wi‑Fi (STA) or setup AP |
+| Red | Solid | Wi‑Fi up — phase 0 / no operator auth yet |
+| Blue | Flash | Token OK — **awaiting device button** (`awaitingDeviceButton`) |
+| Blue | Solid | Sub pressed button — **ready** |
+| Green | Solid | **Scene session ON** |
+| Green | Flash | Run / stroke / automatic active |
+
+Also on **`GET /api/local/status`**: `rgbState`, `subReady`, `sceneActive` (`armed` mirrors scene). Credential reset overrides with fast red flash.
 
 ## Local API
 
 | Method | Path | Auth | Notes |
 |--------|------|------|--------|
 | POST | `/api/local/unlock` | — | `{"pin":"1234"}` optional `"newPin":"..."`; optional **`actuatorKind`** when NVS unbound (**M2-B2**) |
-| POST | `/api/local/lock` | Bearer | Clears session + disarm |
-| POST | `/api/local/arm` | Bearer | GPIO32 ON |
-| POST | `/api/local/disarm` | Bearer | GPIO32 OFF |
-| GET | `/api/local/status` | — | `busy`, `automaticActive`, **`actuatorKind`**, `commandComplete`, `resultJson`, … — **motor** automatic/manual included in busy/automatic (M2-F1) |
+| POST | `/api/local/lock` | Bearer | Clears session + scene |
+| POST | `/api/local/arm` | Bearer | Returns **`409 press_device_button`** — use **D33** |
+| POST | `/api/local/scene` | Bearer | `{"active":true\|false}` — scene session (green LED) |
+| POST | `/api/local/disarm` | Bearer | Scene off (`sceneActive`: false) |
+| GET | `/api/local/status` | — | `subReady`, `sceneActive`, **`rgbState`**, `busy`, … |
 | PUT | `/api/local/actuator-kind` | Bearer | `{"actuatorKind":"relay"\|"hbridge"}` — unlocked, **disarmed**, idle; reboot if kind changed |
 | GET | `/api/local/caps` | — | **`actuatorKind`**: relay stroke limits **or** motor `minDutyPercent` / `maxDutyPercent` |
-| POST | `/api/local/commands` | Bearer + armed | `commandKey` + `payloadJson` — **same JSON as hub** ([PROTOCOL.md](./PROTOCOL.md) §6) |
+| POST | `/api/local/commands` | Bearer + **scene active** | `commandKey` + `payloadJson` |
 | GET | `/api/local/settings` | Bearer | `{ "stored": false }` or settings blob (see below) |
 | PUT | `/api/local/settings` | Bearer | Saved to NVS (`loc_oper_set`); max **1536** bytes |
 
@@ -113,7 +131,7 @@ PUT rejects **`motorManual` / `motorAutomatic` on relay** (`400 motor_settings_o
 
 ### Motor automatic-start (curl sketch)
 
-After unlock + arm, POST **`/api/local/commands`** with the same **`payloadJson`** the hub sends (include `actuatorKind`, `segmentTargetRampMs`, and program fields). Example keys: `automaticMode`, duty/speed bands, `endSessionMode`, burst fields — see [PROTOCOL §6](../PROTOCOL.md) motor automatic. Poll **`GET /api/local/status`** until `automaticActive` is false and `resultJson` is present.
+After unlock, sub **presses D33** (ready), turn **scene** on via **`POST /api/local/scene`** or `/operate` checkbox, then POST **`/api/local/commands`** with the same **`payloadJson`** the hub sends (include `actuatorKind`, `segmentTargetRampMs`, and program fields). Example keys: `automaticMode`, duty/speed bands, `endSessionMode`, burst fields — see [PROTOCOL §6](../PROTOCOL.md) motor automatic. Poll **`GET /api/local/status`** until `automaticActive` is false and `resultJson` is present.
 
 On setup AP, local API returns **`403 setup_mode`**.
 
@@ -143,7 +161,9 @@ curl -s -X POST "$BASE/api/local/unlock" -H "Content-Type: application/json" \
   -d '{"pin":"1234"}'
 TOKEN=<paste>
 AUTH="Authorization: Bearer $TOKEN"
-curl -s -X POST "$BASE/api/local/arm" -H "$AUTH"
+# Arm: press D33 on the device (HTTP arm returns 409 press_device_button)
+# Scene: curl -s -X POST "$BASE/api/local/scene" -H "$AUTH" -H "Content-Type: application/json" -d '{"active":true}'
+curl -s "$BASE/api/local/status" -H "$AUTH"
 ```
 
 ### Hub vs local (M2-P0)
@@ -205,8 +225,8 @@ With NVS **`hbridge`**, POST **`stroke`** → firmware rejects (400-class ack / 
 | NVS “fully provisioned” | Wi‑Fi + `server_url` | Wi‑Fi only |
 | **`SOMNET_LOCAL_API`** | **`/operate` + `/api/local/*`** on STA (default **dev**) | Same + standalone provisioning |
 | SignalR | When configured | Optional hybrid; off for LAN-only |
-| Button D33 clicks | Hub event when hub enabled | Ignored when hub paused / standalone |
-| Status LED | Wi‑Fi + hub | Wi‑Fi (+ hub when hybrid enabled) |
+| Button D33 | Hub event when hub enabled | **Sub ready** (single-click local / double-click hub) |
+| Status RGB | Legacy GPIO2 | **Red** network · **Blue** sub · **Green** session/motion |
 | Session history (LittleFS) | Not mounted on **`dev`** partition | **`env:somesp`** — `/api/local/history` |
 
 ## Session history (LittleFS)

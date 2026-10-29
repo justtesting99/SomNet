@@ -4,7 +4,7 @@
 
 constexpr int PIN_RELAY = 4;   // D4
 constexpr int PIN_BUTTON = 33; // D33
-/** DevKit V1 built-in LED (GPIO 2). Debug / hub connection indicator only. */
+/** DevKit V1 built-in LED (GPIO 2). Legacy — superseded by RGB status (PIN_LED_*). */
 constexpr int PIN_STATUS_LED = 2;
 /** Session accessory / external lock output (Dom Session in Progress). */
 constexpr int PIN_SESSION_ACCESSORY = 32;
@@ -19,9 +19,10 @@ constexpr int PIN_MOTOR_PWM_SECONDARY = 26; // D26
 /** Secondary enable (e.g. L_EN) — unused when enables are ganged on D27. */
 constexpr int PIN_MOTOR_ENABLE_SECONDARY = 14; // D14
 
-constexpr int PIN_LED_R = 23 // D23
-constexpr int PIN_LED_G = 22 // D22
-constexpr int PIN_LED_B = 1  // D1
+constexpr int PIN_LED_R = 23; // D23
+constexpr int PIN_LED_G = 22; // D22
+/** Blue channel — do not use GPIO1 (D1): it is UART0 TX and breaks USB serial when driven as OUTPUT. */
+constexpr int PIN_LED_B = 21; // D21
 
 /** BTS7960 module enable pin polarity (ESP output → module EN). Tune on bench — doc 31. */
 constexpr bool MOTOR_ENABLE_ACTIVE_HIGH = true;
@@ -50,3 +51,5 @@ constexpr bool RELAY_ACTIVE_HIGH = true;
 constexpr bool SESSION_ACCESSORY_ACTIVE_HIGH = true;
 /** Most ESP32 DevKit V1 boards: built-in LED is active-LOW (LOW = lit). */
 constexpr bool STATUS_LED_ACTIVE_HIGH = true;
+/** External RGB module channel polarity (verify on bench). Sub-ack states use blue (poor R/G yellow on some 5mm RGB). */
+constexpr bool RGB_LED_ACTIVE_HIGH = true;

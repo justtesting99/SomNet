@@ -35,6 +35,9 @@ public static class HardwareCommandKeys
     /// <summary>Device + API — session accessory / external lock (GPIO32).</summary>
     public const string SessionAccessory = "session-accessory";
 
+    /// <summary>Device + API — operator scene session (RGB green; not GPIO32).</summary>
+    public const string SceneSession = "scene-session";
+
     /// <summary>Device + API — H-bridge PWM run (ExecuteCommand).</summary>
     public const string MotorRun = "motor-run";
 

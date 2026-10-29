@@ -184,7 +184,24 @@ export function useDeviceSceneSessionControls(deviceId: string, actuatorKind: Ac
             dismissReadyBanner: () => dismissReadyBannerForSub(selectedSub),
           });
           await startSessionForDevice(deviceId, mode!);
+          await sendHardwareCommand(
+            selectedSub,
+            deviceId,
+            HARDWARE_COMMAND_KEYS.sceneSession,
+            JSON.stringify({ enabled: true }),
+          );
           return;
+        }
+
+        try {
+          await sendHardwareCommand(
+            selectedSub,
+            deviceId,
+            HARDWARE_COMMAND_KEYS.sceneSession,
+            JSON.stringify({ enabled: false }),
+          );
+        } catch {
+          // Best-effort before local teardown
         }
 
         const automaticForStop = {

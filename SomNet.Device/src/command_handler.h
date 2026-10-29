@@ -87,3 +87,8 @@ private:
 };
 
 void commandHandlerOnExecuteCommand(const ExecuteCommandPayload& command);
+
+#if SOMNET_LOCAL_OPERATE_ENABLED
+class LocalOperate;
+void commandHandlerSetLocalOperate(LocalOperate* localOperate);
+#endif
