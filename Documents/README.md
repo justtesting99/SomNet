@@ -15,7 +15,7 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [Session & History](./07-Session-And-History.md) | Developers | Live session lifecycle, summaries, and timeline aggregation |
 | [Development Guide](./08-Development-Guide.md) | Developers | Local setup, build pipeline, common tasks, **recurring doc maintenance** (keep canonical docs in sync with code) |
 | [User Guide](./User-Guide.md) | Operators | How to use the web application day to day |
-| [Hardware User Guide](./Hardware-User-Guide.md) | Installers / owners | ESP32 setup, Wi‑Fi provisioning, pairing, relay + GPIO32 session accessory (updated 2026-09-21) |
+| [Hardware User Guide](./Hardware-User-Guide.md) | Installers / owners | ESP32 setup, Wi‑Fi provisioning, pairing, actuator relay (D32) + session accessory (D4) |
 | [ESP32 Device Plan](./09-ESP32-Device-Plan.md) | Developers | **Source of truth** — firmware plan (Phases 0–12 + button clicks + P16 signed off; current build **`0.16.4-motor-burst-duty`**) |
 | [ESP32 Phase 0 Checklist](./09-ESP32-Phase-0-Checklist.md) | Developers | Protocol capture — **Complete** (2026-09-05) |
 | [ESP32 Phase 1 Checklist](./09-ESP32-Phase-1-Checklist.md) | Developers | PlatformIO scaffold — **Complete** (2026-09-05) |
@@ -35,7 +35,7 @@ Technical and user documentation for SomNet. For project overview and quick star
 | [UI Session Rehydration (automatic)](./10-UI-Session-Rehydration-Checklist.md) | Developers | Restore Stop/Abort after browser refresh during automatic session — **signed off** (2026-09-10) |
 | [UI Manual Session Rehydration](./11-UI-Manual-Session-Rehydration-Checklist.md) | Developers | Restore manual event log after browser refresh — **signed off** (2026-09-11) |
 | [UI Multi-Tab Sync](./12-UI-Multi-Tab-Sync-Checklist.md) | Developers | Coordinate live session/mode/sub across browser tabs — **signed off** (2026-09-11) |
-| [Session accessory / Session in Progress (P16)](./25-Session-Accessory-In-Progress-Checklist.md) | Developers | GPIO32 lock + slide switch–gated sessions — **signed off** (2026-09-20; firmware `0.15.0-session-accessory`) |
+| [Session accessory / Session in Progress (P16)](./25-Session-Accessory-In-Progress-Checklist.md) | Developers | Accessory on **D4** + slide switch–gated sessions — **signed off** (2026-09-20; pin map updated 2026-11 in `boardDefs.h`) |
 | [Video & Camera Architecture](./13-Video-And-Camera-Architecture.md) | Developers / installers | Session-scoped streams, edge gateway (Pi), webcam/IP cameras, snapshots — **Phases 1–6 implemented (PC); Phase 7 next** |
 | [Video Implementation Plan](./14-Video-Implementation-Plan.md) | Developers | Phases 1–8 roadmap — **Phases 2–6 complete; Phase 7 next; IP on hold** |
 | [Video Phase 1 — Edge bench](./14-Video-Phase-1-Edge-Bench-Checklist.md) | Developers | go2rtc on PC — **partial sign-off** (Layout A-dev: 2× USB webcam) |

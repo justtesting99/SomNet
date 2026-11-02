@@ -8,7 +8,7 @@ PlatformIO firmware for the SomNet hardware device (ESP32 DevKit V1 clone). Live
 **Plan:** [Documents/09-ESP32-Device-Plan.md](../Documents/09-ESP32-Device-Plan.md)  
 **Phase checklists:** [0](../Documents/09-ESP32-Phase-0-Checklist.md) · … · [12](../Documents/09-ESP32-Phase-12-Network-Hardening-Checklist.md) · [button clicks](../Documents/23-Device-Button-Clicks-Checklist.md) · [P16 session accessory](../Documents/25-Session-Accessory-In-Progress-Checklist.md)
 
-**Current firmware:** **`0.16.5.4-rgb-blue-sub`** (`platformio.ini`) — unified **`env:dev`** image: relay automatic (Phases 5–12 lineage) + **burst placement** + **motor automatic** (H-bridge PWM, modes, bursts, segment telemetry) + optional **LAN `/operate`** (`SOMNET_LOCAL_API=1`). P16 **`session-accessory`** (GPIO32) — [V2 rules](../Documents/34-Operator-Session-And-Accessory-V2-Rules.md). Sign-off: hub [32 M1d](../Documents/32-Motor-Actuator-Implementation-Plan-And-Checklist.md#52-phase-m1d--motor-automatic-bursts--placement-bp-e) · LAN/SomEsp [32 M2](../Documents/32-Motor-Actuator-Implementation-Plan-And-Checklist.md#phase-m2-sign-off) **2026-10-28**.
+**Current firmware:** see **`FIRMWARE_VERSION`** in `platformio.ini` (e.g. **`0.16.5.7-Relay-swap`**) — unified **`env:dev`** image: relay automatic (Phases 5–12 lineage) + **burst placement** + **motor automatic** (H-bridge PWM, modes, bursts, segment telemetry) + optional **LAN `/operate`** (`SOMNET_LOCAL_API=1`). P16 **`session-accessory`** on **`PIN_SESSION_ACCESSORY` (D4 / GPIO 4)** — [V2 rules](../Documents/34-Operator-Session-And-Accessory-V2-Rules.md).
 
 ### Capability summary
 
@@ -20,14 +20,14 @@ PlatformIO firmware for the SomNet hardware device (ESP32 DevKit V1 clone). Live
 | 11 | `automatic-update` — replan after current stroke |
 | 12 | Network hardening |
 | 23 | Button single/double on D33 → hub `ReportButtonEvent` |
-| P16 | `session-accessory` `{ enabled }` → GPIO32; fail-safe OFF on transport loss |
+| P16 | `session-accessory` `{ enabled }` → **D4** (`PIN_SESSION_ACCESSORY`); fail-safe OFF on transport loss |
 
 ## Hardware (default wiring)
 
 | Silkscreen | GPIO | Role |
 |------------|------|------|
-| D4 | 4 | Relay |
-| D32 | 32 | Session accessory / lock output |
+| D32 | 32 | Actuator relay (`PIN_RELAY`) — stroke / burst / automatic |
+| D4 | 4 | Session accessory / lock output (`PIN_SESSION_ACCESSORY`) |
 | D33 | 33 | Button (input, pull-up) |
 
 Change pins and relay polarity only in **`include/boardDefs.h`**.
@@ -128,7 +128,7 @@ Flash and open **`http://<device-ip>/`** on your phone to preview.
 
 ## Phase 6 behavior (relay + stroke)
 
-Firmware **0.6.0-phase6** drives the **relay on D4** for `stroke` commands and supports **`abort`** during an active pulse.
+Firmware drives the **actuator relay on D32** (`PIN_RELAY`) for `stroke` commands and supports **`abort`** during an active pulse.
 
 ### Flow
 

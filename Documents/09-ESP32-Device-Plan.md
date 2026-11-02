@@ -16,7 +16,7 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 
 **Implementation progress (2026-09-20):** Phases **0–12 + device button clicks + Session in Progress (P16) signed off** at firmware **`0.15.0-session-accessory`**. **Follow-on (2026-10-27):** [Burst placement](./36-Burst-Placement-Modes-Design.md) — **`burstPlacement`** main+ / instead-of; relay **`0.15.2-burst-main-timing`**. **Motor automatic bursts (M1d):** **`0.16.4-motor-burst-duty`** — signed **2026-10-28** ([31 §5.2.1](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27)).
 
-**Capabilities (current build):** manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On** and placement modes; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; network hardening (Phase 12); GPIO **single/double click** + 10 s hold reset ([23](./23-Device-Button-Clicks-Checklist.md)); **`session-accessory`** on GPIO32 ([25](./25-Session-Accessory-In-Progress-Checklist.md)); **`resultJson`** end-to-end. SomNet UI: P16 slide switch + session rehydration [10](./10-UI-Session-Rehydration-Checklist.md) / [11](./11-UI-Manual-Session-Rehydration-Checklist.md) + multi-tab sync [12](./12-UI-Multi-Tab-Sync-Checklist.md). See §10.
+**Capabilities (current build):** manual **stroke**, **burst**, and **abort**; **automatic** Start/Stop/Abort with **Bursts On** and placement modes; live **`automatic-update`** mid-session replan; hub sync for auto-end, abort, and cooperative manual stop; network hardening (Phase 12); GPIO **single/double click** + 10 s hold reset ([23](./23-Device-Button-Clicks-Checklist.md)); **`session-accessory`** on **D4** (`PIN_SESSION_ACCESSORY`, [25](./25-Session-Accessory-In-Progress-Checklist.md)); actuator relay on **D32** (`PIN_RELAY`); **`resultJson`** end-to-end. SomNet UI: P16 slide switch + session rehydration [10](./10-UI-Session-Rehydration-Checklist.md) / [11](./11-UI-Manual-Session-Rehydration-Checklist.md) + multi-tab sync [12](./12-UI-Multi-Tab-Sync-Checklist.md). See §10.
 
 **Scope:** Authoritative design reference for `SomNet.Device` firmware. **Implementation through Phase 12 + button clicks signed off (2026-09-13).** SomNet API/UI integration complete for manual and automatic commands.
 
@@ -58,7 +58,8 @@ This document defines the plan for a standalone Arduino/ESP32 firmware project t
 | **PlatformIO board** | `esp32dev` in `platformio.ini` |
 | **Flash partitions** | **`min_spiffs.csv`** — dual OTA ~1.9 MB/slot (Phase 7); see [PARTITIONS.md](../SomNet.Device/docs/PARTITIONS.md) |
 | **USB serial** | On-board CP2102/CH340 (clone-dependent); **115200** baud for monitor |
-| **Relay module** | **D4** (GPIO 4) → optocoupled input; module has **built-in LED(s)** on relay state — no separate status LEDs in project |
+| **Relay module (actuator)** | **D32** (GPIO 32) → optocoupled input (`PIN_RELAY`); module has **built-in LED(s)** on relay state |
+| **Session accessory output** | **D4** (GPIO 4) → second opto input on dual-relay bench wiring (`PIN_SESSION_ACCESSORY`) |
 | **Push button** | **D33** (GPIO 33) — input with internal pull-up, debounced |
 
 ### Status LEDs
@@ -73,12 +74,13 @@ Firmware status and command trace rely on **Serial Monitor** (115200) until/unle
 
 ### Relay module (optocoupler)
 
-Typical 1-channel ESP32 relay module layout:
+Typical dual-channel ESP32 relay module layout (2026-11 bench wiring):
 
 ```
-ESP32 D4 (GPIO 4) ──► optocoupler input (IN) ──► relay driver ──► relay contacts (load)
+ESP32 D32 (GPIO 32) ──► IN (actuator) ──► relay driver ──► air valve contacts
+ESP32 D4  (GPIO 4)  ──► IN (accessory) ──► relay driver ──► lock / accessory load
                               │
-                         module LED(s) follow input/relay state
+                         module LED(s) follow each input
 ```
 
 | Aspect | Detail |
@@ -88,29 +90,31 @@ ESP32 D4 (GPIO 4) ──► optocoupler input (IN) ──► relay driver ──
 | **Active level** | Many modules are **active-low** (IN pulled low to turn on). Set `RELAY_ACTIVE_HIGH` in `boardDefs.h` to match your module. **Verified on bench unit (2026-09-05):** `RELAY_ACTIVE_HIGH = true` |
 | **Visual feedback** | Module LED illuminates when relay is energized — sufficient for stroke/burst testing without external LEDs |
 
-**Pin mapping:** DevKit silkscreen labels (`D4`, `D33`) map to ESP32 GPIO numbers. All hardware pins are defined as **constants in `include/boardDefs.h`** so wiring can be corrected in one place without searching the codebase.
+**Pin mapping:** DevKit silkscreen labels (`D4`, `D32`, `D33`) map to ESP32 GPIO numbers. All hardware pins are defined as **constants in `include/boardDefs.h`** so wiring can be corrected in one place without searching the codebase.
 
-| Silkscreen | GPIO | Constant (proposed) | Role |
-|------------|------|---------------------|------|
-| **D4** | 4 | `PIN_RELAY` | Relay control (digital output) |
+| Silkscreen | GPIO | Constant | Role |
+|------------|------|----------|------|
+| **D32** | 32 | `PIN_RELAY` | Actuator relay (stroke / burst / automatic) |
+| **D4** | 4 | `PIN_SESSION_ACCESSORY` | Session accessory / lock output |
 | **D33** | 33 | `PIN_BUTTON` | Push switch (digital input, pull-up) |
 
-Example `include/boardDefs.h`:
+Example `include/boardDefs.h` (current bench wiring — **2026-11**):
 
 ```cpp
 #pragma once
 
 // ESP32 DevKit V1 clone — update here if wiring changes
-constexpr int PIN_RELAY  = 4;   // D4
+constexpr int PIN_RELAY = 32; // D32
+constexpr int PIN_SESSION_ACCESSORY = 4; // D4
 constexpr int PIN_BUTTON = 33;  // D33
 
-// Relay active level (many opto modules are active-LOW — verify against module LED behavior)
 constexpr bool RELAY_ACTIVE_HIGH = true;
+constexpr bool SESSION_ACCESSORY_ACTIVE_HIGH = true;
 ```
 
 Firmware must **never hard-code GPIO numbers** in `main.cpp` or drivers — include `boardDefs.h` from `relay_controller`, `button_input`, etc.
 
-**Avoid** flash pins **6–11** and boot-strapping pins **0, 2, 12, 15** for new wiring. D4 and D33 are acceptable on typical DevKit V1 clones with Wi-Fi enabled.
+**Avoid** flash pins **6–11** and boot-strapping pins **0, 2, 12, 15** for new wiring. D4, D32, and D33 are acceptable on typical DevKit V1 clones with Wi-Fi enabled.
 
 DevKit V1 clones vary slightly (CP2102 vs CH340 USB chip); PlatformIO `esp32dev` profile works for most WROOM-32 V1 clones. If upload fails, try holding **BOOT**, press **EN**, or lower `upload_speed` in `platformio.ini`.
 
@@ -1481,7 +1485,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 
 - [x] Create `SomNet.Device/` folder in repo
 - [x] PlatformIO project for `esp32dev`
-- [x] `boardDefs.h`: `PIN_RELAY` (D4 / GPIO 4), `PIN_BUTTON` (D33 / GPIO 33), relay polarity
+- [x] `boardDefs.h`: `PIN_RELAY` (**D32** / GPIO 32), `PIN_SESSION_ACCESSORY` (**D4** / GPIO 4), `PIN_BUTTON` (D33), relay/accessory polarity — see §1.3 (updated **2026-11**)
 - [x] `config.h`: server URL, feature flags (`secrets.ini` for Wi-Fi in dev)
 - [x] **Architecture skeleton (stubs OK):** `i_execution_mode.h`, `execution_context.*`, `command_handler.*`, empty `modes/burst_sequence_mode.*` and `modes/automatic_session_mode.*`
 - [x] Serial banner: firmware version, device ID, pairing state
@@ -1688,7 +1692,7 @@ Phase-specific **checklists** track day-to-day progress. The plan below stays th
 **Known follow-ups (post–Phase 12 / UI rehydration):**
 
 - ~~**Device button single / double click**~~ — **signed off** 2026-09-13 (`0.14.0-button-clicks`). See [23 — Device button clicks checklist](./23-Device-Button-Clicks-Checklist.md).
-- ~~**Session accessory (`session-accessory`, GPIO32)**~~ — **signed off** 2026-09-20 ([P16 checklist](./25-Session-Accessory-In-Progress-Checklist.md); firmware **`0.15.0-session-accessory`**).
+- ~~**Session accessory (`session-accessory`, D4 / `PIN_SESSION_ACCESSORY`)**~~ — **signed off** 2026-09-20 ([P16 checklist](./25-Session-Accessory-In-Progress-Checklist.md); was GPIO32 at sign-off; **`boardDefs.h` updated 2026-11**).
 - **Session timeline visualization** — graph or timeline of a planned or completed automatic session (main strokes, burst events, gaps, relative power). Placement TBD: Automatic mode page (pre-start preview or live), session history detail, or both.
 - **Site operating profiles** — [26](./26-ESP32-Local-Offline-Mode-Design.md): tiers 1–3; **SomEsp fork trial** — [27 standalone device plan](./27-SomEsp-Standalone-Device-Plan.md) (ESP-only, no API/Pi). Tier 1 only implemented on main today.
 

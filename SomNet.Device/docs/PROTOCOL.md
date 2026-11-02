@@ -355,9 +355,11 @@ When firmware is built with **`SOMNET_LOCAL_API=1`** (`env:dev` default) or **`e
 | Step | Endpoint | Notes |
 |------|----------|--------|
 | Unlock | `POST /api/local/unlock` | PIN → Bearer token (RAM); optional **`actuatorKind`** on first bind |
-| Arm | `POST /api/local/arm` | GPIO accessory enable (SE-D5) |
-| Command | `POST /api/local/commands` | Same **`commandKey`** + **`payloadJson`** as hub **`ExecuteCommand`** (§6.2–§6.9) |
-| Poll | `GET /api/local/status` | `busy`, `automaticActive`, `resultJson`, **`actuatorKind`** |
+| Sub ready | D33 short press | Required before scene on (same as hub double-click semantics on LAN) |
+| Scene | `POST /api/local/scene` | `{"active":true\|false}` — scene session (RGB green) |
+| Accessory | `POST /api/local/accessory` | `{"enabled":true\|false}` — **`PIN_SESSION_ACCESSORY`**; scene must be on to enable |
+| Command | `POST /api/local/commands` | Same **`commandKey`** + **`payloadJson`** as hub **`ExecuteCommand`** (incl. **`session-accessory`**, **`scene-session`**) |
+| Poll | `GET /api/local/status` | `sceneActive`, **`accessoryEngaged`**, `busy`, `automaticActive`, `resultJson`, **`actuatorKind`** |
 | Settings | `GET/PUT /api/local/settings` | Relay **`manual`/`automatic`** or motor **`motorManual`/`motorAutomatic`/`appOptions`** |
 | Caps | `GET /api/local/caps` | Relay stroke limits or motor duty bounds |
 
@@ -483,7 +485,7 @@ Detail: [Phase 10 checklist](../../Documents/09-ESP32-Phase-10-Checklist.md).
 
 ### 6.8 session-accessory (P16)
 
-Dom **Session in Progress** switch — drives **GPIO32** (`PIN_SESSION_ACCESSORY`). Payload:
+Dom **Scene accessory** switch — drives **`PIN_SESSION_ACCESSORY`** (**D4 / GPIO 4**). Payload:
 
 ```json
 { "enabled": true }

@@ -58,7 +58,7 @@
 | **SE-D3** | Provisioning “fully provisioned” | **Wi‑Fi SSID + password only** (ignore empty `server_url`) |
 | **SE-D4** | Config `/config` form | **Hide** SomNet server URL field (or show read-only “not used — standalone”) |
 | **SE-D5** | Stroke gating | **Unlock + arm** required; **bypass** hub/pairing/accessory fail-safe tied to hub loss |
-| **SE-D6** | GPIO32 session accessory | **Assert ON** when armed; **OFF** on disarm/lock; **no** `sessionAccessoryOnTransportLost` in standalone |
+| **SE-D6** | `PIN_SESSION_ACCESSORY` (D4) | **Explicit Accessory toggle** on `/operate` + **`POST /api/local/accessory`** (V2 — scene on first); GPIO off on scene off / lock / Wi‑Fi loss; hub builds still use **`session-accessory`** over SignalR |
 | **SE-D7** | Command ingress | **`LocalCommandService`** → shared `CommandHandler` with `CommandSource::Local` |
 | **SE-D8** | PIN | NVS key `operate_pin` (or default factory PIN printed once on serial / label — **change on first unlock**) |
 | **SE-D9** | HTTP long commands | **Accept + poll** (`POST` returns immediately; client polls `/api/local/status` or command result) |
@@ -136,7 +136,7 @@ CommandHandler
 
 **Phase 1 checklist (2026-10-05):**
 
-- [x] `local_operate.*` + `local_api.cpp` — PIN, Bearer TTL, arm/disarm → GPIO32
+- [x] `local_operate.*` + `local_api.cpp` — PIN, Bearer TTL, arm/disarm → `PIN_SESSION_ACCESSORY` (D4)
 - [x] NVS `operate_pin` (default **1234**)
 - [x] Routes under `/api/local/*`; `commands` stub → 401/403/501
 - [x] Wi‑Fi drop clears local session (SE-T8 prep)

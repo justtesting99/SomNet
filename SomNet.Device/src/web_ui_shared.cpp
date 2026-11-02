@@ -108,15 +108,19 @@ html.session-resume #main.app-shell.hidden{display:flex!important}
 .mode-seg.active{background:#4f46e5;color:#fff}
 .mode-seg:hover:not(.active){background:#1e293b;color:#e2e8f0}
 .header-toggle{display:flex;align-items:center;gap:.5rem;border-radius:.75rem;border:1px solid rgba(71,85,105,.55);background:rgba(30,41,59,.55);padding:.4rem .65rem;margin-left:auto}
-.header-toggle.on{border-color:rgba(99,102,241,.45);background:rgba(79,70,229,.12)}
+.header-toggle.scene-tone.on{border-color:rgba(99,102,241,.45);background:rgba(79,70,229,.12)}
+.header-toggle.accessory-tone.on{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.1)}
 .header-toggle-label{font-size:.8125rem;font-weight:600;color:#cbd5e1}
 .header-toggle-state{font-size:.625rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
-.header-toggle.on .header-toggle-state{color:#a5b4fc}
+.header-toggle.scene-tone.on .header-toggle-state{color:#a5b4fc}
+.header-toggle.accessory-tone.on .header-toggle-label{color:#fde68a}
+.header-toggle.accessory-tone.on .header-toggle-state{color:#fcd34d}
 .toggle-switch{position:relative;width:2.5rem;height:1.35rem;flex-shrink:0;display:inline-block}
 .toggle-switch input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:2}
 .toggle-knob{position:absolute;inset:0;background:#334155;border-radius:999px;pointer-events:none;z-index:1;transition:background .2s}
 .toggle-knob:before{content:"";position:absolute;height:1rem;width:1rem;left:.2rem;bottom:.175rem;background:#e2e8f0;border-radius:50%;transition:transform .2s}
-.toggle-switch input:checked+.toggle-knob{background:#4f46e5}
+.header-toggle.scene-tone .toggle-switch input:checked+.toggle-knob{background:#4f46e5}
+.header-toggle.accessory-tone .toggle-switch input:checked+.toggle-knob{background:#f59e0b}
 .toggle-switch input:checked+.toggle-knob:before{transform:translateX(1.05rem)}
 .toggle-switch input:disabled{cursor:not-allowed}
 .toggle-switch input:disabled+.toggle-knob{opacity:.45}

@@ -55,6 +55,7 @@ Serial banner includes **`Mode: STANDALONE`** and **`Control: http://<ip>/operat
 - Bearer token in RAM until lock, expiry, or Wi‑Fi loss.
 - **Sub ready:** **D33** **single click** (short press). With hub paused, unlock **`/operate`** first. **`POST /api/local/arm`** returns **`409 press_device_button`**.
 - **Scene session:** **`POST /api/local/scene`** `{"active":true|false}` (Bearer; requires sub ready to turn on). Motion commands require **scene active**.
+- **Accessory output:** **`POST /api/local/accessory`** `{"enabled":true|false}` (Bearer; requires **scene active** to turn on). Drives **`PIN_SESSION_ACCESSORY`** (D4); turning scene off clears accessory.
 
 ## RGB status (D23/D22/D1 — no serial required)
 
@@ -79,8 +80,9 @@ Also on **`GET /api/local/status`**: `rgbState`, `subReady`, `sceneActive` (`arm
 | POST | `/api/local/lock` | Bearer | Clears session + scene |
 | POST | `/api/local/arm` | Bearer | Returns **`409 press_device_button`** — use **D33** |
 | POST | `/api/local/scene` | Bearer | `{"active":true\|false}` — scene session (green LED) |
+| POST | `/api/local/accessory` | Bearer | `{"enabled":true\|false}` — lock relay (D4); scene must be on to enable |
 | POST | `/api/local/disarm` | Bearer | Scene off (`sceneActive`: false) |
-| GET | `/api/local/status` | — | `subReady`, `sceneActive`, **`rgbState`**, `busy`, … |
+| GET | `/api/local/status` | — | `subReady`, `sceneActive`, **`accessoryEngaged`**, **`rgbState`**, `busy`, … |
 | PUT | `/api/local/actuator-kind` | Bearer | `{"actuatorKind":"relay"\|"hbridge"}` — unlocked, **disarmed**, idle; reboot if kind changed |
 | GET | `/api/local/caps` | — | **`actuatorKind`**: relay stroke limits **or** motor `minDutyPercent` / `maxDutyPercent` |
 | POST | `/api/local/commands` | Bearer + **scene active** | `commandKey` + `payloadJson` |
@@ -131,7 +133,7 @@ PUT rejects **`motorManual` / `motorAutomatic` on relay** (`400 motor_settings_o
 
 ### Motor automatic-start (curl sketch)
 
-After unlock, sub **presses D33** (ready), turn **scene** on via **`POST /api/local/scene`** or `/operate` checkbox, then POST **`/api/local/commands`** with the same **`payloadJson`** the hub sends (include `actuatorKind`, `segmentTargetRampMs`, and program fields). Example keys: `automaticMode`, duty/speed bands, `endSessionMode`, burst fields — see [PROTOCOL §6](../PROTOCOL.md) motor automatic. Poll **`GET /api/local/status`** until `automaticActive` is false and `resultJson` is present.
+After unlock, sub **presses D33** (ready), turn **scene** on via **`POST /api/local/scene`** or `/operate` **Scene** toggle; optionally turn **Accessory** on for the lock output, then POST **`/api/local/commands`** with the same **`payloadJson`** the hub sends (include `actuatorKind`, `segmentTargetRampMs`, and program fields). Example keys: `automaticMode`, duty/speed bands, `endSessionMode`, burst fields — see [PROTOCOL §6](../PROTOCOL.md) motor automatic. Poll **`GET /api/local/status`** until `automaticActive` is false and `resultJson` is present.
 
 On setup AP, local API returns **`403 setup_mode`**.
 
@@ -163,6 +165,9 @@ TOKEN=<paste>
 AUTH="Authorization: Bearer $TOKEN"
 # Arm: press D33 on the device (HTTP arm returns 409 press_device_button)
 # Scene: curl -s -X POST "$BASE/api/local/scene" -H "$AUTH" -H "Content-Type: application/json" -d '{"active":true}'
+# Accessory (scene must be on): curl -s -X POST "$BASE/api/local/accessory" -H "$AUTH" -H "Content-Type: application/json" -d '{"enabled":true}'
+# Or hub-parity: curl -s -X POST "$BASE/api/local/commands" -H "$AUTH" -H "Content-Type: application/json" \
+#   -d '{"commandKey":"session-accessory","payloadJson":"{\"enabled\":true}"}'
 curl -s "$BASE/api/local/status" -H "$AUTH"
 ```
 
@@ -170,7 +175,7 @@ curl -s "$BASE/api/local/status" -H "$AUTH"
 
 | Hub | Local |
 |-----|-------|
-| `POST /api/devices/commands` + operator JWT | `POST /api/local/commands` + Bearer + **armed** |
+| `POST /api/devices/commands` + operator JWT | `POST /api/local/commands` + Bearer; **`scene-session`** / **`session-accessory`** allowed without scene; motion keys need **scene active** |
 | `commandKey` + `payloadJson` in REST body | Same **`commandKey`** + **`payloadJson`** in JSON body |
 
 Local body shape:

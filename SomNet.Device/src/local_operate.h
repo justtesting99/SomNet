@@ -33,6 +33,9 @@ public:
     /** D33 (local single-click or hub double-click): sub ready — solid yellow. */
     bool acknowledgeSubReady();
     bool setSceneActive(bool active);
+    bool isAccessoryEngaged() const;
+    /** Requires scene active to engage (V2). Drives PIN_SESSION_ACCESSORY. */
+    bool setAccessoryEngaged(bool engaged);
     void disarm();
 
     /** True when Authorization: Bearer matches active session. */

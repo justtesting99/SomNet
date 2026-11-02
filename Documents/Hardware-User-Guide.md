@@ -10,7 +10,7 @@ Guide for **installers**, **device owners**, and **support staff** using the Som
 | Hub protocol | [SignalR & Hardware](./06-SignalR-And-Hardware.md) |
 | Video at tool site | [Video & Camera Architecture](./13-Video-And-Camera-Architecture.md) — Pi + cameras (separate from ESP32) |
 
-**Firmware status:** Phases **0–12 + device button clicks + Session in Progress (P16)** — relay manual **stroke / abort / burst** and **automatic** (including **Bursts On** + **burst placement**), live **`automatic-update`**, network hardening, GPIO **single/double click** on D33, and optional **`session-accessory`** on **GPIO32**. **Motor (H-bridge)** units use the **same binary** with NVS **`actuatorKind: hbridge`** — automatic modes, bursts ([MA-D28](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27) duty envelope), segment telemetry for the operator graph. Current firmware **`0.16.4-motor-burst-duty`**. See [P16 checklist](./25-Session-Accessory-In-Progress-Checklist.md) · [Burst placement](./36-Burst-Placement-Modes-Design.md) · [Motor plan](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) · [Device button clicks](./23-Device-Button-Clicks-Checklist.md).
+**Firmware status:** Phases **0–12 + device button clicks + Session in Progress (P16)** — relay manual **stroke / abort / burst** and **automatic** (including **Bursts On** + **burst placement**), live **`automatic-update`**, network hardening, GPIO **single/double click** on D33, and optional **`session-accessory`** on **D4** (`PIN_SESSION_ACCESSORY`). **Motor (H-bridge)** units use the **same binary** with NVS **`actuatorKind: hbridge`** — automatic modes, bursts ([MA-D28](./31-Motor-Actuator-Device-Design.md#521-bursts-in-motor-automatic-design-locked-2026-10-27) duty envelope), segment telemetry for the operator graph. Current firmware version: see `SomNet.Device/platformio.ini`. See [P16 checklist](./25-Session-Accessory-In-Progress-Checklist.md) · [Burst placement](./36-Burst-Placement-Modes-Design.md) · [Motor plan](./32-Motor-Actuator-Implementation-Plan-And-Checklist.md) · [Device button clicks](./23-Device-Button-Clicks-Checklist.md).
 
 ---
 
@@ -23,8 +23,8 @@ The SomNet device is a small Wi‑Fi controller that connects **outbound** to yo
 | Part | Label | Purpose |
 |------|-------|---------|
 | Setup button | **D33** | Short press: single (reserved) / **double** = air-tool user ready (Dom can turn **Session in Progress** on). **Hold 10 s:** reset Wi‑Fi / server settings |
-| Relay output | **D4** | Drives the air valve relay — energized during a **stroke** command from SomNet |
-| Session accessory | **D32** (GPIO32) | **Session in Progress** lock output — active while Dom switch is **ON**; fail-safe **OFF** if hub/Wi‑Fi drops |
+| Relay output | **D32** | Drives the air valve relay — energized during a **stroke** command from SomNet (`PIN_RELAY`) |
+| Session accessory | **D4** (GPIO 4) | **Accessory** output — active while Scene **Accessory** is **ON**; fail-safe **OFF** if hub/Wi‑Fi drops (`PIN_SESSION_ACCESSORY`) |
 | USB | — | Power and optional service access (developers / support) |
 
 Production enclosures may label the button differently; the **10 second hold** behavior is the same.
@@ -322,9 +322,9 @@ When the operator enables **Allow automatic mode overrides** in SomNet **Options
 
 ## Relay timing validation (oscilloscope)
 
-Firmware reports **measured** pulse time in **`actualStrokeMs`** (USB serial `[RELAY]` log and SomNet session/history). **Initial scope validation (2026-09-06)** on **D4** confirmed that these values match **relay module input** (GPIO pulse):
+Firmware reports **measured** pulse time in **`actualStrokeMs`** (USB serial `[RELAY]` log and SomNet session/history). **Initial scope validation (2026-09-06)** on **D4** (actuator relay at that time) confirmed that these values match **relay module input** (GPIO pulse). **Current wiring:** probe **D32** (`PIN_RELAY`).
 
-| Requested stroke | Scope (D4) | Typical `actualStrokeMs` |
+| Requested stroke | Scope (actuator IN) | Typical `actualStrokeMs` |
 |------------------|------------|---------------------------|
 | 25 ms | 25.8 ms | ~26 ms |
 | 201 ms | ~208 ms | **207 ms** (burst — matches relay input) |
@@ -370,7 +370,7 @@ From an operator or Dom perspective:
 | Step | Action |
 |------|--------|
 | 1 | Pair device; run Manual **Stroke** at known min/max settings |
-| 2 | Probe **D4** (or relay module input) — confirm active-high matches module behavior |
+| 2 | Probe **D32** (`PIN_RELAY`) or relay module actuator input — confirm active-high matches module behavior |
 | 3 | Compare scope pulse width to **actualStrokeMs** in session and serial log |
 | 4 | **Air-line pressure** at the valve — separate from GPIO timing; optional pressure gauge during a session |
 | 5 | Relay **NO contacts** (load side) — optional; may differ slightly from input timing |
@@ -387,7 +387,7 @@ From an operator or Dom perspective:
 | Device ID needed for pairing | Status page at `http://<device-ip>/` after Wi‑Fi works, or USB serial log for installers |
 | Paired but “not connected” in SomNet | Check server URL on device; confirm API is running; same LAN; Windows Firewall on dev PC may block LAN inbound port 5031 |
 | Device was paired; now “not paired” after ~1 year | **Expected** — pairing token expired. Dom: **Hardware** → **Pair** again (same Device ID). See [Pairing token renewal](./Hardware-User-Guide.md#pairing-token-renewal-about-once-a-year) |
-| Stroke does nothing | Confirm pairing + **Connected** on **Hardware → All Subs**; relay wiring on **D4** |
+| Stroke does nothing | Confirm pairing + **Connected** on **Hardware → All Subs**; actuator relay wiring on **D32** (`PIN_RELAY`) |
 | Burst stops early | Check **Abort** was not pressed; review session for `strokesCompleted` vs requested count |
 | **Online now** is empty but device works | **Expected** if already paired — check **All Subs** for **Connected** |
 | Lost pairing / start over completely | On `/config`, use **Factory reset** (when reachable), or contact support |
@@ -419,3 +419,4 @@ From an operator or Dom perspective:
 | 2026-09-06 | Link to Phase 7 §G2 / device plan — deferred timing options (`esp_timer`, poll, dual-core; OTA-safe) |
 | 2026-09-07 | Automatic mode overview — **signed off**; Start/Stop/Abort; auto-end via end-session rules |
 | 2026-09-07 | Phase 10 burst-in-automatic — **available**; Bursts On, scheduling, stop/abort semantics (cooperative Stop + instant Abort) |
+| 2026-11-01 | **Pin map:** actuator relay **D32** (`PIN_RELAY`), session accessory **D4** (`PIN_SESSION_ACCESSORY`) — `boardDefs.h`; dual-relay bench wiring |

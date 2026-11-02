@@ -32,7 +32,7 @@ public static class HardwareCommandKeys
 
     public const string AutomaticUpdate = "automatic-update";
 
-    /// <summary>Device + API — session accessory / external lock (GPIO32).</summary>
+    /// <summary>Device + API — session accessory / external lock (D4 / PIN_SESSION_ACCESSORY in boardDefs.h).</summary>
     public const string SessionAccessory = "session-accessory";
 
     /// <summary>Device + API — operator scene session (RGB green; not GPIO32).</summary>

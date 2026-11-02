@@ -476,6 +476,31 @@ void CommandHandler::handleExecuteCommand(const ExecuteCommandPayload& command) 
     }
 
     if (strcmp(command.commandKey, "session-accessory") == 0) {
+#if SOMNET_LOCAL_OPERATE_ENABLED
+        if (gLocalOperateForCommands != nullptr) {
+            JsonDocument doc;
+            const DeserializationError err = deserializeJson(
+                doc,
+                command.payloadJson[0] != '\0' ? command.payloadJson : "{}");
+            if (err || !doc["enabled"].is<bool>()) {
+                sendAck(command.correlationId, false, "invalid session-accessory payload", nullptr);
+                return;
+            }
+
+            const bool enabled = doc["enabled"].as<bool>();
+            if (!gLocalOperateForCommands->setAccessoryEngaged(enabled)) {
+                sendAck(
+                    command.correlationId,
+                    false,
+                    enabled ? "scene_inactive" : "accessory_off_failed",
+                    nullptr);
+                return;
+            }
+
+            sendAck(command.correlationId, true, enabled ? "accessory on" : "accessory off", nullptr);
+            return;
+        }
+#endif
         if (sessionAccessory_ == nullptr) {
             sendAck(command.correlationId, false, "accessory unavailable", nullptr);
             return;

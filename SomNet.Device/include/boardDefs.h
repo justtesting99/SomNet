@@ -2,12 +2,12 @@
 
 // ESP32 DevKit V1 clone — update here if wiring changes (see Documents/09-ESP32-Device-Plan.md §1.3)
 
-constexpr int PIN_RELAY = 4;   // D4
+constexpr int PIN_RELAY = 32; // D32 — actuator relay (stroke / burst / automatic)
 constexpr int PIN_BUTTON = 33; // D33
 /** DevKit V1 built-in LED (GPIO 2). Legacy — superseded by RGB status (PIN_LED_*). */
 constexpr int PIN_STATUS_LED = 2;
-/** Session accessory / external lock output (Dom Session in Progress). */
-constexpr int PIN_SESSION_ACCESSORY = 32;
+/** Session accessory / external lock output (Scene accessory / session-accessory). */
+constexpr int PIN_SESSION_ACCESSORY = 4; // D4
 
 // Motor (BTS7960) — same firmware binary as relay; active backend from NVS actuator profile. Doc 31.
 /** PWM to module LPWM (bench: D25). Opposite rotation vs PIN_MOTOR_PWM_SECONDARY. */

@@ -9,7 +9,7 @@ SomNet tracks live sessions during operation and persists them for historical re
 Dom **Session in Progress** (header slide switch) gates both UI and firmware:
 
 - Switch **ON** only when system **Ready**, Sub **double-click** ack is present, and a mode (Manual or Automatic) is selected ([P16 checklist](./25-Session-Accessory-In-Progress-Checklist.md)).
-- **Stroke**, **Burst**, and automatic **Start** are blocked until the switch is **ON**; firmware rejects `stroke`, `burst`, and `automatic-start` when the **`session-accessory`** output is off (GPIO32).
+- **Stroke**, **Burst**, and automatic **Start** are blocked until the switch is **ON**; firmware rejects `stroke`, `burst`, and `automatic-start` when the **`session-accessory`** output is off (**D4** / `PIN_SESSION_ACCESSORY`). *(V1; see [34 — V2 rules](./34-Operator-Session-And-Accessory-V2-Rules.md) for current motion vs accessory.)*
 - Each **OFF→ON** creates a **new** server session (`POST /api/sessions`). **Manual ↔ automatic** while the switch stays **ON** keeps the **same** session id (optional `PATCH` with `mode`).
 - **ON→OFF** ends the session normally, or **DELETE** discards a placeholder with no strokes and no automatic **Start** (P16-D9).
 - Switch **OFF** is blocked while stroke/burst/start is pending or automatic is **running** (use **Abort** or wait for idle first).

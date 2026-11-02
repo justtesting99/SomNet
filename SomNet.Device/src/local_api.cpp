@@ -60,6 +60,16 @@ void sendJsonError(AsyncWebServerRequest* request, int code, const char* error) 
     sendJson(request, code, body);
 }
 
+bool localCommandRequiresSceneActive(const char* commandKey) {
+    if (commandKey == nullptr || commandKey[0] == '\0') {
+        return true;
+    }
+    if (strcmp(commandKey, "session-accessory") == 0 || strcmp(commandKey, "scene-session") == 0) {
+        return false;
+    }
+    return true;
+}
+
 bool rejectLocalApiInSetupMode(AsyncWebServerRequest* request) {
     if (gWifi != nullptr && gWifi->isSoftAp()) {
         sendJsonError(request, 403, "setup_mode");
@@ -229,13 +239,15 @@ void handleLocalSceneBody(AsyncWebServerRequest* request, const char* body, size
         return;
     }
 
-    char response[96];
+    const bool accessoryEngaged = gLocalOperate->isAccessoryEngaged();
+    char response[128];
     snprintf(
         response,
         sizeof(response),
-        "{\"sceneActive\":%s,\"armed\":%s}",
+        "{\"sceneActive\":%s,\"armed\":%s,\"accessoryEngaged\":%s}",
         active ? "true" : "false",
-        active ? "true" : "false");
+        active ? "true" : "false",
+        accessoryEngaged ? "true" : "false");
     sendJson(request, 200, response);
 }
 
@@ -253,6 +265,46 @@ void handleLocalScene(
     handleJsonPost(request, data, len, index, total, &ctx, 128);
 }
 
+void handleLocalAccessoryBody(AsyncWebServerRequest* request, const char* body, size_t len) {
+    if (!requireUnlocked(request)) {
+        return;
+    }
+
+    JsonDocument doc;
+    if (deserializeJson(doc, body, len) || !doc["enabled"].is<bool>()) {
+        sendJsonError(request, 400, "enabled_required");
+        return;
+    }
+
+    const bool enabled = doc["enabled"].as<bool>();
+    if (!gLocalOperate->setAccessoryEngaged(enabled)) {
+        sendJsonError(request, 409, enabled ? "scene_inactive" : "accessory_off_failed");
+        return;
+    }
+
+    char response[64];
+    snprintf(
+        response,
+        sizeof(response),
+        "{\"accessoryEngaged\":%s}",
+        enabled ? "true" : "false");
+    sendJson(request, 200, response);
+}
+
+void handleLocalAccessory(
+    AsyncWebServerRequest* request,
+    uint8_t* data,
+    size_t len,
+    size_t index,
+    size_t total) {
+    logLocalRequest(request, "/api/local/accessory");
+    if (rejectLocalApiInSetupMode(request)) {
+        return;
+    }
+    static JsonPostContext ctx = {"/api/local/accessory", handleLocalAccessoryBody};
+    handleJsonPost(request, data, len, index, total, &ctx, 128);
+}
+
 void handleLocalDisarm(AsyncWebServerRequest* request) {
     logLocalRequest(request, "/api/local/disarm");
     if (rejectLocalApiInSetupMode(request)) {
@@ -262,7 +314,7 @@ void handleLocalDisarm(AsyncWebServerRequest* request) {
         return;
     }
     gLocalOperate->disarm();
-    sendJson(request, 200, "{\"sceneActive\":false,\"armed\":false}");
+    sendJson(request, 200, "{\"sceneActive\":false,\"armed\":false,\"accessoryEngaged\":false}");
 }
 
 void handleLocalStatus(AsyncWebServerRequest* request) {
@@ -273,6 +325,7 @@ void handleLocalStatus(AsyncWebServerRequest* request) {
     const bool unlocked = gLocalOperate != nullptr && gLocalOperate->isUnlocked();
     const bool subReady = gLocalOperate != nullptr && gLocalOperate->isSubReady();
     const bool sceneActive = gLocalOperate != nullptr && gLocalOperate->isSceneActive();
+    const bool accessoryEngaged = gLocalOperate != nullptr && gLocalOperate->isAccessoryEngaged();
     const bool armed = sceneActive;
     const bool busy =
         gCommandHandler != nullptr ? gCommandHandler->isMotionBusy()
@@ -306,6 +359,7 @@ void handleLocalStatus(AsyncWebServerRequest* request) {
     doc["unlocked"] = unlocked;
     doc["subReady"] = subReady;
     doc["sceneActive"] = sceneActive;
+    doc["accessoryEngaged"] = accessoryEngaged;
     doc["armed"] = armed;
     doc["busy"] = busy;
     doc["automaticActive"] = automaticActive;
@@ -444,6 +498,12 @@ void handleLocalCommandsBody(AsyncWebServerRequest* request, const char* body, s
         strncpy(payloadBuf, "{}", sizeof(payloadBuf) - 1);
     }
 
+    if (gLocalOperate != nullptr && localCommandRequiresSceneActive(commandKey) &&
+        !gLocalOperate->isSceneActive()) {
+        sendJsonError(request, 403, "scene_inactive");
+        return;
+    }
+
     dispatchLocalCommand(request, commandKey, payloadBuf);
 }
 
@@ -459,10 +519,6 @@ void handleLocalCommandsPost(
     }
     if (gLocalOperate == nullptr || !gLocalOperate->authorizeRequest(request)) {
         sendJsonError(request, 401, "unauthorized");
-        return;
-    }
-    if (!gLocalOperate->isSceneActive()) {
-        sendJsonError(request, 403, "scene_inactive");
         return;
     }
 
@@ -821,6 +877,14 @@ void registerLocalApiRoutes(AsyncWebServer& server, LocalOperate* localOperate) 
         nullptr,
         [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
             handleLocalScene(request, data, len, index, total);
+        });
+    server.on(
+        "/api/local/accessory",
+        HTTP_POST,
+        [](AsyncWebServerRequest* request) {},
+        NULL,
+        [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+            handleLocalAccessory(request, data, len, index, total);
         });
     server.on("/api/local/status", HTTP_GET, [](AsyncWebServerRequest* request) { handleLocalStatus(request); });
     server.on("/api/local/caps", HTTP_GET, [](AsyncWebServerRequest* request) { handleLocalCaps(request); });

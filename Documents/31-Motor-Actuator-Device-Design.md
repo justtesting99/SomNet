@@ -66,14 +66,15 @@ Non-goals: **concurrent relay + motor automatic sessions** on one ESP; **two out
 
 ### 2.1 Unified MCU board
 
-- **Single PCB design** for relay and motor products: ESP32 DevKit-class pin plan (`boardDefs.h`), **D33** button, **D2** LED, **D32** session accessory, plus routed signals for **relay** and **motor** headers (populated per SKU in manufacturing or assembly).
+- **Single PCB design** for relay and motor products: ESP32 DevKit-class pin plan (`boardDefs.h`), **D33** button, **D2** LED, **D4** session accessory (`PIN_SESSION_ACCESSORY`), **D32** actuator relay (`PIN_RELAY`), plus routed signals for **motor** headers (populated per SKU in manufacturing or assembly).
 - **Not built yet** — pin numbers remain provisional until layout; firmware proceeds against `boardDefs.h`.
 
 ### 2.2 Relay module (existing)
 
 | Signal | GPIO |
 |--------|------|
-| Relay control | **D4** (`PIN_RELAY`) |
+| Actuator relay | **D32** (`PIN_RELAY`) |
+| Session accessory | **D4** (`PIN_SESSION_ACCESSORY`) |
 
 Connect commercial relay/opto module to the platform **relay** header.
 
@@ -85,7 +86,7 @@ Connect commercial relay/opto module to the platform **relay** header.
 | **Primary channel** | **D25** — PWM · **D27** — enable (maps to one side of the module, e.g. RPWM + R_EN) |
 | **Secondary channel** | **D26** — PWM · **D14** — enable (opposite direction, e.g. LPWM + L_EN) |
 | **Direction policy (software)** | **v1:** automatic and manual programs use **primary channel only** (single direction). **Hardware** is wired for both channels so reverse can ship later without a board spin. |
-| **Operator I/O** | Shared on platform: **D33** button, **D2** LED, **D32** session accessory |
+| **Operator I/O** | Shared on platform: **D33** button, **D2** LED, **D4** session accessory, **D32** actuator relay |
 
 Software can command **either** output family; a given **assembled unit** only **responds on the fitted module**. Active profile (NVS + handshake) selects which backend/FSM runs so the unused path does not drive the wrong header. All pins in `boardDefs.h` (`PIN_RELAY`, `PIN_MOTOR_*`).
 
@@ -166,7 +167,7 @@ These layers should remain stable across actuator types:
 
 | Relay (today) | Motor (BTS7960) |
 |---------------|-----------------|
-| GPIO pulse on D4 during “stroke” | **PWM duty** on **D25** (primary) while segment active; **D27** enable on; secondary **D26/D14** off in v1 |
+| GPIO pulse on D32 during “stroke” | **PWM duty** on **D25** (primary) while segment active; **D27** enable on; secondary **D26/D14** off in v1 |
 | Abort → de-energize relay quickly | Abort → **PWM off**, **enable outputs low** (D27/D14 deasserted) — **MA-D4** |
 | `minimumPower` / `maximumPower` → stroke intensity semantics | **Same fields (conceptually): min/max speed** → **PWM duty %** (0–100) |
 
@@ -348,7 +349,7 @@ Hub handshake / local unlock  →  actuatorProfile (actuatorKind)
                                         ↓
 CommandHandler  →  route by command + profile
                         ↓
-           RelayAutomaticFsm ──→ RelayBackend (D4)
+           RelayAutomaticFsm ──→ RelayBackend (D32 / PIN_RELAY)
            MotorAutomaticFsm  ──→ MotorBackend (BTS7960 pins)
            (only one FSM + driver pair constructed / active — MA-R7)
 ```
@@ -581,7 +582,7 @@ Clients **must not** send `AutomaticControlStateDto` to motor devices or treat m
 | **MA-D26** | Burst micro-hold duration | v1 **bench-tuned** per micro-cycle (not motor `strokeMs` DTO) | 2026-10-27 |
 | **MA-D27** | Periodic + burst placement | **Session spread + minutes** only; disable even/chance for periodic in UI | 2026-10-27 |
 | **MA-D28** | Motor burst power envelope | **Duty min/max** (PWM), not speed min/max | 2026-10-28 |
-| **MA-D6** | Hardware driver | **Unified MCU board**; motor header → **BTS7960** (**D25/D27**, **D26/D14**); relay header → **D4**; shared **D33/D2/D32** | 2026-10-25 |
+| **MA-D6** | Hardware driver | **Unified MCU board**; motor header → **BTS7960** (**D25/D27**, **D26/D14**); relay header → **D32** (`PIN_RELAY`); accessory → **D4**; shared **D33/D2** | 2026-10-25; relay/accessory pins **2026-11** |
 | **MA-D11** | Product hardware | **One platform PCB** + **either** relay **or** H-bridge module; future alternate modules possible, none planned | 2026-10-25 |
 | **MA-D12** | Actuator binding | **`actuatorKind` chosen at device registration** (pair / add device: relay or motor?) → **NVS on ESP** + **server registration row**; `PairDevice` carries kind to firmware; commands validated vs NVS | 2026-10-25 |
 | **MA-D13** | Production hardening (optional) | **Maybe:** 3 strap inputs at boot → 3-bit **`actuatorProfileId`**; cross-check software binding (§2.4) — not v1 | 2026-10-25 |

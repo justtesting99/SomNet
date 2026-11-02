@@ -303,7 +303,7 @@ For **local operate**, define explicit policy:
 
 | Policy option | Behavior |
 |---------------|----------|
-| **A (recommended)** | **Unlock + arm** sets local session armed and may assert GPIO32 (or bypass accessory gate **only** for `CommandSource::Local`). Hub disconnect **does not** disarm local session. |
+| **A (recommended)** | **Unlock + arm** sets local session armed and may assert **`PIN_SESSION_ACCESSORY`** (D4) (or bypass accessory gate **only** for `CommandSource::Local`). Hub disconnect **does not** disarm local session. |
 | **B (stricter)** | Local strokes only when hub offline (auto-detect). Cloud path takes precedence when hub up. |
 
 **Disarm:** `POST /api/local/lock`, or after configurable idle timeout (optional).
@@ -631,7 +631,7 @@ Offline operate estimate: **tens of KB** flash for JS + routes; history size dep
 |----|----------|---------|
 | **LO-D1** | Mode A: local operate **anytime on LAN** vs **only when hub down**? | Anytime + arming vs auto-detect offline |
 | **LO-D2** | Cloud vs local **simultaneous** control | Reject cloud while local armed vs allow both (not recommended) |
-| **LO-D3** | GPIO32 during Mode A local arm | Assert accessory line vs software-only gate |
+| **LO-D3** | `PIN_SESSION_ACCESSORY` (D4) during Mode A local arm | Assert accessory line vs software-only gate |
 | **LO-D4** | Pairing required for Mode A? | Require prior pair vs allow unprovisioned local-only |
 | **LO-D5** | Mode A history default | On / off / caps |
 | **LO-D6** | Partition change (Mode A) | Stay on minimal SPIFFS vs custom **512 KB** LittleFS |

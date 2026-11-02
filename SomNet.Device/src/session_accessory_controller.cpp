@@ -27,7 +27,9 @@ void SessionAccessoryController::begin() {
     enabled_ = false;
     initialized_ = true;
     gSessionAccessoryInstance = this;
-    Serial.println(F("[ACCESSORY] init OFF (GPIO32)"));
+    Serial.print(F("[ACCESSORY] init OFF (GPIO"));
+    Serial.print(PIN_SESSION_ACCESSORY);
+    Serial.println(')');
 }
 
 bool SessionAccessoryController::setEnabled(bool enabled) {

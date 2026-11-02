@@ -8,7 +8,7 @@
 
 
 
-**Goal (V1 at sign-off):** Dom **Session in Progress** slide switch drives server session lifecycle and ESP32 **`session-accessory`** GPIO (GPIO32). Sub **double-click** (`ReportButtonEvent`) plus device **Ready** form a **series gate** before the switch can turn on. **Start / Stroke / Burst** are blocked until the switch is **ON**. The switch stays **disabled** while manual or automatic work is in flight until idle or **Abort**.
+**Goal (V1 at sign-off):** Dom **Session in Progress** slide switch drives server session lifecycle and ESP32 **`session-accessory`** on **`PIN_SESSION_ACCESSORY` (D4)**. Sub **double-click** (`ReportButtonEvent`) plus device **Ready** form a **series gate** before the switch can turn on. **Start / Stroke / Burst** are blocked until the switch is **ON**. The switch stays **disabled** while manual or automatic work is in flight until idle or **Abort**.
 
 
 
@@ -44,7 +44,7 @@
 
 | **P16-D3** | Switch **disabled** while stroke/burst/start pending, automatic **running**, or cooperative stop in progress; **Abort** allowed. Dom turns switch **OFF** manually when satisfied (no auto-off on device complete). |
 
-| **P16-D4** | **GPIO32** (`PIN_SESSION_ACCESSORY` in `boardDefs.h`); **active-high** like relay; **fail-safe OFF** on hub/Wi‑Fi transport loss. |
+| **P16-D4** | **D4 / GPIO 4** (`PIN_SESSION_ACCESSORY` in `boardDefs.h`); **active-high** like relay; **fail-safe OFF** on hub/Wi‑Fi transport loss. *(Actuator relay is **D32** / `PIN_RELAY` — updated 2026-11.)* |
 
 | **P16-D5** | Tab-sync broadcasts **session in progress** like `running` / `session`. |
 
@@ -102,7 +102,7 @@
 
 
 
-- [x] `PIN_SESSION_ACCESSORY` = 32, `SESSION_ACCESSORY_ACTIVE_HIGH`
+- [x] `PIN_SESSION_ACCESSORY` = **4 (D4)** — was GPIO32 at P16 sign-off; **`PIN_RELAY` = 32 (D32)** since 2026-11 bench wiring (`boardDefs.h`)
 
 - [x] `session_accessory_controller` — set/release, `[ACCESSORY]` logs
 

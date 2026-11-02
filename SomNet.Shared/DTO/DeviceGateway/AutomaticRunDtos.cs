@@ -55,6 +55,12 @@ public sealed class DeviceGatewayLocalStatusDto
 
     public bool Armed { get; init; }
 
+    /// <summary>Sub pressed device button after unlock (solid blue LED).</summary>
+    public bool SubReady { get; init; }
+
+    /// <summary>Scene session on (green LED when idle).</summary>
+    public bool SceneActive { get; init; }
+
     public bool Busy { get; init; }
 
     public bool AutomaticActive { get; init; }
@@ -68,6 +74,9 @@ public sealed class DeviceGatewayLocalStatusDto
     public string? CommandMessage { get; init; }
 
     public string? ResultJson { get; init; }
+
+    /// <summary>Firmware RGB state name (wifiUp, awaitingDeviceButton, ready, …).</summary>
+    public string? RgbState { get; init; }
 }
 
 public sealed class DeviceGatewayDeviceStatusDto

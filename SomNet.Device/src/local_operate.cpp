@@ -185,6 +185,31 @@ bool LocalOperate::setSceneActive(bool active) {
     sceneActive_ = active;
     Serial.print(F("[LOCAL] scene "));
     Serial.println(active ? F("ON") : F("OFF"));
+    if (!active && accessory_ != nullptr) {
+        accessory_->setEnabled(false);
+    }
+    return true;
+}
+
+bool LocalOperate::isAccessoryEngaged() const {
+    return accessory_ != nullptr && accessory_->isEnabled();
+}
+
+bool LocalOperate::setAccessoryEngaged(bool engaged) {
+    if (accessory_ == nullptr) {
+        return false;
+    }
+    if (engaged && !sceneActive_) {
+        return false;
+    }
+    if (accessory_->isEnabled() == engaged) {
+        return true;
+    }
+    if (!accessory_->setEnabled(engaged)) {
+        return false;
+    }
+    Serial.print(F("[LOCAL] accessory "));
+    Serial.println(engaged ? F("ON") : F("OFF"));
     return true;
 }
 

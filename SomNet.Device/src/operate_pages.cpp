@@ -10,7 +10,7 @@ namespace {
 // Full /operate page in PROGMEM (CSS at /ui/somnet.css). Served via beginResponse_P — do not use
 // beginResponseStream(..., N) where N is mistaken for HTTP status (second arg is stream buffer bytes).
 constexpr char kOperateHtml[] PROGMEM = R"raw(
-<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SomEsp Control</title><link rel="stylesheet" href="/ui/somnet.css?v=3"></head><body><script>try{if(sessionStorage.getItem('somesp-bearer'))document.documentElement.classList.add('session-resume');}catch(e){}</script>
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SomEsp Control</title><link rel="stylesheet" href="/ui/somnet.css?v=4"></head><body><script>try{if(sessionStorage.getItem('somesp-bearer'))document.documentElement.classList.add('session-resume');}catch(e){}</script>
 <div class="shell-bg"></div>
 <div id="gate" class="gate-screen">
 <div class="gate-card ui-panel"><div class="ui-panel-hd"><h2>Unlock control panel</h2></div><div class="ui-panel-bd">
@@ -51,9 +51,10 @@ constexpr char kOperateHtml[] PROGMEM = R"raw(
 <div class="device-toolbar">
 <span class="note" style="margin:0;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#64748b">Mode</span>
 <div class="mode-segment" role="tablist"><button type="button" class="mode-seg tab active" data-tab="manual">Manual</button><button type="button" class="mode-seg tab" data-tab="auto">Automatic</button></div>
-<div id="scene-toggle-wrap" class="header-toggle"><span class="header-toggle-label">Scene</span><span class="header-toggle-state" id="scene-state">Off</span><label class="toggle-switch"><input type="checkbox" id="scene-on"><span class="toggle-knob"></span></label></div>
+<div id="scene-toggle-wrap" class="header-toggle scene-tone"><span class="header-toggle-label">Scene</span><span class="header-toggle-state" id="scene-state">Off</span><label class="toggle-switch"><input type="checkbox" id="scene-on"><span class="toggle-knob"></span></label></div>
+<div id="accessory-toggle-wrap" class="header-toggle accessory-tone"><span class="header-toggle-label">Accessory</span><span class="header-toggle-state" id="accessory-state">Off</span><label class="toggle-switch"><input type="checkbox" id="accessory-on"><span class="toggle-knob"></span></label></div>
 </div>
-<p class="note hidden" id="arm-hint">Unlocked — press D33 once (same as hub mode). Status shows <strong>ready</strong>, then enable Scene above.</p>
+<p class="note hidden" id="arm-hint">Unlocked — press D33 once (same as hub mode). Status shows <strong>ready</strong>, then enable Scene above. Turn <strong>Accessory</strong> on only when the lock output is wired.</p>
 <p id="auto-session-banner" class="session-banner hidden" role="status">Session running — changes apply after the current stroke. Use Stop to end gracefully; Abort stops immediately.</p>
 <div id="tab-manual">
 <div id="relay-manual-panel" class="profile-relay control-grid cols-2 layout-split">
@@ -285,6 +286,7 @@ var liveSegments=[];
 var lastLiveSegmentIndex=-1;
 var graphNowSec=null;
 var sceneTogglePending=false;
+var accessoryTogglePending=false;
 var MOTOR_MANUAL_KEY='somnet-local-motor-manual';
 var MOTOR_AUTO_KEY='somnet-local-motor-automatic';
 var APP_OPTIONS_KEY='somnet-local-app-options';
@@ -356,6 +358,7 @@ function notifyStatusLine(s){
   if(!token)statusText='Locked';
   else if(s&&s.wifiConnected===false)statusText='Device offline';
   else if(s&&(s.busy||s.automaticActive))statusText=s.automaticActive?'Automatic running':'Busy';
+  else if(s&&s.accessoryEngaged)statusText='Accessory on';
   else if(s&&s.sceneActive)statusText='Scene session on';
   else if(s&&s.subReady)statusText='Ready';
   else if(s&&s.unlocked)statusText='Awaiting device button';
@@ -369,7 +372,7 @@ function notifyStatusTone(s){
   if(!s)return 'checking';
   if(s.wifiConnected===false)return 'error';
   if(s.busy||s.automaticActive)return 'warning';
-  if(s.sceneActive||s.subReady)return 'ready';
+  if(s.sceneActive||s.accessoryEngaged||s.subReady)return 'ready';
   if(s.unlocked)return 'warning';
   return 'error';
 }
@@ -396,6 +399,28 @@ function updateSceneControlFromStatus(s){
   if(wrap){
     wrap.classList.toggle('is-disabled',blockEnable);
     wrap.title=blockEnable?'Press device button (D33) once — status shows Ready — then turn Scene on.':'';
+  }
+}
+function syncAccessoryToggleUi(on){
+  var wrap=$('accessory-toggle-wrap');
+  if(wrap)wrap.classList.toggle('on',!!on);
+  var st=$('accessory-state');
+  if(st)st.textContent=on?'On':'Off';
+}
+function updateAccessoryControlFromStatus(s){
+  var el=$('accessory-on');
+  var wrap=$('accessory-toggle-wrap');
+  if(!el||!s)return;
+  var wantOn=!!s.accessoryEngaged;
+  if(!accessoryTogglePending){
+    el.checked=wantOn;
+    syncAccessoryToggleUi(wantOn);
+  }
+  var blockEnable=!s.sceneActive&&!wantOn;
+  el.disabled=blockEnable;
+  if(wrap){
+    wrap.classList.toggle('is-disabled',blockEnable);
+    wrap.title=blockEnable?'Turn Scene on before Accessory.':'';
   }
 }
 function endSessionResume(){
@@ -434,6 +459,7 @@ function devicePanelReadinessLine(s){
   if(!token||!s)return '';
   if(s.busy||s.automaticActive)return s.automaticActive?'Automatic session running':'Busy';
   if(s.sceneActive)return 'Scene session on';
+  if(s.accessoryEngaged)return 'Accessory on';
   if(s.subReady)return 'Ready for commands';
   if(s.unlocked)return 'Press device button (D33)';
   return '';
@@ -1790,6 +1816,7 @@ async function poll(){
     if(!ensureDeviceSession(s))return;
     var parts=[];
     if(s.sceneActive)parts.push('scene');
+    if(s.accessoryEngaged)parts.push('accessory');
     else if(s.subReady)parts.push('ready');
     else if(s.unlocked)parts.push('awaiting device button');
     if(s.rgbState)parts.push('led:'+s.rgbState);
@@ -1808,6 +1835,9 @@ async function poll(){
     }
     if($('scene-on')){
       updateSceneControlFromStatus(s);
+    }
+    if($('accessory-on')){
+      updateAccessoryControlFromStatus(s);
     }
     $('btn-auto-start').disabled=!!(s.busy||s.automaticActive);
     if(s.automaticActive&&!autoLiveActive){
@@ -1935,6 +1965,23 @@ $('scene-on').onchange=async function(){
     setStatus(e.message||'Scene update failed');
   }finally{
     sceneTogglePending=false;
+  }
+};
+$('accessory-on').onchange=async function(){
+  if(accessoryTogglePending||$('accessory-on').disabled)return;
+  var want=$('accessory-on').checked;
+  accessoryTogglePending=true;
+  syncAccessoryToggleUi(want);
+  try{
+    await api('/api/local/accessory',{method:'POST',body:JSON.stringify({enabled:want})});
+    setStatus(want?'Accessory on':'Accessory off');
+    await poll();
+  }catch(e){
+    $('accessory-on').checked=!want;
+    syncAccessoryToggleUi(!want);
+    setStatus(e.message||'Accessory update failed');
+  }finally{
+    accessoryTogglePending=false;
   }
 };
 $('btn-stroke').onclick=async function(){
